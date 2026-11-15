@@ -34,3 +34,4 @@ export async function getSystemHealth(): Promise<SystemHealthResponse> {
 
   return response.json();
 }
+

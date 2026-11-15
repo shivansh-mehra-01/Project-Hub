@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { QueryProvider } from "@/lib/query-provider";
+import { ProjectHubStoreProvider } from "@/mocks/ProjectHubStore";
 import "./globals.css";
 
 const inter = Inter({
@@ -28,8 +29,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="min-h-screen bg-background text-foreground font-sans antialiased">
-        <QueryProvider>{children}</QueryProvider>
+      <body className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans antialiased">
+        <QueryProvider>
+          <ProjectHubStoreProvider>{children}</ProjectHubStoreProvider>
+        </QueryProvider>
       </body>
     </html>
   );
