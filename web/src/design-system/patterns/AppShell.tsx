@@ -81,29 +81,29 @@ export const AppShell: React.FC<AppShellProps> = ({
       case "SuperAdmin":
         return [
           { label: "Tenants", href: "/admin", icon: Building2 },
-          { label: "Master Templates", href: "/admin#templates", icon: Layers },
-          { label: "Subscriptions", href: "/admin#subscriptions", icon: Shield },
-          { label: "Health & Telemetry", href: "/admin#health", icon: Sliders },
+          { label: "Master Templates", href: "/admin/templates", icon: Layers },
+          { label: "Subscriptions", href: "/admin/subscriptions", icon: Shield },
+          { label: "Health & Telemetry", href: "/admin/health", icon: Sliders },
         ];
       case "CollegeAdmin":
         return [
           { label: "Overview", href: "/college", icon: LayoutDashboard },
-          { label: "Departments & HODs", href: "/college#departments", icon: Users2 },
-          { label: "Campus Settings", href: "/college#settings", icon: Sliders },
-          { label: "Accreditation", href: "/college#compliance", icon: FileCheck2 },
+          { label: "Departments & HODs", href: "/college/departments", icon: Users2 },
+          { label: "Campus Settings", href: "/college/settings", icon: Sliders },
+          { label: "Accreditation", href: "/college/compliance", icon: FileCheck2 },
         ];
       case "HOD":
         return [
           { label: "Overview", href: "/hod", icon: LayoutDashboard },
-          { label: "Approvals Queue", href: "/hod#approvals", icon: FileCheck2 },
-          { label: "NBA Criterion 2 & 3", href: "/hod#nba", icon: GraduationCap },
-          { label: "Faculty Setup", href: "/hod#faculty", icon: Sliders },
+          { label: "Approvals Queue", href: "/hod/approvals", icon: FileCheck2 },
+          { label: "NBA Criterion 2 & 3", href: "/hod/nba", icon: GraduationCap },
+          { label: "Faculty Setup", href: "/hod/faculty", icon: Sliders },
         ];
       case "Faculty": {
         const baseItems = [
           { label: "Action Queue", href: "/faculty", icon: FileCheck2 },
-          { label: "My Teams", href: "/faculty#teams", icon: Users2 },
-          { label: "Live Viva Grading", href: "/faculty#evaluations", icon: GraduationCap },
+          { label: "My Teams", href: "/faculty/teams", icon: Users2 },
+          { label: "Live Viva Grading", href: "/faculty/evaluations", icon: GraduationCap },
         ];
         // Dynamic 4th Tab if ProjectCoordinator = true (User Refinement)
         if (currentPersona.isProjectCoordinator) {
@@ -193,10 +193,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           </div>
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive =
-              activeTab === item.label ||
-              pathname === item.href ||
-              (item.href !== "/" && pathname.startsWith(item.href) && !item.href.includes("#"));
+            const isActive = activeTab === item.label || pathname === item.href;
 
             return (
               <Link
@@ -468,10 +465,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 bg-white border-t border-[#E2E8F0] z-40 flex items-center justify-around px-2 select-none shadow-sm">
         {navItems.slice(0, 4).map((item) => {
           const Icon = item.icon;
-          const isActive =
-            activeTab === item.label ||
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href) && !item.href.includes("#"));
+          const isActive = activeTab === item.label || pathname === item.href;
 
           return (
             <Link

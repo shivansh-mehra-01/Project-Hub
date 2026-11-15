@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   Plus,
@@ -12,6 +13,9 @@ import {
   Sparkles,
   ExternalLink,
   Zap,
+  Server,
+  Shield,
+  Sliders,
 } from "lucide-react";
 import { AppShell } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
@@ -25,8 +29,15 @@ import { Textarea } from "@/design-system/components/Textarea";
 import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 
-export const SuperAdminView: React.FC = () => {
+export interface SuperAdminViewProps {
+  initialTab?: "tenants" | "templates" | "subscriptions" | "health";
+}
+
+export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "tenants" }) => {
+  const router = useRouter();
   const { college, onboardCollege } = useProjectHubStore();
+
+  const [activeTab, setActiveTab] = useState<"tenants" | "templates" | "subscriptions" | "health">(initialTab);
 
   const [collegesList, setCollegesList] = useState([
     {
@@ -110,32 +121,37 @@ export const SuperAdminView: React.FC = () => {
     },
   ]);
 
+  // Form states for adding college
   const [newCollegeName, setNewCollegeName] = useState("");
   const [newCollegeCode, setNewCollegeCode] = useState("");
   const [newCollegeDomain, setNewCollegeDomain] = useState("");
   const [newCollegePlan, setNewCollegePlan] = useState<"Pilot" | "Standard" | "Enterprise">("Pilot");
 
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  const switchTab = (tab: "tenants" | "templates" | "subscriptions" | "health") => {
+    setActiveTab(tab);
+    if (tab === "tenants") router.push("/admin");
+    else if (tab === "templates") router.push("/admin/templates");
+    else if (tab === "subscriptions") router.push("/admin/subscriptions");
+    else if (tab === "health") router.push("/admin/health");
+  };
+
   const handleAddCollege = () => {
     if (!newCollegeName || !newCollegeCode || !newCollegeDomain) return;
-
-    const newCol = {
+    const newCollege = {
       id: `col-${Date.now()}`,
       name: newCollegeName,
       code: newCollegeCode.toUpperCase(),
-      domain: newCollegeDomain.toLowerCase(),
+      domain: newCollegeDomain,
       plan: newCollegePlan,
       status: "Active",
-      students: 500,
+      students: 800,
       departments: 3,
     };
-
-    setCollegesList([newCol, ...collegesList]);
-    onboardCollege({
-      name: newCollegeName,
-      code: newCollegeCode.toUpperCase(),
-      domain: newCollegeDomain.toLowerCase(),
-    });
-
+    setCollegesList([newCollege, ...collegesList]);
     setShowAddModal(false);
     setNewCollegeName("");
     setNewCollegeCode("");
@@ -145,31 +161,22 @@ export const SuperAdminView: React.FC = () => {
   const handleApprovePilot = (reqId: string) => {
     const req = pilotRequests.find((r) => r.id === reqId);
     if (!req) return;
-
-    setCollegesList([
-      {
-        id: `col-${Date.now()}`,
-        name: req.collegeName,
-        code: req.code,
-        domain: req.deanEmail.split("@")[1] || "college.ac.in",
-        plan: "Pilot",
-        status: "Active",
-        students: 600,
-        departments: 3,
-      },
-      ...collegesList,
-    ]);
-
+    const provisionedCollege = {
+      id: `col-pilot-${Date.now()}`,
+      name: req.collegeName,
+      code: req.code,
+      domain: req.deanEmail.split("@")[1] || "college.ac.in",
+      plan: "Pilot" as const,
+      status: "Active",
+      students: parseInt(req.intake.replace(/[^0-9]/g, "")) || 1000,
+      departments: 4,
+    };
+    setCollegesList([provisionedCollege, ...collegesList]);
     setPilotRequests(pilotRequests.filter((r) => r.id !== reqId));
-    if (reviewingPilot?.id === reqId) setReviewingPilot(null);
+    setReviewingPilot(null);
   };
 
-  const handleDeclinePilot = (reqId: string) => {
-    setPilotRequests(pilotRequests.filter((r) => r.id !== reqId));
-    if (reviewingPilot?.id === reqId) setReviewingPilot(null);
-  };
-
-  const handleAddCustomTemplate = () => {
+  const handleAddTemplate = () => {
     if (!newTemplateTitle || !newTemplateDesc) return;
     setRubricPresets([
       ...rubricPresets,
@@ -183,270 +190,478 @@ export const SuperAdminView: React.FC = () => {
     setNewTemplateDesc("");
   };
 
+  const tabLabels: Record<string, string> = {
+    tenants: "Tenants",
+    templates: "Master Templates",
+    subscriptions: "Subscriptions",
+    health: "Health & Telemetry",
+  };
+
   return (
-    <AppShell pageTitle="Super Admin Console" breadcrumb="Platform & Tenant Governance">
-      {/* Top Telemetry KPI Bar */}
-      <div id="health" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="space-y-0.5">
-              <span className="text-[11px] font-medium text-[#64748B]">Active College Tenants</span>
-              <div className="text-xl font-bold text-[#0F172A] tabular-nums">{collegesList.length}</div>
-              <span className="text-[10px] text-emerald-600 font-medium">+2 this month</span>
-            </div>
-            <div className="h-9 w-9 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
-              <Building2 className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="space-y-0.5">
-              <span className="text-[11px] font-medium text-[#64748B]">Enrolled Students</span>
-              <div className="text-xl font-bold text-[#0F172A] tabular-nums">
-                {collegesList.reduce((acc, c) => acc + c.students, 0).toLocaleString()}
-              </div>
-              <span className="text-[10px] text-[#64748B]">Across all partitioned DBs</span>
-            </div>
-            <div className="h-9 w-9 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
-              <Activity className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="space-y-0.5">
-              <span className="text-[11px] font-medium text-[#64748B]">Pending Pilot Requests</span>
-              <div className="text-xl font-bold text-amber-700 tabular-nums">{pilotRequests.length}</div>
-              <span className="text-[10px] text-amber-600 font-medium">Requires approval</span>
-            </div>
-            <div className="h-9 w-9 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
-              <Clock className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="space-y-0.5">
-              <span className="text-[11px] font-medium text-[#64748B]">Platform Health</span>
-              <div className="text-xl font-bold text-emerald-600 flex items-center gap-1.5">
-                <CheckCircle2 className="h-5 w-5" />
-                <span>99.98%</span>
-              </div>
-              <span className="text-[10px] text-[#64748B]">PostgreSQL 17 • Redis 7</span>
-            </div>
-            <div className="h-9 w-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <Zap className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
+    <AppShell
+      pageTitle="Super Admin Console"
+      breadcrumb="Platform & Tenant Governance"
+      activeTab={tabLabels[activeTab] || "Tenants"}
+    >
+      {/* 4 SuperAdmin Navigation Sub-Tabs */}
+      <div className="flex border-b border-[#E2E8F0] gap-4 text-xs font-semibold select-none overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => switchTab("tenants")}
+          className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
+            activeTab === "tenants"
+              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              : "text-[#64748B] hover:text-[#0F172A]"
+          }`}
+        >
+          1. Tenants &amp; Partitions ({collegesList.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => switchTab("templates")}
+          className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
+            activeTab === "templates"
+              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              : "text-[#64748B] hover:text-[#0F172A]"
+          }`}
+        >
+          2. Master Templates (NBA &amp; SDGs)
+        </button>
+        <button
+          type="button"
+          onClick={() => switchTab("subscriptions")}
+          className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === "subscriptions"
+              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              : "text-[#64748B] hover:text-[#0F172A]"
+          }`}
+        >
+          <span>3. Subscriptions &amp; Pilots</span>
+          {pilotRequests.length > 0 && (
+            <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+              {pilotRequests.length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => switchTab("health")}
+          className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
+            activeTab === "health"
+              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              : "text-[#64748B] hover:text-[#0F172A]"
+          }`}
+        >
+          4. Health &amp; Telemetry
+        </button>
       </div>
 
-      {/* Colleges & Tenants Section */}
-      <Card id="subscriptions">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <div>
-            <CardTitle>College Tenants</CardTitle>
-            <CardDescription>
-              Each institutional tenant maintains strict database isolation via verified CollegeId.
-            </CardDescription>
-          </div>
-          <Button
-            size="sm"
-            variant="primary"
-            leftIcon={<Plus className="h-3.5 w-3.5" />}
-            onClick={() => setShowAddModal(true)}
-          >
-            Onboard New College
-          </Button>
-        </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B] font-medium">
-              <tr>
-                <th className="py-3 px-4">College Name</th>
-                <th className="py-3 px-4">Tenant Code</th>
-                <th className="py-3 px-4">SSO Domain</th>
-                <th className="py-3 px-4">License Plan</th>
-                <th className="py-3 px-4">Active Intake</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
-              {collegesList.map((col) => (
-                <tr key={col.id} className="hover:bg-[#F8FAFC] transition-colors">
-                  <td className="py-3 px-4 font-semibold flex items-center gap-2">
-                    <div className="h-7 w-7 rounded-md bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center font-bold text-xs">
-                      {col.code.charAt(0)}
-                    </div>
-                    <span>{col.name}</span>
-                  </td>
-                  <td className="py-3 px-4 font-mono font-medium text-[#475569]">{col.code}</td>
-                  <td className="py-3 px-4 font-mono text-[#64748B]">@{col.domain}</td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${
-                        col.plan === "Enterprise"
-                          ? "bg-purple-50 text-purple-700 border border-purple-200"
-                          : "bg-blue-50 text-blue-700 border border-blue-200"
-                      }`}
-                    >
-                      {col.plan}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 tabular-nums">
-                    {col.students.toLocaleString()} students • {col.departments} branches
-                  </td>
-                  <td className="py-3 px-4">
-                    <Badge variant="success" size="sm" dot>
-                      Operational
-                    </Badge>
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setManagingCollege(col);
-                        setTenantSaved(false);
-                      }}
-                      className="text-xs font-semibold text-[#4F46E5] hover:underline cursor-pointer"
-                    >
-                      Manage Tenant
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
-
-      {/* Pilot Queue Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Incoming Pilot Requests Queue</CardTitle>
-          <CardDescription>
-            Institutional pilot requests awaiting Super Admin license provisioning.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {pilotRequests.length > 0 ? (
-            pilotRequests.map((req) => (
-              <div
-                key={req.id}
-                className="p-4 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-[#0F172A]">{req.collegeName}</span>
-                    <span className="font-mono text-[10px] bg-white px-1.5 py-0.5 rounded border border-[#CBD5E1]">
-                      {req.code}
-                    </span>
-                    <span className="text-[10px] text-[#94A3B8]">• {req.requestedAt}</span>
-                  </div>
-                  <div className="text-xs text-[#475569]">
-                    Dean Contact: <span className="font-mono text-[#0F172A]">{req.deanEmail}</span> •
-                    Target Capacity: {req.intake}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => handleApprovePilot(req.id)}
-                    leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                  >
-                    Approve 90-Day Pilot
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setReviewingPilot(req)}
-                  >
-                    Review Details
-                  </Button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <EmptyState
-              title="No Pending Pilot Requests"
-              description="All incoming university pilot applications have been provisioned or resolved."
-            />
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Global Master Templates (NBA Criterion 2 & 3 & UN SDGs) */}
-      <section id="templates" className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>NBA Criterion 2 &amp; 3 Master Rubric Presets</CardTitle>
-              <CardDescription>
-                Standardized PO/PSO outcome matrices provisioned to all college tenants.
-              </CardDescription>
-            </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              leftIcon={<Plus className="h-3.5 w-3.5" />}
-              onClick={() => setShowAddTemplateModal(true)}
-            >
-              Add Preset
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-2.5">
-            {rubricPresets.map((p, i) => (
-              <div
-                key={i}
-                className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex items-start justify-between"
-              >
+      {/* ========================================================================= */}
+      {/* TAB 1: TENANTS & PARTITIONS                                               */}
+      {/* ========================================================================= */}
+      {activeTab === "tenants" && (
+        <div className="space-y-6">
+          {/* Top Telemetry KPI Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4 flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-xs font-semibold text-[#0F172A]">{p.title}</div>
-                  <div className="text-[11px] text-[#475569]">{p.desc}</div>
+                  <span className="text-[11px] font-medium text-[#64748B]">Active College Tenants</span>
+                  <div className="text-xl font-bold text-[#0F172A] tabular-nums">{collegesList.length}</div>
+                  <span className="text-[10px] text-emerald-600 font-medium">+2 this month</span>
                 </div>
-                <Badge variant="neutral" size="sm">
-                  Global
-                </Badge>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+                <div className="h-9 w-9 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
+                  <Building2 className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>UN Sustainable Development Goals (SDG) Catalog</CardTitle>
-            <CardDescription>
-              Mandatory UN SDG mapping framework attached to academic project proposals.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {[
-              { num: 3, name: "Good Health and Well-Being" },
-              { num: 7, name: "Affordable and Clean Energy" },
-              { num: 9, name: "Industry, Innovation and Infrastructure" },
-              { num: 11, name: "Sustainable Cities and Communities" },
-              { num: 13, name: "Climate Action" },
-            ].map((sdg) => (
-              <div
-                key={sdg.num}
-                className="flex items-center justify-between p-2 rounded-md bg-[#F8FAFC] border border-[#E2E8F0]"
-              >
-                <Badge variant="sdg" sdgNumber={sdg.num}>
-                  {sdg.name}
-                </Badge>
-                <span className="text-[10px] text-[#64748B] font-mono">Template ID: SDG-{sdg.num}</span>
+            <Card>
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-[11px] font-medium text-[#64748B]">Enrolled Students</span>
+                  <div className="text-xl font-bold text-[#0F172A] tabular-nums">
+                    {collegesList.reduce((acc, c) => acc + c.students, 0).toLocaleString()}
+                  </div>
+                  <span className="text-[10px] text-[#64748B]">Across all partitioned DBs</span>
+                </div>
+                <div className="h-9 w-9 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+                  <Activity className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-[11px] font-medium text-[#64748B]">Pending Pilot Requests</span>
+                  <div className="text-xl font-bold text-amber-700 tabular-nums">{pilotRequests.length}</div>
+                  <span className="text-[10px] text-amber-600 font-medium">Requires approval</span>
+                </div>
+                <div className="h-9 w-9 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                  <Clock className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-[11px] font-medium text-[#64748B]">Platform Health</span>
+                  <div className="text-xl font-bold text-emerald-600 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span>99.98%</span>
+                  </div>
+                  <span className="text-[10px] text-[#64748B]">PostgreSQL 17 • Redis 7</span>
+                </div>
+                <div className="h-9 w-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                  <Zap className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Colleges & Tenants Section */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle>College Tenants</CardTitle>
+                <CardDescription>
+                  Each institutional tenant maintains strict database isolation via verified CollegeId.
+                </CardDescription>
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      </section>
+              <Button
+                size="sm"
+                variant="primary"
+                leftIcon={<Plus className="h-3.5 w-3.5" />}
+                onClick={() => setShowAddModal(true)}
+              >
+                Onboard New College
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B] font-medium">
+                  <tr>
+                    <th className="py-3 px-4">College Name</th>
+                    <th className="py-3 px-4">Tenant Code</th>
+                    <th className="py-3 px-4">SSO Domain</th>
+                    <th className="py-3 px-4">License Plan</th>
+                    <th className="py-3 px-4">Active Intake</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
+                  {collegesList.map((col) => (
+                    <tr key={col.id} className="hover:bg-[#F8FAFC] transition-colors">
+                      <td className="py-3 px-4 font-semibold flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-md bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center font-bold text-xs">
+                          {col.code.charAt(0)}
+                        </div>
+                        <span>{col.name}</span>
+                      </td>
+                      <td className="py-3 px-4 font-mono font-medium text-[#475569]">{col.code}</td>
+                      <td className="py-3 px-4 font-mono text-[#64748B]">@{col.domain}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${
+                            col.plan === "Enterprise"
+                              ? "bg-purple-50 text-purple-700 border border-purple-200"
+                              : "bg-blue-50 text-blue-700 border border-blue-200"
+                          }`}
+                        >
+                          {col.plan}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 tabular-nums">
+                        {col.students.toLocaleString()} students • {col.departments} branches
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge variant="success" size="sm" dot>
+                          Operational
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManagingCollege(col);
+                            setTenantSaved(false);
+                          }}
+                          className="text-xs font-semibold text-[#4F46E5] hover:underline cursor-pointer"
+                        >
+                          Manage Tenant
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 2: MASTER TEMPLATES (NBA & SDGS)                                      */}
+      {/* ========================================================================= */}
+      {activeTab === "templates" && (
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>NBA Criterion 2 &amp; 3 Master Rubric Presets</CardTitle>
+                <CardDescription>
+                  Standardized PO/PSO outcome matrices provisioned to all college tenants.
+                </CardDescription>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                leftIcon={<Plus className="h-3.5 w-3.5" />}
+                onClick={() => setShowAddTemplateModal(true)}
+              >
+                Add Preset
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2.5">
+              {rubricPresets.map((p, i) => (
+                <div
+                  key={i}
+                  className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex items-start justify-between"
+                >
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-semibold text-[#0F172A]">{p.title}</div>
+                    <div className="text-[11px] text-[#475569]">{p.desc}</div>
+                  </div>
+                  <Badge variant="neutral" size="sm">
+                    Global
+                  </Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>UN Sustainable Development Goals (SDG) Catalog</CardTitle>
+              <CardDescription>
+                Mandatory UN SDG mapping framework attached to academic project proposals.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {[
+                { num: 3, name: "Good Health and Well-Being" },
+                { num: 7, name: "Affordable and Clean Energy" },
+                { num: 9, name: "Industry, Innovation and Infrastructure" },
+                { num: 11, name: "Sustainable Cities and Communities" },
+                { num: 13, name: "Climate Action" },
+              ].map((sdg) => (
+                <div
+                  key={sdg.num}
+                  className="flex items-center justify-between p-2 rounded-md bg-[#F8FAFC] border border-[#E2E8F0]"
+                >
+                  <Badge variant="sdg" sdgNumber={sdg.num}>
+                    {sdg.name}
+                  </Badge>
+                  <span className="text-[10px] text-[#64748B] font-mono">Template ID: SDG-{sdg.num}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: SUBSCRIPTIONS & PILOTS                                             */}
+      {/* ========================================================================= */}
+      {activeTab === "subscriptions" && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Incoming Pilot Requests Queue</CardTitle>
+              <CardDescription>
+                Institutional pilot requests awaiting Super Admin license provisioning.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {pilotRequests.length > 0 ? (
+                pilotRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="p-4 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-[#0F172A]">{req.collegeName}</span>
+                        <span className="font-mono text-[10px] bg-white px-1.5 py-0.5 rounded border border-[#CBD5E1]">
+                          {req.code}
+                        </span>
+                        <span className="text-[10px] text-[#94A3B8]">• {req.requestedAt}</span>
+                      </div>
+                      <div className="text-xs text-[#475569]">
+                        Dean Contact: <span className="font-mono text-[#0F172A]">{req.deanEmail}</span> •
+                        Target Capacity: {req.intake}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => handleApprovePilot(req.id)}
+                        leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                      >
+                        Approve 90-Day Pilot
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setReviewingPilot(req)}
+                      >
+                        Review Details
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <EmptyState
+                  title="No Pending Pilot Requests"
+                  description="All incoming university pilot applications have been provisioned or resolved."
+                />
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Subscription Tiers Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>License Plan Entitlements &amp; SLAs</CardTitle>
+              <CardDescription>
+                Features unlocked across Pilot, Standard, and Enterprise tiers.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]">
+                  <tr>
+                    <th className="py-2.5 px-4 font-semibold">Tier Plan</th>
+                    <th className="py-2.5 px-4 font-semibold">Student Intake Limit</th>
+                    <th className="py-2.5 px-4 font-semibold">NBA Audit Export</th>
+                    <th className="py-2.5 px-4 font-semibold">SSO Domain Sync</th>
+                    <th className="py-2.5 px-4 text-right font-semibold">SLA Guarantee</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
+                  <tr className="hover:bg-[#F8FAFC]">
+                    <td className="py-2.5 px-4 font-bold text-blue-700">Pilot (90 Days)</td>
+                    <td className="py-2.5 px-4 font-mono">Up to 1,000</td>
+                    <td className="py-2.5 px-4">Standard PDF/CSV</td>
+                    <td className="py-2.5 px-4 text-amber-700 font-medium">Domain match only</td>
+                    <td className="py-2.5 px-4 text-right font-mono">99.5%</td>
+                  </tr>
+                  <tr className="hover:bg-[#F8FAFC]">
+                    <td className="py-2.5 px-4 font-bold text-emerald-700">Standard Annual</td>
+                    <td className="py-2.5 px-4 font-mono">Up to 2,500</td>
+                    <td className="py-2.5 px-4">Full SAR Criterion 2 &amp; 3</td>
+                    <td className="py-2.5 px-4 text-emerald-700 font-medium">Google &amp; Azure AD</td>
+                    <td className="py-2.5 px-4 text-right font-mono">99.9%</td>
+                  </tr>
+                  <tr className="hover:bg-[#F8FAFC]">
+                    <td className="py-2.5 px-4 font-bold text-purple-700">Enterprise Multi-Campus</td>
+                    <td className="py-2.5 px-4 font-mono">Unlimited</td>
+                    <td className="py-2.5 px-4">Digital Signatures + ZIP Packager</td>
+                    <td className="py-2.5 px-4 text-purple-700 font-medium">Automated SCIM Directory</td>
+                    <td className="py-2.5 px-4 text-right font-mono">99.98%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: PLATFORM HEALTH & TELEMETRY                                        */}
+      {/* ========================================================================= */}
+      {activeTab === "health" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-4 space-y-1">
+              <span className="text-[11px] text-[#64748B]">PostgreSQL 17 Isolation</span>
+              <div className="text-lg font-bold text-[#0F172A] flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>Row-Level Security Active</span>
+              </div>
+              <p className="text-[10px] text-[#64748B]">0 cross-tenant leaks detected</p>
+            </Card>
+
+            <Card className="p-4 space-y-1">
+              <span className="text-[11px] text-[#64748B]">Redis 7 State Broker</span>
+              <div className="text-lg font-bold text-[#0F172A] flex items-center gap-1.5">
+                <Zap className="h-4 w-4 text-blue-600" />
+                <span>Cluster Healthy</span>
+              </div>
+              <p className="text-[10px] text-[#64748B]">2.1ms average cache latency</p>
+            </Card>
+
+            <Card className="p-4 space-y-1">
+              <span className="text-[11px] text-[#64748B]">Edge API Gateway</span>
+              <div className="text-lg font-bold text-[#0F172A] flex items-center gap-1.5">
+                <Server className="h-4 w-4 text-purple-600" />
+                <span>18ms Latency</span>
+              </div>
+              <p className="text-[10px] text-[#64748B]">AWS ap-south-1 (Mumbai)</p>
+            </Card>
+
+            <Card className="p-4 space-y-1">
+              <span className="text-[11px] text-[#64748B]">Global Platform Uptime</span>
+              <div className="text-lg font-bold text-emerald-600 font-mono">
+                99.98% SLA
+              </div>
+              <p className="text-[10px] text-emerald-700">Zero downtime in past 90 days</p>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Database Partition Telemetry &amp; Quotas</CardTitle>
+              <CardDescription>
+                PostgreSQL schema partitions assigned to each verified CollegeId.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]">
+                  <tr>
+                    <th className="py-2.5 px-4 font-semibold">Tenant Partition</th>
+                    <th className="py-2.5 px-4 font-semibold">Schema Identifier</th>
+                    <th className="py-2.5 px-4 font-semibold">Allocated Storage</th>
+                    <th className="py-2.5 px-4 font-semibold">Active Connections</th>
+                    <th className="py-2.5 px-4 text-right font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A] font-mono">
+                  {collegesList.map((col) => (
+                    <tr key={col.id} className="hover:bg-[#F8FAFC]">
+                      <td className="py-2.5 px-4 font-sans font-semibold text-[#0F172A]">{col.name}</td>
+                      <td className="py-2.5 px-4 font-bold text-[#4F46E5]">tenant_{col.code.toLowerCase()}_prod</td>
+                      <td className="py-2.5 px-4 tabular-nums">14.8 GB / 50.0 GB</td>
+                      <td className="py-2.5 px-4 tabular-nums">12 connections</td>
+                      <td className="py-2.5 px-4 text-right font-sans">
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          Isolated &amp; Healthy
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Onboard College Modal */}
       <Modal
@@ -525,69 +740,64 @@ export const SuperAdminView: React.FC = () => {
                 size="sm"
                 onClick={() => {
                   setTenantSaved(true);
-                  setTimeout(() => setManagingCollege(null), 1500);
+                  setTimeout(() => setManagingCollege(null), 1200);
                 }}
               >
-                {tenantSaved ? "Configuration Saved!" : "Save Tenant Configuration"}
+                {tenantSaved ? "Configuration Saved!" : "Save Partition Config"}
               </Button>
             </div>
           )
         }
       >
         {managingCollege && (
-          <div className="space-y-4 text-xs">
-            <div className="p-3 bg-[#EEF2FF] rounded-lg border border-indigo-100 text-[#3730A3] space-y-1">
-              <div className="font-semibold flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-[#4F46E5]" />
-                <span>Dedicated PostgreSQL Schema Active</span>
+          <div className="space-y-5 text-xs">
+            {tenantSaved && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>Tenant partition configuration updated successfully.</span>
               </div>
-              <p className="text-[11px] leading-relaxed">
-                Database partition <code className="font-mono bg-white px-1 rounded">schema_{managingCollege.code.toLowerCase()}</code> enforces strict multi-tenancy with zero cross-tenant query leaks.
-              </p>
+            )}
+
+            {/* DB Partition Health */}
+            <div className="space-y-2">
+              <span className="font-bold text-[#0F172A] block">Database Partition Health</span>
+              <div className="p-3 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] space-y-2 font-mono text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-[#64748B]">Schema:</span>
+                  <span className="font-bold text-[#0F172A]">tenant_{managingCollege.code.toLowerCase()}_prod</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#64748B]">Storage Quota:</span>
+                  <span className="text-[#0F172A]">14.8 GB / 50.0 GB (30%)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#64748B]">RLS Status:</span>
+                  <span className="text-emerald-700 font-bold">Enforced (CollegeId)</span>
+                </div>
+              </div>
             </div>
 
-            <div className="p-3.5 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] space-y-2">
-              <div className="flex justify-between">
-                <span className="text-[#64748B]">SSO Email Domain:</span>
-                <span className="font-mono font-semibold text-[#0F172A]">@{managingCollege.domain}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#64748B]">Active Enrollment:</span>
-                <span className="font-semibold text-[#0F172A] tabular-nums">{managingCollege.students} Students</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#64748B]">Storage Quota Utilization:</span>
-                <span className="font-mono font-bold text-emerald-600 tabular-nums">14.8 GB / 50.0 GB (29.6%)</span>
-              </div>
-            </div>
-
-            <div className="space-y-3 pt-2 border-t border-[#E2E8F0]">
+            {/* Subscription Tier Selector */}
+            <div className="space-y-2">
+              <span className="font-bold text-[#0F172A] block">Subscription &amp; License Plan</span>
               <Select
-                label="Subscription Tier"
+                label="License Tier"
                 value={managingCollege.plan}
-                onChange={(e) => {
-                  const updatedPlan = e.target.value as "Pilot" | "Standard" | "Enterprise";
-                  setCollegesList((prev) =>
-                    prev.map((c) =>
-                      c.id === managingCollege.id ? { ...c, plan: updatedPlan } : c
-                    )
-                  );
-                  setManagingCollege({ ...managingCollege, plan: updatedPlan });
-                }}
                 options={[
-                  { label: "Pilot (90-Day Evaluation)", value: "Pilot" },
-                  { label: "Standard (Annual Campus License)", value: "Standard" },
-                  { label: "Enterprise (Multi-Campus Full NBA Suite)", value: "Enterprise" },
+                  { label: "Pilot License (90-Day Evaluation)", value: "Pilot" },
+                  { label: "Standard License (Annual Academic)", value: "Standard" },
+                  { label: "Enterprise (Multi-Campus & NBA Assurance)", value: "Enterprise" },
                 ]}
               />
+            </div>
 
-              <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex items-center justify-between">
-                <div>
-                  <div className="font-semibold text-[#0F172A]">Scheduled Maintenance Mode</div>
-                  <div className="text-[11px] text-[#64748B]">Prevents new viva submissions during DB upgrades</div>
-                </div>
-                <input type="checkbox" className="rounded text-[#4F46E5]" />
+            {/* Maintenance Mode Toggle */}
+            <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex items-center justify-between">
+              <div>
+                <span className="font-bold text-[#0F172A] block">Maintenance Mode</span>
+                <span className="text-[11px] text-[#64748B]">Temporarily block student portal access for maintenance</span>
               </div>
+              <input type="checkbox" className="h-4 w-4 rounded text-[#4F46E5] focus:ring-[#4F46E5]" />
             </div>
           </div>
         )}
@@ -597,118 +807,104 @@ export const SuperAdminView: React.FC = () => {
       <Modal
         isOpen={!!reviewingPilot}
         onClose={() => setReviewingPilot(null)}
-        title="Review Pilot Request Application"
-        description="Verify institutional credentials and target student capacity before license activation."
-        footer={
-          reviewingPilot && (
-            <div className="flex items-center justify-between w-full">
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => handleDeclinePilot(reviewingPilot.id)}
-              >
-                Decline Request
-              </Button>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" onClick={() => setReviewingPilot(null)}>
-                  Close
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => handleApprovePilot(reviewingPilot.id)}
-                  leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                >
-                  Approve 90-Day Pilot
-                </Button>
-              </div>
-            </div>
-          )
-        }
+        title="Institutional Pilot Application"
+        description="Review engineering university details and accreditations before provisioning tenant DB."
+        maxWidth="lg"
       >
         {reviewingPilot && (
-          <div className="space-y-3.5 text-xs">
-            <div className="p-3.5 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] space-y-2">
+          <div className="space-y-4 text-xs">
+            <div className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] space-y-2">
               <div className="flex justify-between">
-                <span className="text-[#64748B]">College Name:</span>
+                <span className="text-[#64748B]">Institution Name:</span>
                 <span className="font-bold text-[#0F172A]">{reviewingPilot.collegeName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#64748B]">Institutional Code:</span>
+                <span className="text-[#64748B]">Assigned Code:</span>
                 <span className="font-mono font-bold text-[#4F46E5]">{reviewingPilot.code}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#64748B]">Dean Contact:</span>
+                <span className="text-[#64748B]">Dean / Principal Email:</span>
                 <span className="font-mono text-[#0F172A]">{reviewingPilot.deanEmail}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#64748B]">Target Student Capacity:</span>
-                <span className="font-semibold text-[#0F172A]">{reviewingPilot.intake}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#64748B]">Application Date:</span>
-                <span className="text-[#64748B]">{reviewingPilot.requestedAt}</span>
+                <span className="text-[#64748B]">Estimated Student Intake:</span>
+                <span className="font-bold text-[#0F172A]">{reviewingPilot.intake}</span>
               </div>
             </div>
 
-            <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-800 text-[11px] flex items-start gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-              <span>Domain ownership verified via university academic registry. Approving will automatically provision a isolated tenant partition with default NBA Criteria 2 &amp; 3 rubric templates.</span>
+            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-900 text-[11px] leading-relaxed">
+              Approval triggers automatic PostgreSQL 17 tenant partition generation and dispatches an onboarding invitation to the dean&apos;s email.
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-[#E2E8F0]">
+              <Button size="sm" variant="ghost" onClick={() => setReviewingPilot(null)}>
+                Decline Request
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => handleApprovePilot(reviewingPilot.id)}
+                leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
+              >
+                Approve 90-Day Pilot
+              </Button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Add Custom Master Template Modal */}
+      {/* Add Custom Template Modal */}
       <Modal
         isOpen={showAddTemplateModal}
         onClose={() => setShowAddTemplateModal(false)}
-        title="Add Master Accreditation Rubric Preset"
-        description="Global presets are provisioned across all engineering college tenant partitions."
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button variant="secondary" size="sm" onClick={() => setShowAddTemplateModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" size="sm" onClick={handleAddCustomTemplate}>
-              Publish Global Template
-            </Button>
-          </div>
-        }
+        title="Add Master NBA Rubric Preset"
+        description="Creates a standardized evaluation criterion distributed to all college tenant catalogs."
+        maxWidth="md"
       >
         <div className="space-y-3.5">
           <Input
-            label="Template Title / Competency"
-            placeholder="e.g. Ethics and Social Responsibility"
+            label="Criterion Name"
+            placeholder="e.g. Sustainable Development Engineering"
             value={newTemplateTitle}
             onChange={(e) => setNewTemplateTitle(e.target.value)}
           />
+
           <Select
-            label="Target NBA Program Outcome (PO / PSO)"
+            label="Target Program Outcome (PO / PSO)"
             value={newTemplateCode}
             onChange={(e) => setNewTemplateCode(e.target.value)}
             options={[
               { label: "PO1: Engineering Knowledge", value: "PO1" },
               { label: "PO2: Problem Analysis", value: "PO2" },
               { label: "PO3: Design/Development of Solutions", value: "PO3" },
-              { label: "PO4: Conduct Investigations of Complex Problems", value: "PO4" },
+              { label: "PO4: Complex Investigations", value: "PO4" },
               { label: "PO5: Modern Tool Usage", value: "PO5" },
-              { label: "PO6: The Engineer and Society", value: "PO6" },
-              { label: "PO8: Ethics & Professionalism", value: "PO8" },
-              { label: "PSO1: Domain Specific Hardware/Firmware", value: "PSO1" },
-              { label: "PSO2: AI & Cloud Infrastructure", value: "PSO2" },
+              { label: "PO7: Environment and Sustainability", value: "PO7" },
+              { label: "PO9: Individual and Team Work", value: "PO9" },
+              { label: "PO10: Communication", value: "PO10" },
+              { label: "PSO1: Domain Core Specialization", value: "PSO1" },
+              { label: "PSO2: Professional Readiness", value: "PSO2" },
             ]}
           />
+
           <Textarea
-            label="Evaluation Guidance & Benchmark Descriptors"
-            placeholder="Specify rubric criteria and expectations for panel evaluators..."
+            label="Scoring Guideline & Description"
+            placeholder="Describe what evaluators should measure to award maximum marks..."
             value={newTemplateDesc}
             onChange={(e) => setNewTemplateDesc(e.target.value)}
             rows={3}
           />
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-[#E2E8F0]">
+            <Button size="sm" variant="secondary" onClick={() => setShowAddTemplateModal(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" variant="primary" onClick={handleAddTemplate}>
+              Publish Global Preset
+            </Button>
+          </div>
         </div>
       </Modal>
     </AppShell>
   );
 };
-

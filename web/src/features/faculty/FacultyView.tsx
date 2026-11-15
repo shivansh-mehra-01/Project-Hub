@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   FileCheck2,
   Users2,
@@ -32,7 +33,12 @@ import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { WeeklyLog, Team } from "@/mocks/store-types";
 import { GithubIcon } from "@/design-system/components/Icons";
 
-export const FacultyView: React.FC = () => {
+export interface FacultyViewProps {
+  initialTab?: "queue" | "teams" | "grading";
+}
+
+export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }) => {
+  const router = useRouter();
   const {
     teams,
     evaluations,
@@ -46,7 +52,7 @@ export const FacultyView: React.FC = () => {
     postProblemIdea,
   } = useProjectHubStore();
 
-  const [activeTab, setActiveTab] = useState<"queue" | "teams" | "grading">("queue");
+  const [activeTab, setActiveTab] = useState<"queue" | "teams" | "grading">(initialTab);
   const [inspectingLog, setInspectingLog] = useState<WeeklyLog | null>(null);
   const [inspectingTeam, setInspectingTeam] = useState<Team | null>(null);
   const [guideRemarks, setGuideRemarks] = useState("");
@@ -70,30 +76,15 @@ export const FacultyView: React.FC = () => {
   const [vivaFeedback, setVivaFeedback] = useState("Solid prototype hardware demo.");
   const [isLocked, setIsLocked] = useState(false);
 
-  // Hash-to-Tab Synchronization
   useEffect(() => {
-    const syncHashToTab = () => {
-      const hash = window.location.hash.toLowerCase();
-      if (hash === "#teams") {
-        setActiveTab("teams");
-      } else if (hash === "#evaluations" || hash === "#grading") {
-        setActiveTab("grading");
-      } else if (hash === "#queue" || hash === "") {
-        setActiveTab("queue");
-      }
-    };
-
-    syncHashToTab();
-    window.addEventListener("hashchange", syncHashToTab);
-    return () => window.removeEventListener("hashchange", syncHashToTab);
-  }, []);
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const switchTab = (tab: "queue" | "teams" | "grading") => {
     setActiveTab(tab);
-    const hash = tab === "teams" ? "#teams" : tab === "grading" ? "#evaluations" : "#queue";
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", hash);
-    }
+    if (tab === "queue") router.push("/faculty");
+    else if (tab === "teams") router.push("/faculty/teams");
+    else if (tab === "grading") router.push("/faculty/evaluations");
   };
 
   // Filter teams mentored by this faculty or sample
@@ -141,8 +132,18 @@ export const FacultyView: React.FC = () => {
     setIdeaAbstract("");
   };
 
+  const tabLabels: Record<string, string> = {
+    queue: "Action Queue",
+    teams: "My Teams",
+    grading: "Live Viva Grading",
+  };
+
   return (
-    <AppShell pageTitle="Faculty Academic Workspace" breadcrumb="Mentorship & Evaluation Console">
+    <AppShell
+      pageTitle="Faculty Academic Workspace"
+      breadcrumb="Mentorship & Evaluation Console"
+      activeTab={tabLabels[activeTab] || "Action Queue"}
+    >
       {/* 3 Primary Faculty Tabs */}
       <div className="flex border-b border-[#E2E8F0] gap-4 text-xs font-semibold select-none overflow-x-auto">
         <button

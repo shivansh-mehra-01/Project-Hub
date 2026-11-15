@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   AlertCircle,
@@ -28,7 +29,12 @@ import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { Team } from "@/mocks/store-types";
 
-export const HODView: React.FC = () => {
+export interface HODViewProps {
+  initialTab?: "overview" | "approvals" | "nba" | "faculty";
+}
+
+export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => {
+  const router = useRouter();
   const {
     teams,
     facultyRoster,
@@ -40,7 +46,7 @@ export const HODView: React.FC = () => {
     rejectGradeUnlock,
   } = useProjectHubStore();
 
-  const [activeTab, setActiveTab] = useState<"overview" | "approvals" | "nba" | "faculty">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "approvals" | "nba" | "faculty">(initialTab);
   const [approvalSubTab, setApprovalSubTab] = useState<"allotments" | "proposals" | "unlocks" | "results">(
     "allotments"
   );
@@ -54,26 +60,16 @@ export const HODView: React.FC = () => {
   const [archiveSearch, setArchiveSearch] = useState("");
   const [archiveBatch, setArchiveBatch] = useState("ALL");
 
-  // Sync tab with URL hash
   useEffect(() => {
-    const handleHashSync = () => {
-      const hash = window.location.hash.replace("#", "");
-      if (hash === "approvals" || hash === "nba" || hash === "faculty") {
-        setActiveTab(hash);
-      } else if (!hash || hash === "overview") {
-        setActiveTab("overview");
-      }
-    };
-    handleHashSync();
-    window.addEventListener("hashchange", handleHashSync);
-    return () => window.removeEventListener("hashchange", handleHashSync);
-  }, []);
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const switchTab = (tab: "overview" | "approvals" | "nba" | "faculty") => {
     setActiveTab(tab);
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", tab === "overview" ? "/hod" : `/hod#${tab}`);
-    }
+    if (tab === "overview") router.push("/hod");
+    else if (tab === "approvals") router.push("/hod/approvals");
+    else if (tab === "nba") router.push("/hod/nba");
+    else if (tab === "faculty") router.push("/hod/faculty");
   };
 
   // Teams waiting for HOD sign-off
@@ -104,8 +100,19 @@ export const HODView: React.FC = () => {
     }, 1200);
   };
 
+  const tabLabels: Record<string, string> = {
+    overview: "Overview",
+    approvals: "Approvals Queue",
+    nba: "NBA Criterion 2 & 3",
+    faculty: "Faculty Setup",
+  };
+
   return (
-    <AppShell pageTitle="HOD Executive Workspace" breadcrumb="Department of Computer Science & Engineering">
+    <AppShell
+      pageTitle="HOD Executive Workspace"
+      breadcrumb="Department of Computer Science & Engineering"
+      activeTab={tabLabels[activeTab] || "Overview"}
+    >
       {/* 4 Navigation Sub-Tabs */}
       <div className="flex border-b border-[#E2E8F0] gap-4 text-xs font-semibold select-none">
         <button
