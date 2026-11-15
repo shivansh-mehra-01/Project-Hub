@@ -687,17 +687,7 @@ export const AppShell: React.FC<AppShellProps> = ({
               </div>
             )}
 
-            {/* Top-Right Dedicated Log Out Action (Replaces redundant user avatar block) */}
-            <div className="pl-2 border-l border-white/[0.08]">
-              <Link
-                href="/login"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-rose-400 hover:bg-white/5 transition-colors cursor-pointer group"
-                title="Log Out of Session"
-              >
-                <LogOut className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-400 transition-colors" strokeWidth={1.75} />
-                <span className="hidden sm:inline text-xs font-medium">Log Out</span>
-              </Link>
-            </div>
+
           </div>
         </header>
 
