@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -9,6 +9,8 @@ import {
   Calendar,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
   Compass,
   FileCheck2,
   FolderGit2,
@@ -17,17 +19,17 @@ import {
   Layers,
   LogOut,
   RotateCcw,
+  Search,
   Sliders,
-  Sparkles,
   User,
+  UserCog,
   Users2,
   X,
   Shield,
   Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "../components/Badge";
-import { Button } from "../components/Button";
+import { CommandPalette } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
 
@@ -52,17 +54,36 @@ export const AppShell: React.FC<AppShellProps> = ({
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showMobileRoleMenu, setShowMobileRoleMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showCampusMenu, setShowCampusMenu] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState("Gandhi Nagar (Main)");
+
+  // Demo mode gate: defaults to true unless explicitly disabled in env
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
 
   // Enforce strictly Emerald & Charcoal theme
-  React.useEffect(() => {
+  useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("projecthub_theme");
       document.documentElement.removeAttribute("data-theme");
     }
   }, []);
 
+  // Keyboard shortcut listener for Cmd+K / Ctrl+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Auto-sync persona with route if accessed directly via URL
-  React.useEffect(() => {
+  useEffect(() => {
     if (pathname.startsWith("/admin") && currentPersona.role !== "SuperAdmin") {
       switchPersona("SuperAdmin");
     } else if (pathname.startsWith("/college") && currentPersona.role !== "CollegeAdmin") {
@@ -98,6 +119,13 @@ export const AppShell: React.FC<AppShellProps> = ({
     },
   ];
 
+  // Available campus branches for multi-campus institutional switcher
+  const campusBranches = [
+    { id: "main", name: "Gandhi Nagar (Main Campus)", code: "INST-MP-0176" },
+    { id: "ratibad", name: "Ratibad Campus", code: "INST-MP-0192" },
+    { id: "pharmacy", name: "SISTec Pharmacy & Tech", code: "INST-MP-0205" },
+  ];
+
   // Determine role-based navigation tabs (strictly max 4 primary tabs)
   const getNavItems = () => {
     switch (currentPersona.role) {
@@ -128,7 +156,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           { label: "My Teams", href: "/faculty/teams", icon: Users2 },
           { label: "Live Viva Grading", href: "/faculty/evaluations", icon: GraduationCap },
         ];
-        // Dynamic 4th Tab if ProjectCoordinator = true (User Refinement)
+        // Dynamic 4th Tab if ProjectCoordinator = true
         if (currentPersona.isProjectCoordinator) {
           baseItems.push({
             label: "Batch Ops",
@@ -166,48 +194,111 @@ export const AppShell: React.FC<AppShellProps> = ({
   return (
     <div className="flex min-h-screen bg-canvas-bg">
       {/* ========================================================================= */}
-      {/* 1. DESKTOP FIXED SIDEBAR (240px, Master Dark Anchor)                       */}
+      {/* 1. DESKTOP FIXED SIDEBAR (240px, Dark L-Frame Anchor)                     */}
       {/* ========================================================================= */}
-      <aside className="hidden lg:flex w-[240px] flex-col border-r border-shell-border bg-shell-bg text-shell-text fixed inset-y-0 z-30 select-none">
-        {/* Brand & College Tenant Header */}
-        <div className="h-16 flex items-center px-4 border-b border-shell-border gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-brand-primary flex items-center justify-center text-white font-bold text-xs shadow-xs shrink-0 font-heading">
+      <aside className="hidden lg:flex w-[240px] flex-col border-r border-white/[0.08] bg-[#111827] text-white fixed inset-y-0 z-30 select-none">
+        
+        {/* Top-Left Brand Lockup & Multi-Campus Switcher (Locked to 56px / h-14) */}
+        <div className="h-14 flex items-center px-4 border-b border-white/[0.08] gap-2.5 relative">
+          <div className="h-7 w-7 rounded-lg bg-brand-primary flex items-center justify-center text-white font-bold text-xs shadow-xs shrink-0 font-heading">
             PH
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="font-bold text-xs text-shell-text tracking-tight truncate font-heading">
-              {currentPersona.role === "SuperAdmin" ? "Project Hub • Platform Ops" : `${college.code} • Project Hub`}
-            </span>
-            <span className="text-[10px] text-shell-muted truncate">
-              {currentPersona.role === "SuperAdmin"
-                ? "Global Multi-Tenant Control"
-                : currentPersona.departmentId
-                ? "Dept. of CSE"
-                : "Institutional Admin"}
-            </span>
-          </div>
+
+          {currentPersona.role === "SuperAdmin" ? (
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-xs text-white tracking-tight truncate font-heading">
+                Project Hub • Platform
+              </span>
+              <span className="text-[10px] text-slate-400 truncate">
+                Global Tenant Control
+              </span>
+            </div>
+          ) : (
+            <div className="flex-1 min-w-0 relative">
+              <button
+                type="button"
+                onClick={() => setShowCampusMenu(!showCampusMenu)}
+                className="w-full flex items-center justify-between text-left group cursor-pointer"
+                title="Switch campus branch"
+              >
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-xs text-white tracking-tight truncate font-heading group-hover:text-emerald-300 transition-colors">
+                    {college.code} • {selectedBranch.split(" ")[0]}
+                  </span>
+                  <span className="text-[10px] text-slate-400 truncate">
+                    {currentPersona.departmentId ? "Dept. of CSE" : "Institutional Admin"}
+                  </span>
+                </div>
+                <ChevronsUpDown
+                  className="w-3.5 h-3.5 text-slate-400 group-hover:text-white shrink-0 ml-1 transition-colors"
+                  strokeWidth={1.75}
+                />
+              </button>
+
+              {/* Multi-Campus Dropdown */}
+              {showCampusMenu && (
+                <div className="absolute top-full left-0 mt-2 w-52 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-1.5 z-50 space-y-0.5 text-xs animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold border-b border-white/[0.08]">
+                    Campus Branches
+                  </div>
+                  {campusBranches.map((branch) => (
+                    <button
+                      key={branch.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedBranch(branch.name);
+                        setShowCampusMenu(false);
+                      }}
+                      className={cn(
+                        "w-full text-left px-2 py-1.5 rounded-lg flex flex-col cursor-pointer transition-colors",
+                        selectedBranch === branch.name
+                          ? "bg-brand-primary text-white font-semibold"
+                          : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
+                      )}
+                    >
+                      <span className="text-xs truncate">{branch.name}</span>
+                      <span className="text-[10px] opacity-75 font-mono">{branch.code}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Current Role Identity Card */}
         <div className="px-3 pt-3 pb-2">
-          <div className="p-2.5 rounded-lg bg-shell-surface border border-shell-border flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-shell-muted">
+          <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
                 Active Persona
               </span>
-              <Badge variant="role" role={currentPersona.role} size="sm" dot />
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <span>
+                  {currentPersona.role === "SuperAdmin"
+                    ? "Super Admin"
+                    : currentPersona.role === "CollegeAdmin"
+                    ? "College Admin"
+                    : currentPersona.role === "TeamLead"
+                    ? "Team Lead"
+                    : currentPersona.role}
+                </span>
+              </span>
             </div>
-            <div className="text-xs font-semibold text-shell-text truncate font-heading">
+
+            <div className="text-xs font-semibold text-white truncate font-heading">
               {currentPersona.name}
             </div>
             {currentPersona.enrollmentNumber && (
-              <div className="font-mono text-[10px] text-shell-muted tabular-nums">
+              <div className="font-mono text-[10px] text-slate-400 tabular-nums">
                 USN: {currentPersona.enrollmentNumber}
               </div>
             )}
             {currentPersona.isProjectCoordinator && (
-              <div className="text-[10px] font-medium text-emerald-300 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800 w-fit">
-                ★ Coordinator Authority
+              <div className="text-[10px] font-medium text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 w-fit flex items-center gap-1">
+                <span>★</span>
+                <span>Coordinator Authority</span>
               </div>
             )}
           </div>
@@ -215,7 +306,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
         {/* Navigation Tabs (Max 4 per role) */}
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-          <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-shell-muted">
+          <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
             Menu
           </div>
           {navItems.map((item) => {
@@ -230,13 +321,16 @@ export const AppShell: React.FC<AppShellProps> = ({
                   "flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors",
                   isActive
                     ? "bg-brand-primary text-white font-semibold shadow-xs"
-                    : "text-shell-muted hover:bg-shell-surface hover:text-shell-text"
+                    : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
                 )}
               >
-                <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-white" : "text-shell-muted")} strokeWidth={1.75} />
+                <Icon
+                  className={cn("h-4 w-4 shrink-0", isActive ? "text-white" : "text-slate-400")}
+                  strokeWidth={1.75}
+                />
                 <span className="truncate">{item.label}</span>
                 {item.label === "Batch Ops" && (
-                  <span className="ml-auto text-[9px] bg-emerald-900 text-emerald-200 font-bold px-1.5 py-0.2 rounded font-mono">
+                  <span className="ml-auto text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold px-1.5 py-0.2 rounded font-mono">
                     ON
                   </span>
                 )}
@@ -245,73 +339,79 @@ export const AppShell: React.FC<AppShellProps> = ({
           })}
         </nav>
 
-        {/* Persona Switcher Quick Dock & Controls */}
-        <div className="p-3 border-t border-shell-border space-y-2 bg-shell-bg">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-shell-muted">
-              Switch Persona
-            </span>
-            <button
-              type="button"
-              onClick={resetToDefaults}
-              title="Reset Campus Mock Data"
-              className="text-shell-muted hover:text-emerald-400 text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
-            >
-              <RotateCcw className="h-3 w-3" strokeWidth={1.75} />
-              <span>Reset</span>
-            </button>
-          </div>
-
-          {/* Quick Persona Selector Dropdown Trigger */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowRoleMenu(!showRoleMenu)}
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-shell-border bg-shell-surface text-xs font-medium text-shell-text hover:bg-shell-surface/80 transition-colors cursor-pointer"
-            >
-              <span className="flex items-center gap-2 truncate">
-                <Sparkles className="h-3.5 w-3.5 text-emerald-400" strokeWidth={1.75} />
-                <span className="truncate">{currentPersona.role}</span>
-              </span>
-              <ChevronDown className="h-3.5 w-3.5 text-shell-muted" strokeWidth={1.75} />
-            </button>
-
-            {/* Persona Switcher Menu Popover */}
-            {showRoleMenu && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 rounded-lg border border-shell-border bg-shell-surface shadow-xl p-1.5 z-50 space-y-0.5 text-xs">
-                {(
-                  [
-                    "SuperAdmin",
-                    "CollegeAdmin",
-                    "HOD",
-                    "Faculty",
-                    "Student",
-                    "TeamLead",
-                  ] as RoleType[]
-                ).map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => handleRoleSwitch(r)}
-                    className={cn(
-                      "w-full text-left px-2.5 py-1.5 rounded-md flex items-center justify-between cursor-pointer transition-colors",
-                      currentPersona.role === r
-                        ? "bg-brand-primary text-white font-semibold"
-                        : "text-shell-muted hover:bg-shell-border/60 hover:text-shell-text"
-                    )}
-                  >
-                    <span>{r}</span>
-                    {currentPersona.role === r && <CheckCircle2 className="h-3.5 w-3.5 text-white" strokeWidth={2} />}
-                  </button>
-                ))}
+        {/* Persona Switcher Quick Dock & Controls (Gated behind Demo Mode + Padded pb-12) */}
+        <div className="p-3 border-t border-white/[0.08] space-y-2 bg-[#111827] pb-12">
+          {isDemoMode && (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
+                  Switch Persona
+                </span>
+                <button
+                  type="button"
+                  onClick={resetToDefaults}
+                  title="Reset Campus Mock Data"
+                  className="text-slate-400 hover:text-emerald-400 text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <RotateCcw className="h-3 w-3" strokeWidth={1.75} />
+                  <span>Reset</span>
+                </button>
               </div>
-            )}
-          </div>
+
+              {/* Quick Persona Selector Dropdown Trigger */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowRoleMenu(!showRoleMenu)}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] text-xs font-medium text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    <UserCog className="w-4 h-4 stroke-[1.75] text-slate-400 shrink-0" />
+                    <span className="truncate text-xs">{currentPersona.role}</span>
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                </button>
+
+                {/* Persona Switcher Menu Popover */}
+                {showRoleMenu && (
+                  <div className="absolute bottom-full left-0 right-0 mb-1 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-1.5 z-50 space-y-0.5 text-xs animate-in fade-in zoom-in-95 duration-100">
+                    {(
+                      [
+                        "SuperAdmin",
+                        "CollegeAdmin",
+                        "HOD",
+                        "Faculty",
+                        "Student",
+                        "TeamLead",
+                      ] as RoleType[]
+                    ).map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => handleRoleSwitch(r)}
+                        className={cn(
+                          "w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between cursor-pointer transition-colors",
+                          currentPersona.role === r
+                            ? "bg-brand-primary text-white font-semibold"
+                            : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
+                        )}
+                      >
+                        <span>{r}</span>
+                        {currentPersona.role === r && (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-white" strokeWidth={2} />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* Sign Out Link */}
           <Link
             href="/login"
-            className="flex items-center gap-2 px-2 py-1 text-[11px] font-medium text-shell-muted hover:text-rose-400 transition-colors"
+            className="flex items-center gap-2 px-2 py-1 text-[11px] font-medium text-slate-400 hover:text-rose-400 transition-colors"
           >
             <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
             <span>Sign Out / Change Account</span>
@@ -323,35 +423,56 @@ export const AppShell: React.FC<AppShellProps> = ({
       {/* 2. MAIN CANVAS WRAPPER (offset on desktop by 240px)                       */}
       {/* ========================================================================= */}
       <div className="flex-1 lg:pl-[240px] flex flex-col min-w-0 pb-16 lg:pb-0">
-        {/* Top Header (64px desktop / 56px mobile) */}
-        <header className="h-14 lg:h-16 border-b border-topbar-border bg-topbar-bg sticky top-0 z-20 px-4 sm:px-6 flex items-center justify-between transition-colors duration-200">
-          {/* Breadcrumb / Title */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <span className="text-xs sm:text-sm font-semibold text-topbar-text truncate">
+        
+        {/* Top Header (Locked to 56px / h-14 with 1px Hairline Border) */}
+        <header className="h-14 border-b border-white/[0.08] bg-[#111827] sticky top-0 z-20 px-4 sm:px-6 flex items-center justify-between select-none">
+          
+          {/* Breadcrumb Hierarchy */}
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <span className="text-sm font-semibold text-white tracking-tight font-heading truncate">
               {pageTitle || "Project Hub"}
             </span>
             {breadcrumb && (
               <>
-                <span className="text-topbar-text/40">/</span>
-                <span className="text-xs font-medium text-topbar-text/70 truncate hidden sm:inline">
+                <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" strokeWidth={1.75} />
+                <span className="text-xs font-normal text-slate-400 truncate hidden sm:inline">
                   {breadcrumb}
                 </span>
               </>
             )}
           </div>
 
-          {/* Center/Right Status Indicators & Notifications */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Context-Aware Status Indicator */}
+          {/* Center/Right Actions: Global Command Search + Dark Status Pill + Notifications */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            
+            {/* Global Command Search (⌘K) */}
+            <button
+              type="button"
+              onClick={() => setShowCommandPalette(true)}
+              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 text-xs px-2.5 sm:px-3 py-1.5 rounded-md flex items-center gap-2 transition-colors cursor-pointer group"
+              title="Search campus or jump to... (⌘K)"
+            >
+              <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200" strokeWidth={1.75} />
+              <span className="hidden md:inline text-xs font-sans">Search or jump to...</span>
+              <kbd className="hidden sm:inline-flex items-center text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/10 border border-white/10 text-slate-300">
+                ⌘K
+              </kbd>
+            </button>
+
+            {/* Context-Aware Dark-Mode Status Pill */}
             {currentPersona.role === "SuperAdmin" ? (
-              <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-primary-tint text-brand-primary-text border border-brand-primary-border">
-                <span className="h-2 w-2 rounded-full bg-brand-primary animate-pulse" />
-                <span className="font-mono font-medium text-[11px] tabular-nums">Production • ap-south-1</span>
+              <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-slate-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span className="font-mono text-[11px] tabular-nums text-slate-200">
+                  Production • ap-south-1
+                </span>
               </div>
             ) : (
-              <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-topbar-bg/40 text-topbar-text/80 border border-topbar-border">
-                <Calendar className="h-3.5 w-3.5 text-brand-primary" strokeWidth={1.75} />
-                <span className="font-mono text-xs tabular-nums">{cycle.academicYear} • Minor Sem {cycle.semester}</span>
+              <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-slate-200">
+                <Calendar className="w-3 h-3 text-emerald-400 shrink-0" strokeWidth={1.75} />
+                <span className="font-mono text-[11px] tabular-nums text-slate-200">
+                  {cycle.academicYear} • Minor Sem {cycle.semester}
+                </span>
               </div>
             )}
 
@@ -360,34 +481,34 @@ export const AppShell: React.FC<AppShellProps> = ({
               <button
                 type="button"
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 rounded-lg text-topbar-text/70 hover:text-topbar-text hover:bg-topbar-text/10 transition-colors cursor-pointer"
+                className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                 title="Notifications"
               >
                 <Bell className="h-4 w-4" strokeWidth={1.75} />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-brand-primary" />
+                <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
               </button>
 
               {/* Notification Popover */}
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 rounded-xl border border-card-border bg-card-bg shadow-xl p-3 z-50 space-y-2 text-slate-800">
-                  <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
-                    <span className="text-xs font-bold text-[#0F172A] font-heading">Notifications</span>
+                <div className="absolute right-0 mt-2 w-80 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-3 z-50 space-y-2 text-white animate-in fade-in zoom-in-95 duration-100">
+                  <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
+                    <span className="text-xs font-bold text-white font-heading">Notifications</span>
                     <button
                       type="button"
                       onClick={() => setShowNotifications(false)}
-                      className="text-[#94A3B8] hover:text-[#0F172A]"
+                      className="text-slate-400 hover:text-white p-0.5 cursor-pointer"
                     >
                       <X className="h-3.5 w-3.5" strokeWidth={1.75} />
                     </button>
                   </div>
-                  <div className="divide-y divide-[#E2E8F0] max-h-64 overflow-y-auto">
+                  <div className="divide-y divide-white/[0.04] max-h-64 overflow-y-auto">
                     {notifications.map((n) => (
                       <div key={n.id} className="py-2 space-y-0.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-[#0F172A]">{n.title}</span>
-                          <span className="text-[10px] text-[#94A3B8]">{n.time}</span>
+                          <span className="text-xs font-semibold text-white">{n.title}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">{n.time}</span>
                         </div>
-                        <p className="text-[11px] text-[#475569] leading-tight">{n.desc}</p>
+                        <p className="text-[11px] text-slate-300 leading-tight">{n.desc}</p>
                       </div>
                     ))}
                   </div>
@@ -396,90 +517,92 @@ export const AppShell: React.FC<AppShellProps> = ({
             </div>
 
             {/* Mobile Persona Switcher Button (< 1024px) */}
-            <div className="relative lg:hidden">
-              <button
-                type="button"
-                onClick={() => setShowMobileRoleMenu(!showMobileRoleMenu)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-topbar-border bg-topbar-bg/60 text-[11px] font-semibold text-topbar-text hover:bg-topbar-text/10 transition-colors cursor-pointer"
-                title="Switch Persona"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-brand-primary" strokeWidth={1.75} />
-                <span className="truncate max-w-[80px]">{currentPersona.role}</span>
-                <ChevronDown className="h-3 w-3 text-topbar-text/60" strokeWidth={1.75} />
-              </button>
+            {isDemoMode && (
+              <div className="relative lg:hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowMobileRoleMenu(!showMobileRoleMenu)}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-[11px] font-semibold text-slate-200 hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Switch Persona"
+                >
+                  <UserCog className="w-3.5 h-3.5 stroke-[1.75] text-slate-400" />
+                  <span className="truncate max-w-[80px]">{currentPersona.role}</span>
+                  <ChevronDown className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
+                </button>
 
-              {showMobileRoleMenu && (
-                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-[#E2E8F0] bg-white shadow-xl p-2 z-50 space-y-1 text-xs text-slate-800">
-                  <div className="flex items-center justify-between px-2 py-1 border-b border-[#E2E8F0]">
-                    <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">
-                      Switch Persona
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        resetToDefaults();
-                        setShowMobileRoleMenu(false);
-                      }}
-                      className="text-[10px] text-brand-primary hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <RotateCcw className="h-2.5 w-2.5" strokeWidth={1.75} />
-                      <span>Reset</span>
-                    </button>
+                {showMobileRoleMenu && (
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-2 z-50 space-y-1 text-xs text-white">
+                    <div className="flex items-center justify-between px-2 py-1 border-b border-white/[0.08]">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Switch Persona
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetToDefaults();
+                          setShowMobileRoleMenu(false);
+                        }}
+                        className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw className="h-2.5 w-2.5" strokeWidth={1.75} />
+                        <span>Reset</span>
+                      </button>
+                    </div>
+                    {(
+                      [
+                        "SuperAdmin",
+                        "CollegeAdmin",
+                        "HOD",
+                        "Faculty",
+                        "Student",
+                        "TeamLead",
+                      ] as RoleType[]
+                    ).map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => {
+                          handleRoleSwitch(r);
+                          setShowMobileRoleMenu(false);
+                        }}
+                        className={cn(
+                          "w-full text-left px-2.5 py-1.5 rounded-md flex items-center justify-between cursor-pointer transition-colors",
+                          currentPersona.role === r
+                            ? "bg-brand-primary text-white font-semibold"
+                            : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
+                        )}
+                      >
+                        <span>{r}</span>
+                        {currentPersona.role === r && (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-white" strokeWidth={2} />
+                        )}
+                      </button>
+                    ))}
+                    <div className="pt-1 border-t border-white/[0.08]">
+                      <Link
+                        href="/login"
+                        onClick={() => setShowMobileRoleMenu(false)}
+                        className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium text-slate-400 hover:text-rose-400 transition-colors"
+                      >
+                        <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        <span>Sign Out</span>
+                      </Link>
+                    </div>
                   </div>
-                  {(
-                    [
-                      "SuperAdmin",
-                      "CollegeAdmin",
-                      "HOD",
-                      "Faculty",
-                      "Student",
-                      "TeamLead",
-                    ] as RoleType[]
-                  ).map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => {
-                        handleRoleSwitch(r);
-                        setShowMobileRoleMenu(false);
-                      }}
-                      className={cn(
-                        "w-full text-left px-2.5 py-1.5 rounded-md flex items-center justify-between cursor-pointer transition-colors",
-                        currentPersona.role === r
-                          ? "bg-brand-primary-tint text-brand-primary-text font-semibold"
-                          : "text-[#475569] hover:bg-[#F1F5F9]"
-                      )}
-                    >
-                      <span>{r}</span>
-                      {currentPersona.role === r && (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-brand-primary" strokeWidth={2} />
-                      )}
-                    </button>
-                  ))}
-                  <div className="pt-1 border-t border-[#E2E8F0]">
-                    <Link
-                      href="/login"
-                      onClick={() => setShowMobileRoleMenu(false)}
-                      className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium text-[#64748B] hover:text-[#DC2626] transition-colors"
-                    >
-                      <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      <span>Sign Out</span>
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* User Profile Avatar with Role Tag */}
-            <div className="flex items-center gap-2 pl-2 border-l border-topbar-border">
-              <div className="h-8 w-8 rounded-full bg-brand-primary-tint border border-brand-primary-border text-brand-primary flex items-center justify-center text-xs font-bold font-mono">
+            <div className="flex items-center gap-2 pl-2 border-l border-white/[0.08]">
+              <div className="h-7 w-7 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono">
                 {currentPersona.name.charAt(0)}
               </div>
               <div className="hidden md:flex flex-col">
-                <span className="text-xs font-semibold text-topbar-text leading-none">
+                <span className="text-xs font-semibold text-white leading-none">
                   {currentPersona.name}
                 </span>
-                <span className="text-[10px] text-topbar-text/70 mt-0.5">
+                <span className="text-[10px] text-slate-400 mt-0.5">
                   {currentPersona.role}
                 </span>
               </div>
@@ -496,7 +619,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       {/* ========================================================================= */}
       {/* 3. MOBILE FIXED BOTTOM TAB BAR (< 768px, 64px height, max 4 tabs)         */}
       {/* ========================================================================= */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 bg-white border-t border-[#E2E8F0] z-40 flex items-center justify-around px-2 select-none shadow-sm">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 bg-[#111827] border-t border-white/[0.08] z-40 flex items-center justify-around px-2 select-none shadow-lg">
         {navItems.slice(0, 4).map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.label || pathname === item.href;
@@ -508,17 +631,27 @@ export const AppShell: React.FC<AppShellProps> = ({
               className={cn(
                 "flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium transition-colors",
                 isActive
-                  ? "text-brand-primary font-semibold"
-                  : "text-[#64748B] hover:text-[#0F172A]"
+                  ? "text-emerald-400 font-semibold"
+                  : "text-slate-400 hover:text-white"
               )}
             >
-              <Icon className={cn("h-4 w-4 mb-1", isActive ? "text-brand-primary" : "text-[#94A3B8]")} strokeWidth={1.75} />
+              <Icon
+                className={cn("h-4 w-4 mb-1", isActive ? "text-emerald-400" : "text-slate-500")}
+                strokeWidth={1.75}
+              />
               <span className="truncate max-w-[64px]">{item.label}</span>
             </Link>
           );
         })}
       </nav>
+
+      {/* ========================================================================= */}
+      {/* 4. GLOBAL COMMAND PALETTE MODAL                                           */}
+      {/* ========================================================================= */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+      />
     </div>
   );
 };
-
