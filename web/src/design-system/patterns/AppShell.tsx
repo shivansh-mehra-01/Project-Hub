@@ -49,8 +49,10 @@ export const AppShell: React.FC<AppShellProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentPersona, college, cycle, switchPersona, resetToDefaults, tenants, pilotRequests } =
+  const { currentPersona, college, cycle, switchPersona, resetToDefaults, tenants, pilotRequests, teams } =
     useProjectHubStore();
+
+  const pendingHODCount = teams.filter((t) => t.state === "PendingHOD").length || 1;
 
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showMobileRoleMenu, setShowMobileRoleMenu] = useState(false);
@@ -148,7 +150,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       case "HOD":
         return [
           { label: "Overview", href: "/hod", icon: LayoutDashboard },
-          { label: "Approvals Queue", href: "/hod/approvals", icon: FileCheck2 },
+          { label: "Approvals Queue", href: "/hod/approvals", icon: FileCheck2, count: pendingHODCount },
           { label: "NBA Criterion 2 & 3", href: "/hod/nba", icon: GraduationCap },
           { label: "Faculty Setup", href: "/hod/faculty", icon: Sliders },
         ];

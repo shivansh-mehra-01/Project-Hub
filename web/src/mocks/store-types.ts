@@ -53,8 +53,11 @@ export interface Department {
   name: string;
   code: string;
   hodUserId?: string;
+  hodName?: string;
   studentCount: number;
   facultyCount: number;
+  criterion3Attainment?: number;
+  hodSignOffStatus?: "Attested & Locked" | "Pending Sign-Off";
 }
 
 export interface ProjectCycle {

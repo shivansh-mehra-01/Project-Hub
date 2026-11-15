@@ -31,8 +31,11 @@ export const initialDepartments: Department[] = [
     name: "Computer Science & Engineering",
     code: "CSE",
     hodUserId: "usr-hod-01",
+    hodName: "Dr. Ravindra Kumar Sharma",
     studentCount: 480,
     facultyCount: 32,
+    criterion3Attainment: 82.6,
+    hodSignOffStatus: "Attested & Locked",
   },
   {
     id: "dept-ece-01",
@@ -40,8 +43,11 @@ export const initialDepartments: Department[] = [
     name: "Electronics & Communication Engineering",
     code: "ECE",
     hodUserId: "usr-hod-ece",
+    hodName: "Dr. Ananya Deshmukh",
     studentCount: 320,
     facultyCount: 22,
+    criterion3Attainment: 79.4,
+    hodSignOffStatus: "Attested & Locked",
   },
   {
     id: "dept-me-01",
@@ -49,8 +55,11 @@ export const initialDepartments: Department[] = [
     name: "Mechanical Engineering",
     code: "ME",
     hodUserId: "usr-hod-me",
+    hodName: "Prof. Rajesh Kulkarni",
     studentCount: 260,
     facultyCount: 18,
+    criterion3Attainment: 76.8,
+    hodSignOffStatus: "Pending Sign-Off",
   },
   {
     id: "dept-ce-01",
@@ -58,8 +67,11 @@ export const initialDepartments: Department[] = [
     name: "Civil Engineering",
     code: "CE",
     hodUserId: "usr-hod-ce",
+    hodName: "Dr. Sunita Tiwari",
     studentCount: 220,
     facultyCount: 16,
+    criterion3Attainment: 78.2,
+    hodSignOffStatus: "Attested & Locked",
   },
 ];
 

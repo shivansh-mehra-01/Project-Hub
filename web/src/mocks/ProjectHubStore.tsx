@@ -119,7 +119,11 @@ interface ProjectHubStoreContextType {
   requestGradeUnlock: (evalId: string, reason: string) => void;
   approveGradeUnlock: (evalId: string) => void;
   rejectGradeUnlock: (evalId: string) => void;
-  addDepartment: (name: string, code: string) => void;
+  addDepartment: (name: string, code: string, hodName?: string, studentCount?: number, facultyCount?: number) => void;
+  reassignHOD: (deptId: string, newHodName: string) => void;
+  lockDepartmentSAR: (deptCode: string) => void;
+  updateFacultyCapacity: (facultyId: string, delta: number) => void;
+  addFaculty: (faculty: Omit<FacultyRosterItem, "id" | "guidedCount">) => void;
   onboardCollege: (collegeData: Partial<College>) => void;
   onboardTenant: (tenantData: Omit<TenantCollege, "id">) => void;
   updateTenant: (id: string, updates: Partial<TenantCollege>) => void;
@@ -461,16 +465,58 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     );
   };
 
-  const addDepartment = (name: string, code: string) => {
+  const addDepartment = (
+    name: string,
+    code: string,
+    hodName?: string,
+    studentCount: number = 120,
+    facultyCount: number = 12
+  ) => {
     const newDept: Department = {
       id: `dept-${Date.now()}`,
       collegeId: college.id,
       name,
       code: code.toUpperCase(),
-      studentCount: 120,
-      facultyCount: 12,
+      studentCount,
+      facultyCount,
+      hodName: hodName || "Appointed HOD",
+      criterion3Attainment: 80.0,
+      hodSignOffStatus: "Pending Sign-Off",
     };
     setDepartments((prev) => [...prev, newDept]);
+  };
+
+  const reassignHOD = (deptId: string, newHodName: string) => {
+    setDepartments((prev) =>
+      prev.map((d) => (d.id === deptId ? { ...d, hodName: newHodName } : d))
+    );
+  };
+
+  const lockDepartmentSAR = (deptCode: string) => {
+    setDepartments((prev) =>
+      prev.map((d) => (d.code === deptCode ? { ...d, hodSignOffStatus: "Attested & Locked" } : d))
+    );
+  };
+
+  const updateFacultyCapacity = (facultyId: string, delta: number) => {
+    setFacultyRoster((prev) =>
+      prev.map((f) => {
+        if (f.id === facultyId) {
+          const newMax = Math.max(1, Math.min(10, f.maxTeams + delta));
+          return { ...f, maxTeams: newMax };
+        }
+        return f;
+      })
+    );
+  };
+
+  const addFaculty = (facultyData: Omit<FacultyRosterItem, "id" | "guidedCount">) => {
+    const newFaculty: FacultyRosterItem = {
+      ...facultyData,
+      id: `usr-fac-${Date.now()}`,
+      guidedCount: 0,
+    };
+    setFacultyRoster((prev) => [...prev, newFaculty]);
   };
 
   const onboardCollege = (collegeData: Partial<College>) => {
@@ -609,6 +655,10 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         approveGradeUnlock,
         rejectGradeUnlock,
         addDepartment,
+        reassignHOD,
+        lockDepartmentSAR,
+        updateFacultyCapacity,
+        addFaculty,
         onboardCollege,
         onboardTenant,
         updateTenant,
