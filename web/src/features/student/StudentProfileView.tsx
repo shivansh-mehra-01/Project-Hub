@@ -25,7 +25,7 @@ export const StudentProfileView: React.FC = () => {
   };
 
   return (
-    <AppShell pageTitle="Learner Academic Profile" breadcrumb="Enrollment &amp; Integrations" activeTab="Profile">
+    <AppShell pageTitle="Learner Academic Profile" breadcrumb="Learner Academic Profile" activeTab="Profile">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* 1. Locked College Identity Card */}
         <Card>

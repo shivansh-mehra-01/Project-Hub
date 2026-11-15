@@ -38,9 +38,19 @@ interface PastProject {
 }
 
 export const StudentExploreView: React.FC = () => {
-  const { problemBank } = useProjectHubStore();
+  const { problemBank, teams, currentPersona } = useProjectHubStore();
   const [filter, setFilter] = useState<"problems" | "peers" | "past">("problems");
   const [requestedId, setRequestedId] = useState<string | null>(null);
+
+  // Active team allocation check
+  const myTeam =
+    teams.find(
+      (t) =>
+        t.teamCode === "2026-CS-MIN-01" ||
+        t.id === "team-01" ||
+        t.members.some((m) => m.name === currentPersona.name)
+    ) || teams[0];
+  const hasActiveProject = !!myTeam && (myTeam.state === "Active" || myTeam.teamCode === "2026-CS-MIN-01");
 
   // Peer invitation state
   const [invitedPeerIds, setInvitedPeerIds] = useState<string[]>([]);
@@ -124,6 +134,28 @@ export const StudentExploreView: React.FC = () => {
   return (
     <AppShell pageTitle="Explore Campus Repository" breadcrumb="Problem Bank &amp; Team Matching" activeTab="Explore">
       <div className="space-y-6">
+        {/* Active Project Allocated Status Banner */}
+        {hasActiveProject && myTeam && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200/90 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-emerald-100 border border-emerald-200 text-emerald-800 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="h-4 w-4 stroke-[2]" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-emerald-950 font-heading">
+                  Active Project Allocated: {myTeam.teamCode} — Topic requests are locked for this cycle
+                </div>
+                <div className="text-[11px] text-emerald-800 mt-0.5">
+                  &ldquo;{myTeam.title}&rdquo; is verified under Guide {myTeam.guideName}. Topic allocations are finalized for your team.
+                </div>
+              </div>
+            </div>
+            <Badge variant="success" size="sm" dot>
+              Allocated &amp; Locked
+            </Badge>
+          </div>
+        )}
+
         {peerInviteBanner && (
           <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -211,12 +243,14 @@ export const StudentExploreView: React.FC = () => {
 
                   <Button
                     size="sm"
-                    variant={requestedId === pb.id ? "secondary" : "primary"}
+                    variant={hasActiveProject || pb.taken ? "secondary" : requestedId === pb.id ? "secondary" : "primary"}
                     className="w-full"
-                    disabled={pb.taken || requestedId === pb.id}
-                    onClick={() => setRequestedId(pb.id)}
+                    disabled={hasActiveProject || pb.taken || requestedId === pb.id}
+                    onClick={() => !hasActiveProject && setRequestedId(pb.id)}
                   >
-                    {pb.taken
+                    {hasActiveProject
+                      ? "Topic Requests Locked"
+                      : pb.taken
                       ? "Topic Allocated"
                       : requestedId === pb.id
                       ? "Request Submitted to Faculty"

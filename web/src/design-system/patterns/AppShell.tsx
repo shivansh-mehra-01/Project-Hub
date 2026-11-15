@@ -30,7 +30,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CommandPalette } from "../components/CommandPalette";
+import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
 
@@ -100,27 +100,94 @@ export const AppShell: React.FC<AppShellProps> = ({
     }
   }, [pathname, currentPersona.role, switchPersona]);
 
-  // Simulated alerts
-  const notifications = [
-    {
-      id: "n-1",
-      title: "Friday Logbook Pending",
-      time: "10 mins ago",
-      desc: "Shivansh Mehra submitted Week 5 Logbook for review.",
-    },
-    {
-      id: "n-2",
-      title: "Proposal Ready for Sign-Off",
-      time: "1 hour ago",
-      desc: "Team 2026-CS-MIN-02 proposal approved by Guide.",
-    },
-    {
-      id: "n-3",
-      title: "NBA Attainment Updated",
-      time: "Yesterday",
-      desc: "PO3 attainment reached 81.4% (Exceeds Target).",
-    },
-  ];
+  // Role-scoped notifications (strictly isolated by role & team)
+  const notifications = (() => {
+    if (currentPersona.role === "Student" || currentPersona.role === "TeamLead") {
+      return [
+        {
+          id: "n-s1",
+          title: "Weekly Logbook Accepted",
+          time: "10 mins ago",
+          desc: "Guide Prof. S. K. Verma approved Week 5 Logbook with remarks for Team 2026-CS-MIN-01.",
+        },
+        {
+          id: "n-s2",
+          title: "Sprint Task Due",
+          time: "2 hours ago",
+          desc: "Task 'ESP32 firmware OTA integration' is due tomorrow for Team 2026-CS-MIN-01.",
+        },
+        {
+          id: "n-s3",
+          title: "Mid-Term Defense Scheduled",
+          time: "Yesterday",
+          desc: "Team 2026-CS-MIN-01 evaluation panel confirmed for May 04 at 10:30 AM (Room Lab-3).",
+        },
+      ];
+    }
+    if (currentPersona.role === "Faculty") {
+      return [
+        {
+          id: "n-f1",
+          title: "Friday Logbook Pending",
+          time: "10 mins ago",
+          desc: "Shivansh Mehra submitted Week 5 Logbook for review (Team 2026-CS-MIN-01).",
+        },
+        {
+          id: "n-f2",
+          title: "Mid-Term Evaluation Panel",
+          time: "2 hours ago",
+          desc: "You are assigned to evaluate 3 Minor project teams in Lab-3.",
+        },
+      ];
+    }
+    if (currentPersona.role === "HOD") {
+      return [
+        {
+          id: "n-h1",
+          title: "Proposal Ready for Sign-Off",
+          time: "1 hour ago",
+          desc: "Team 2026-CS-MIN-03 guide allotment approved by Coordinator.",
+        },
+        {
+          id: "n-h2",
+          title: "NBA Attainment Updated",
+          time: "Yesterday",
+          desc: "PO3 attainment reached 81.4% (Exceeds Target).",
+        },
+      ];
+    }
+    if (currentPersona.role === "CollegeAdmin") {
+      return [
+        {
+          id: "n-c1",
+          title: "Department SAR Sign-Off",
+          time: "2 hours ago",
+          desc: "CSE & ECE departments completed SAR Criterion 3 attestation.",
+        },
+        {
+          id: "n-c2",
+          title: "Directory Sync Complete",
+          time: "1 day ago",
+          desc: "1,280 student enrollments validated for AY 2025-26 Even Sem.",
+        },
+      ];
+    }
+    // SuperAdmin
+    return [
+      {
+        id: "n-a1",
+        title: "Tenant Partition Provisioned",
+        time: "30 mins ago",
+        desc: "SISTec Bhopal partition healthy on ap-south-1.",
+      },
+      {
+        id: "n-a2",
+        title: "Pilot Application Received",
+        time: "3 hours ago",
+        desc: "Medicaps University submitted a 90-day institutional pilot trial request.",
+      },
+    ];
+  })();
 
   // Available campus branches for multi-campus institutional switcher
   const campusBranches = [
@@ -279,15 +346,7 @@ export const AppShell: React.FC<AppShellProps> = ({
               </span>
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                <span>
-                  {currentPersona.role === "SuperAdmin"
-                    ? "Super Admin"
-                    : currentPersona.role === "CollegeAdmin"
-                    ? "College Admin"
-                    : currentPersona.role === "TeamLead"
-                    ? "Team Lead"
-                    : currentPersona.role}
-                </span>
+                <span>{formatRoleLabel(currentPersona.role)}</span>
               </span>
             </div>
 
@@ -383,7 +442,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                 >
                   <span className="flex items-center gap-2 truncate">
                     <UserCog className="w-4 h-4 stroke-[1.75] text-slate-400 shrink-0" />
-                    <span className="truncate text-xs">{currentPersona.role}</span>
+                    <span className="truncate text-xs">{formatRoleLabel(currentPersona.role)}</span>
                   </span>
                   <ChevronDown className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
                 </button>
@@ -412,7 +471,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                             : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
                         )}
                       >
-                        <span>{r}</span>
+                        <span>{formatRoleLabel(r)}</span>
                         {currentPersona.role === r && (
                           <CheckCircle2 className="h-3.5 w-3.5 text-white" strokeWidth={2} />
                         )}
@@ -542,7 +601,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                   title="Switch Persona"
                 >
                   <UserCog className="w-3.5 h-3.5 stroke-[1.75] text-slate-400" />
-                  <span className="truncate max-w-[80px]">{currentPersona.role}</span>
+                  <span className="truncate max-w-[90px]">{formatRoleLabel(currentPersona.role)}</span>
                   <ChevronDown className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
                 </button>
 
@@ -588,7 +647,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                             : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
                         )}
                       >
-                        <span>{r}</span>
+                        <span>{formatRoleLabel(r)}</span>
                         {currentPersona.role === r && (
                           <CheckCircle2 className="h-3.5 w-3.5 text-white" strokeWidth={2} />
                         )}
@@ -619,7 +678,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                   {currentPersona.name}
                 </span>
                 <span className="text-[10px] text-slate-400 mt-0.5">
-                  {currentPersona.role}
+                  {formatRoleLabel(currentPersona.role)}
                 </span>
               </div>
             </div>

@@ -44,6 +44,9 @@ export const StudentWorkspaceView: React.FC = () => {
     updateTeamRepo,
   } = useProjectHubStore();
 
+  // Demo mode gate
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
+
   // Lifecycle state simulator: Off-Season, Pre-Approval Setup, Post-Approval Active
   const [lifecycleState, setLifecycleState] = useState<"offseason" | "preapproval" | "active">("active");
 
@@ -56,6 +59,7 @@ export const StudentWorkspaceView: React.FC = () => {
   const [taskAssignee, setTaskAssignee] = useState("Shivansh Mehra");
   const [taskTag, setTaskTag] = useState("Hardware");
   const [taskDueDate, setTaskDueDate] = useState("2026-03-25");
+  const [taskCreatedToast, setTaskCreatedToast] = useState(false);
 
   // Weekly Log Form
   const [logAccomplishments, setLogAccomplishments] = useState("");
@@ -74,34 +78,49 @@ export const StudentWorkspaceView: React.FC = () => {
   const [repoSuccess, setRepoSuccess] = useState(false);
 
   // Active student team
-  const myTeam = teams[0] || {
-    id: "team-default",
-    teamCode: "2026-CS-MIN-01",
-    title: "Smart IoT Energy Monitoring & Telemetry for University Labs",
-    abstract: "Edge telemetric hardware monitoring energy dissipation across university labs with LSTM anomaly prediction.",
-    domain: "IoT & Smart Systems",
-    sdgNumber: 7,
-    guideName: "Prof. S. K. Verma",
-    state: "Active",
-    githubUrl: "https://github.com/sistec-cse/iot-energy-monitor",
-    jiraUrl: "https://sistec-cse.atlassian.net/jira/projects/IOT",
-    isRosterLocked: true,
-    members: [],
-    tasks: [],
-    weeklyLogs: [],
-    health: "Healthy",
-  };
+  const myTeam =
+    teams.find(
+      (t) =>
+        t.teamCode === "2026-CS-MIN-01" ||
+        t.id === "team-01" ||
+        t.members.some((m) => m.name === currentPersona.name)
+    ) ||
+    teams[0] || {
+      id: "team-default",
+      teamCode: "2026-CS-MIN-01",
+      title: "Smart IoT Energy Monitoring & Telemetry for University Labs",
+      abstract: "Edge telemetric hardware monitoring energy dissipation across university labs with LSTM anomaly prediction.",
+      domain: "IoT & Smart Systems",
+      sdgNumber: 7,
+      guideName: "Prof. S. K. Verma",
+      state: "Active",
+      githubUrl: "https://github.com/sistec-cse/iot-energy-monitor",
+      jiraUrl: "https://sistec-cse.atlassian.net/jira/projects/IOT",
+      isRosterLocked: true,
+      members: [],
+      tasks: [],
+      weeklyLogs: [],
+      health: "Healthy",
+    };
 
   const isTeamLead = currentPersona.role === "TeamLead" || myTeam.members.some((m) => m.isLead && m.name === currentPersona.name);
 
   const [githubUrl, setGithubUrl] = useState(myTeam.githubUrl || "https://github.com/sistec-cse/iot-energy-monitor");
   const [jiraUrl, setJiraUrl] = useState(myTeam.jiraUrl || "https://sistec-cse.atlassian.net/jira/projects/IOT");
 
+  const handleOpenRepoModal = () => {
+    setGithubUrl(myTeam.githubUrl || "https://github.com/sistec-cse/iot-energy-monitor");
+    setJiraUrl(myTeam.jiraUrl || "https://sistec-cse.atlassian.net/jira/projects/IOT");
+    setShowRepoModal(true);
+  };
+
   const handleCreateTask = () => {
-    if (!taskTitle) return;
-    createTask(myTeam.id, taskTitle, taskTag, taskAssignee, taskDueDate);
+    if (!taskTitle.trim()) return;
+    createTask(myTeam.id, taskTitle.trim(), taskTag, taskAssignee, taskDueDate);
     setShowTaskModal(false);
     setTaskTitle("");
+    setTaskCreatedToast(true);
+    setTimeout(() => setTaskCreatedToast(false), 3500);
   };
 
   const handleSubmitLog = (e: React.FormEvent) => {
@@ -143,55 +162,57 @@ export const StudentWorkspaceView: React.FC = () => {
       {/* Semester GPS Stepper */}
       <StepperGPS currentStep={lifecycleState === "offseason" ? 1 : lifecycleState === "preapproval" ? 2 : 4} />
 
-      {/* Lifecycle Mode Simulator Pill */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white rounded-xl border border-[#E2E8F0] shadow-2xs select-none">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-[#0F172A]">Workspace Stage Preview:</span>
-          <div className="flex gap-1 p-0.5 bg-[#F1F5F9] rounded-lg border border-[#E2E8F0]">
-            <button
-              type="button"
-              onClick={() => setLifecycleState("offseason")}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                lifecycleState === "offseason"
-                  ? "bg-white text-[#0F172A] shadow-xs"
-                  : "text-[#64748B] hover:text-[#0F172A]"
-              }`}
-            >
-              1. Off-Season
-            </button>
-            <button
-              type="button"
-              onClick={() => setLifecycleState("preapproval")}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                lifecycleState === "preapproval"
-                  ? "bg-white text-[#0F172A] shadow-xs"
-                  : "text-[#64748B] hover:text-[#0F172A]"
-              }`}
-            >
-              2. Pre-Approval Setup
-            </button>
-            <button
-              type="button"
-              onClick={() => setLifecycleState("active")}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                lifecycleState === "active"
-                  ? "bg-white text-[#0F172A] shadow-xs"
-                  : "text-[#64748B] hover:text-[#0F172A]"
-              }`}
-            >
-              3. Post-Approval Active
-            </button>
+      {/* Lifecycle Mode Simulator Pill (Gated behind Demo Mode) */}
+      {isDemoMode && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white rounded-xl border border-[#E2E8F0] shadow-2xs select-none">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-[#0F172A]">Workspace Stage Preview:</span>
+            <div className="flex gap-1 p-0.5 bg-[#F1F5F9] rounded-lg border border-[#E2E8F0]">
+              <button
+                type="button"
+                onClick={() => setLifecycleState("offseason")}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  lifecycleState === "offseason"
+                    ? "bg-white text-[#0F172A] shadow-xs"
+                    : "text-[#64748B] hover:text-[#0F172A]"
+                }`}
+              >
+                1. Off-Season
+              </button>
+              <button
+                type="button"
+                onClick={() => setLifecycleState("preapproval")}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  lifecycleState === "preapproval"
+                    ? "bg-white text-[#0F172A] shadow-xs"
+                    : "text-[#64748B] hover:text-[#0F172A]"
+                }`}
+              >
+                2. Pre-Approval Setup
+              </button>
+              <button
+                type="button"
+                onClick={() => setLifecycleState("active")}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  lifecycleState === "active"
+                    ? "bg-white text-[#0F172A] shadow-xs"
+                    : "text-[#64748B] hover:text-[#0F172A]"
+                }`}
+              >
+                3. Post-Approval Active
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isTeamLead && (
+              <Badge variant="role" role="TeamLead" size="sm" dot>
+                Lead Authority Unlocked
+              </Badge>
+            )}
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          {isTeamLead && (
-            <Badge variant="role" role="TeamLead" size="sm" dot>
-              Lead Authority Unlocked
-            </Badge>
-          )}
-        </div>
-      </div>
+      )}
 
       {repoSuccess && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
@@ -424,6 +445,13 @@ export const StudentWorkspaceView: React.FC = () => {
           {/* SUB-TAB A: 3-COLUMN KANBAN SPRINT BOARD */}
           {subTab === "board" && (
             <div className="space-y-4">
+              {taskCreatedToast && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2 animate-in fade-in duration-200">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>Sprint task added to Kanban board successfully.</span>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-[#0F172A]">Sprint Tasks &amp; Milestones</h3>
@@ -435,7 +463,7 @@ export const StudentWorkspaceView: React.FC = () => {
                       size="sm"
                       variant="secondary"
                       leftIcon={<Settings className="h-3.5 w-3.5" />}
-                      onClick={() => setShowRepoModal(true)}
+                      onClick={handleOpenRepoModal}
                     >
                       Repo &amp; Jira Links
                     </Button>
@@ -807,12 +835,22 @@ export const StudentWorkspaceView: React.FC = () => {
             onChange={(e) => setTaskTitle(e.target.value)}
           />
           <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Tag / Component"
-              placeholder="e.g. Hardware or ML"
-              value={taskTag}
-              onChange={(e) => setTaskTag(e.target.value)}
-            />
+            <div>
+              <label className="block text-xs font-semibold text-[#0F172A] mb-1">Tag / Category</label>
+              <select
+                value={taskTag}
+                onChange={(e) => setTaskTag(e.target.value)}
+                className="w-full h-9 rounded-lg border border-[#E2E8F0] bg-white px-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-brand-primary cursor-pointer"
+              >
+                <option value="Hardware">Hardware</option>
+                <option value="Firmware">Firmware</option>
+                <option value="Backend">Backend</option>
+                <option value="Frontend">Frontend</option>
+                <option value="ML">ML / Anomaly</option>
+                <option value="Testing">QA / Calibration</option>
+                <option value="Docs">Documentation</option>
+              </select>
+            </div>
             <Input
               label="Due Date"
               type="date"
@@ -820,11 +858,24 @@ export const StudentWorkspaceView: React.FC = () => {
               onChange={(e) => setTaskDueDate(e.target.value)}
             />
           </div>
-          <Input
-            label="Assignee"
-            value={taskAssignee}
-            onChange={(e) => setTaskAssignee(e.target.value)}
-          />
+          <div>
+            <label className="block text-xs font-semibold text-[#0F172A] mb-1">Assignee</label>
+            <select
+              value={taskAssignee}
+              onChange={(e) => setTaskAssignee(e.target.value)}
+              className="w-full h-9 rounded-lg border border-[#E2E8F0] bg-white px-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-brand-primary cursor-pointer"
+            >
+              {myTeam.members.length > 0 ? (
+                myTeam.members.map((m) => (
+                  <option key={m.id} value={m.name}>
+                    {m.name} {m.isLead ? "(Lead)" : ""} — {m.roleDescription}
+                  </option>
+                ))
+              ) : (
+                <option value={currentPersona.name}>{currentPersona.name}</option>
+              )}
+            </select>
+          </div>
         </div>
       </Modal>
 
