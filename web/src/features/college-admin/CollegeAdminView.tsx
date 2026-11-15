@@ -21,11 +21,13 @@ import { SlideOverDrawer } from "@/design-system/components/SlideOverDrawer";
 import { Input } from "@/design-system/components/Input";
 import { Select } from "@/design-system/components/Select";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
+import { Department } from "@/mocks/store-types";
 
 export const CollegeAdminView: React.FC = () => {
   const { college, departments, addDepartment, onboardCollege } = useProjectHubStore();
 
   const [showAddDrawer, setShowAddDrawer] = useState(false);
+  const [inspectingDept, setInspectingDept] = useState<Department | null>(null);
   const [deptName, setDeptName] = useState("");
   const [deptCode, setDeptCode] = useState("");
   const [hodName, setHodName] = useState("");
@@ -136,7 +138,11 @@ export const CollegeAdminView: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {departments.map((dept) => (
-            <Card key={dept.id} className="hover:border-[#CBD5E1] transition-colors">
+            <Card
+              key={dept.id}
+              onClick={() => setInspectingDept(dept)}
+              className="hover:border-[#4F46E5] hover:shadow-xs transition-all cursor-pointer group"
+            >
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <span className="font-mono font-bold text-xs bg-[#EEF2FF] text-[#4F46E5] px-2 py-0.5 rounded border border-indigo-100">
@@ -146,7 +152,9 @@ export const CollegeAdminView: React.FC = () => {
                     Accredited
                   </Badge>
                 </div>
-                <CardTitle className="pt-2 text-sm truncate">{dept.name}</CardTitle>
+                <CardTitle className="pt-2 text-sm truncate group-hover:text-[#4F46E5] transition-colors">
+                  {dept.name}
+                </CardTitle>
                 <CardDescription>
                   {dept.code === "CSE" ? "Dr. Ravindra Kumar Sharma (HOD)" : "HOD Appointed"}
                 </CardDescription>
@@ -165,11 +173,14 @@ export const CollegeAdminView: React.FC = () => {
                     {dept.facultyCount} mentors
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>NBA Criterion 3 Attainment:</span>
+                <div className="flex justify-between items-center pt-0.5">
+                  <span>NBA Criterion 3:</span>
                   <span className="font-semibold text-emerald-600 font-mono tabular-nums">
                     {dept.code === "CSE" ? "82.6% (Met)" : "78.4% (Met)"}
                   </span>
+                </div>
+                <div className="pt-1 text-[11px] text-[#4F46E5] font-semibold flex items-center justify-end">
+                  Inspect Branch &rarr;
                 </div>
               </CardContent>
             </Card>
@@ -246,6 +257,62 @@ export const CollegeAdminView: React.FC = () => {
         </Card>
       </section>
 
+      {/* Institutional Accreditation & NBA Compliance Section */}
+      <section id="compliance" className="space-y-4">
+        <div>
+          <h2 className="text-sm font-bold text-[#0F172A]">Institutional Accreditation &amp; NBA Readiness</h2>
+          <p className="text-xs text-[#64748B]">
+            Automated compliance synthesis monitoring NBA Criterion 2 (Student Support &amp; Progression) and Criterion 3 (Course Outcomes).
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#0F172A]">SAR Tier-1 Status</span>
+              <Badge variant="success" size="sm" dot>Accredited</Badge>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xl font-bold font-mono text-[#0F172A] tabular-nums">91.4% Overall</div>
+              <p className="text-[11px] text-[#64748B]">All 4 engineering branches satisfy the mandatory 80/20 CO-PO threshold.</p>
+            </div>
+            <div className="pt-2 border-t border-[#E2E8F0] text-[11px] text-[#475569] flex justify-between">
+              <span>Next Audit Cycle:</span>
+              <span className="font-semibold text-[#0F172A]">November 2026</span>
+            </div>
+          </Card>
+
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#0F172A]">Signed Criterion 2 &amp; 3 Dossiers</span>
+              <Badge variant="info" size="sm">4 Branches</Badge>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xl font-bold font-mono text-emerald-600 tabular-nums">100% Signed</div>
+              <p className="text-[11px] text-[#64748B]">All HOD final rubric sheets and 3 Best/Avg/Weak project packages archived.</p>
+            </div>
+            <div className="pt-2 border-t border-[#E2E8F0] text-[11px] text-[#4F46E5] font-semibold cursor-pointer hover:underline flex justify-end">
+              Download College SAR Summary &rarr;
+            </div>
+          </Card>
+
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#0F172A]">Multi-Tenant Isolation Audit</span>
+              <Badge variant="success" size="sm" dot>Passed</Badge>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xl font-bold font-mono text-[#0F172A] tabular-nums">0 Leaks Detected</div>
+              <p className="text-[11px] text-[#64748B]">PostgreSQL 17 row-level tenant security enforces strict CollegeId partition boundary.</p>
+            </div>
+            <div className="pt-2 border-t border-[#E2E8F0] text-[11px] text-[#64748B] flex justify-between">
+              <span>Tenant Hash:</span>
+              <span className="font-mono text-[#475569]">0xSISTEC_2026</span>
+            </div>
+          </Card>
+        </div>
+      </section>
+
       {/* Add Department Slide-Over Drawer */}
       <SlideOverDrawer
         isOpen={showAddDrawer}
@@ -284,6 +351,92 @@ export const CollegeAdminView: React.FC = () => {
             helperText="The appointed professor gains HOD sign-off authority"
           />
         </div>
+      </SlideOverDrawer>
+
+      {/* Inspect Department Slide-Over Drawer */}
+      <SlideOverDrawer
+        isOpen={!!inspectingDept}
+        onClose={() => setInspectingDept(null)}
+        title={inspectingDept?.name}
+        subtitle={`Branch Code: ${inspectingDept?.code} • SISTec Bhopal`}
+        badge={
+          inspectingDept && (
+            <Badge variant="success" size="sm" dot>
+              NBA Accredited
+            </Badge>
+          )
+        }
+        footer={
+          inspectingDept && (
+            <div className="flex items-center justify-between w-full">
+              <Button variant="secondary" size="sm" onClick={() => setInspectingDept(null)}>
+                Close
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setInspectingDept(null)}
+              >
+                Done
+              </Button>
+            </div>
+          )
+        }
+      >
+        {inspectingDept && (
+          <div className="space-y-4 text-xs">
+            <div className="p-3.5 bg-[#EEF2FF] rounded-lg border border-indigo-100 text-[#3730A3] space-y-1">
+              <div className="font-semibold">Department Leadership &amp; Administration</div>
+              <p className="text-[11px] leading-relaxed">
+                Appointed HOD:{" "}
+                <strong>
+                  {inspectingDept.code === "CSE"
+                    ? "Dr. Ravindra Kumar Sharma (hod.cse@sistec.ac.in)"
+                    : `Prof. HOD (${inspectingDept.code.toLowerCase()}@sistec.ac.in)`}
+                </strong>
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] space-y-2">
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Total Enrolled Students:</span>
+                <span className="font-bold text-[#0F172A] tabular-nums">{inspectingDept.studentCount} Students</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Faculty Mentors:</span>
+                <span className="font-semibold text-[#0F172A] tabular-nums">{inspectingDept.facultyCount} Mentors</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">NBA Criterion 3 Attainment:</span>
+                <span className="font-mono font-bold text-emerald-600 tabular-nums">
+                  {inspectingDept.code === "CSE" ? "82.6% (Target Met)" : "78.4% (Target Met)"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Active Capstone Batches:</span>
+                <span className="font-semibold text-[#0F172A]">Minor Sem 6 &amp; Major Sem 8</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-[#E2E8F0]">
+              <span className="font-semibold text-[#0F172A]">Branch Accreditations &amp; Milestones:</span>
+              <div className="space-y-1.5">
+                <div className="p-2.5 rounded bg-white border border-[#E2E8F0] flex items-center justify-between">
+                  <span>Criterion 2 (Logbook Compliance)</span>
+                  <span className="font-mono font-bold text-emerald-600">94.2%</span>
+                </div>
+                <div className="p-2.5 rounded bg-white border border-[#E2E8F0] flex items-center justify-between">
+                  <span>Criterion 3 (PO/PSO Direct Attainment)</span>
+                  <span className="font-mono font-bold text-emerald-600">82.6%</span>
+                </div>
+                <div className="p-2.5 rounded bg-white border border-[#E2E8F0] flex items-center justify-between">
+                  <span>Faculty-to-Student Mentorship Ratio</span>
+                  <span className="font-mono font-bold text-[#0F172A]">1 : 10</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </SlideOverDrawer>
     </AppShell>
   );

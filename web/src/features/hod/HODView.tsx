@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   CheckCircle2,
   AlertCircle,
@@ -17,12 +17,14 @@ import {
   FileSpreadsheet,
   FileArchive,
   HelpCircle,
+  Search,
 } from "lucide-react";
 import { AppShell } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
 import { SlideOverDrawer } from "@/design-system/components/SlideOverDrawer";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { Team } from "@/mocks/store-types";
 
@@ -35,6 +37,7 @@ export const HODView: React.FC = () => {
     approveProposal,
     rejectProposal,
     approveGradeUnlock,
+    rejectGradeUnlock,
   } = useProjectHubStore();
 
   const [activeTab, setActiveTab] = useState<"overview" | "approvals" | "nba" | "faculty">("overview");
@@ -45,6 +48,33 @@ export const HODView: React.FC = () => {
   const [inspectingTeam, setInspectingTeam] = useState<Team | null>(null);
   const [zipPackaging, setZipPackaging] = useState(false);
   const [zipSuccess, setZipSuccess] = useState(false);
+  const [unlockRejected, setUnlockRejected] = useState(false);
+
+  // Multi-Year Archive state
+  const [archiveSearch, setArchiveSearch] = useState("");
+  const [archiveBatch, setArchiveBatch] = useState("ALL");
+
+  // Sync tab with URL hash
+  useEffect(() => {
+    const handleHashSync = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (hash === "approvals" || hash === "nba" || hash === "faculty") {
+        setActiveTab(hash);
+      } else if (!hash || hash === "overview") {
+        setActiveTab("overview");
+      }
+    };
+    handleHashSync();
+    window.addEventListener("hashchange", handleHashSync);
+    return () => window.removeEventListener("hashchange", handleHashSync);
+  }, []);
+
+  const switchTab = (tab: "overview" | "approvals" | "nba" | "faculty") => {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", tab === "overview" ? "/hod" : `/hod#${tab}`);
+    }
+  };
 
   // Teams waiting for HOD sign-off
   const pendingHODTeams = teams.filter((t) => t.state === "PendingHOD");
@@ -80,7 +110,7 @@ export const HODView: React.FC = () => {
       <div className="flex border-b border-[#E2E8F0] gap-4 text-xs font-semibold select-none">
         <button
           type="button"
-          onClick={() => setActiveTab("overview")}
+          onClick={() => switchTab("overview")}
           className={`pb-2.5 transition-colors cursor-pointer ${
             activeTab === "overview"
               ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
@@ -91,7 +121,7 @@ export const HODView: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("approvals")}
+          onClick={() => switchTab("approvals")}
           className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 ${
             activeTab === "approvals"
               ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
@@ -107,7 +137,7 @@ export const HODView: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("nba")}
+          onClick={() => switchTab("nba")}
           className={`pb-2.5 transition-colors cursor-pointer ${
             activeTab === "nba"
               ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
@@ -118,7 +148,7 @@ export const HODView: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("faculty")}
+          onClick={() => switchTab("faculty")}
           className={`pb-2.5 transition-colors cursor-pointer ${
             activeTab === "faculty"
               ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
@@ -286,11 +316,11 @@ export const HODView: React.FC = () => {
         <div className="space-y-4">
           {/* Sub-Queue Filter Tabs */}
           <div className="flex items-center justify-between">
-            <div className="flex gap-1.5 p-1 bg-[#F1F5F9] rounded-lg border border-[#E2E8F0]">
+            <div className="flex gap-1.5 p-1 bg-[#F1F5F9] rounded-lg border border-[#E2E8F0] overflow-x-auto">
               <button
                 type="button"
                 onClick={() => setApprovalSubTab("allotments")}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                   approvalSubTab === "allotments"
                     ? "bg-white text-[#0F172A] shadow-xs"
                     : "text-[#64748B] hover:text-[#0F172A]"
@@ -301,7 +331,7 @@ export const HODView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setApprovalSubTab("proposals")}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                   approvalSubTab === "proposals"
                     ? "bg-white text-[#0F172A] shadow-xs"
                     : "text-[#64748B] hover:text-[#0F172A]"
@@ -312,13 +342,24 @@ export const HODView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setApprovalSubTab("unlocks")}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                   approvalSubTab === "unlocks"
                     ? "bg-white text-[#0F172A] shadow-xs"
                     : "text-[#64748B] hover:text-[#0F172A]"
                 }`}
               >
-                Grade Unlock Requests (1)
+                Grade Unlock Requests ({unlockRejected ? "0" : "1"})
+              </button>
+              <button
+                type="button"
+                onClick={() => setApprovalSubTab("results")}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                  approvalSubTab === "results"
+                    ? "bg-white text-[#0F172A] shadow-xs"
+                    : "text-[#64748B] hover:text-[#0F172A]"
+                }`}
+              >
+                Consolidated Results
               </button>
             </div>
 
@@ -335,7 +376,7 @@ export const HODView: React.FC = () => {
           </div>
 
           {/* Allotment & Proposal Queue Table */}
-          {approvalSubTab !== "unlocks" ? (
+          {approvalSubTab === "allotments" || approvalSubTab === "proposals" ? (
             <Card>
               <CardContent className="p-0 overflow-x-auto">
                 <table className="w-full text-left text-xs">
@@ -417,20 +458,21 @@ export const HODView: React.FC = () => {
                         </tr>
                       )
                     )}
-
-                    {(approvalSubTab === "allotments" ? pendingHODTeams : allPendingApprovals).length ===
-                      0 && (
-                      <tr>
-                        <td colSpan={7} className="py-8 text-center text-xs text-[#64748B]">
-                          No pending proposals awaiting HOD sign-off at this time.
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
+
+                {(approvalSubTab === "allotments" ? pendingHODTeams : allPendingApprovals).length ===
+                  0 && (
+                  <div className="p-6">
+                    <EmptyState
+                      title="No Pending Proposals"
+                      description="All student capstone proposals have been reviewed and signed off by the HOD."
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
-          ) : (
+          ) : approvalSubTab === "unlocks" ? (
             /* Grade Unlock Requests Queue */
             <Card>
               <CardHeader>
@@ -440,36 +482,104 @@ export const HODView: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs text-[#0F172A]">
-                        Team 2026-CS-MIN-01: Smart IoT Energy Monitoring
-                      </span>
-                      <span className="text-[11px] font-mono bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-800">
-                        Mid-Term Viva
-                      </span>
+                {!unlockRejected ? (
+                  <div className="p-4 rounded-lg border border-amber-200 bg-amber-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-[#0F172A]">
+                          Team 2026-CS-MIN-01: Smart IoT Energy Monitoring
+                        </span>
+                        <span className="text-[11px] font-mono bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-800">
+                          Mid-Term Viva
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#475569]">
+                        Requested by: <span className="font-semibold">Prof. Priya Nair</span> • Reason:{" "}
+                        <em>&ldquo;Hardware sensor code demo marks were transcribed as 13/15 instead of 15/15.&rdquo;</em>
+                      </p>
                     </div>
-                    <p className="text-xs text-[#475569]">
-                      Requested by: <span className="font-semibold">Prof. Priya Nair</span> • Reason:{" "}
-                      <em>&ldquo;Hardware sensor code demo marks were transcribed as 13/15 instead of 15/15.&rdquo;</em>
-                    </p>
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => approveGradeUnlock("eval-01")}
-                      leftIcon={<Unlock className="h-3.5 w-3.5" />}
-                    >
-                      Authorize Unlock
-                    </Button>
-                    <Button size="sm" variant="ghost">
-                      Reject Request
-                    </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => approveGradeUnlock("eval-01")}
+                        leftIcon={<Unlock className="h-3.5 w-3.5" />}
+                      >
+                        Authorize Unlock
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          rejectGradeUnlock("eval-01");
+                          setUnlockRejected(true);
+                        }}
+                      >
+                        Reject Request
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <EmptyState
+                    title="No Active Grade Correction Requests"
+                    description="All mid-term and final defense rubric marks are securely finalized."
+                  />
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            /* Consolidated Results Sub-Tab */
+            <Card>
+              <CardHeader>
+                <CardTitle>Consolidated Student Marksheet &amp; Letter Grades</CardTitle>
+                <CardDescription>
+                  Cumulative internal assessments, guide continuous evals, and external viva scores feeding NBA SAR Criterion 3.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]">
+                    <tr>
+                      <th className="py-2.5 px-4 font-semibold">University USN</th>
+                      <th className="py-2.5 px-4 font-semibold">Student Name</th>
+                      <th className="py-2.5 px-4 font-semibold">Team Code</th>
+                      <th className="py-2.5 px-4 font-semibold">Guide Score (/30)</th>
+                      <th className="py-2.5 px-4 font-semibold">Defense Score (/50)</th>
+                      <th className="py-2.5 px-4 font-semibold">Total (/100)</th>
+                      <th className="py-2.5 px-4 font-semibold">Letter Grade</th>
+                      <th className="py-2.5 px-4 text-right font-semibold">NBA Attainment</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A] font-mono tabular-nums">
+                    {[
+                      { usn: "0176CS221045", name: "Shivansh Mehra", team: "2026-CS-MIN-01", guide: 28.5, viva: 44.5, total: 89.0, grade: "A+", nba: "Met (High)" },
+                      { usn: "0176CS221002", name: "Aarav Sharma", team: "2026-CS-MIN-01", guide: 27.0, viva: 43.0, total: 86.0, grade: "A+", nba: "Met (High)" },
+                      { usn: "0176CS221021", name: "Diya Patel", team: "2026-CS-MIN-01", guide: 26.5, viva: 42.0, total: 84.5, grade: "A", nba: "Met (Target)" },
+                      { usn: "0176CS221038", name: "Rohan Gupta", team: "2026-CS-MIN-02", guide: 25.0, viva: 39.5, total: 79.0, grade: "B+", nba: "Met (Target)" },
+                      { usn: "0176CS221049", name: "Sanya Saxena", team: "2026-CS-MIN-02", guide: 28.0, viva: 45.0, total: 91.0, grade: "O", nba: "Met (High)" },
+                    ].map((row) => (
+                      <tr key={row.usn} className="hover:bg-[#F8FAFC]">
+                        <td className="py-2.5 px-4 font-bold text-[#4F46E5]">{row.usn}</td>
+                        <td className="py-2.5 px-4 font-sans font-semibold text-[#0F172A]">{row.name}</td>
+                        <td className="py-2.5 px-4 text-[#475569]">{row.team}</td>
+                        <td className="py-2.5 px-4">{row.guide}</td>
+                        <td className="py-2.5 px-4">{row.viva}</td>
+                        <td className="py-2.5 px-4 font-bold text-[#0F172A]">{row.total}</td>
+                        <td className="py-2.5 px-4 font-sans">
+                          <span className="font-bold text-xs bg-slate-100 text-slate-800 px-2 py-0.5 rounded">
+                            {row.grade}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-sans">
+                          <span className="font-semibold text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            {row.nba}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </CardContent>
             </Card>
           )}
@@ -603,6 +713,84 @@ export const HODView: React.FC = () => {
                     <td>2</td>
                     <td className="text-right text-emerald-600 font-bold">85.0%</td>
                   </tr>
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+
+          {/* Multi-Year Department Project Archive Card */}
+          <Card>
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle>Multi-Year Department Project Archive &amp; SAR Evidence</CardTitle>
+                <CardDescription>
+                  Search past Minor &amp; Major capstone batches with signed rubrics and university marksheets.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-[#94A3B8]" />
+                  <input
+                    type="text"
+                    placeholder="Search projects, stack..."
+                    value={archiveSearch}
+                    onChange={(e) => setArchiveSearch(e.target.value)}
+                    className="h-8 pl-8 pr-2.5 text-xs rounded-lg border border-[#E2E8F0] bg-white focus:outline-none focus:border-[#4F46E5]"
+                  />
+                </div>
+                <select
+                  value={archiveBatch}
+                  onChange={(e) => setArchiveBatch(e.target.value)}
+                  className="h-8 text-xs rounded-lg border border-[#E2E8F0] bg-white px-2 focus:outline-none"
+                >
+                  <option value="ALL">All Batches</option>
+                  <option value="2026">2026 (Minor Sem 6)</option>
+                  <option value="2025">2025 (Major Sem 8)</option>
+                  <option value="2024">2024 (Major Sem 8)</option>
+                </select>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]">
+                  <tr>
+                    <th className="py-2.5 px-4 font-semibold">Batch</th>
+                    <th className="py-2.5 px-4 font-semibold">Team Code</th>
+                    <th className="py-2.5 px-4 font-semibold">Project Title</th>
+                    <th className="py-2.5 px-4 font-semibold">Faculty Guide</th>
+                    <th className="py-2.5 px-4 font-semibold">Domain &amp; SDG</th>
+                    <th className="py-2.5 px-4 font-semibold">Score</th>
+                    <th className="py-2.5 px-4 text-right font-semibold">SAR Audit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
+                  {[
+                    { batch: "2026 Minor", code: "2026-CS-MIN-01", title: "Smart IoT Energy Monitoring for Labs", guide: "Prof. S. K. Verma", domain: "IoT (SDG 7)", score: "89.0%", status: "Active Audit" },
+                    { batch: "2025 Major", code: "2025-CS-MAJ-04", title: "Automated Solar Microgrid with MPPT Tracking", guide: "Prof. S. K. Verma", domain: "Energy (SDG 7)", score: "92.0%", status: "Best Project" },
+                    { batch: "2025 Major", code: "2025-CS-MAJ-11", title: "Contrastive Learning Chest X-Ray Diagnostics", guide: "Dr. Amit Rawat", domain: "Health (SDG 3)", score: "88.5%", status: "IEEE Published" },
+                    { batch: "2024 Major", code: "2024-CS-MAJ-08", title: "Warehouse AGV Robot with 2D LiDAR SLAM", guide: "Prof. Priya Nair", domain: "Robotics (SDG 9)", score: "88.0%", status: "Dossier Archived" },
+                    { batch: "2024 Major", code: "2024-CS-MAJ-19", title: "Decentralized University Credential Verification", guide: "Dr. R. K. Sharma", domain: "Web3 (SDG 9)", score: "84.0%", status: "Dossier Archived" },
+                  ]
+                    .filter((item) => {
+                      if (archiveBatch !== "ALL" && !item.batch.includes(archiveBatch)) return false;
+                      if (archiveSearch && !item.title.toLowerCase().includes(archiveSearch.toLowerCase()) && !item.code.toLowerCase().includes(archiveSearch.toLowerCase())) return false;
+                      return true;
+                    })
+                    .map((item) => (
+                      <tr key={item.code} className="hover:bg-[#F8FAFC]">
+                        <td className="py-2.5 px-4 font-mono text-[11px] text-[#64748B]">{item.batch}</td>
+                        <td className="py-2.5 px-4 font-mono font-bold text-[#4F46E5]">{item.code}</td>
+                        <td className="py-2.5 px-4 font-semibold max-w-xs truncate">{item.title}</td>
+                        <td className="py-2.5 px-4 text-[#475569]">{item.guide}</td>
+                        <td className="py-2.5 px-4 text-[#64748B]">{item.domain}</td>
+                        <td className="py-2.5 px-4 font-mono font-bold text-emerald-600">{item.score}</td>
+                        <td className="py-2.5 px-4 text-right">
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            {item.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </CardContent>

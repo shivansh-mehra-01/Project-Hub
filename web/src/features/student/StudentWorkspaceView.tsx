@@ -16,6 +16,8 @@ import {
   AlertCircle,
   FileText,
   Upload,
+  Link as LinkIcon,
+  Settings,
 } from "lucide-react";
 import { AppShell } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
@@ -25,18 +27,28 @@ import { StepperGPS } from "@/design-system/patterns/StepperGPS";
 import { Modal } from "@/design-system/components/Modal";
 import { Input } from "@/design-system/components/Input";
 import { Textarea } from "@/design-system/components/Textarea";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { TaskStatusType } from "@/mocks/store-types";
+import { GithubIcon } from "@/design-system/components/Icons";
 
 export const StudentWorkspaceView: React.FC = () => {
-  const { teams, currentPersona, updateTaskStatus, createTask, submitWeeklyLog, approveProposal } =
-    useProjectHubStore();
+  const {
+    teams,
+    currentPersona,
+    updateTaskStatus,
+    createTask,
+    submitWeeklyLog,
+    approveProposal,
+    inviteTeamMember,
+    updateTeamRepo,
+  } = useProjectHubStore();
 
   // Lifecycle state simulator: Off-Season, Pre-Approval Setup, Post-Approval Active
   const [lifecycleState, setLifecycleState] = useState<"offseason" | "preapproval" | "active">("active");
 
   // Post-approval sub-tabs
-  const [subTab, setSubTab] = useState<"overview" | "board" | "logs" | "evaluations">("board");
+  const [subTab, setSubTab] = useState<"board" | "logs" | "overview" | "evaluations">("board");
 
   // New Task Modal
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -54,10 +66,36 @@ export const StudentWorkspaceView: React.FC = () => {
 
   // Pre-approval proposal form
   const [proposalSubmitted, setProposalSubmitted] = useState(false);
+  const [inviteUsn, setInviteUsn] = useState("");
+  const [inviteFeedback, setInviteFeedback] = useState("");
+
+  // Repository & Jira modal
+  const [showRepoModal, setShowRepoModal] = useState(false);
+  const [repoSuccess, setRepoSuccess] = useState(false);
 
   // Active student team
-  const myTeam = teams[0]; // Team 2026-CS-MIN-01
-  const isTeamLead = currentPersona.role === "TeamLead";
+  const myTeam = teams[0] || {
+    id: "team-default",
+    teamCode: "2026-CS-MIN-01",
+    title: "Smart IoT Energy Monitoring & Telemetry for University Labs",
+    abstract: "Edge telemetric hardware monitoring energy dissipation across university labs with LSTM anomaly prediction.",
+    domain: "IoT & Smart Systems",
+    sdgNumber: 7,
+    guideName: "Prof. S. K. Verma",
+    state: "Active",
+    githubUrl: "https://github.com/sistec-cse/iot-energy-monitor",
+    jiraUrl: "https://sistec-cse.atlassian.net/jira/projects/IOT",
+    isRosterLocked: true,
+    members: [],
+    tasks: [],
+    weeklyLogs: [],
+    health: "Healthy",
+  };
+
+  const isTeamLead = currentPersona.role === "TeamLead" || myTeam.members.some((m) => m.isLead && m.name === currentPersona.name);
+
+  const [githubUrl, setGithubUrl] = useState(myTeam.githubUrl || "https://github.com/sistec-cse/iot-energy-monitor");
+  const [jiraUrl, setJiraUrl] = useState(myTeam.jiraUrl || "https://sistec-cse.atlassian.net/jira/projects/IOT");
 
   const handleCreateTask = () => {
     if (!taskTitle) return;
@@ -83,8 +121,25 @@ export const StudentWorkspaceView: React.FC = () => {
     setTimeout(() => setProposalSubmitted(false), 3000);
   };
 
+  const handleSendInvite = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteUsn.trim()) return;
+    inviteTeamMember(myTeam.id, inviteUsn.trim(), "Student Peer");
+    setInviteFeedback(`Invitation successfully dispatched to USN ${inviteUsn.trim()}.`);
+    setInviteUsn("");
+    setTimeout(() => setInviteFeedback(""), 4000);
+  };
+
+  const handleSaveRepoSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateTeamRepo(myTeam.id, githubUrl, jiraUrl);
+    setShowRepoModal(false);
+    setRepoSuccess(true);
+    setTimeout(() => setRepoSuccess(false), 3500);
+  };
+
   return (
-    <AppShell pageTitle="Project Workspace" breadcrumb="SISTec CSE • Minor Project">
+    <AppShell pageTitle="Project Workspace" breadcrumb="SISTec CSE • Minor Project" activeTab="Workspace">
       {/* Semester GPS Stepper */}
       <StepperGPS currentStep={lifecycleState === "offseason" ? 1 : lifecycleState === "preapproval" ? 2 : 4} />
 
@@ -129,12 +184,21 @@ export const StudentWorkspaceView: React.FC = () => {
           </div>
         </div>
 
-        {isTeamLead && (
-          <Badge variant="role" role="TeamLead" size="sm" dot>
-            Lead Authority Unlocked
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {isTeamLead && (
+            <Badge variant="role" role="TeamLead" size="sm" dot>
+              Lead Authority Unlocked
+            </Badge>
+          )}
+        </div>
       </div>
+
+      {repoSuccess && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>Repository &amp; Jira tracking endpoints saved to team project configuration.</span>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* STATE 1: OFF-SEASON                                                       */}
@@ -162,6 +226,13 @@ export const StudentWorkspaceView: React.FC = () => {
       {/* ========================================================================= */}
       {lifecycleState === "preapproval" && (
         <div className="space-y-6">
+          {inviteFeedback && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>{inviteFeedback}</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Team Roster & Invitations */}
             <Card>
@@ -198,13 +269,23 @@ export const StudentWorkspaceView: React.FC = () => {
                   ))}
                 </div>
 
-                {isTeamLead && (
-                  <div className="flex gap-2">
-                    <Input placeholder="Enter student USN (e.g. 0176CS221038)" />
-                    <Button size="sm" variant="secondary" className="shrink-0">
+                {isTeamLead ? (
+                  <form onSubmit={handleSendInvite} className="flex gap-2">
+                    <Input
+                      placeholder="Enter student USN (e.g. 0176CS221038)"
+                      value={inviteUsn}
+                      onChange={(e) => setInviteUsn(e.target.value)}
+                      className="text-xs"
+                      required
+                    />
+                    <Button size="sm" variant="secondary" type="submit" className="shrink-0" leftIcon={<Send className="h-3 w-3" />}>
                       Send Invite
                     </Button>
-                  </div>
+                  </form>
+                ) : (
+                  <p className="text-[11px] text-[#64748B] italic">
+                    Contact your Team Lead ({myTeam.members.find((m) => m.isLead)?.name || "Lead"}) to invite teammates.
+                  </p>
                 )}
               </CardContent>
             </Card>
@@ -289,11 +370,11 @@ export const StudentWorkspaceView: React.FC = () => {
       {lifecycleState === "active" && (
         <div className="space-y-6">
           {/* Active Workspace Sub-Tabs */}
-          <div className="flex border-b border-[#E2E8F0] gap-4 text-xs font-semibold select-none">
+          <div className="flex border-b border-[#E2E8F0] gap-4 text-xs font-semibold select-none overflow-x-auto">
             <button
               type="button"
               onClick={() => setSubTab("board")}
-              className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 ${
+              className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 subTab === "board"
                   ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
                   : "text-[#64748B] hover:text-[#0F172A]"
@@ -305,7 +386,7 @@ export const StudentWorkspaceView: React.FC = () => {
             <button
               type="button"
               onClick={() => setSubTab("logs")}
-              className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 ${
+              className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 subTab === "logs"
                   ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
                   : "text-[#64748B] hover:text-[#0F172A]"
@@ -317,7 +398,7 @@ export const StudentWorkspaceView: React.FC = () => {
             <button
               type="button"
               onClick={() => setSubTab("overview")}
-              className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 ${
+              className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 subTab === "overview"
                   ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
                   : "text-[#64748B] hover:text-[#0F172A]"
@@ -329,7 +410,7 @@ export const StudentWorkspaceView: React.FC = () => {
             <button
               type="button"
               onClick={() => setSubTab("evaluations")}
-              className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 ${
+              className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 subTab === "evaluations"
                   ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
                   : "text-[#64748B] hover:text-[#0F172A]"
@@ -343,19 +424,31 @@ export const StudentWorkspaceView: React.FC = () => {
           {/* SUB-TAB A: 3-COLUMN KANBAN SPRINT BOARD */}
           {subTab === "board" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-[#0F172A]">Sprint Tasks &amp; Milestones</h3>
-                  <p className="text-xs text-[#64748B]">Click tasks to advance status.</p>
+                  <p className="text-xs text-[#64748B]">Click any task to advance status (Todo &rarr; InProgress &rarr; Done).</p>
                 </div>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  leftIcon={<Plus className="h-3.5 w-3.5" />}
-                  onClick={() => setShowTaskModal(true)}
-                >
-                  New Task
-                </Button>
+                <div className="flex items-center gap-2">
+                  {isTeamLead && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      leftIcon={<Settings className="h-3.5 w-3.5" />}
+                      onClick={() => setShowRepoModal(true)}
+                    >
+                      Repo &amp; Jira Links
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    leftIcon={<Plus className="h-3.5 w-3.5" />}
+                    onClick={() => setShowTaskModal(true)}
+                  >
+                    New Task
+                  </Button>
+                </div>
               </div>
 
               {/* 3 Kanban Columns */}
@@ -380,7 +473,6 @@ export const StudentWorkspaceView: React.FC = () => {
                           <div
                             key={task.id}
                             onClick={() => {
-                              // Cycle status: Todo -> InProgress -> Done -> Todo
                               const next =
                                 task.status === "Todo"
                                   ? "InProgress"
@@ -431,7 +523,7 @@ export const StudentWorkspaceView: React.FC = () => {
                   <CardHeader>
                     <CardTitle>Submit Friday Weekly Check-In</CardTitle>
                     <CardDescription>
-                      Mandatory weekly logbook reviewable by designated guide Prof. S. K. Verma.
+                      Mandatory weekly logbook reviewable by designated guide {myTeam.guideName || "Prof. S. K. Verma"}.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -482,31 +574,38 @@ export const StudentWorkspaceView: React.FC = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {myTeam.weeklyLogs.map((log) => (
-                      <div
-                        key={log.id}
-                        className="p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-2 text-xs"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-[#0F172A]">
-                            Week {log.weekNumber} Check-In • {log.dateSubmitted}
-                          </span>
-                          <Badge
-                            variant={log.guideStatus === "Approved" ? "success" : "warning"}
-                            size="sm"
-                            dot
-                          >
-                            {log.guideStatus}
-                          </Badge>
-                        </div>
-                        <p className="text-[#475569] leading-relaxed">{log.accomplishments}</p>
-                        {log.guideRemarks && (
-                          <div className="p-2 bg-emerald-50 rounded border border-emerald-200 text-emerald-800 text-[11px]">
-                            <strong>Guide Remarks:</strong> {log.guideRemarks}
+                    {myTeam.weeklyLogs.length === 0 ? (
+                      <EmptyState
+                        title="No Weekly Logs Recorded"
+                        description="Submit your first Friday check-in to start logging engineering hours."
+                      />
+                    ) : (
+                      myTeam.weeklyLogs.map((log) => (
+                        <div
+                          key={log.id}
+                          className="p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-2 text-xs"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-[#0F172A]">
+                              Week {log.weekNumber} Check-In • {log.dateSubmitted}
+                            </span>
+                            <Badge
+                              variant={log.guideStatus === "Approved" ? "success" : "warning"}
+                              size="sm"
+                              dot
+                            >
+                              {log.guideStatus}
+                            </Badge>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          <p className="text-[#475569] leading-relaxed">{log.accomplishments}</p>
+                          {log.guideRemarks && (
+                            <div className="p-2 bg-emerald-50 rounded border border-emerald-200 text-emerald-800 text-[11px]">
+                              <strong>Guide Remarks:</strong> {log.guideRemarks}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -515,63 +614,111 @@ export const StudentWorkspaceView: React.FC = () => {
 
           {/* SUB-TAB C: OVERVIEW */}
           {subTab === "overview" && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-xs text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded">
-                    {myTeam.teamCode}
-                  </span>
-                  <Badge variant="success" size="sm" dot>
-                    Active Build Phase
-                  </Badge>
-                </div>
-                <CardTitle className="pt-2 text-base">{myTeam.title}</CardTitle>
-                <CardDescription>{myTeam.abstract}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 text-xs">
-                <div className="p-4 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div>
-                    <span className="text-[#64748B]">Assigned Mentor:</span>
-                    <div className="font-bold text-[#0F172A]">{myTeam.guideName}</div>
-                  </div>
-                  <div>
-                    <span className="text-[#64748B]">UN SDG Target:</span>
-                    <div className="font-bold text-emerald-700">SDG {myTeam.sdgNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-[#64748B]">Weekly Logs Signed:</span>
-                    <div className="font-bold text-[#0F172A] font-mono tabular-nums">
-                      {myTeam.weeklyLogs.length} Verified
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-xs text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded">
+                      {myTeam.teamCode}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="success" size="sm" dot>
+                        Active Build Phase
+                      </Badge>
+                      {isTeamLead && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setShowRepoModal(true)}
+                          leftIcon={<Settings className="h-3.5 w-3.5" />}
+                        >
+                          Configure Integrations
+                        </Button>
+                      )}
                     </div>
                   </div>
-                  <div>
-                    <span className="text-[#64748B]">Sprint Tasks:</span>
-                    <div className="font-bold text-[#0F172A] font-mono tabular-nums">
-                      {myTeam.tasks.filter((t) => t.status === "Done").length}/{myTeam.tasks.length} Done
+                  <CardTitle className="pt-2 text-base">{myTeam.title}</CardTitle>
+                  <CardDescription>{myTeam.abstract}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 text-xs">
+                  <div className="p-4 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div>
+                      <span className="text-[#64748B]">Assigned Mentor:</span>
+                      <div className="font-bold text-[#0F172A]">{myTeam.guideName}</div>
                     </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <h4 className="font-bold text-xs text-[#0F172A]">Enrolled Team Members</h4>
-                  <div className="divide-y divide-[#E2E8F0] border border-[#E2E8F0] rounded-xl bg-white">
-                    {myTeam.members.map((m) => (
-                      <div key={m.id} className="p-3 flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-[#0F172A]">
-                            {m.name} {m.isLead && <span className="text-[#4F46E5]">(Team Lead)</span>}
-                          </div>
-                          <div className="text-[11px] text-[#64748B]">{m.roleDescription}</div>
-                        </div>
-                        <span className="font-mono text-xs tabular-nums text-[#475569]">
-                          {m.enrollmentNumber}
-                        </span>
+                    <div>
+                      <span className="text-[#64748B]">UN SDG Target:</span>
+                      <div className="font-bold text-emerald-700">SDG {myTeam.sdgNumber}</div>
+                    </div>
+                    <div>
+                      <span className="text-[#64748B]">Weekly Logs Signed:</span>
+                      <div className="font-bold text-[#0F172A] font-mono tabular-nums">
+                        {myTeam.weeklyLogs.length} Verified
                       </div>
-                    ))}
+                    </div>
+                    <div>
+                      <span className="text-[#64748B]">Sprint Tasks:</span>
+                      <div className="font-bold text-[#0F172A] font-mono tabular-nums">
+                        {myTeam.tasks.filter((t) => t.status === "Done").length}/{myTeam.tasks.length} Done
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+
+                  {/* Connected Integrations Card */}
+                  <div className="p-3.5 rounded-xl border border-[#E2E8F0] bg-white space-y-2">
+                    <span className="font-bold text-xs text-[#0F172A] block">Connected Repository &amp; Issue Trackers</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2 font-mono">
+                        <GithubIcon className="h-4 w-4 text-[#0F172A]" />
+                        <span className="text-[#64748B]">GitHub:</span>
+                        <a
+                          href={githubUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#4F46E5] hover:underline flex items-center gap-1 font-semibold"
+                        >
+                          <span>{githubUrl.replace("https://github.com/", "")}</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+
+                      <div className="flex items-center gap-2 font-mono">
+                        <LinkIcon className="h-4 w-4 text-[#0F172A]" />
+                        <span className="text-[#64748B]">Jira:</span>
+                        <a
+                          href={jiraUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#4F46E5] hover:underline flex items-center gap-1 font-semibold"
+                        >
+                          <span>{jiraUrl.replace("https://", "")}</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-xs text-[#0F172A]">Enrolled Team Members</h4>
+                    <div className="divide-y divide-[#E2E8F0] border border-[#E2E8F0] rounded-xl bg-white">
+                      {myTeam.members.map((m) => (
+                        <div key={m.id} className="p-3 flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-[#0F172A]">
+                              {m.name} {m.isLead && <span className="text-[#4F46E5]">(Team Lead)</span>}
+                            </div>
+                            <div className="text-[11px] text-[#64748B]">{m.roleDescription}</div>
+                          </div>
+                          <span className="font-mono text-xs tabular-nums text-[#475569]">
+                            {m.enrollmentNumber}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {/* SUB-TAB D: EVALUATIONS */}
@@ -679,6 +826,43 @@ export const StudentWorkspaceView: React.FC = () => {
             onChange={(e) => setTaskAssignee(e.target.value)}
           />
         </div>
+      </Modal>
+
+      {/* Team Repository & Jira Integration Modal */}
+      <Modal
+        isOpen={showRepoModal}
+        onClose={() => setShowRepoModal(false)}
+        title="Configure Team VCS & Tracker Integrations"
+        description="Link your team's GitHub repository and Jira workspace to sync commit telemetry."
+        maxWidth="md"
+      >
+        <form onSubmit={handleSaveRepoSettings} className="space-y-4">
+          <Input
+            label="GitHub Repository URL"
+            value={githubUrl}
+            onChange={(e) => setGithubUrl(e.target.value)}
+            placeholder="https://github.com/organization/repo"
+            helperText="Faculty guides can inspect commit integrity directly from their dashboard."
+            required
+          />
+
+          <Input
+            label="Jira / Atlassian Board URL"
+            value={jiraUrl}
+            onChange={(e) => setJiraUrl(e.target.value)}
+            placeholder="https://company.atlassian.net/jira/projects/PROJ"
+            helperText="Optional link to sprint backlog and issue management."
+          />
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-[#E2E8F0]">
+            <Button size="sm" variant="secondary" type="button" onClick={() => setShowRepoModal(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" variant="primary" type="submit">
+              Save Integrations
+            </Button>
+          </div>
+        </form>
       </Modal>
     </AppShell>
   );

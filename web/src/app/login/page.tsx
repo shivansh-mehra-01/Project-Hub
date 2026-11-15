@@ -15,6 +15,7 @@ import {
 import { Button } from "@/design-system/components/Button";
 import { Input } from "@/design-system/components/Input";
 import { Badge } from "@/design-system/components/Badge";
+import { Modal } from "@/design-system/components/Modal";
 import { OnboardingModal } from "@/features/auth/OnboardingModal";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
@@ -26,11 +27,29 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"signin" | "activate">("signin");
   const [email, setEmail] = useState("0176cs221045@sistec.ac.in");
   const [password, setPassword] = useState("••••••••••••");
+  const [emailError, setEmailError] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSubmitted, setForgotSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignIn = (e: React.FormEvent) => {
     e.preventDefault();
+    const isInstitutional =
+      email.includes("@") &&
+      (email.includes("sistec.ac.in") ||
+        email.includes("projecthub") ||
+        email.includes(".edu") ||
+        email.includes(".ac.in"));
+
+    if (!isInstitutional) {
+      setEmailError(
+        "Institutional domain required: only @sistec.ac.in or authorized campus accounts are permitted."
+      );
+      return;
+    }
+    setEmailError("");
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
@@ -173,7 +192,11 @@ export default function LoginPage() {
               label="Institutional Email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (emailError) setEmailError("");
+              }}
+              error={emailError}
               placeholder="usn@sistec.ac.in"
               leftIcon={<Mail className="h-4 w-4" />}
             />
@@ -196,9 +219,17 @@ export default function LoginPage() {
                 />
                 <span>Remember campus session</span>
               </label>
-              <a href="#" className="font-medium text-[#4F46E5] hover:underline">
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotEmail(email);
+                  setForgotSubmitted(false);
+                  setShowForgotModal(true);
+                }}
+                className="font-medium text-[#4F46E5] hover:underline cursor-pointer"
+              >
                 Forgot?
-              </a>
+              </button>
             </div>
 
             <Button
@@ -303,6 +334,64 @@ export default function LoginPage() {
           router.push("/student");
         }}
       />
+
+      {/* Password Reset Modal */}
+      <Modal
+        isOpen={showForgotModal}
+        onClose={() => setShowForgotModal(false)}
+        title="Reset Institutional Password"
+        description="Verification links are dispatched exclusively to authorized campus emails."
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowForgotModal(false)}
+            >
+              Cancel
+            </Button>
+            {!forgotSubmitted && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setForgotSubmitted(true)}
+              >
+                Send Recovery OTP
+              </Button>
+            )}
+          </div>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          {forgotSubmitted ? (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-2 text-center">
+              <CheckCircle2 className="h-6 w-6 text-emerald-600 mx-auto" />
+              <div className="font-bold text-sm">Recovery Link Dispatched</div>
+              <p className="text-[11px] leading-relaxed">
+                A one-time verification link has been sent to{" "}
+                <span className="font-mono font-bold">{forgotEmail}</span>.
+                Please check your university inbox or contact your department coordinator.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Input
+                label="Registered College Email Address"
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="your.usn@sistec.ac.in"
+                leftIcon={<Mail className="h-4 w-4" />}
+                helperText="Must match the pre-registered CSV record on file with SISTec"
+              />
+              <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] text-[#64748B] text-[11px] leading-relaxed">
+                For security reasons, self-service password reset is restricted to domain-verified
+                accounts. If your roll number has changed, contact the HOD office.
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

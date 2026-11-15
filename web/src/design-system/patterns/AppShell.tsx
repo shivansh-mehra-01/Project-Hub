@@ -50,6 +50,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     useProjectHubStore();
 
   const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const [showMobileRoleMenu, setShowMobileRoleMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
   // Simulated alerts
@@ -358,6 +359,81 @@ export const AppShell: React.FC<AppShellProps> = ({
                         <p className="text-[11px] text-[#475569] leading-tight">{n.desc}</p>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Persona Switcher Button (< 1024px) */}
+            <div className="relative lg:hidden">
+              <button
+                type="button"
+                onClick={() => setShowMobileRoleMenu(!showMobileRoleMenu)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#0F172A] hover:bg-[#F1F5F9] transition-colors"
+                title="Switch Persona"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-[#4F46E5]" />
+                <span className="truncate max-w-[80px]">{currentPersona.role}</span>
+                <ChevronDown className="h-3 w-3 text-[#94A3B8]" />
+              </button>
+
+              {showMobileRoleMenu && (
+                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-[#E2E8F0] bg-white shadow-xl p-2 z-50 space-y-1 text-xs">
+                  <div className="flex items-center justify-between px-2 py-1 border-b border-[#E2E8F0]">
+                    <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">
+                      Switch Persona
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetToDefaults();
+                        setShowMobileRoleMenu(false);
+                      }}
+                      className="text-[10px] text-[#4F46E5] hover:underline flex items-center gap-1"
+                    >
+                      <RotateCcw className="h-2.5 w-2.5" />
+                      <span>Reset</span>
+                    </button>
+                  </div>
+                  {(
+                    [
+                      "SuperAdmin",
+                      "CollegeAdmin",
+                      "HOD",
+                      "Faculty",
+                      "Student",
+                      "TeamLead",
+                    ] as RoleType[]
+                  ).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => {
+                        handleRoleSwitch(r);
+                        setShowMobileRoleMenu(false);
+                      }}
+                      className={cn(
+                        "w-full text-left px-2.5 py-1.5 rounded-md flex items-center justify-between cursor-pointer transition-colors",
+                        currentPersona.role === r
+                          ? "bg-[#EEF2FF] text-[#4F46E5] font-semibold"
+                          : "text-[#475569] hover:bg-[#F1F5F9]"
+                      )}
+                    >
+                      <span>{r}</span>
+                      {currentPersona.role === r && (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-[#4F46E5]" />
+                      )}
+                    </button>
+                  ))}
+                  <div className="pt-1 border-t border-[#E2E8F0]">
+                    <Link
+                      href="/login"
+                      onClick={() => setShowMobileRoleMenu(false)}
+                      className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium text-[#64748B] hover:text-[#DC2626] transition-colors"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      <span>Sign Out</span>
+                    </Link>
                   </div>
                 </div>
               )}

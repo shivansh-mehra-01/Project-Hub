@@ -14,6 +14,7 @@ import {
   TaskItem,
   TaskStatusType,
   Team,
+  TeamMember,
   UserPersona,
   WeeklyLog,
 } from "./store-types";
@@ -108,8 +109,12 @@ interface ProjectHubStoreContextType {
   lockEvaluation: (evalId: string) => void;
   requestGradeUnlock: (evalId: string, reason: string) => void;
   approveGradeUnlock: (evalId: string) => void;
+  rejectGradeUnlock: (evalId: string) => void;
   addDepartment: (name: string, code: string) => void;
   onboardCollege: (collegeData: Partial<College>) => void;
+  updateCycle: (cycleData: Partial<ProjectCycle>) => void;
+  updateTeamRepo: (teamId: string, githubUrl: string, jiraUrl: string) => void;
+  inviteTeamMember: (teamId: string, enrollmentNumber: string, name?: string) => void;
   postProblemIdea: (idea: Omit<ProblemBankIdea, "id" | "taken">) => void;
   resetToDefaults: () => void;
 }
@@ -388,6 +393,49 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     );
   };
 
+  const rejectGradeUnlock = (evalId: string) => {
+    setEvaluations((prev) =>
+      prev.map((ev) =>
+        ev.id === evalId
+          ? { ...ev, unlockedRequested: false, unlockReason: undefined }
+          : ev
+      )
+    );
+  };
+
+  const updateCycle = (cycleData: Partial<ProjectCycle>) => {
+    setCycle((prev) => ({
+      ...prev,
+      ...cycleData,
+    }));
+  };
+
+  const updateTeamRepo = (teamId: string, githubUrl: string, jiraUrl: string) => {
+    setTeams((prev) =>
+      prev.map((t) => (t.id === teamId ? { ...t, githubUrl, jiraUrl } : t))
+    );
+  };
+
+  const inviteTeamMember = (teamId: string, enrollmentNumber: string, name?: string) => {
+    setTeams((prev) =>
+      prev.map((t) => {
+        if (t.id !== teamId) return t;
+        const newMember: TeamMember = {
+          id: `mem-${Date.now()}`,
+          userId: `usr-${Date.now()}`,
+          name: name || `Student (${enrollmentNumber})`,
+          enrollmentNumber,
+          isLead: false,
+          roleDescription: "Invited Contributor (Pending)",
+        };
+        return {
+          ...t,
+          members: [...t.members, newMember],
+        };
+      })
+    );
+  };
+
   const addDepartment = (name: string, code: string) => {
     const newDept: Department = {
       id: `dept-${Date.now()}`,
@@ -455,8 +503,12 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         lockEvaluation,
         requestGradeUnlock,
         approveGradeUnlock,
+        rejectGradeUnlock,
         addDepartment,
         onboardCollege,
+        updateCycle,
+        updateTeamRepo,
+        inviteTeamMember,
         postProblemIdea,
         resetToDefaults,
       }}

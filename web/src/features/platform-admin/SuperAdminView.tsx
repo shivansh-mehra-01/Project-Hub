@@ -18,8 +18,11 @@ import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
 import { Modal } from "@/design-system/components/Modal";
+import { SlideOverDrawer } from "@/design-system/components/SlideOverDrawer";
 import { Input } from "@/design-system/components/Input";
 import { Select } from "@/design-system/components/Select";
+import { Textarea } from "@/design-system/components/Textarea";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 
 export const SuperAdminView: React.FC = () => {
@@ -78,6 +81,35 @@ export const SuperAdminView: React.FC = () => {
   ]);
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [managingCollege, setManagingCollege] = useState<(typeof collegesList)[0] | null>(null);
+  const [reviewingPilot, setReviewingPilot] = useState<(typeof pilotRequests)[0] | null>(null);
+  const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
+  const [tenantSaved, setTenantSaved] = useState(false);
+
+  // Custom template state
+  const [newTemplateTitle, setNewTemplateTitle] = useState("");
+  const [newTemplateCode, setNewTemplateCode] = useState("PO3");
+  const [newTemplateDesc, setNewTemplateDesc] = useState("");
+
+  const [rubricPresets, setRubricPresets] = useState([
+    {
+      title: "Engineering Problem Analysis (PO2)",
+      desc: "Literature review depth, research formulation, IEEE paper benchmarking.",
+    },
+    {
+      title: "Design/Development of Solutions (PO3)",
+      desc: "Architecture diagrams, component modularity, hardware/cloud interface schemas.",
+    },
+    {
+      title: "Modern Tool Usage (PO5)",
+      desc: "Version control (Git), automated CI testing, profiling, cloud runtime.",
+    },
+    {
+      title: "Individual and Team Work (PO9)",
+      desc: "Peer ratings, weekly task accountability, task completion percentage.",
+    },
+  ]);
+
   const [newCollegeName, setNewCollegeName] = useState("");
   const [newCollegeCode, setNewCollegeCode] = useState("");
   const [newCollegeDomain, setNewCollegeDomain] = useState("");
@@ -129,12 +161,32 @@ export const SuperAdminView: React.FC = () => {
     ]);
 
     setPilotRequests(pilotRequests.filter((r) => r.id !== reqId));
+    if (reviewingPilot?.id === reqId) setReviewingPilot(null);
+  };
+
+  const handleDeclinePilot = (reqId: string) => {
+    setPilotRequests(pilotRequests.filter((r) => r.id !== reqId));
+    if (reviewingPilot?.id === reqId) setReviewingPilot(null);
+  };
+
+  const handleAddCustomTemplate = () => {
+    if (!newTemplateTitle || !newTemplateDesc) return;
+    setRubricPresets([
+      ...rubricPresets,
+      {
+        title: `${newTemplateTitle} (${newTemplateCode})`,
+        desc: newTemplateDesc,
+      },
+    ]);
+    setShowAddTemplateModal(false);
+    setNewTemplateTitle("");
+    setNewTemplateDesc("");
   };
 
   return (
     <AppShell pageTitle="Super Admin Console" breadcrumb="Platform & Tenant Governance">
       {/* Top Telemetry KPI Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="health" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-0.5">
@@ -194,7 +246,7 @@ export const SuperAdminView: React.FC = () => {
       </div>
 
       {/* Colleges & Tenants Section */}
-      <Card>
+      <Card id="subscriptions">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
             <CardTitle>College Tenants</CardTitle>
@@ -257,6 +309,10 @@ export const SuperAdminView: React.FC = () => {
                   <td className="py-3 px-4 text-right">
                     <button
                       type="button"
+                      onClick={() => {
+                        setManagingCollege(col);
+                        setTenantSaved(false);
+                      }}
                       className="text-xs font-semibold text-[#4F46E5] hover:underline cursor-pointer"
                     >
                       Manage Tenant
@@ -307,16 +363,21 @@ export const SuperAdminView: React.FC = () => {
                   >
                     Approve 90-Day Pilot
                   </Button>
-                  <Button size="sm" variant="secondary">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setReviewingPilot(req)}
+                  >
                     Review Details
                   </Button>
                 </div>
               </div>
             ))
           ) : (
-            <div className="p-6 text-center text-xs text-[#64748B]">
-              All pilot requests have been reviewed and provisioned.
-            </div>
+            <EmptyState
+              title="No Pending Pilot Requests"
+              description="All incoming university pilot applications have been provisioned or resolved."
+            />
           )}
         </CardContent>
       </Card>
@@ -324,31 +385,24 @@ export const SuperAdminView: React.FC = () => {
       {/* Global Master Templates (NBA Criterion 2 & 3 & UN SDGs) */}
       <section id="templates" className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle>NBA Criterion 2 &amp; 3 Master Rubric Presets</CardTitle>
-            <CardDescription>
-              Standardized PO/PSO outcome matrices provisioned to all college tenants.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>NBA Criterion 2 &amp; 3 Master Rubric Presets</CardTitle>
+              <CardDescription>
+                Standardized PO/PSO outcome matrices provisioned to all college tenants.
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              leftIcon={<Plus className="h-3.5 w-3.5" />}
+              onClick={() => setShowAddTemplateModal(true)}
+            >
+              Add Preset
+            </Button>
           </CardHeader>
           <CardContent className="space-y-2.5">
-            {[
-              {
-                title: "Engineering Problem Analysis (PO2)",
-                desc: "Literature review depth, research formulation, IEEE paper benchmarking.",
-              },
-              {
-                title: "Design/Development of Solutions (PO3)",
-                desc: "Architecture diagrams, component modularity, hardware/cloud interface schemas.",
-              },
-              {
-                title: "Modern Tool Usage (PO5)",
-                desc: "Version control (Git), automated CI testing, profiling, cloud runtime.",
-              },
-              {
-                title: "Individual and Team Work (PO9)",
-                desc: "Peer ratings, weekly task accountability, task completion percentage.",
-              },
-            ].map((p, i) => (
+            {rubricPresets.map((p, i) => (
               <div
                 key={i}
                 className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex items-start justify-between"
@@ -443,6 +497,214 @@ export const SuperAdminView: React.FC = () => {
               { label: "Standard (Annual - Up to 2,500 Students)", value: "Standard" },
               { label: "Enterprise (Multi-Campus Unlimited)", value: "Enterprise" },
             ]}
+          />
+        </div>
+      </Modal>
+
+      {/* Manage Tenant Slide-Over Drawer */}
+      <SlideOverDrawer
+        isOpen={!!managingCollege}
+        onClose={() => setManagingCollege(null)}
+        title={managingCollege?.name}
+        subtitle={`Tenant Partition Code: ${managingCollege?.code}`}
+        badge={
+          managingCollege && (
+            <Badge variant="success" size="sm" dot>
+              {managingCollege.status}
+            </Badge>
+          )
+        }
+        footer={
+          managingCollege && (
+            <div className="flex items-center justify-between w-full">
+              <Button variant="ghost" size="sm" onClick={() => setManagingCollege(null)}>
+                Close
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setTenantSaved(true);
+                  setTimeout(() => setManagingCollege(null), 1500);
+                }}
+              >
+                {tenantSaved ? "Configuration Saved!" : "Save Tenant Configuration"}
+              </Button>
+            </div>
+          )
+        }
+      >
+        {managingCollege && (
+          <div className="space-y-4 text-xs">
+            <div className="p-3 bg-[#EEF2FF] rounded-lg border border-indigo-100 text-[#3730A3] space-y-1">
+              <div className="font-semibold flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-[#4F46E5]" />
+                <span>Dedicated PostgreSQL Schema Active</span>
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                Database partition <code className="font-mono bg-white px-1 rounded">schema_{managingCollege.code.toLowerCase()}</code> enforces strict multi-tenancy with zero cross-tenant query leaks.
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] space-y-2">
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">SSO Email Domain:</span>
+                <span className="font-mono font-semibold text-[#0F172A]">@{managingCollege.domain}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Active Enrollment:</span>
+                <span className="font-semibold text-[#0F172A] tabular-nums">{managingCollege.students} Students</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Storage Quota Utilization:</span>
+                <span className="font-mono font-bold text-emerald-600 tabular-nums">14.8 GB / 50.0 GB (29.6%)</span>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2 border-t border-[#E2E8F0]">
+              <Select
+                label="Subscription Tier"
+                value={managingCollege.plan}
+                onChange={(e) => {
+                  const updatedPlan = e.target.value as "Pilot" | "Standard" | "Enterprise";
+                  setCollegesList((prev) =>
+                    prev.map((c) =>
+                      c.id === managingCollege.id ? { ...c, plan: updatedPlan } : c
+                    )
+                  );
+                  setManagingCollege({ ...managingCollege, plan: updatedPlan });
+                }}
+                options={[
+                  { label: "Pilot (90-Day Evaluation)", value: "Pilot" },
+                  { label: "Standard (Annual Campus License)", value: "Standard" },
+                  { label: "Enterprise (Multi-Campus Full NBA Suite)", value: "Enterprise" },
+                ]}
+              />
+
+              <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-[#0F172A]">Scheduled Maintenance Mode</div>
+                  <div className="text-[11px] text-[#64748B]">Prevents new viva submissions during DB upgrades</div>
+                </div>
+                <input type="checkbox" className="rounded text-[#4F46E5]" />
+              </div>
+            </div>
+          </div>
+        )}
+      </SlideOverDrawer>
+
+      {/* Review Pilot Request Modal */}
+      <Modal
+        isOpen={!!reviewingPilot}
+        onClose={() => setReviewingPilot(null)}
+        title="Review Pilot Request Application"
+        description="Verify institutional credentials and target student capacity before license activation."
+        footer={
+          reviewingPilot && (
+            <div className="flex items-center justify-between w-full">
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => handleDeclinePilot(reviewingPilot.id)}
+              >
+                Decline Request
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setReviewingPilot(null)}>
+                  Close
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => handleApprovePilot(reviewingPilot.id)}
+                  leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                >
+                  Approve 90-Day Pilot
+                </Button>
+              </div>
+            </div>
+          )
+        }
+      >
+        {reviewingPilot && (
+          <div className="space-y-3.5 text-xs">
+            <div className="p-3.5 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] space-y-2">
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">College Name:</span>
+                <span className="font-bold text-[#0F172A]">{reviewingPilot.collegeName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Institutional Code:</span>
+                <span className="font-mono font-bold text-[#4F46E5]">{reviewingPilot.code}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Dean Contact:</span>
+                <span className="font-mono text-[#0F172A]">{reviewingPilot.deanEmail}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Target Student Capacity:</span>
+                <span className="font-semibold text-[#0F172A]">{reviewingPilot.intake}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#64748B]">Application Date:</span>
+                <span className="text-[#64748B]">{reviewingPilot.requestedAt}</span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-800 text-[11px] flex items-start gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span>Domain ownership verified via university academic registry. Approving will automatically provision a isolated tenant partition with default NBA Criteria 2 &amp; 3 rubric templates.</span>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Add Custom Master Template Modal */}
+      <Modal
+        isOpen={showAddTemplateModal}
+        onClose={() => setShowAddTemplateModal(false)}
+        title="Add Master Accreditation Rubric Preset"
+        description="Global presets are provisioned across all engineering college tenant partitions."
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <Button variant="secondary" size="sm" onClick={() => setShowAddTemplateModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleAddCustomTemplate}>
+              Publish Global Template
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3.5">
+          <Input
+            label="Template Title / Competency"
+            placeholder="e.g. Ethics and Social Responsibility"
+            value={newTemplateTitle}
+            onChange={(e) => setNewTemplateTitle(e.target.value)}
+          />
+          <Select
+            label="Target NBA Program Outcome (PO / PSO)"
+            value={newTemplateCode}
+            onChange={(e) => setNewTemplateCode(e.target.value)}
+            options={[
+              { label: "PO1: Engineering Knowledge", value: "PO1" },
+              { label: "PO2: Problem Analysis", value: "PO2" },
+              { label: "PO3: Design/Development of Solutions", value: "PO3" },
+              { label: "PO4: Conduct Investigations of Complex Problems", value: "PO4" },
+              { label: "PO5: Modern Tool Usage", value: "PO5" },
+              { label: "PO6: The Engineer and Society", value: "PO6" },
+              { label: "PO8: Ethics & Professionalism", value: "PO8" },
+              { label: "PSO1: Domain Specific Hardware/Firmware", value: "PSO1" },
+              { label: "PSO2: AI & Cloud Infrastructure", value: "PSO2" },
+            ]}
+          />
+          <Textarea
+            label="Evaluation Guidance & Benchmark Descriptors"
+            placeholder="Specify rubric criteria and expectations for panel evaluators..."
+            value={newTemplateDesc}
+            onChange={(e) => setNewTemplateDesc(e.target.value)}
+            rows={3}
           />
         </div>
       </Modal>
