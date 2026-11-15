@@ -18,6 +18,13 @@ import {
   Calendar,
   Layers,
   ArrowRight,
+  ShieldCheck,
+  GitCommit,
+  X,
+  Send,
+  AlertCircle,
+  HelpCircle,
+  ChevronDown,
 } from "lucide-react";
 import { AppShell } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
@@ -55,8 +62,11 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
   const [activeTab, setActiveTab] = useState<"queue" | "teams" | "grading">(initialTab);
   const [inspectingLog, setInspectingLog] = useState<WeeklyLog | null>(null);
   const [inspectingTeam, setInspectingTeam] = useState<Team | null>(null);
+  const [proposalRevisionTeam, setProposalRevisionTeam] = useState<Team | null>(null);
+  const [revisionRemarks, setRevisionRemarks] = useState("");
   const [guideRemarks, setGuideRemarks] = useState("");
   const [showPostIdeaModal, setShowPostIdeaModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // New Idea form state
   const [ideaTitle, setIdeaTitle] = useState("");
@@ -64,31 +74,98 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
   const [ideaDomain, setIdeaDomain] = useState("IoT & Smart Systems");
   const [ideaSdg, setIdeaSdg] = useState("7");
 
-  // Live Viva Grading state
-  const selectedEval = evaluations[0];
+  // Panel assigned defense teams (with verified non-guide conflict-of-interest check)
+  const assignedDefenseTeams = [
+    {
+      id: "eval-team-04",
+      teamCode: "2026-CS-MIN-04",
+      title: "Automated Solar Microgrid with MPPT Tracking",
+      leadName: "Devansh Patel",
+      domain: "Renewable Energy & IoT (SDG 7)",
+      abstract: "Dual-axis solar tracking system driven by astronomical algorithm with Perturb and Observe (P&O) MPPT firmware.",
+      guideName: "Prof. Priya Nair",
+      commits: "48 commits (Verified)",
+      attendance: "100% (5/5 weeks)",
+      members: [
+        { name: "Devansh Patel (Lead)", role: "Firmware & Embedded 40%", usn: "0176CS221019" },
+        { name: "Meera Sen", role: "Power Electronics 35%", usn: "0176CS221033" },
+        { name: "Kunal Jain", role: "Telemetry Dashboard 25%", usn: "0176CS221027" },
+      ],
+      defaultScores: { "crit-01": 9.5, "crit-02": 14.5, "crit-03": 14.0, "crit-04": 9.0 },
+    },
+    {
+      id: "eval-team-07",
+      teamCode: "2026-CS-MIN-07",
+      title: "Decentralized University Credential Verification",
+      leadName: "Neha Singhal",
+      domain: "Web3 & Cryptography (SDG 9)",
+      abstract: "Zero-knowledge proof verification pipeline for university transcripts and semester grade cards.",
+      guideName: "Dr. Amit Rawat",
+      commits: "36 commits (Verified)",
+      attendance: "100% (5/5 weeks)",
+      members: [
+        { name: "Neha Singhal (Lead)", role: "Smart Contract Architecture 40%", usn: "0176CS221039" },
+        { name: "Tarun Sharma", role: "Zero-Knowledge Circuit 35%", usn: "0176CS221051" },
+        { name: "Pooja Verma", role: "Verification Portal 25%", usn: "0176CS221043" },
+      ],
+      defaultScores: { "crit-01": 8.5, "crit-02": 13.0, "crit-03": 12.5, "crit-04": 8.0 },
+    },
+    {
+      id: "eval-team-09",
+      teamCode: "2026-CS-MIN-09",
+      title: "Warehouse AGV Robot with 2D LiDAR SLAM",
+      leadName: "Vikram Rathore",
+      domain: "Robotics & Automation (SDG 9)",
+      abstract: "Differential drive robot running 2D Cartographer SLAM and TEB local planner for warehouse collision avoidance.",
+      guideName: "Dr. Manisha Sharma",
+      commits: "52 commits (Verified)",
+      attendance: "100% (5/5 weeks)",
+      members: [
+        { name: "Vikram Rathore (Lead)", role: "ROS2 & LiDAR SLAM 45%", usn: "0176CS221058" },
+        { name: "Ananya Dixit", role: "Motor Controller & PCB 30%", usn: "0176CS221008" },
+        { name: "Siddharth Rao", role: "Warehouse Fleet Planner 25%", usn: "0176CS221048" },
+      ],
+      defaultScores: { "crit-01": 9.0, "crit-02": 14.0, "crit-03": 13.5, "crit-04": 9.0 },
+    },
+  ];
+
+  const [selectedDefenseTeamId, setSelectedDefenseTeamId] = useState(assignedDefenseTeams[0].id);
+  const [lockedDefenseTeamIds, setLockedDefenseTeamIds] = useState<string[]>([]);
+  const currentDefenseTeam =
+    assignedDefenseTeams.find((t) => t.id === selectedDefenseTeamId) || assignedDefenseTeams[0];
+
   const activeRubric = rubrics[0];
-  const [scores, setScores] = useState<Record<string, number>>({
-    "crit-01": 9,
-    "crit-02": 14,
-    "crit-03": 13,
-    "crit-04": 8.5,
-  });
-  const [vivaFeedback, setVivaFeedback] = useState("Solid prototype hardware demo.");
-  const [isLocked, setIsLocked] = useState(false);
+  const [scores, setScores] = useState<Record<string, number>>(currentDefenseTeam.defaultScores);
+  const [vivaFeedback, setVivaFeedback] = useState("Solid hardware prototype demonstration with verified telemetry streaming.");
 
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
 
-  const switchTab = (tab: "queue" | "teams" | "grading") => {
-    setActiveTab(tab);
-    if (tab === "queue") router.push("/faculty");
-    else if (tab === "teams") router.push("/faculty/teams");
-    else if (tab === "grading") router.push("/faculty/evaluations");
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Filter teams mentored by this faculty or sample
-  const myGuidedTeams = teams.filter((t) => t.guideId === "usr-fac-verma" || t.guideId === currentPersona.id);
+  // Switch defense team and update scores
+  const handleSelectDefenseTeam = (teamId: string) => {
+    setSelectedDefenseTeamId(teamId);
+    const target = assignedDefenseTeams.find((t) => t.id === teamId);
+    if (target) {
+      setScores(target.defaultScores);
+    }
+  };
+
+  const isCurrentDefenseLocked = lockedDefenseTeamIds.includes(currentDefenseTeam.id);
+
+  // Filter teams mentored by this faculty (Prof. Verma: 2026-CS-MIN-01 & 2026-CS-MIN-02)
+  const myGuidedTeams = teams.filter(
+    (t) =>
+      t.guideId === "usr-fac-verma" ||
+      t.guideId === currentPersona.id ||
+      t.teamCode === "2026-CS-MIN-01" ||
+      t.teamCode === "2026-CS-MIN-02"
+  );
 
   // Action Queue items: unreviewed weekly logs and pending proposals
   const pendingLogs = teams.flatMap((t) =>
@@ -102,17 +179,17 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
 
   const handleScoreChange = (critId: string, val: number, max: number) => {
+    if (isCurrentDefenseLocked) return;
     const clamped = Math.min(Math.max(0, val), max);
     setScores((prev) => ({ ...prev, [critId]: clamped }));
   };
 
   const handleSubmitMarks = () => {
-    if (selectedEval) {
-      submitEvaluationScores(selectedEval.id, scores, vivaFeedback);
-      lockEvaluation(selectedEval.id);
-      setIsLocked(true);
-      setTimeout(() => setIsLocked(false), 3000);
-    }
+    if (isCurrentDefenseLocked) return;
+    setLockedDefenseTeamIds((prev) => [...prev, currentDefenseTeam.id]);
+    submitEvaluationScores(evaluations[0]?.id || "eval-01", scores, vivaFeedback);
+    lockEvaluation(evaluations[0]?.id || "eval-01");
+    showToast(`Panel marks for ${currentDefenseTeam.teamCode} locked & submitted to NBA SAR Criterion 3.`);
   };
 
   const handlePostIdea = () => {
@@ -127,64 +204,57 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
       prerequisites: ["Python", "Engineering Fundamentals"],
       capacity: 4,
     });
+    showToast(`Problem statement "${ideaTitle}" published to campus problem bank.`);
     setShowPostIdeaModal(false);
     setIdeaTitle("");
     setIdeaAbstract("");
   };
 
-  const tabLabels: Record<string, string> = {
-    queue: "Action Queue",
-    teams: "My Teams",
-    grading: "Live Viva Grading",
+  const handleProposalRevisionSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!proposalRevisionTeam) return;
+    rejectProposal(proposalRevisionTeam.id, revisionRemarks || "Revision required in methodology");
+    showToast(`Proposal ${proposalRevisionTeam.teamCode} returned to Team Lead with revision remarks.`);
+    setProposalRevisionTeam(null);
+    setRevisionRemarks("");
   };
+
+  const tabConfigs: Record<
+    string,
+    { title: string; breadcrumb: string; label: string }
+  > = {
+    queue: {
+      title: "Faculty Priority Action Queue",
+      breadcrumb: "Mentorship & Evaluation Console • SISTec CSE",
+      label: "Action Queue",
+    },
+    teams: {
+      title: "Faculty Mentored Project Teams",
+      breadcrumb: "Mentorship & Evaluation Console • SISTec CSE",
+      label: "My Teams",
+    },
+    grading: {
+      title: "Live Viva Defense Rubric Grading",
+      breadcrumb: "Mentorship & Evaluation Console • SISTec CSE",
+      label: "Live Viva Grading",
+    },
+  };
+
+  const currentTabConfig = tabConfigs[activeTab] || tabConfigs.queue;
 
   return (
     <AppShell
-      pageTitle="Faculty Academic Workspace"
-      breadcrumb="Mentorship & Evaluation Console"
-      activeTab={tabLabels[activeTab] || "Action Queue"}
+      pageTitle={currentTabConfig.title}
+      breadcrumb={currentTabConfig.breadcrumb}
+      activeTab={currentTabConfig.label}
     >
-      {/* 3 Primary Faculty Tabs */}
-      <div className="flex border-b border-[#E2E8F0] gap-4 text-xs font-semibold select-none overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => switchTab("queue")}
-          className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-            activeTab === "queue"
-              ? "border-b-2 border-brand-primary text-brand-primary"
-              : "text-[#64748B] hover:text-[#0F172A]"
-          }`}
-        >
-          <span>Priority Action Queue</span>
-          {pendingLogs.length + pendingProposals.length > 0 && (
-            <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
-              {pendingLogs.length + pendingProposals.length}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => switchTab("teams")}
-          className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
-            activeTab === "teams"
-              ? "border-b-2 border-brand-primary text-brand-primary"
-              : "text-[#64748B] hover:text-[#0F172A]"
-          }`}
-        >
-          My Mentored Teams ({myGuidedTeams.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => switchTab("grading")}
-          className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
-            activeTab === "grading"
-              ? "border-b-2 border-brand-primary text-brand-primary"
-              : "text-[#64748B] hover:text-[#0F172A]"
-          }`}
-        >
-          Live Viva Grading Panel
-        </button>
-      </div>
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-lg bg-[#111827] px-4 py-2.5 text-xs font-medium text-white shadow-xl border border-white/10 animate-in fade-in slide-in-from-top-2 duration-200">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 stroke-[1.75]" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* TAB 1: ACTION QUEUE                                                       */}
@@ -193,7 +263,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
         <div className="space-y-6">
           {/* Pending Weekly Logs Card */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div>
                 <CardTitle>Friday Weekly Check-Ins Awaiting Review</CardTitle>
                 <CardDescription>
@@ -201,12 +271,12 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                 </CardDescription>
               </div>
               <Badge variant={pendingLogs.length > 0 ? "warning" : "success"} size="sm" dot>
-                {pendingLogs.length} Pending
+                {pendingLogs.length} Pending Review
               </Badge>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
               {pendingLogs.length === 0 ? (
-                <div className="p-6">
+                <div className="p-8">
                   <EmptyState
                     title="All Weekly Check-Ins Reviewed"
                     description="Every Friday student logbook submission has been inspected, given mentor feedback, and approved."
@@ -214,26 +284,26 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                 </div>
               ) : (
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]">
+                  <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-slate-500">
                     <tr>
-                      <th className="py-2.5 px-4 font-semibold">Team Code</th>
-                      <th className="py-2.5 px-4 font-semibold">Student Author</th>
-                      <th className="py-2.5 px-4 font-semibold">Week #</th>
-                      <th className="py-2.5 px-4 font-semibold">Accomplishments Summary</th>
-                      <th className="py-2.5 px-4 font-semibold">Hours</th>
-                      <th className="py-2.5 px-4 text-right font-semibold">Action</th>
+                      <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Team Code</th>
+                      <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Student Author</th>
+                      <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Sprint Week</th>
+                      <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Accomplishments Summary</th>
+                      <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Hours</th>
+                      <th className="py-2.5 px-4 text-right font-semibold text-[11px] uppercase tracking-[0.06em]">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
                     {pendingLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-[#F8FAFC]">
+                      <tr key={log.id} className="hover:bg-[#F8FAFC] transition-colors">
                         <td className="py-2.5 px-4 font-mono font-bold text-brand-primary">{log.teamCode}</td>
-                        <td className="py-2.5 px-4 font-semibold">{log.studentName}</td>
-                        <td className="py-2.5 px-4 font-mono tabular-nums">Week {log.weekNumber}</td>
+                        <td className="py-2.5 px-4 font-semibold text-[#0F172A]">{log.studentName}</td>
+                        <td className="py-2.5 px-4 font-mono tabular-nums text-slate-700">Week {log.weekNumber}</td>
                         <td className="py-2.5 px-4 max-w-xs truncate text-[#475569]">
                           {log.accomplishments}
                         </td>
-                        <td className="py-2.5 px-4 font-mono tabular-nums">{log.hoursSpent} hrs</td>
+                        <td className="py-2.5 px-4 font-mono tabular-nums text-slate-700">{log.hoursSpent} hrs</td>
                         <td className="py-2.5 px-4 text-right">
                           <Button
                             size="sm"
@@ -256,15 +326,15 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
 
           {/* Pending Proposal Endorsements Card */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div>
                 <CardTitle>Proposal Endorsements</CardTitle>
                 <CardDescription>
-                  New team project proposals awaiting your endorsement as designated Guide.
+                  New team project proposals awaiting your endorsement as designated Faculty Guide.
                 </CardDescription>
               </div>
               <Badge variant={pendingProposals.length > 0 ? "warning" : "success"} size="sm" dot>
-                {pendingProposals.length} Pending
+                {pendingProposals.length} Pending Endorsement
               </Badge>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -277,7 +347,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                 pendingProposals.map((t) => (
                   <div
                     key={t.id}
-                    className="p-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    className="p-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-slate-300 transition-colors"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -289,7 +359,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                       </div>
                       <p className="text-xs text-[#475569] line-clamp-1">{t.abstract}</p>
                       <div className="text-[11px] text-[#64748B]">
-                        Lead: {t.members.find((m) => m.isLead)?.name} ({t.members.length} members)
+                        Lead: <span className="font-semibold text-slate-800">{t.members.find((m) => m.isLead)?.name}</span> ({t.members.length} members) • Mentor Designated: Prof. S. K. Verma
                       </div>
                     </div>
 
@@ -297,15 +367,22 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                       <Button
                         size="sm"
                         variant="primary"
-                        onClick={() => approveProposal(t.id, "Faculty")}
-                        leftIcon={<Check className="h-3.5 w-3.5" />}
+                        onClick={() => {
+                          approveProposal(t.id, "Faculty");
+                          showToast(`Proposal endorsed for team ${t.teamCode}. Forwarded to Coordinator.`);
+                        }}
+                        leftIcon={<Check className="h-3.5 w-3.5 stroke-[2]" />}
                       >
                         Endorse Proposal
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => rejectProposal(t.id, "Requires revision")}
+                        onClick={() => {
+                          setProposalRevisionTeam(t);
+                          setRevisionRemarks("");
+                        }}
+                        className="text-amber-700 hover:bg-amber-50"
                       >
                         Request Revisions
                       </Button>
@@ -323,20 +400,20 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
       {/* ========================================================================= */}
       {activeTab === "teams" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-bold text-[#0F172A]">Mentored Project Teams</h3>
+              <h3 className="text-sm font-bold font-heading text-[#0F172A]">Mentored Project Teams</h3>
               <p className="text-xs text-[#64748B]">
-                Track team milestone progress, weekly log submissions, and GitHub activity.
+                Track team milestone progress, sprint completion rates, and GitHub repository activity.
               </p>
             </div>
             <Button
               size="sm"
               variant="primary"
-              leftIcon={<Plus className="h-3.5 w-3.5" />}
+              leftIcon={<Plus className="h-3.5 w-3.5 stroke-[2]" />}
               onClick={() => setShowPostIdeaModal(true)}
             >
-              Post Idea to Problem Bank
+              + Post Idea to Problem Bank
             </Button>
           </div>
 
@@ -347,65 +424,105 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {myGuidedTeams.map((team) => (
-                <Card
-                  key={team.id}
-                  className="hover:border-[#CBD5E1] transition-all cursor-pointer group"
-                  onClick={() => setInspectingTeam(team)}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-xs text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
-                        {team.teamCode}
-                      </span>
-                      <Badge variant={team.health === "Healthy" ? "success" : "warning"} size="sm" dot>
-                        {team.state}
-                      </Badge>
-                    </div>
-                    <CardTitle className="pt-2 text-sm group-hover:text-brand-primary transition-colors">
-                      {team.title}
-                    </CardTitle>
-                    <CardDescription className="line-clamp-2">{team.abstract}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-xs">
-                    {/* Members */}
-                    <div className="space-y-1">
-                      <span className="text-[11px] font-semibold text-[#64748B]">Enrolled Students:</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {team.members.map((m) => (
-                          <span
-                            key={m.id}
-                            className="px-2 py-0.5 rounded-md bg-[#F1F5F9] text-[#334155] border border-[#E2E8F0] font-mono text-[11px]"
-                          >
-                            {m.name} {m.isLead && "(Lead)"}
+              {myGuidedTeams.map((team) => {
+                const totalTasks = team.tasks?.length || 4;
+                const doneTasks = team.tasks?.filter((t) => t.status === "Done").length || 2;
+                const completionPct = Math.round((doneTasks / totalTasks) * 100);
+
+                // Format badge label with clean space
+                const formattedState =
+                  team.state === "PendingHOD"
+                    ? "Pending HOD"
+                    : team.state === "PendingGuide"
+                    ? "Pending Guide"
+                    : team.state === "PendingCoordinator"
+                    ? "Pending Coordinator"
+                    : team.state;
+
+                const displayRepo = team.githubUrl
+                  ? team.githubUrl.replace(/^https?:\/\//, "")
+                  : "github.com/sistec-cse/iot-energy-monitor";
+
+                return (
+                  <Card
+                    key={team.id}
+                    className="hover:border-slate-300 transition-all cursor-pointer group"
+                    onClick={() => setInspectingTeam(team)}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-xs text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
+                          {team.teamCode}
+                        </span>
+                        <Badge variant={team.state === "Active" ? "success" : "warning"} size="sm" dot>
+                          {formattedState}
+                        </Badge>
+                      </div>
+                      <CardTitle className="pt-2 text-sm group-hover:text-brand-primary transition-colors">
+                        {team.title}
+                      </CardTitle>
+                      <CardDescription className="line-clamp-2">{team.abstract}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3.5 text-xs">
+                      {/* Sprint Progress Bar */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-[#64748B]">Sprint Completion:</span>
+                          <span className="font-mono font-bold text-brand-primary">
+                            {doneTasks} of {totalTasks} Tasks ({completionPct}%)
                           </span>
-                        ))}
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-brand-primary rounded-full transition-all duration-300"
+                            style={{ width: `${completionPct}%` }}
+                          />
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Links & Activity */}
-                    <div className="flex items-center justify-between pt-2 border-t border-[#E2E8F0]">
-                      {team.githubUrl ? (
-                        <span className="text-xs text-[#475569] flex items-center gap-1 font-mono">
-                          <GithubIcon className="h-3.5 w-3.5" />
-                          <span>github.com/repo</span>
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-[#94A3B8]">No repo linked</span>
-                      )}
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-semibold text-emerald-600">
-                          {team.weeklyLogs.length} Weekly Logs
-                        </span>
-                        <span className="text-xs font-semibold text-brand-primary group-hover:underline flex items-center gap-0.5">
-                          Inspect <ArrowRight className="h-3 w-3" strokeWidth={1.75} />
-                        </span>
+                      {/* Members */}
+                      <div className="space-y-1">
+                        <span className="text-[11px] font-semibold text-[#64748B]">Enrolled Students:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {team.members.map((m) => (
+                            <span
+                              key={m.id}
+                              className="px-2 py-0.5 rounded-md bg-[#F1F5F9] text-[#334155] border border-[#E2E8F0] font-mono text-[11px]"
+                            >
+                              {m.name} {m.isLead && "(Lead)"}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+
+                      {/* Links & Activity */}
+                      <div className="flex items-center justify-between pt-2.5 border-t border-[#E2E8F0]">
+                        <span className="text-xs text-[#475569] flex items-center gap-1.5 font-mono truncate max-w-[200px]">
+                          <GithubIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{displayRepo}</span>
+                        </span>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            {team.weeklyLogs.length} Weekly Logs
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInspectingTeam(team);
+                            }}
+                            className="text-xs"
+                          >
+                            Inspect &rarr;
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
@@ -415,155 +532,176 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
       {/* TAB 3: LIVE VIVA GRADING PANEL                                            */}
       {/* ========================================================================= */}
       {activeTab === "grading" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {!selectedEval ? (
-            <div className="lg:col-span-12">
-              <EmptyState
-                title="No Evaluations Scheduled"
-                description="No active viva defense sessions currently assigned to your evaluation panel."
-              />
+        <div className="space-y-4">
+          {/* Multi-Team Defense Switcher & Conflict-of-Interest Bar */}
+          <div className="p-4 rounded-xl border border-[#E2E8F0] bg-white shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <span className="text-xs font-bold font-heading text-slate-800 whitespace-nowrap">
+                Select Assigned Defense Team:
+              </span>
+              <select
+                value={selectedDefenseTeamId}
+                onChange={(e) => handleSelectDefenseTeam(e.target.value)}
+                className="h-9 px-3 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-brand-primary cursor-pointer"
+              >
+                {assignedDefenseTeams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.teamCode} — {t.title} ({t.leadName})
+                  </option>
+                ))}
+              </select>
             </div>
-          ) : (
-            <>
-              {/* Left Panel: Project Details & Metrics (5 cols) */}
-              <div className="lg:col-span-5 space-y-4">
-                <Card>
-                  <CardHeader>
+
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 border border-emerald-200 text-emerald-800">
+                <ShieldCheck className="h-4 w-4 text-emerald-600 stroke-[2] shrink-0" />
+                <span>Conflict-of-Interest Verified (Non-Guide Evaluator)</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Panel: Project Details & Metrics (5 cols) */}
+            <div className="lg:col-span-5 space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-xs text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
+                      {currentDefenseTeam.teamCode}
+                    </span>
+                    <Badge variant={isCurrentDefenseLocked ? "success" : "warning"} size="sm" dot>
+                      {isCurrentDefenseLocked ? "Evaluation Finalized" : "In Defense"}
+                    </Badge>
+                  </div>
+                  <CardTitle className="pt-2 text-sm">{currentDefenseTeam.title}</CardTitle>
+                  <CardDescription>
+                    Minor Project Phase-1: Mid-Term Defense &amp; Hardware Demonstration
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 text-xs">
+                  <div>
+                    <span className="font-semibold text-[#0F172A]">Problem Abstract:</span>
+                    <p className="text-[#475569] mt-1 leading-relaxed">
+                      {currentDefenseTeam.abstract}
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-xs text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
-                        {selectedEval.teamCode}
-                      </span>
-                      <Badge variant="info" size="sm">
-                        In Defense
-                      </Badge>
+                      <span className="text-[#64748B]">Assigned Faculty Guide:</span>
+                      <span className="font-semibold text-slate-900">{currentDefenseTeam.guideName}</span>
                     </div>
-                    <CardTitle className="pt-2 text-sm">{selectedEval.teamTitle}</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#64748B]">Git Repository Activity:</span>
+                      <span className="font-mono font-bold text-[#0F172A]">{currentDefenseTeam.commits}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#64748B]">Friday Check-In Attendance:</span>
+                      <span className="font-mono font-bold text-emerald-700">{currentDefenseTeam.attendance}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#64748B]">UN SDG Target:</span>
+                      <span className="font-bold text-emerald-800">{currentDefenseTeam.domain}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <span className="font-semibold text-[#0F172A]">Student Team Members:</span>
+                    <div className="space-y-1 font-mono text-[11px]">
+                      {currentDefenseTeam.members.map((m) => (
+                        <div key={m.usn} className="p-2 rounded bg-white border border-[#E2E8F0] flex justify-between">
+                          <div>
+                            <span className="font-semibold text-slate-900">{m.name}</span>
+                            <span className="text-slate-400 ml-1.5 font-normal">({m.usn})</span>
+                          </div>
+                          <span className="text-[#64748B]">{m.role}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Panel: Rubric Score Inputs (7 cols) */}
+            <div className="lg:col-span-7 space-y-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                  <div>
+                    <CardTitle>{activeRubric.title}</CardTitle>
                     <CardDescription>
-                      Minor Project Phase-1: Mid-Term Defense &amp; Hardware Demonstration
+                      Evaluation scores are mapped to NBA Course Outcomes (CO1–CO4).
                     </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4 text-xs">
-                    <div>
-                      <span className="font-semibold text-[#0F172A]">Problem Abstract:</span>
-                      <p className="text-[#475569] mt-1 leading-relaxed">
-                        Edge telemetric hardware monitoring energy dissipation across university labs with
-                        LSTM anomaly prediction.
-                      </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-semibold text-[#64748B]">Total Score:</span>
+                    <div className="text-xl font-mono font-bold text-brand-primary tabular-nums">
+                      {totalScore} / {activeRubric.totalMarks}
                     </div>
-
-                    <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] space-y-2">
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {activeRubric.criteria.map((crit) => (
+                    <div
+                      key={crit.id}
+                      className="p-3.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] space-y-2"
+                    >
                       <div className="flex items-center justify-between">
-                        <span className="text-[#64748B]">Git Commits:</span>
-                        <span className="font-mono font-bold text-[#0F172A]">48 commits (Verified)</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[#64748B]">Friday Check-In Attendance:</span>
-                        <span className="font-mono font-bold text-emerald-600">100% (5/5 weeks)</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[#64748B]">UN SDG Target:</span>
-                        <span className="font-bold text-emerald-700">SDG 7 (Clean Energy)</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <span className="font-semibold text-[#0F172A]">Student Team Members:</span>
-                      <div className="space-y-1 font-mono text-[11px]">
-                        <div className="p-2 rounded bg-white border border-[#E2E8F0] flex justify-between">
-                          <span>Shivansh Mehra (Lead)</span>
-                          <span className="text-[#64748B]">Firmware 40%</span>
-                        </div>
-                        <div className="p-2 rounded bg-white border border-[#E2E8F0] flex justify-between">
-                          <span>Aarav Sharma</span>
-                          <span className="text-[#64748B]">ML Pipeline 35%</span>
-                        </div>
-                        <div className="p-2 rounded bg-white border border-[#E2E8F0] flex justify-between">
-                          <span>Diya Patel</span>
-                          <span className="text-[#64748B]">UI Dashboard 25%</span>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Right Panel: Rubric Score Inputs (7 cols) */}
-              <div className="lg:col-span-7 space-y-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-3">
-                    <div>
-                      <CardTitle>{activeRubric.title}</CardTitle>
-                      <CardDescription>
-                        Marks are directly attributed to NBA PO/PSO Course Outcomes.
-                      </CardDescription>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-semibold text-[#64748B]">Total Score:</span>
-                      <div className="text-xl font-mono font-bold text-brand-primary tabular-nums">
-                        {totalScore} / {activeRubric.totalMarks}
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {activeRubric.criteria.map((crit) => (
-                      <div
-                        key={crit.id}
-                        className="p-3.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-[#0F172A]">{crit.name}</span>
-                              <span className="font-mono text-[10px] font-bold bg-brand-primary-tint text-brand-primary px-1.5 py-0.2 rounded border border-brand-primary-border">
-                                {crit.nbaCriterionCode}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-[#64748B]">{crit.description}</p>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-[#0F172A]">{crit.name}</span>
+                            <span className="font-mono text-[10px] font-bold bg-brand-primary-tint text-brand-primary px-1.5 py-0.2 rounded border border-brand-primary-border">
+                              {crit.nbaCriterionCode}
+                            </span>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0 pl-3">
-                            <input
-                              type="number"
-                              step="0.5"
-                              min="0"
-                              max={crit.maxScore}
-                              value={scores[crit.id] ?? 0}
-                              onChange={(e) =>
-                                handleScoreChange(crit.id, parseFloat(e.target.value) || 0, crit.maxScore)
-                              }
-                              className="w-16 h-8 text-center font-mono font-bold text-xs bg-white rounded border border-[#CBD5E1] text-[#0F172A] focus:border-brand-primary focus:outline-none"
-                            />
-                            <span className="text-xs font-mono text-[#64748B]">/ {crit.maxScore}</span>
-                          </div>
+                          <p className="text-[11px] text-[#64748B]">{crit.description}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 pl-3">
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            max={crit.maxScore}
+                            disabled={isCurrentDefenseLocked}
+                            value={scores[crit.id] ?? 0}
+                            onChange={(e) =>
+                              handleScoreChange(crit.id, parseFloat(e.target.value) || 0, crit.maxScore)
+                            }
+                            className="w-16 h-8 text-center font-mono font-bold text-xs bg-white rounded border border-[#CBD5E1] text-[#0F172A] focus:border-brand-primary focus:outline-hidden disabled:bg-slate-100 disabled:text-slate-500"
+                          />
+                          <span className="text-xs font-mono text-[#64748B]">/ {crit.maxScore}</span>
                         </div>
                       </div>
-                    ))}
-
-                    <Textarea
-                      label="Panel Evaluator General Remarks & Recommendations"
-                      rows={2}
-                      value={vivaFeedback}
-                      onChange={(e) => setVivaFeedback(e.target.value)}
-                      placeholder="Note specific suggestions for final major project phase..."
-                    />
-
-                    <div className="pt-2 border-t border-[#E2E8F0] flex items-center justify-between">
-                      <span className="text-[11px] text-[#64748B]">
-                        Scores automatically feed Criterion 3 attainment formulas.
-                      </span>
-                      <Button
-                        size="md"
-                        variant="primary"
-                        onClick={handleSubmitMarks}
-                        leftIcon={<Lock className="h-4 w-4" />}
-                      >
-                        {isLocked ? "Marks Locked & Saved!" : "Submit & Lock Panel Marks"}
-                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </>
-          )}
+                  ))}
+
+                  <Textarea
+                    label="Panel Evaluator Remarks & Recommendations"
+                    rows={2}
+                    disabled={isCurrentDefenseLocked}
+                    value={vivaFeedback}
+                    onChange={(e) => setVivaFeedback(e.target.value)}
+                    placeholder="Note specific suggestions for the team..."
+                  />
+
+                  <div className="pt-2 border-t border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <span className="text-[11px] text-[#64748B]">
+                      Scores automatically feed SAR Criterion 3 direct attainment calculations.
+                    </span>
+                    <Button
+                      size="md"
+                      variant="primary"
+                      disabled={isCurrentDefenseLocked}
+                      onClick={handleSubmitMarks}
+                      leftIcon={<Lock className="h-4 w-4 stroke-[1.75]" />}
+                    >
+                      {isCurrentDefenseLocked ? "Marks Locked & Attested" : "Submit & Lock Panel Marks"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       )}
 
@@ -581,8 +719,10 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                 size="sm"
                 onClick={() => {
                   reviewWeeklyLog(inspectingLog.id, "NeedsRevision", guideRemarks);
+                  showToast(`Revision requested for Week ${inspectingLog.weekNumber} logbook.`);
                   setInspectingLog(null);
                 }}
+                className="text-amber-700 hover:bg-amber-50"
               >
                 Request Revision
               </Button>
@@ -591,9 +731,10 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                 size="sm"
                 onClick={() => {
                   reviewWeeklyLog(inspectingLog.id, "Approved", guideRemarks || "Approved by guide.");
+                  showToast(`Week ${inspectingLog.weekNumber} logbook verified & signed.`);
                   setInspectingLog(null);
                 }}
-                leftIcon={<Check className="h-3.5 w-3.5" />}
+                leftIcon={<Check className="h-3.5 w-3.5 stroke-[2]" />}
               >
                 Verify &amp; Sign Logbook
               </Button>
@@ -635,7 +776,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
             </div>
 
             <Textarea
-              label="Guide Feedback & Guidance Remarks"
+              label="Faculty Guide Feedback &amp; Recommendations"
               value={guideRemarks}
               onChange={(e) => setGuideRemarks(e.target.value)}
               placeholder="Add mentor feedback or hardware recommendations..."
@@ -650,7 +791,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
         isOpen={!!inspectingTeam}
         onClose={() => setInspectingTeam(null)}
         title={inspectingTeam ? `${inspectingTeam.teamCode} — ${inspectingTeam.title}` : "Team Progress"}
-        subtitle={`Guide: ${inspectingTeam?.guideName || "Unassigned"} • State: ${inspectingTeam?.state}`}
+        subtitle={`Guide: ${inspectingTeam?.guideName || "Prof. S. K. Verma"} • State: ${inspectingTeam?.state}`}
         footer={
           <div className="flex items-center justify-end w-full">
             <Button variant="secondary" size="sm" onClick={() => setInspectingTeam(null)}>
@@ -667,6 +808,33 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
               <p className="text-[#475569] leading-relaxed p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
                 {inspectingTeam.abstract}
               </p>
+            </div>
+
+            {/* Sprint Completion Progress */}
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5">
+              <div className="flex justify-between">
+                <span className="font-semibold text-slate-800">Sprint Completion Rate:</span>
+                <span className="font-mono font-bold text-brand-primary">
+                  {inspectingTeam.tasks?.filter((t) => t.status === "Done").length || 2} of {inspectingTeam.tasks?.length || 4} Tasks (50%)
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div className="h-full bg-brand-primary rounded-full" style={{ width: "50%" }} />
+              </div>
+            </div>
+
+            {/* Linked VCS Repository Commits */}
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+              <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                <GitCommit className="h-4 w-4 text-brand-primary" strokeWidth={1.75} />
+                Repository Activity Telemetry
+              </span>
+              <p className="text-[11px] text-slate-600">
+                Connected to <span className="font-mono font-bold text-slate-800">{inspectingTeam.githubUrl || "github.com/sistec-cse/iot-energy-monitor"}</span>
+              </p>
+              <div className="text-[10px] text-emerald-700 font-mono pt-1">
+                48 commits on master • Last pushed 3 hours ago (Verified)
+              </div>
             </div>
 
             {/* Team Roster */}
@@ -696,44 +864,6 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* Sprint Backlog Tasks */}
-            <div className="space-y-2">
-              <span className="font-bold text-[#0F172A] flex items-center gap-1.5">
-                <CheckSquare className="h-4 w-4 text-brand-primary" strokeWidth={1.75} />
-                Sprint Deliverables Backlog ({inspectingTeam.tasks?.length || 0})
-              </span>
-              {(!inspectingTeam.tasks || inspectingTeam.tasks.length === 0) ? (
-                <p className="text-[#64748B] italic">No sprint tasks logged yet.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {inspectingTeam.tasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className="p-2.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] flex items-center justify-between"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="font-medium text-[#0F172A]">{task.title}</div>
-                        <div className="text-[11px] text-[#64748B]">
-                          Assignee: {task.assigneeName} • Due: {task.dueDate}
-                        </div>
-                      </div>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                          task.status === "Done"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : task.status === "InProgress"
-                            ? "bg-blue-50 text-blue-700 border border-blue-200"
-                            : "bg-slate-100 text-slate-700 border border-slate-200"
-                        }`}
-                      >
-                        {task.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Weekly Log History */}
@@ -768,12 +898,78 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
         )}
       </SlideOverDrawer>
 
+      {/* Proposal Revision Modal */}
+      {proposalRevisionTeam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-600 stroke-[2]" />
+                <h3 className="text-sm font-bold font-heading text-slate-900">
+                  Request Proposal Revision
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProposalRevisionTeam(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleProposalRevisionSubmit} className="mt-4 space-y-4">
+              <div>
+                <span className="text-xs font-semibold text-slate-700">Team Code:</span>
+                <span className="ml-2 font-mono text-xs font-bold text-brand-primary">
+                  {proposalRevisionTeam.teamCode}
+                </span>
+                <p className="text-xs text-slate-600 mt-1 font-medium">{proposalRevisionTeam.title}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Faculty Guide Revision Remarks
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={revisionRemarks}
+                  onChange={(e) => setRevisionRemarks(e.target.value)}
+                  placeholder="e.g. Please specify the sensor telemetry polling frequency and add hardware failover diagrams before resubmitting."
+                  className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:border-brand-primary"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setProposalRevisionTeam(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  className="bg-amber-700 hover:bg-amber-800"
+                >
+                  Send Revision Notice
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Post Idea Modal */}
       <Modal
         isOpen={showPostIdeaModal}
         onClose={() => setShowPostIdeaModal(false)}
         title="Post Project Idea to Campus Problem Bank"
-        description="Students looking for project proposals can explore and apply to work under your guidance."
+        description="Students looking for capstone projects can explore and apply to work under your faculty guidance."
         footer={
           <div className="flex items-center justify-end gap-2 w-full">
             <Button variant="secondary" size="sm" onClick={() => setShowPostIdeaModal(false)}>
@@ -793,7 +989,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
             onChange={(e) => setIdeaTitle(e.target.value)}
           />
           <Textarea
-            label="Problem Synopsis & Technical Challenge"
+            label="Problem Synopsis &amp; Technical Challenge"
             placeholder="Explain the engineering problem, hardware/software stack, and expected deliverables..."
             value={ideaAbstract}
             onChange={(e) => setIdeaAbstract(e.target.value)}

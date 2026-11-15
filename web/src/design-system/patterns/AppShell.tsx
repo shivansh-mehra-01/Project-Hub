@@ -34,6 +34,14 @@ import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
 
+export const getAvatarInitials = (name: string): string => {
+  const cleaned = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.|Er\.)\s+/i, "").trim();
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "U";
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export interface AppShellProps {
   children: React.ReactNode;
   pageTitle?: string;
@@ -59,6 +67,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCampusMenu, setShowCampusMenu] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState("Gandhi Nagar (Main)");
 
   // Demo mode gate: defaults to true unless explicitly disabled in env
@@ -222,8 +231,15 @@ export const AppShell: React.FC<AppShellProps> = ({
           { label: "Faculty Setup", href: "/hod/faculty", icon: Sliders },
         ];
       case "Faculty": {
+        const pendingFacultyCount =
+          teams.reduce((acc, t) => {
+            const unreviewedLogs = t.weeklyLogs.filter((l) => l.guideStatus === "Pending").length;
+            const isProposalPending = t.state === "PendingGuide" ? 1 : 0;
+            return acc + unreviewedLogs + isProposalPending;
+          }, 0) || 2;
+
         const baseItems = [
-          { label: "Action Queue", href: "/faculty", icon: FileCheck2 },
+          { label: "Action Queue", href: "/faculty", icon: FileCheck2, count: pendingFacultyCount },
           { label: "My Teams", href: "/faculty/teams", icon: Users2 },
           { label: "Live Viva Grading", href: "/faculty/evaluations", icon: GraduationCap },
         ];
@@ -335,36 +351,6 @@ export const AppShell: React.FC<AppShellProps> = ({
               )}
             </div>
           )}
-        </div>
-
-        {/* Current Role Identity Card */}
-        <div className="px-3 pt-3 pb-2">
-          <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] flex flex-col gap-1.5">
-            <div className="flex items-center justify-between gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
-                Active Persona
-              </span>
-              <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                <span>{formatRoleLabel(currentPersona.role)}</span>
-              </span>
-            </div>
-
-            <div className="text-xs font-semibold text-white truncate font-heading">
-              {currentPersona.name}
-            </div>
-            {currentPersona.enrollmentNumber && (
-              <div className="font-mono text-[10px] text-slate-400 tabular-nums">
-                USN: {currentPersona.enrollmentNumber}
-              </div>
-            )}
-            {currentPersona.isProjectCoordinator && (
-              <div className="text-[10px] font-medium text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 w-fit flex items-center gap-1">
-                <span>★</span>
-                <span>Coordinator Authority</span>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Navigation Tabs (Max 4 per role) */}
@@ -668,19 +654,88 @@ export const AppShell: React.FC<AppShellProps> = ({
               </div>
             )}
 
-            {/* User Profile Avatar with Role Tag */}
-            <div className="flex items-center gap-2 pl-2 border-l border-white/[0.08]">
-              <div className="h-7 w-7 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono">
-                {currentPersona.name.charAt(0)}
-              </div>
-              <div className="hidden md:flex flex-col">
-                <span className="text-xs font-semibold text-white leading-none">
-                  {currentPersona.name}
-                </span>
-                <span className="text-[10px] text-slate-400 mt-0.5">
-                  {formatRoleLabel(currentPersona.role)}
-                </span>
-              </div>
+            {/* Interactive User Account Dropdown */}
+            <div className="relative pl-2 border-l border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => setShowAccountMenu(!showAccountMenu)}
+                className="flex items-center gap-2 rounded-lg p-1 hover:bg-white/5 transition-colors cursor-pointer group"
+                title="Account & Settings"
+              >
+                <div className="h-7 w-7 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono group-hover:border-emerald-400/40 transition-colors">
+                  {getAvatarInitials(currentPersona.name)}
+                </div>
+                <div className="hidden md:flex flex-col text-left">
+                  <span className="text-xs font-semibold text-white leading-none group-hover:text-emerald-300 transition-colors">
+                    {currentPersona.name}
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">
+                    {formatRoleLabel(currentPersona.role)}
+                  </span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors" strokeWidth={1.75} />
+              </button>
+
+              {/* Account Dropdown Popover */}
+              {showAccountMenu && (
+                <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-2 z-50 text-white animate-in fade-in zoom-in-95 duration-100">
+                  {/* User Identity Header */}
+                  <div className="px-3 py-2.5 border-b border-white/[0.08] space-y-1">
+                    <div className="text-xs font-bold text-white font-heading truncate">
+                      {currentPersona.name}
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-mono truncate">
+                      {currentPersona.email || `${currentPersona.name.toLowerCase().replace(/^(dr\.|prof\.|mr\.|ms\.)\s*/i, "").replace(/[^a-z]/g, "")}@sistec.ac.in`}
+                    </div>
+                    <div className="pt-1 flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                        <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
+                        <span>{formatRoleLabel(currentPersona.role)}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="py-1 space-y-0.5 text-xs">
+                    <Link
+                      href={
+                        currentPersona.role === "Student" || currentPersona.role === "TeamLead"
+                          ? "/student/profile"
+                          : "/account"
+                      }
+                      onClick={() => setShowAccountMenu(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:bg-white/[0.06] hover:text-white transition-colors"
+                    >
+                      <User className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
+                      <span>My Profile &amp; Settings</span>
+                    </Link>
+
+                    <Link
+                      href={
+                        currentPersona.role === "Student" || currentPersona.role === "TeamLead"
+                          ? "/student/profile"
+                          : "/account"
+                      }
+                      onClick={() => setShowAccountMenu(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:bg-white/[0.06] hover:text-white transition-colors"
+                    >
+                      <Bell className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
+                      <span>Notification Preferences</span>
+                    </Link>
+                  </div>
+
+                  <div className="pt-1 border-t border-white/[0.08]">
+                    <Link
+                      href="/login"
+                      onClick={() => setShowAccountMenu(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/[0.06] hover:text-rose-400 transition-colors text-xs"
+                    >
+                      <LogOut className="h-4 w-4" strokeWidth={1.75} />
+                      <span>Sign Out</span>
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

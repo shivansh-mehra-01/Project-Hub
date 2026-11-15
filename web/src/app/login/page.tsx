@@ -268,49 +268,49 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => handleQuickPersona("SuperAdmin")}
-              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-[#F8FAFC] hover:border-[#CBD5E1] transition-colors"
+              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors group"
             >
-              <div className="font-semibold text-purple-700">Super Admin</div>
+              <div className="font-semibold text-[#0F172A] group-hover:text-emerald-800 transition-colors">Super Admin</div>
               <div className="text-[9px] text-[#64748B] truncate">Platform Ops</div>
             </button>
             <button
               type="button"
               onClick={() => handleQuickPersona("CollegeAdmin")}
-              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-[#F8FAFC] hover:border-[#CBD5E1] transition-colors"
+              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors group"
             >
-              <div className="font-semibold text-blue-700">College Admin</div>
+              <div className="font-semibold text-[#0F172A] group-hover:text-emerald-800 transition-colors">College Admin</div>
               <div className="text-[9px] text-[#64748B] truncate">Principal / IT</div>
             </button>
             <button
               type="button"
               onClick={() => handleQuickPersona("HOD")}
-              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-[#F8FAFC] hover:border-[#CBD5E1] transition-colors"
+              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors group"
             >
-              <div className="font-semibold text-indigo-700">HOD (CSE)</div>
+              <div className="font-semibold text-[#0F172A] group-hover:text-emerald-800 transition-colors">HOD (CSE)</div>
               <div className="text-[9px] text-[#64748B] truncate">Dr. R. K. Sharma</div>
             </button>
             <button
               type="button"
               onClick={() => handleQuickPersona("Faculty")}
-              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-[#F8FAFC] hover:border-[#CBD5E1] transition-colors"
+              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors group"
             >
-              <div className="font-semibold text-teal-700">Faculty Guide</div>
+              <div className="font-semibold text-[#0F172A] group-hover:text-emerald-800 transition-colors">Faculty Guide</div>
               <div className="text-[9px] text-[#64748B] truncate">Prof. Verma</div>
             </button>
             <button
               type="button"
               onClick={() => handleQuickPersona("TeamLead")}
-              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-[#F8FAFC] hover:border-[#CBD5E1] transition-colors"
+              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors group"
             >
-              <div className="font-semibold text-emerald-700">Student Lead</div>
+              <div className="font-semibold text-emerald-800 group-hover:text-emerald-900 transition-colors">Student Lead</div>
               <div className="text-[9px] text-[#64748B] truncate">Shivansh Mehra</div>
             </button>
             <button
               type="button"
               onClick={() => handleQuickPersona("Student")}
-              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-[#F8FAFC] hover:border-[#CBD5E1] transition-colors"
+              className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] text-[11px] font-medium text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors group"
             >
-              <div className="font-semibold text-slate-700">Student Peer</div>
+              <div className="font-semibold text-[#0F172A] group-hover:text-emerald-800 transition-colors">Student Peer</div>
               <div className="text-[9px] text-[#64748B] truncate">Aarav Sharma</div>
             </button>
           </div>
