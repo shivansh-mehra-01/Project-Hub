@@ -61,6 +61,21 @@ export const AppShell: React.FC<AppShellProps> = ({
     }
   }, []);
 
+  // Auto-sync persona with route if accessed directly via URL
+  React.useEffect(() => {
+    if (pathname.startsWith("/admin") && currentPersona.role !== "SuperAdmin") {
+      switchPersona("SuperAdmin");
+    } else if (pathname.startsWith("/college") && currentPersona.role !== "CollegeAdmin") {
+      switchPersona("CollegeAdmin");
+    } else if (pathname.startsWith("/hod") && currentPersona.role !== "HOD") {
+      switchPersona("HOD");
+    } else if (pathname.startsWith("/coordinator") && currentPersona.role !== "Faculty") {
+      switchPersona("Faculty");
+    } else if (pathname.startsWith("/faculty") && currentPersona.role !== "Faculty") {
+      switchPersona("Faculty");
+    }
+  }, [pathname, currentPersona.role, switchPersona]);
+
   // Simulated alerts
   const notifications = [
     {
