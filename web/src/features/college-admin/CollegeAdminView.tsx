@@ -96,7 +96,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
           onClick={() => switchTab("overview")}
           className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === "overview"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -107,7 +107,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
           onClick={() => switchTab("departments")}
           className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === "departments"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -118,7 +118,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
           onClick={() => switchTab("settings")}
           className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === "settings"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -129,7 +129,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
           onClick={() => switchTab("compliance")}
           className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === "compliance"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -166,7 +166,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
                   <div className="text-xl font-bold text-[#0F172A] tabular-nums">{departments.length}</div>
                   <span className="text-[10px] text-emerald-600 font-medium">All HODs Appointed</span>
                 </div>
-                <div className="h-9 w-9 rounded-lg bg-[#ECFDF5] text-[#047857] flex items-center justify-center">
+                <div className="h-9 w-9 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
                   <Building2 className="h-4 w-4" strokeWidth={1.75} />
                 </div>
               </CardContent>
@@ -234,7 +234,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
                       onClick={() => setInspectingDept(dept)}
                       className="hover:bg-[#F8FAFC] cursor-pointer"
                     >
-                      <td className="py-2.5 px-4 font-mono font-bold text-[#047857]">{dept.code}</td>
+                      <td className="py-2.5 px-4 font-mono font-bold text-brand-primary">{dept.code}</td>
                       <td className="py-2.5 px-4 font-semibold">{dept.name}</td>
                       <td className="py-2.5 px-4 text-[#475569]">
                         {dept.code === "CSE" ? "Dr. Ravindra Kumar Sharma" : "Appointed HOD"}
@@ -280,18 +280,18 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
               <Card
                 key={dept.id}
                 onClick={() => setInspectingDept(dept)}
-                className="hover:border-[#047857] hover:shadow-xs transition-all cursor-pointer group"
+                className="hover:border-brand-primary hover:shadow-xs transition-all cursor-pointer group"
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-xs bg-[#ECFDF5] text-[#047857] px-2 py-0.5 rounded border border-[#A7F3D0]">
+                    <span className="font-mono font-bold text-xs bg-brand-primary-tint text-brand-primary px-2 py-0.5 rounded border border-brand-primary-border">
                       {dept.code}
                     </span>
                     <Badge variant="success" size="sm" dot>
                       Accredited
                     </Badge>
                   </div>
-                  <CardTitle className="pt-2 text-sm truncate group-hover:text-[#047857] transition-colors">
+                  <CardTitle className="pt-2 text-sm truncate group-hover:text-brand-primary transition-colors">
                     {dept.name}
                   </CardTitle>
                   <CardDescription>
@@ -318,7 +318,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
                       {dept.code === "CSE" ? "82.6% (Met)" : "78.4% (Met)"}
                     </span>
                   </div>
-                  <div className="pt-1 text-[11px] text-[#047857] font-semibold flex items-center justify-end">
+                  <div className="pt-1 text-[11px] text-brand-primary font-semibold flex items-center justify-end">
                     Inspect Branch &rarr;
                   </div>
                 </CardContent>
@@ -438,7 +438,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
                 <div className="text-xl font-bold font-mono text-emerald-600 tabular-nums">100% Signed</div>
                 <p className="text-[11px] text-[#64748B]">All HOD final rubric sheets and 3 Best/Avg/Weak project packages archived.</p>
               </div>
-              <div className="pt-2 border-t border-[#E2E8F0] text-[11px] text-[#047857] font-semibold cursor-pointer hover:underline flex justify-end">
+              <div className="pt-2 border-t border-[#E2E8F0] text-[11px] text-brand-primary font-semibold cursor-pointer hover:underline flex justify-end">
                 Download College SAR Summary &rarr;
               </div>
             </Card>

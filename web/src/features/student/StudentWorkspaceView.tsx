@@ -205,7 +205,7 @@ export const StudentWorkspaceView: React.FC = () => {
       {/* ========================================================================= */}
       {lifecycleState === "offseason" && (
         <Card className="text-center p-8 space-y-4">
-          <div className="h-12 w-12 mx-auto rounded-full bg-[#ECFDF5] text-[#047857] border border-[#A7F3D0] flex items-center justify-center">
+          <div className="h-12 w-12 mx-auto rounded-full bg-brand-primary-tint text-brand-primary border border-brand-primary-border flex items-center justify-center">
             <Clock className="h-5 w-5" strokeWidth={1.75} />
           </div>
           <div className="space-y-1 max-w-md mx-auto">
@@ -376,7 +376,7 @@ export const StudentWorkspaceView: React.FC = () => {
               onClick={() => setSubTab("board")}
               className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 subTab === "board"
-                  ? "border-b-2 border-[#047857] text-[#047857]"
+                  ? "border-b-2 border-brand-primary text-brand-primary"
                   : "text-[#64748B] hover:text-[#0F172A]"
               }`}
             >
@@ -388,7 +388,7 @@ export const StudentWorkspaceView: React.FC = () => {
               onClick={() => setSubTab("logs")}
               className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 subTab === "logs"
-                  ? "border-b-2 border-[#047857] text-[#047857]"
+                  ? "border-b-2 border-brand-primary text-brand-primary"
                   : "text-[#64748B] hover:text-[#0F172A]"
               }`}
             >
@@ -400,7 +400,7 @@ export const StudentWorkspaceView: React.FC = () => {
               onClick={() => setSubTab("overview")}
               className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 subTab === "overview"
-                  ? "border-b-2 border-[#047857] text-[#047857]"
+                  ? "border-b-2 border-brand-primary text-brand-primary"
                   : "text-[#64748B] hover:text-[#0F172A]"
               }`}
             >
@@ -412,7 +412,7 @@ export const StudentWorkspaceView: React.FC = () => {
               onClick={() => setSubTab("evaluations")}
               className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 subTab === "evaluations"
-                  ? "border-b-2 border-[#047857] text-[#047857]"
+                  ? "border-b-2 border-brand-primary text-brand-primary"
                   : "text-[#64748B] hover:text-[#0F172A]"
               }`}
             >
@@ -481,10 +481,10 @@ export const StudentWorkspaceView: React.FC = () => {
                                   : "Todo";
                               updateTaskStatus(task.id, next);
                             }}
-                            className="p-3 bg-white rounded-lg border border-[#E2E8F0] shadow-2xs hover:border-[#047857] transition-all cursor-pointer space-y-2"
+                            className="p-3 bg-white rounded-lg border border-[#E2E8F0] shadow-2xs hover:border-brand-primary transition-all cursor-pointer space-y-2"
                           >
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-[#047857] bg-[#ECFDF5] px-1.5 py-0.2 rounded border border-[#A7F3D0]">
+                              <span className="text-[10px] font-bold text-brand-primary bg-brand-primary-tint px-1.5 py-0.2 rounded border border-brand-primary-border">
                                 {task.tag}
                               </span>
                               <span className="text-[10px] text-[#94A3B8] font-mono tabular-nums">
@@ -618,7 +618,7 @@ export const StudentWorkspaceView: React.FC = () => {
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-xs text-[#047857] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
+                    <span className="font-mono font-bold text-xs text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
                       {myTeam.teamCode}
                     </span>
                     <div className="flex items-center gap-2">
@@ -675,7 +675,7 @@ export const StudentWorkspaceView: React.FC = () => {
                           href={githubUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[#047857] hover:underline flex items-center gap-1 font-semibold"
+                          className="text-brand-primary hover:underline flex items-center gap-1 font-semibold"
                         >
                           <span>{githubUrl.replace("https://github.com/", "")}</span>
                           <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
@@ -689,7 +689,7 @@ export const StudentWorkspaceView: React.FC = () => {
                           href={jiraUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[#047857] hover:underline flex items-center gap-1 font-semibold"
+                          className="text-brand-primary hover:underline flex items-center gap-1 font-semibold"
                         >
                           <span>{jiraUrl.replace("https://", "")}</span>
                           <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
@@ -705,7 +705,7 @@ export const StudentWorkspaceView: React.FC = () => {
                         <div key={m.id} className="p-3 flex items-center justify-between">
                           <div>
                             <div className="font-bold text-[#0F172A]">
-                              {m.name} {m.isLead && <span className="text-[#047857] font-semibold">(Team Lead)</span>}
+                              {m.name} {m.isLead && <span className="text-brand-primary font-semibold">(Team Lead)</span>}
                             </div>
                             <div className="text-[11px] text-[#64748B]">{m.roleDescription}</div>
                           </div>
@@ -734,7 +734,7 @@ export const StudentWorkspaceView: React.FC = () => {
                 <div className="p-4 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] flex items-center justify-between">
                   <div>
                     <span className="text-xs text-[#64748B]">Consolidated Defense Score</span>
-                    <div className="text-2xl font-bold font-mono text-[#047857] tabular-nums">
+                    <div className="text-2xl font-bold font-mono text-brand-primary tabular-nums">
                       44.5 / 50.0
                     </div>
                   </div>

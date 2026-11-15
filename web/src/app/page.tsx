@@ -82,7 +82,7 @@ export default function MarketingHomePage() {
         <div className="max-w-[1240px] h-full mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           {/* Left Brand Mark */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="h-8 w-8 rounded-lg bg-[#047857] flex items-center justify-center text-white font-bold text-xs shadow-xs font-heading group-hover:bg-[#065F46] transition-colors">
+            <div className="h-8 w-8 rounded-lg bg-brand-primary flex items-center justify-center text-white font-bold text-xs shadow-xs font-heading group-hover:bg-brand-primary-hover transition-colors">
               PH
             </div>
             <span className="font-heading font-bold text-base tracking-tight text-white flex items-center gap-1.5">
@@ -117,7 +117,7 @@ export default function MarketingHomePage() {
             <button
               type="button"
               onClick={() => setIsPilotModalOpen(true)}
-              className="px-3.5 py-1.5 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
             >
               Request College Pilot
             </button>
@@ -131,23 +131,23 @@ export default function MarketingHomePage() {
       <section className="py-12 lg:py-20 border-b border-[#E2E8F0] overflow-hidden bg-gradient-to-b from-white to-[#F8FAFC]">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
-            {/* Left Column: Copy & Actions (7 cols) */}
-            <div className="lg:col-span-7 space-y-6">
+            {/* Left Column: Copy & Actions (6 cols) */}
+            <div className="lg:col-span-6 space-y-6">
               {/* Eyebrow Pill */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ECFDF5] border border-[#A7F3D0] text-[#065F46] text-xs font-medium">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#047857]" />
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-primary-tint border border-brand-primary-border text-brand-primary-text text-xs font-medium">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" />
                 <span>Built for NBA Criterion 2 &amp; 3</span>
               </div>
 
               {/* Display Headline */}
-              <h1 className="font-heading font-bold text-4xl sm:text-5xl lg:text-[54px] text-[#0F172A] leading-[1.08] tracking-tight">
+              <h1 className="font-heading font-bold text-4xl sm:text-5xl lg:text-[52px] text-[#0F172A] leading-[1.08] tracking-tight">
                 The Complete Workspace for College Projects &amp; NBA Compliance.
               </h1>
 
               {/* Subheadline */}
               <p className="text-base sm:text-lg text-[#475569] leading-relaxed max-w-xl">
                 Manage Minor &amp; Major student teams, automate weekly guide reviews, and export
-                audit-ready CO-PO attainment dossiers in 1 click.
+                audit-ready CO-PO attainment dossiers.
               </p>
 
               {/* Action Buttons */}
@@ -155,7 +155,7 @@ export default function MarketingHomePage() {
                 <button
                   type="button"
                   onClick={() => setIsPilotModalOpen(true)}
-                  className="h-11 px-6 rounded-xl bg-[#047857] hover:bg-[#065F46] text-white font-semibold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="h-11 px-6 rounded-xl bg-brand-primary hover:bg-brand-primary-hover text-white font-semibold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span>Request College Pilot</span>
                   <ArrowRight className="h-4 w-4" />
@@ -164,7 +164,7 @@ export default function MarketingHomePage() {
                   href="#portals"
                   className="h-11 px-5 rounded-xl border border-[#CBD5E1] bg-white hover:bg-[#F8FAFC] text-[#0F172A] font-semibold text-sm shadow-2xs transition-all flex items-center justify-center gap-2"
                 >
-                  <Sparkles className="h-4 w-4 text-[#047857]" />
+                  <Sparkles className="h-4 w-4 text-brand-primary" />
                   <span>Explore Interactive Demo</span>
                 </a>
               </div>
@@ -172,151 +172,288 @@ export default function MarketingHomePage() {
               {/* Trust Strip */}
               <div className="pt-3 border-t border-[#E2E8F0] flex flex-wrap items-center gap-y-2 gap-x-4 text-xs font-medium text-[#64748B]">
                 <span className="flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-[#047857]" />
+                  <ShieldCheck className="h-3.5 w-3.5 text-brand-primary" />
                   Zero Public Signup
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1.5">
-                  <Lock className="h-3.5 w-3.5 text-[#047857]" />
+                  <Lock className="h-3.5 w-3.5 text-brand-primary" />
                   College SSO Ready
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1.5">
-                  <FileArchive className="h-3.5 w-3.5 text-[#047857]" />
+                  <FileArchive className="h-3.5 w-3.5 text-brand-primary" />
                   1-Click NBA Audit ZIP
                 </span>
               </div>
             </div>
 
-            {/* Right Column: Interactive UI Preview Card (5 cols) */}
-            <div className="lg:col-span-5">
-              <div className="rounded-2xl border border-[#CBD5E1] bg-white shadow-xl overflow-hidden flex flex-col sm:flex-row min-h-[420px]">
-                {/* Mini Charcoal Sidebar */}
-                <div className="w-14 bg-[#111827] border-r border-[#1F2937] p-3 flex sm:flex-col items-center justify-between sm:justify-start gap-4">
-                  <div className="h-8 w-8 rounded-lg bg-[#047857] flex items-center justify-center text-white font-bold text-xs font-heading">
-                    PH
+            {/* Right Column: High-Fidelity UI Preview Card (6 cols) */}
+            <div className="lg:col-span-6">
+              <div className="rounded-2xl border border-slate-300 bg-white shadow-2xl overflow-hidden flex flex-col text-slate-800 transition-all hover:shadow-3xl">
+                {/* Mock Window Top Bar */}
+                <div className="bg-[#111827] px-3.5 py-2.5 flex items-center justify-between border-b border-slate-800 text-white select-none">
+                  <div className="flex items-center gap-2">
+                    <div className="h-5 w-5 rounded bg-brand-primary flex items-center justify-center text-white font-bold text-[10px] font-heading">
+                      PH
+                    </div>
+                    <span className="font-heading font-semibold text-xs tracking-tight text-white">Project Hub</span>
                   </div>
-                  <div className="flex sm:flex-col gap-3 text-[#9CA3AF]">
-                    <div className="p-1.5 rounded-md bg-[#047857] text-white">
-                      <FolderGit2 className="h-4 w-4" />
+                  <div className="flex items-center gap-3 text-slate-400">
+                    <Search className="h-3.5 w-3.5 hover:text-white cursor-pointer" />
+                    <Sliders className="h-3.5 w-3.5 hover:text-white cursor-pointer" />
+                    <div className="h-5 w-5 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-200">
+                      JS
                     </div>
-                    <div className="p-1.5 rounded-md hover:bg-[#1F2937]">
-                      <Users2 className="h-4 w-4" />
-                    </div>
-                    <div className="p-1.5 rounded-md hover:bg-[#1F2937]">
-                      <GraduationCap className="h-4 w-4" />
-                    </div>
-                    <div className="p-1.5 rounded-md hover:bg-[#1F2937]">
-                      <Sliders className="h-4 w-4" />
-                    </div>
-                  </div>
-                  <div className="sm:mt-auto">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400 block" />
                   </div>
                 </div>
 
-                {/* Main Workspace Preview Content */}
-                <div className="flex-1 p-4 space-y-4 bg-[#F8FAFC]">
-                  {/* Top Mock Bar */}
-                  <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#0F172A] font-heading">
-                      <span>Timelines &amp; SAR</span>
+                {/* Mock Window Body: Mini Sidebar + Timelines Column + Workspace */}
+                <div className="flex min-h-[380px] bg-[#F8FAFC]">
+                  {/* Mini Left Sidebar */}
+                  <div className="w-11 bg-[#111827] border-r border-slate-800 py-3 flex flex-col items-center gap-3 text-slate-400 select-none">
+                    <div className="h-6 w-6 rounded-full bg-slate-700 flex items-center justify-center text-[9px] text-slate-300 font-bold">
+                      D
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        Active Sem 6
-                      </span>
+                    <div className="p-1 rounded bg-brand-primary text-white">
+                      <FolderGit2 className="h-3.5 w-3.5" />
                     </div>
-                  </div>
-
-                  {/* Batch Lifecycle Funnel Card */}
-                  <div className="p-3 bg-white rounded-xl border border-[#E2E8F0] space-y-2.5 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#0F172A] font-heading">Batch Lifecycle Funnel</span>
-                      <span className="text-[10px] font-mono text-[#64748B]">96 Students</span>
+                    <div className="p-1 rounded hover:bg-slate-800 text-slate-400">
+                      <Users2 className="h-3.5 w-3.5" />
                     </div>
-
-                    {/* Funnel Progress Bars */}
-                    <div className="space-y-1.5 text-[10px]">
-                      <div>
-                        <div className="flex justify-between text-[#475569] mb-0.5">
-                          <span>1. Proposal Submitted</span>
-                          <span className="font-mono tabular-nums font-semibold">100% (24 teams)</span>
-                        </div>
-                        <div className="h-2 w-full bg-[#E2E8F0] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#047857] rounded-full w-full" />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between text-[#475569] mb-0.5">
-                          <span>2. Guide &amp; HOD Approved</span>
-                          <span className="font-mono tabular-nums font-semibold">92% (22 teams)</span>
-                        </div>
-                        <div className="h-2 w-full bg-[#E2E8F0] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#065F46] rounded-full w-[92%]" />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between text-[#475569] mb-0.5">
-                          <span>3. Mid-Term Defense Completed</span>
-                          <span className="font-mono tabular-nums font-semibold">88% (21 teams)</span>
-                        </div>
-                        <div className="h-2 w-full bg-[#E2E8F0] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#047857] rounded-full w-[88%]" />
-                        </div>
-                      </div>
+                    <div className="p-1 rounded hover:bg-slate-800 text-slate-400">
+                      <GraduationCap className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="p-1 rounded hover:bg-slate-800 text-slate-400">
+                      <FileCheck2 className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="mt-auto">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 block" />
                     </div>
                   </div>
 
-                  {/* CO-PO Attainment Matrix Card */}
-                  <div className="p-3 bg-white rounded-xl border border-[#E2E8F0] space-y-2 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#0F172A] font-heading">CO-PO Attainment Matrix</span>
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                        Target Met
-                      </span>
+                  {/* Timelines Roster Column */}
+                  <div className="w-48 border-r border-slate-200 bg-white p-2.5 flex flex-col gap-2 shrink-0 select-none">
+                    <div className="font-heading font-bold text-xs text-slate-900 tracking-tight">
+                      Timelines
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-100 border border-slate-200 text-[10px] text-slate-500">
+                      <Search className="h-2.5 w-2.5" />
+                      <span>Search...</span>
                     </div>
 
-                    <table className="w-full text-left text-[11px]">
-                      <thead className="text-[#64748B] border-b border-[#F1F5F9]">
-                        <tr>
-                          <th className="pb-1">Outcome</th>
-                          <th className="pb-1 text-right">Score</th>
-                          <th className="pb-1 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#F1F5F9] font-mono tabular-nums">
-                        <tr>
-                          <td className="py-1 font-sans text-[#0F172A]">PO2: Problem Analysis</td>
-                          <td className="py-1 text-right text-emerald-700 font-bold">84.2%</td>
-                          <td className="py-1 text-right font-sans">
-                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded">
-                              ✓ Verified
+                    <div className="space-y-2 overflow-hidden text-[10px]">
+                      <div>
+                        <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                          Student 1
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                            <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
+                              DG
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-slate-800 truncate leading-tight">David Gulosparza</div>
+                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                            </div>
+                            <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                          </div>
+                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                            <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
+                              DG
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-slate-800 truncate leading-tight">Daniel Giocozon</div>
+                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                            </div>
+                            <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                          Student 2
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                            <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
+                              DS
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-slate-800 truncate leading-tight">Daniel Sadcrin</div>
+                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                            </div>
+                            <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                          </div>
+                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                            <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
+                              DK
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-slate-800 truncate leading-tight">David Keringas</div>
+                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                            </div>
+                            <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                          </div>
+                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                            <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
+                              DN
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-slate-800 truncate leading-tight">David Nailson</div>
+                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                            </div>
+                            <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                          Student 3
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                            <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
+                              DM
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-slate-800 truncate leading-tight">Daniel Mombe</div>
+                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                            </div>
+                            <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Main Analytics: Batch Lifecycle Funnel + CO-PO Matrix */}
+                  <div className="flex-1 p-3 flex flex-col gap-2.5 min-w-0">
+                    {/* Batch Lifecycle Funnel Card */}
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900 font-heading">
+                          Batch Lifecycle Funnel
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-mono">Progress Tracker</span>
+                      </div>
+
+                      {/* Centered Progressive Funnel Bars */}
+                      <div className="space-y-1.5 py-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-3.5 bg-brand-primary rounded-xs shadow-xs" style={{ width: "100%" }} />
+                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-9 text-right">60 pct</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-3.5 bg-brand-primary/90 rounded-xs shadow-xs mx-auto" style={{ width: "82%" }} />
+                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-9 text-right">27 pct</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-3.5 bg-brand-primary/80 rounded-xs shadow-xs mx-auto" style={{ width: "64%" }} />
+                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-9 text-right">30 pct</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 bg-brand-primary/70 rounded-xs shadow-xs mx-auto" style={{ width: "46%" }} />
+                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-9 text-right">8 vats</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-2.5 bg-brand-primary/60 rounded-xs shadow-xs mx-auto" style={{ width: "28%" }} />
+                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-9 text-right">3 flow</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* CO-PO Attainment Matrix Card */}
+                    <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900 font-heading">
+                          CO-PO Attainment Matrix
+                        </span>
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                          Target Met
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <table className="flex-1 text-left text-[9px]">
+                          <thead className="text-slate-400 border-b border-slate-100">
+                            <tr>
+                              <th className="pb-1 font-medium">Outcome</th>
+                              <th className="pb-1 font-medium">Progress Source</th>
+                              <th className="pb-1 font-medium text-right">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            <tr>
+                              <td className="py-1 font-medium text-slate-800">NBA Tier of impact</td>
+                              <td className="py-1 text-slate-500">Project Item</td>
+                              <td className="py-1 text-right">
+                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded">
+                                  <Check className="h-2 w-2" /> Verified
+                                </span>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 font-medium text-slate-800">NB1 F-4 impact</td>
+                              <td className="py-1 text-slate-500">Project Source</td>
+                              <td className="py-1 text-right">
+                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded">
+                                  <Check className="h-2 w-2" /> Verified
+                                </span>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 font-medium text-slate-800">NB1 Postorders</td>
+                              <td className="py-1 text-slate-500">Project Source</td>
+                              <td className="py-1 text-right">
+                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded">
+                                  <Check className="h-2 w-2" /> Verified
+                                </span>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 font-medium text-slate-800">NB4 Frequent designs</td>
+                              <td className="py-1 text-slate-500">Project Item</td>
+                              <td className="py-1 text-right">
+                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded">
+                                  <Check className="h-2 w-2" /> Verified
+                                </span>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        {/* Circular Gauge */}
+                        <div className="shrink-0 flex flex-col items-center justify-center p-1.5 bg-slate-50 rounded-lg border border-slate-100">
+                          <div className="relative h-11 w-11 flex items-center justify-center">
+                            <svg className="h-11 w-11 -rotate-90" viewBox="0 0 36 36">
+                              <path
+                                className="text-slate-200"
+                                strokeWidth="3.5"
+                                stroke="currentColor"
+                                fill="none"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              />
+                              <path
+                                className="text-brand-primary"
+                                strokeDasharray="84, 100"
+                                strokeWidth="3.5"
+                                strokeLinecap="round"
+                                stroke="currentColor"
+                                fill="none"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              />
+                            </svg>
+                            <span className="absolute font-mono text-[9px] font-bold text-slate-800 tabular-nums">
+                              84%
                             </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="py-1 font-sans text-[#0F172A]">PO3: Solution Design</td>
-                          <td className="py-1 text-right text-emerald-700 font-bold">81.4%</td>
-                          <td className="py-1 text-right font-sans">
-                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded">
-                              ✓ Verified
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="py-1 font-sans text-[#0F172A]">PO5: Modern Tools</td>
-                          <td className="py-1 text-right text-emerald-700 font-bold">79.6%</td>
-                          <td className="py-1 text-right font-sans">
-                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded">
-                              ✓ Verified
-                            </span>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+                          </div>
+                          <span className="text-[8px] font-semibold text-slate-500 mt-0.5">Attainment</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -331,7 +468,7 @@ export default function MarketingHomePage() {
       <section id="workflows" className="py-16 bg-white border-b border-[#E2E8F0]">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
           <div className="text-center space-y-2 max-w-2xl mx-auto">
-            <div className="text-xs font-bold text-[#047857] uppercase tracking-wider">
+            <div className="text-xs font-bold text-brand-primary uppercase tracking-wider">
               Autonomous Governance
             </div>
             <h2 className="font-heading font-bold text-2xl sm:text-3xl text-[#0F172A]">
@@ -344,8 +481,8 @@ export default function MarketingHomePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Step 1 */}
-            <div className="p-6 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-4 hover:border-[#047857] transition-all">
-              <div className="h-10 w-10 rounded-xl bg-emerald-50 text-[#047857] flex items-center justify-center font-bold text-sm border border-emerald-100 font-heading">
+            <div className="p-6 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-4 hover:border-brand-primary transition-all">
+              <div className="h-10 w-10 rounded-xl bg-brand-primary-tint text-brand-primary flex items-center justify-center font-bold text-sm border border-brand-primary-border font-heading">
                 01
               </div>
               <div className="space-y-1.5">
@@ -359,20 +496,20 @@ export default function MarketingHomePage() {
               </div>
               <ul className="text-xs text-[#64748B] space-y-1.5 pt-2 border-t border-[#E2E8F0]">
                 <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-[#047857]" /> Max 4 members enforced
+                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Max 4 members enforced
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-[#047857]" /> Mandatory UN SDG mapping
+                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Mandatory UN SDG mapping
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-[#047857]" /> Roster lock prevents churn
+                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Roster lock prevents churn
                 </li>
               </ul>
             </div>
 
             {/* Step 2 */}
-            <div className="p-6 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-4 hover:border-[#047857] transition-all">
-              <div className="h-10 w-10 rounded-xl bg-emerald-50 text-[#047857] flex items-center justify-center font-bold text-sm border border-emerald-100 font-heading">
+            <div className="p-6 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-4 hover:border-brand-primary transition-all">
+              <div className="h-10 w-10 rounded-xl bg-brand-primary-tint text-brand-primary flex items-center justify-center font-bold text-sm border border-brand-primary-border font-heading">
                 02
               </div>
               <div className="space-y-1.5">
@@ -386,20 +523,20 @@ export default function MarketingHomePage() {
               </div>
               <ul className="text-xs text-[#64748B] space-y-1.5 pt-2 border-t border-[#E2E8F0]">
                 <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-[#047857]" /> Guide technical endorsement
+                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Guide technical endorsement
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-[#047857]" /> Workload threshold verification
+                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Workload threshold verification
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-[#047857]" /> HOD final allotment sign-off
+                  <Check className="h-3.5 w-3.5 text-brand-primary" /> HOD final allotment sign-off
                 </li>
               </ul>
             </div>
 
             {/* Step 3 */}
-            <div className="p-6 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-4 hover:border-[#047857] transition-all">
-              <div className="h-10 w-10 rounded-xl bg-emerald-50 text-[#047857] flex items-center justify-center font-bold text-sm border border-emerald-100 font-heading">
+            <div className="p-6 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-4 hover:border-brand-primary transition-all">
+              <div className="h-10 w-10 rounded-xl bg-brand-primary-tint text-brand-primary flex items-center justify-center font-bold text-sm border border-brand-primary-border font-heading">
                 03
               </div>
               <div className="space-y-1.5">
@@ -413,13 +550,13 @@ export default function MarketingHomePage() {
               </div>
               <ul className="text-xs text-[#64748B] space-y-1.5 pt-2 border-t border-[#E2E8F0]">
                 <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-[#047857]" /> Stamped weekly logbook entries
+                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Stamped weekly logbook entries
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-[#047857]" /> Conflict-free viva scoring
+                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Conflict-free viva scoring
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-[#047857]" /> 3 Best/Avg/Weak ZIP export
+                  <Check className="h-3.5 w-3.5 text-brand-primary" /> 3 Best/Avg/Weak ZIP export
                 </li>
               </ul>
             </div>
@@ -433,7 +570,7 @@ export default function MarketingHomePage() {
       <section id="portals" className="py-16 bg-[#F8FAFC] border-b border-[#E2E8F0]">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
           <div className="text-center space-y-2 max-w-2xl mx-auto">
-            <div className="text-xs font-bold text-[#047857] uppercase tracking-wider">
+            <div className="text-xs font-bold text-brand-primary uppercase tracking-wider">
               Exact 6-Role Hierarchy
             </div>
             <h2 className="font-heading font-bold text-2xl sm:text-3xl text-[#0F172A]">
@@ -447,7 +584,7 @@ export default function MarketingHomePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {/* 1. College Admin */}
-            <Card className="hover:border-[#047857] hover:shadow-xs transition-all flex flex-col justify-between">
+            <Card className="hover:border-brand-primary hover:shadow-xs transition-all flex flex-col justify-between">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <Badge variant="role" role="CollegeAdmin" size="sm" dot />
@@ -473,7 +610,7 @@ export default function MarketingHomePage() {
             </Card>
 
             {/* 2. HOD */}
-            <Card className="hover:border-[#047857] hover:shadow-xs transition-all flex flex-col justify-between">
+            <Card className="hover:border-brand-primary hover:shadow-xs transition-all flex flex-col justify-between">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <Badge variant="role" role="HOD" size="sm" dot />
@@ -499,7 +636,7 @@ export default function MarketingHomePage() {
             </Card>
 
             {/* 3. Project Coordinator */}
-            <Card className="hover:border-[#047857] hover:shadow-xs transition-all flex flex-col justify-between">
+            <Card className="hover:border-brand-primary hover:shadow-xs transition-all flex flex-col justify-between">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
@@ -530,7 +667,7 @@ export default function MarketingHomePage() {
             </Card>
 
             {/* 4. Faculty Guide & Evaluator */}
-            <Card className="hover:border-[#047857] hover:shadow-xs transition-all flex flex-col justify-between">
+            <Card className="hover:border-brand-primary hover:shadow-xs transition-all flex flex-col justify-between">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <Badge variant="role" role="Faculty" size="sm" dot />
@@ -556,7 +693,7 @@ export default function MarketingHomePage() {
             </Card>
 
             {/* 5. Team Lead */}
-            <Card className="hover:border-[#047857] hover:shadow-xs transition-all flex flex-col justify-between">
+            <Card className="hover:border-brand-primary hover:shadow-xs transition-all flex flex-col justify-between">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <Badge variant="role" role="TeamLead" size="sm" dot />
@@ -582,7 +719,7 @@ export default function MarketingHomePage() {
             </Card>
 
             {/* 6. Student */}
-            <Card className="hover:border-[#047857] hover:shadow-xs transition-all flex flex-col justify-between">
+            <Card className="hover:border-brand-primary hover:shadow-xs transition-all flex flex-col justify-between">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <Badge variant="role" role="Student" size="sm" dot />
@@ -615,7 +752,7 @@ export default function MarketingHomePage() {
       {/* ========================================================================= */}
       <section id="nba" className="py-16 bg-white border-b border-[#E2E8F0]">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-[#064E3B] to-[#047857] text-white shadow-xl space-y-8">
+          <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-brand-primary-hover to-brand-primary text-white shadow-xl space-y-8">
             <div className="space-y-3 max-w-3xl">
               <span className="text-xs font-bold uppercase tracking-widest text-emerald-300">
                 Accreditation Assurance Engine
@@ -668,7 +805,7 @@ export default function MarketingHomePage() {
               <button
                 type="button"
                 onClick={() => setIsPilotModalOpen(true)}
-                className="px-5 py-2.5 rounded-xl bg-white text-[#047857] hover:bg-emerald-50 text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-white text-brand-primary hover:bg-brand-primary-tint text-xs font-bold shadow-xs transition-colors cursor-pointer"
               >
                 Schedule an Institutional Consultation
               </button>
@@ -683,7 +820,7 @@ export default function MarketingHomePage() {
       <section id="features" className="py-16 bg-[#F8FAFC] border-b border-[#E2E8F0]">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
           <div className="text-center space-y-2 max-w-2xl mx-auto">
-            <div className="text-xs font-bold text-[#047857] uppercase tracking-wider">
+            <div className="text-xs font-bold text-brand-primary uppercase tracking-wider">
               Enterprise Grade
             </div>
             <h2 className="font-heading font-bold text-2xl sm:text-3xl text-[#0F172A]">
@@ -696,7 +833,7 @@ export default function MarketingHomePage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             <Card className="p-5 space-y-3">
-              <div className="h-9 w-9 rounded-lg bg-emerald-50 text-[#047857] flex items-center justify-center">
+              <div className="h-9 w-9 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <h3 className="font-heading font-bold text-sm text-[#0F172A]">
@@ -709,7 +846,7 @@ export default function MarketingHomePage() {
             </Card>
 
             <Card className="p-5 space-y-3">
-              <div className="h-9 w-9 rounded-lg bg-emerald-50 text-[#047857] flex items-center justify-center">
+              <div className="h-9 w-9 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
                 <Lock className="h-5 w-5" />
               </div>
               <h3 className="font-heading font-bold text-sm text-[#0F172A]">
@@ -722,7 +859,7 @@ export default function MarketingHomePage() {
             </Card>
 
             <Card className="p-5 space-y-3">
-              <div className="h-9 w-9 rounded-lg bg-emerald-50 text-[#047857] flex items-center justify-center">
+              <div className="h-9 w-9 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
                 <Sparkles className="h-5 w-5" />
               </div>
               <h3 className="font-heading font-bold text-sm text-[#0F172A]">
@@ -735,7 +872,7 @@ export default function MarketingHomePage() {
             </Card>
 
             <Card className="p-5 space-y-3">
-              <div className="h-9 w-9 rounded-lg bg-emerald-50 text-[#047857] flex items-center justify-center">
+              <div className="h-9 w-9 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
                 <BarChart3 className="h-5 w-5" />
               </div>
               <h3 className="font-heading font-bold text-sm text-[#0F172A]">
@@ -758,7 +895,7 @@ export default function MarketingHomePage() {
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-[#1F2937]">
             <div className="space-y-1">
               <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 rounded-lg bg-[#047857] flex items-center justify-center text-white font-bold text-xs font-heading">
+                <div className="h-8 w-8 rounded-lg bg-brand-primary flex items-center justify-center text-white font-bold text-xs font-heading">
                   PH
                 </div>
                 <span className="font-heading font-bold text-base text-white">Project Hub</span>
@@ -793,7 +930,7 @@ export default function MarketingHomePage() {
               &copy; 2026 Project Hub SaaS. Multi-tenant academic project management.
             </div>
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-[#047857]" />
+              <span className="h-2 w-2 rounded-full bg-brand-primary" />
               <span>Academic Minor &amp; Major Projects Only</span>
             </div>
           </div>
@@ -812,7 +949,7 @@ export default function MarketingHomePage() {
       >
         {pilotSubmitted ? (
           <div className="p-6 text-center space-y-3">
-            <div className="h-12 w-12 mx-auto rounded-full bg-emerald-50 text-[#047857] flex items-center justify-center">
+            <div className="h-12 w-12 mx-auto rounded-full bg-brand-primary-tint text-brand-primary flex items-center justify-center">
               <CheckCircle2 className="h-6 w-6" />
             </div>
             <div className="space-y-1">
@@ -881,7 +1018,7 @@ export default function MarketingHomePage() {
               />
             </div>
 
-            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] leading-relaxed">
+            <div className="p-3 rounded-lg bg-brand-primary-tint border border-brand-primary-border text-brand-primary-text text-[11px] leading-relaxed">
               Pilot includes full NBA Criterion 2 &amp; 3 dossier exports, student CSV onboarding, and SSO domain verification for one complete semester cycle.
             </div>
 

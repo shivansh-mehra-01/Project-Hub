@@ -30,9 +30,9 @@ export const StepperGPS: React.FC<StepperGPSProps> = ({ currentStep, className }
                   className={cn(
                     "h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-all tabular-nums",
                     isCompleted
-                      ? "bg-[#047857] text-white"
+                      ? "bg-emerald-600 text-white"
                       : isCurrent
-                      ? "bg-[#047857] text-white ring-4 ring-[#ECFDF5]"
+                      ? "bg-brand-primary text-white ring-4 ring-brand-primary-tint"
                       : "bg-[#F1F5F9] text-[#94A3B8] border border-[#E2E8F0]"
                   )}
                 >
@@ -43,7 +43,7 @@ export const StepperGPS: React.FC<StepperGPSProps> = ({ currentStep, className }
                     className={cn(
                       "text-xs font-semibold leading-none",
                       isCurrent
-                        ? "text-[#047857]"
+                        ? "text-brand-primary"
                         : isCompleted
                         ? "text-[#0F172A]"
                         : "text-[#94A3B8]"

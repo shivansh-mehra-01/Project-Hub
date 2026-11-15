@@ -151,7 +151,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
           onClick={() => switchTab("queue")}
           className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
             activeTab === "queue"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -167,7 +167,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
           onClick={() => switchTab("teams")}
           className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === "teams"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -178,7 +178,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
           onClick={() => switchTab("grading")}
           className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === "grading"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -227,7 +227,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                   <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
                     {pendingLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-[#F8FAFC]">
-                        <td className="py-2.5 px-4 font-mono font-bold text-[#047857]">{log.teamCode}</td>
+                        <td className="py-2.5 px-4 font-mono font-bold text-brand-primary">{log.teamCode}</td>
                         <td className="py-2.5 px-4 font-semibold">{log.studentName}</td>
                         <td className="py-2.5 px-4 font-mono tabular-nums">Week {log.weekNumber}</td>
                         <td className="py-2.5 px-4 max-w-xs truncate text-[#475569]">
@@ -281,7 +281,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs text-[#047857]">{t.teamCode}</span>
+                        <span className="font-mono font-bold text-xs text-brand-primary">{t.teamCode}</span>
                         <h4 className="text-xs font-bold text-[#0F172A]">{t.title}</h4>
                         <Badge variant="sdg" sdgNumber={t.sdgNumber} size="sm">
                           {t.domain}
@@ -355,14 +355,14 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-xs text-[#047857] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
+                      <span className="font-mono font-bold text-xs text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
                         {team.teamCode}
                       </span>
                       <Badge variant={team.health === "Healthy" ? "success" : "warning"} size="sm" dot>
                         {team.state}
                       </Badge>
                     </div>
-                    <CardTitle className="pt-2 text-sm group-hover:text-[#047857] transition-colors">
+                    <CardTitle className="pt-2 text-sm group-hover:text-brand-primary transition-colors">
                       {team.title}
                     </CardTitle>
                     <CardDescription className="line-clamp-2">{team.abstract}</CardDescription>
@@ -398,7 +398,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                         <span className="text-[11px] font-semibold text-emerald-600">
                           {team.weeklyLogs.length} Weekly Logs
                         </span>
-                        <span className="text-xs font-semibold text-[#047857] group-hover:underline flex items-center gap-0.5">
+                        <span className="text-xs font-semibold text-brand-primary group-hover:underline flex items-center gap-0.5">
                           Inspect <ArrowRight className="h-3 w-3" strokeWidth={1.75} />
                         </span>
                       </div>
@@ -430,7 +430,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-xs text-[#047857] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
+                      <span className="font-mono font-bold text-xs text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
                         {selectedEval.teamCode}
                       </span>
                       <Badge variant="info" size="sm">
@@ -499,7 +499,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                     </div>
                     <div className="text-right">
                       <span className="text-xs font-semibold text-[#64748B]">Total Score:</span>
-                      <div className="text-xl font-mono font-bold text-[#047857] tabular-nums">
+                      <div className="text-xl font-mono font-bold text-brand-primary tabular-nums">
                         {totalScore} / {activeRubric.totalMarks}
                       </div>
                     </div>
@@ -514,7 +514,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-bold text-[#0F172A]">{crit.name}</span>
-                              <span className="font-mono text-[10px] font-bold bg-[#ECFDF5] text-[#047857] px-1.5 py-0.2 rounded border border-[#A7F3D0]">
+                              <span className="font-mono text-[10px] font-bold bg-brand-primary-tint text-brand-primary px-1.5 py-0.2 rounded border border-brand-primary-border">
                                 {crit.nbaCriterionCode}
                               </span>
                             </div>
@@ -530,7 +530,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                               onChange={(e) =>
                                 handleScoreChange(crit.id, parseFloat(e.target.value) || 0, crit.maxScore)
                               }
-                              className="w-16 h-8 text-center font-mono font-bold text-xs bg-white rounded border border-[#CBD5E1] text-[#0F172A] focus:border-[#047857] focus:outline-none"
+                              className="w-16 h-8 text-center font-mono font-bold text-xs bg-white rounded border border-[#CBD5E1] text-[#0F172A] focus:border-brand-primary focus:outline-none"
                             />
                             <span className="text-xs font-mono text-[#64748B]">/ {crit.maxScore}</span>
                           </div>
@@ -672,7 +672,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
             {/* Team Roster */}
             <div className="space-y-2">
               <span className="font-bold text-[#0F172A] flex items-center gap-1.5">
-                <Users2 className="h-4 w-4 text-[#047857]" strokeWidth={1.75} />
+                <Users2 className="h-4 w-4 text-brand-primary" strokeWidth={1.75} />
                 Enrolled Team Members ({inspectingTeam.members.length})
               </span>
               <div className="space-y-1.5">
@@ -685,7 +685,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                       <div className="font-semibold text-[#0F172A] flex items-center gap-1.5">
                         <span>{m.name}</span>
                         {m.isLead && (
-                          <span className="text-[10px] bg-[#ECFDF5] text-[#047857] font-bold px-1.5 py-0.2 rounded border border-[#A7F3D0]">
+                          <span className="text-[10px] bg-brand-primary-tint text-brand-primary font-bold px-1.5 py-0.2 rounded border border-brand-primary-border">
                             Team Lead
                           </span>
                         )}
@@ -701,7 +701,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
             {/* Sprint Backlog Tasks */}
             <div className="space-y-2">
               <span className="font-bold text-[#0F172A] flex items-center gap-1.5">
-                <CheckSquare className="h-4 w-4 text-[#047857]" strokeWidth={1.75} />
+                <CheckSquare className="h-4 w-4 text-brand-primary" strokeWidth={1.75} />
                 Sprint Deliverables Backlog ({inspectingTeam.tasks?.length || 0})
               </span>
               {(!inspectingTeam.tasks || inspectingTeam.tasks.length === 0) ? (
@@ -739,14 +739,14 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
             {/* Weekly Log History */}
             <div className="space-y-2">
               <span className="font-bold text-[#0F172A] flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-[#047857]" strokeWidth={1.75} />
+                <Calendar className="h-4 w-4 text-brand-primary" strokeWidth={1.75} />
                 Weekly Logbook History ({inspectingTeam.weeklyLogs.length})
               </span>
               <div className="space-y-2">
                 {inspectingTeam.weeklyLogs.map((log) => (
                   <div key={log.id} className="p-3 rounded-lg border border-[#E2E8F0] bg-white space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-[#047857]">Week {log.weekNumber}</span>
+                      <span className="font-mono font-bold text-brand-primary">Week {log.weekNumber}</span>
                       <Badge
                         variant={log.guideStatus === "Approved" ? "success" : "warning"}
                         size="sm"

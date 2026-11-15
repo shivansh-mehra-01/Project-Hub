@@ -26,7 +26,7 @@ export const StudentPortfolioView: React.FC = () => {
         {/* Profile Card Header */}
         <div className="p-6 rounded-xl border border-[#E2E8F0] bg-white shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-full bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857] flex items-center justify-center font-bold text-xl font-mono">
+            <div className="h-14 w-14 rounded-full bg-brand-primary-tint border border-brand-primary-border text-brand-primary flex items-center justify-center font-bold text-xl font-mono">
               SM
             </div>
             <div className="space-y-1">
@@ -73,7 +73,7 @@ export const StudentPortfolioView: React.FC = () => {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold text-[#047857] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
+                <span className="font-mono text-xs font-bold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
                   Year 3 • Minor Project (Semester 6)
                 </span>
                 <Badge variant="success" size="sm" dot>
@@ -167,7 +167,7 @@ export const StudentPortfolioView: React.FC = () => {
       >
         <div className="p-6 bg-white border-2 border-emerald-100 rounded-xl space-y-4 text-center">
           <div className="space-y-1">
-            <span className="text-[10px] font-bold tracking-widest text-[#047857] uppercase font-mono">
+            <span className="text-[10px] font-bold tracking-widest text-brand-primary uppercase font-mono">
               Official University Transcript Record
             </span>
             <h4 className="text-base font-bold text-[#0F172A]">Minor Project Engineering Certificate</h4>

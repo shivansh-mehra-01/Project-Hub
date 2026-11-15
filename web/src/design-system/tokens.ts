@@ -4,23 +4,35 @@
  */
 
 export const colors = {
-  canvas: "#F8FAFC", // Porcelain Off-White (Slate 50)
-  surface: "#FFFFFF",
+  canvas: "var(--canvas-bg, #F8FAFC)", // Porcelain Off-White (Slate 50)
+  surface: "var(--card-bg, #FFFFFF)",
   hover: "#F1F5F9", // Slate 100
-  border: "#E2E8F0", // Slate 200
+  border: "var(--card-border, #E2E8F0)", // Slate 200
   divider: "#CBD5E1", // Slate 300
-  charcoal: "#111827", // Dark Anchor (Navbar / Sidebar)
+  charcoal: "var(--shell-bg, #111827)", // Dark Anchor (Navbar / Sidebar)
 
   // Text
   primaryText: "#0F172A", // Slate 900
   secondaryText: "#475569", // Slate 600
   mutedText: "#94A3B8", // Slate 400
 
-  // Brand Accent: Deep Forest Emerald
-  primary: "#047857", // Deep Forest Emerald
-  primaryHover: "#065F46",
-  primaryLight: "#ECFDF5", // Emerald 50
+  // Brand Accent: Single-source CSS variable driven
+  primary: "var(--brand-primary, #047857)",
+  primaryHover: "var(--brand-primary-hover, #065F46)",
+  primaryLight: "var(--brand-primary-tint, #ECFDF5)",
+  primaryTextAccent: "var(--brand-primary-text, #065F46)",
+  primaryBorder: "var(--brand-primary-border, #A7F3D0)",
   emeraldTint: "#D1FAE5",
+
+  // Shell & Navigation Tokens
+  shellBg: "var(--shell-bg, #111827)",
+  shellSurface: "var(--shell-surface, #1F2937)",
+  shellBorder: "var(--shell-border, #374151)",
+  shellText: "var(--shell-text, #F9FAFB)",
+  shellMuted: "var(--shell-muted, #9CA3AF)",
+  topbarBg: "var(--topbar-bg, #111827)",
+  topbarText: "var(--topbar-text, #F9FAFB)",
+  topbarBorder: "var(--topbar-border, #1F2937)",
 
   // Semantic Status
   status: {

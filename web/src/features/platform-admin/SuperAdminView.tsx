@@ -317,7 +317,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                   {collegesList.map((col) => (
                     <tr key={col.id} className="hover:bg-[#F8FAFC] transition-colors">
                       <td className="py-3 px-4 font-semibold flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-md bg-[#ECFDF5] text-[#047857] border border-[#A7F3D0] flex items-center justify-center font-bold text-xs font-mono">
+                        <div className="h-7 w-7 rounded-md bg-brand-primary-tint text-brand-primary border border-brand-primary-border flex items-center justify-center font-bold text-xs font-mono">
                           {col.code.charAt(0)}
                         </div>
                         <span>{col.name}</span>
@@ -350,7 +350,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                             setManagingCollege(col);
                             setTenantSaved(false);
                           }}
-                          className="text-xs font-semibold text-[#047857] hover:underline cursor-pointer"
+                          className="text-xs font-semibold text-brand-primary hover:underline cursor-pointer"
                         >
                           Manage Tenant
                         </button>
@@ -610,7 +610,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                       <tr key={col.id} className="hover:bg-[#F8FAFC] transition-colors">
                         <td className="py-3 px-4 font-sans font-semibold text-[#0F172A]">{col.name}</td>
                         <td className="py-3 px-4">
-                          <span className="font-mono text-xs font-semibold text-[#047857] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
+                          <span className="font-mono text-xs font-semibold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
                             tenant_{col.code.toLowerCase()}_prod
                           </span>
                         </td>
@@ -622,7 +622,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                             </div>
                             <div className="h-1.5 w-full bg-[#E2E8F0] rounded-full overflow-hidden">
                               <div
-                                className="h-full bg-[#047857] rounded-full transition-all"
+                                className="h-full bg-brand-primary rounded-full transition-all"
                                 style={{ width: `${telem.pct}%` }}
                               />
                             </div>
@@ -632,8 +632,8 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                           {telem.connections} <span className="text-[#64748B] font-sans text-[11px]">conn</span>
                         </td>
                         <td className="py-3 px-4 text-right font-sans">
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#065F46] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#047857]" />
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
                             Isolated &amp; Healthy
                           </span>
                         </td>
@@ -781,7 +781,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                 <span className="font-bold text-[#0F172A] block">Maintenance Mode</span>
                 <span className="text-[11px] text-[#64748B]">Temporarily block student portal access for maintenance</span>
               </div>
-              <input type="checkbox" className="h-4 w-4 rounded text-[#047857] focus:ring-[#047857] accent-[#047857]" />
+              <input type="checkbox" className="h-4 w-4 rounded text-brand-primary focus:ring-brand-primary accent-brand-primary" />
             </div>
           </div>
         )}
@@ -804,7 +804,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               </div>
               <div className="flex justify-between">
                 <span className="text-[#64748B]">Assigned Code:</span>
-                <span className="font-mono font-bold text-[#047857]">{reviewingPilot.code}</span>
+                <span className="font-mono font-bold text-brand-primary">{reviewingPilot.code}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#64748B]">Dean / Principal Email:</span>

@@ -61,7 +61,7 @@ export const TagMultiSelect: React.FC<TagMultiSelectProps> = ({
               className={cn(
                 "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer",
                 isSelected
-                  ? "bg-[#047857] text-white border-[#047857] shadow-xs"
+                  ? "bg-brand-primary text-white border-brand-primary shadow-xs"
                   : "bg-white text-[#475569] border-[#E2E8F0] hover:bg-[#F8FAFC] hover:text-[#0F172A]"
               )}
             >
@@ -77,7 +77,7 @@ export const TagMultiSelect: React.FC<TagMultiSelectProps> = ({
           .map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-[#047857] text-white border border-[#047857]"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-brand-primary text-white border border-brand-primary"
             >
               <span>{tag}</span>
               <button
@@ -107,12 +107,12 @@ export const TagMultiSelect: React.FC<TagMultiSelectProps> = ({
                 }}
                 autoFocus
                 placeholder="Type tag..."
-                className="h-7 w-28 rounded-md border border-[#047857] px-2 text-xs text-[#0F172A] focus:outline-none"
+                className="h-7 w-28 rounded-md border border-brand-primary px-2 text-xs text-[#0F172A] focus:outline-none"
               />
               <button
                 type="button"
                 onClick={addCustomTag}
-                className="h-7 px-2 bg-[#047857] text-white text-xs rounded-md font-medium cursor-pointer"
+                className="h-7 px-2 bg-brand-primary text-white text-xs rounded-md font-medium cursor-pointer"
               >
                 Add
               </button>
@@ -128,7 +128,7 @@ export const TagMultiSelect: React.FC<TagMultiSelectProps> = ({
             <button
               type="button"
               onClick={() => setIsAdding(true)}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-[#047857] hover:bg-[#ECFDF5] border border-dashed border-[#CBD5E1] transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-brand-primary hover:bg-brand-primary-tint border border-dashed border-[#CBD5E1] transition-colors cursor-pointer"
             >
               <Plus className="h-3 w-3" strokeWidth={2} />
               <span>Add Other</span>

@@ -85,7 +85,7 @@ export function DataTable<TData, TValue>({
             value={globalFilter ?? ""}
             onChange={(e) => setGlobalFilter(e.target.value)}
             placeholder={searchPlaceholder}
-            className="h-9 w-full rounded-lg border border-[#E2E8F0] bg-white pl-9 pr-3 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-[#047857] focus:outline-none focus:ring-2 focus:ring-[#047857]/20"
+            className="h-9 w-full rounded-lg border border-[#E2E8F0] bg-white pl-9 pr-3 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
           />
         </div>
 
@@ -112,7 +112,7 @@ export function DataTable<TData, TValue>({
                 className={cn(
                   "px-2.5 py-1 text-xs font-medium rounded-full border transition-colors cursor-pointer shrink-0",
                   selectedStatus === opt.value
-                    ? "bg-[#047857] text-white border-[#047857]"
+                    ? "bg-brand-primary text-white border-brand-primary"
                     : "bg-white text-[#475569] border-[#E2E8F0] hover:bg-[#F8FAFC]"
                 )}
               >
@@ -151,9 +151,9 @@ export function DataTable<TData, TValue>({
                           {canSort && (
                             <span className="text-[#94A3B8]">
                               {isSorted === "asc" ? (
-                                <ChevronUp className="h-3.5 w-3.5 text-[#047857]" strokeWidth={1.75} />
+                                <ChevronUp className="h-3.5 w-3.5 text-brand-primary" strokeWidth={1.75} />
                               ) : isSorted === "desc" ? (
-                                <ChevronDown className="h-3.5 w-3.5 text-[#047857]" strokeWidth={1.75} />
+                                <ChevronDown className="h-3.5 w-3.5 text-brand-primary" strokeWidth={1.75} />
                               ) : (
                                 <ChevronsUpDown className="h-3.5 w-3.5" strokeWidth={1.75} />
                               )}

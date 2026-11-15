@@ -110,26 +110,26 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       <div className="space-y-4">
         {/* Step Indicators */}
         <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#047857]">
-            <span className="h-5 w-5 rounded-full bg-[#ECFDF5] text-[#047857] flex items-center justify-center text-[10px] font-mono">
+          <div className="flex items-center gap-2 text-xs font-semibold text-brand-primary">
+            <span className="h-5 w-5 rounded-full bg-brand-primary-tint text-brand-primary flex items-center justify-center text-[10px] font-mono">
               1
             </span>
             <span>Identity</span>
           </div>
           <div
             className={`h-0.5 flex-1 mx-2 ${
-              step >= 2 ? "bg-[#047857]" : "bg-[#E2E8F0]"
+              step >= 2 ? "bg-brand-primary" : "bg-[#E2E8F0]"
             }`}
           />
           <div
             className={`flex items-center gap-2 text-xs font-semibold ${
-              step >= 2 ? "text-[#047857]" : "text-[#94A3B8]"
+              step >= 2 ? "text-brand-primary" : "text-[#94A3B8]"
             }`}
           >
             <span
               className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-mono ${
                 step >= 2
-                  ? "bg-[#ECFDF5] text-[#047857]"
+                  ? "bg-brand-primary-tint text-brand-primary"
                   : "bg-[#F1F5F9] text-[#94A3B8]"
               }`}
             >
@@ -139,18 +139,18 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           </div>
           <div
             className={`h-0.5 flex-1 mx-2 ${
-              step === 3 ? "bg-[#047857]" : "bg-[#E2E8F0]"
+              step === 3 ? "bg-brand-primary" : "bg-[#E2E8F0]"
             }`}
           />
           <div
             className={`flex items-center gap-2 text-xs font-semibold ${
-              step === 3 ? "text-[#047857]" : "text-[#94A3B8]"
+              step === 3 ? "text-brand-primary" : "text-[#94A3B8]"
             }`}
           >
             <span
               className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-mono ${
                 step === 3
-                  ? "bg-[#ECFDF5] text-[#047857]"
+                  ? "bg-brand-primary-tint text-brand-primary"
                   : "bg-[#F1F5F9] text-[#94A3B8]"
               }`}
             >
@@ -163,9 +163,9 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
         {/* Step 1: Identity */}
         {step === 1 && (
           <div className="space-y-3.5">
-            <div className="p-3 bg-[#ECFDF5] rounded-lg border border-[#A7F3D0] flex items-start gap-2.5">
-              <UserCheck className="h-4 w-4 text-[#047857] shrink-0 mt-0.5" strokeWidth={1.75} />
-              <div className="text-xs text-[#065F46] leading-relaxed">
+            <div className="p-3 bg-brand-primary-tint rounded-lg border border-brand-primary-border flex items-start gap-2.5">
+              <UserCheck className="h-4 w-4 text-brand-primary shrink-0 mt-0.5" strokeWidth={1.75} />
+              <div className="text-xs text-brand-primary-text leading-relaxed">
                 Pre-registered student record found in SISTec Department of CSE
                 roster. Please verify and complete your profile.
               </div>

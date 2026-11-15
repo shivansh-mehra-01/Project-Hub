@@ -238,7 +238,7 @@ export const CoordinatorView: React.FC = () => {
           onClick={() => setActiveSubTab("roster")}
           className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
             activeSubTab === "roster"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -249,7 +249,7 @@ export const CoordinatorView: React.FC = () => {
           onClick={() => setActiveSubTab("allocator")}
           className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
             activeSubTab === "allocator"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -260,7 +260,7 @@ export const CoordinatorView: React.FC = () => {
           onClick={() => setActiveSubTab("panels")}
           className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
             activeSubTab === "panels"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -271,7 +271,7 @@ export const CoordinatorView: React.FC = () => {
           onClick={() => setActiveSubTab("reports")}
           className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
             activeSubTab === "reports"
-              ? "border-b-2 border-[#047857] text-[#047857]"
+              ? "border-b-2 border-brand-primary text-brand-primary"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -342,12 +342,12 @@ export const CoordinatorView: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="border-2 border-dashed border-[#CBD5E1] rounded-xl p-6 text-center bg-[#F8FAFC] space-y-2">
-                  <div className="h-10 w-10 mx-auto rounded-full bg-white border border-[#E2E8F0] flex items-center justify-center text-[#047857]">
+                  <div className="h-10 w-10 mx-auto rounded-full bg-white border border-[#E2E8F0] flex items-center justify-center text-brand-primary">
                     <UploadCloud className="h-5 w-5" strokeWidth={1.75} />
                   </div>
                   <div className="text-xs text-[#0F172A] font-medium">
                     Drag and drop student roster CSV, or{" "}
-                    <span className="text-[#047857] underline cursor-pointer">browse file</span>
+                    <span className="text-brand-primary underline cursor-pointer">browse file</span>
                   </div>
                   <p className="text-[11px] text-[#64748B]">
                     Columns required: <code className="font-mono">USN, Name, Email, Semester</code>
@@ -359,7 +359,7 @@ export const CoordinatorView: React.FC = () => {
                   <a
                     href="#download-template"
                     onClick={handleDownloadCsvTemplate}
-                    className="font-medium text-[#047857] hover:underline flex items-center gap-1 cursor-pointer"
+                    className="font-medium text-brand-primary hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <Download className="h-3 w-3" strokeWidth={1.75} />
                     <span>Download sistec-cse-template.csv</span>
@@ -399,7 +399,7 @@ export const CoordinatorView: React.FC = () => {
                       <tr key={r.row} className="hover:bg-[#F8FAFC]">
                         <td className="py-2.5 px-4 font-mono text-[#64748B]">{r.row}</td>
                         <td className="py-2.5 px-4 font-semibold">{r.name}</td>
-                        <td className="py-2.5 px-4 font-mono font-bold text-[#047857]">{r.usn}</td>
+                        <td className="py-2.5 px-4 font-mono font-bold text-brand-primary">{r.usn}</td>
                         <td className="py-2.5 px-4 font-mono text-[#64748B]">{r.email}</td>
                         <td className="py-2.5 px-4 text-right">
                           {r.status === "Valid" ? (
@@ -432,7 +432,7 @@ export const CoordinatorView: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5]">
             <div className="space-y-0.5">
               <div className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5 font-heading">
-                <Sparkles className="h-4 w-4 text-[#047857]" strokeWidth={1.75} />
+                <Sparkles className="h-4 w-4 text-brand-primary" strokeWidth={1.75} />
                 <span>Heuristic Guide-Student Matcher</span>
               </div>
               <p className="text-[11px] text-[#475569]">
@@ -492,7 +492,7 @@ export const CoordinatorView: React.FC = () => {
                   <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
                     {teams.map((t) => (
                       <tr key={t.id} className="hover:bg-[#F8FAFC]">
-                        <td className="py-2.5 px-4 font-mono font-bold text-[#047857]">{t.teamCode}</td>
+                        <td className="py-2.5 px-4 font-mono font-bold text-brand-primary">{t.teamCode}</td>
                         <td className="py-2.5 px-4 max-w-xs">
                           <div className="font-semibold truncate">{t.title}</div>
                           <div className="text-[10px] text-[#64748B]">{t.domain}</div>
@@ -591,7 +591,7 @@ export const CoordinatorView: React.FC = () => {
                   <div key={p.panelId} className="p-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8F0] pb-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs bg-[#047857] text-white px-2 py-0.5 rounded">
+                        <span className="font-mono font-bold text-xs bg-brand-primary text-white px-2 py-0.5 rounded">
                           {p.panelId}
                         </span>
                         <span className="text-xs font-semibold text-[#0F172A] flex items-center gap-1">
@@ -623,7 +623,7 @@ export const CoordinatorView: React.FC = () => {
                           {p.teams.map((tm) => (
                             <span
                               key={tm}
-                              className="font-mono text-xs font-bold text-[#047857] bg-[#ECFDF5] px-2 py-1 rounded border border-[#A7F3D0]"
+                              className="font-mono text-xs font-bold text-brand-primary bg-brand-primary-tint px-2 py-1 rounded border border-brand-primary-border"
                             >
                               {tm}
                             </span>
@@ -762,7 +762,7 @@ export const CoordinatorView: React.FC = () => {
                 <select
                   value={newChairId}
                   onChange={(e) => setNewChairId(e.target.value)}
-                  className="w-full h-8 text-xs rounded-lg border border-[#E2E8F0] bg-white px-2 text-[#0F172A] focus:outline-none focus:border-[#047857]"
+                  className="w-full h-8 text-xs rounded-lg border border-[#E2E8F0] bg-white px-2 text-[#0F172A] focus:outline-none focus:border-brand-primary"
                 >
                   {facultyRoster.map((f) => (
                     <option key={f.id} value={f.id}>
@@ -777,7 +777,7 @@ export const CoordinatorView: React.FC = () => {
                 <select
                   value={newEval2Id}
                   onChange={(e) => setNewEval2Id(e.target.value)}
-                  className="w-full h-8 text-xs rounded-lg border border-[#E2E8F0] bg-white px-2 text-[#0F172A] focus:outline-none focus:border-[#047857]"
+                  className="w-full h-8 text-xs rounded-lg border border-[#E2E8F0] bg-white px-2 text-[#0F172A] focus:outline-none focus:border-brand-primary"
                 >
                   {facultyRoster.map((f) => (
                     <option key={f.id} value={f.id}>
@@ -792,7 +792,7 @@ export const CoordinatorView: React.FC = () => {
                 <select
                   value={newEval3Id}
                   onChange={(e) => setNewEval3Id(e.target.value)}
-                  className="w-full h-8 text-xs rounded-lg border border-[#E2E8F0] bg-white px-2 text-[#0F172A] focus:outline-none focus:border-[#047857]"
+                  className="w-full h-8 text-xs rounded-lg border border-[#E2E8F0] bg-white px-2 text-[#0F172A] focus:outline-none focus:border-brand-primary"
                 >
                   {facultyRoster.map((f) => (
                     <option key={f.id} value={f.id}>
@@ -809,7 +809,7 @@ export const CoordinatorView: React.FC = () => {
             <select
               value={newSelectedTeam}
               onChange={(e) => setNewSelectedTeam(e.target.value)}
-              className="w-full h-9 text-xs rounded-lg border border-[#E2E8F0] bg-white px-3 text-[#0F172A] focus:outline-none focus:border-[#047857]"
+              className="w-full h-9 text-xs rounded-lg border border-[#E2E8F0] bg-white px-3 text-[#0F172A] focus:outline-none focus:border-brand-primary"
             >
               {teams.map((t) => (
                 <option key={t.id} value={t.teamCode}>

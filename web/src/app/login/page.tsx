@@ -88,7 +88,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[420px] space-y-6">
         {/* Header Branding */}
         <div className="flex flex-col items-center text-center space-y-2">
-          <div className="h-12 w-12 rounded-xl bg-[#047857] flex items-center justify-center text-white font-bold text-lg shadow-sm font-heading">
+          <div className="h-12 w-12 rounded-xl bg-brand-primary flex items-center justify-center text-white font-bold text-lg shadow-sm font-heading">
             PH
           </div>
           <div className="space-y-0.5">
@@ -99,8 +99,8 @@ export default function LoginPage() {
               {college.name} ({college.code})
             </p>
           </div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#047857]" />
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-brand-primary-tint text-brand-primary-text border border-brand-primary-border">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" />
             <span>NBA Criterion 2 &amp; 3 Production Portal</span>
           </div>
         </div>
@@ -215,7 +215,7 @@ export default function LoginPage() {
                 <input
                   type="checkbox"
                   defaultChecked
-                  className="rounded text-[#047857] focus:ring-0 accent-[#047857]"
+                  className="rounded text-brand-primary focus:ring-0 accent-brand-primary"
                 />
                 <span>Remember campus session</span>
               </label>
@@ -226,7 +226,7 @@ export default function LoginPage() {
                   setForgotSubmitted(false);
                   setShowForgotModal(true);
                 }}
-                className="font-medium text-[#047857] hover:underline cursor-pointer"
+                className="font-medium text-brand-primary hover:underline cursor-pointer"
               >
                 Forgot?
               </button>
@@ -244,8 +244,8 @@ export default function LoginPage() {
           </form>
 
           {/* Pre-Registered Hint */}
-          <div className="p-3 bg-[#ECFDF5] rounded-lg border border-[#A7F3D0] flex items-start gap-2 text-[11px] text-[#065F46]">
-            <CheckCircle2 className="h-4 w-4 text-[#047857] shrink-0 mt-0.5" strokeWidth={1.75} />
+          <div className="p-3 bg-brand-primary-tint rounded-lg border border-brand-primary-border flex items-start gap-2 text-[11px] text-brand-primary-text">
+            <CheckCircle2 className="h-4 w-4 text-brand-primary shrink-0 mt-0.5" strokeWidth={1.75} />
             <span>
               <strong>Pre-registered User?</strong> College accounts are
               pre-provisioned via coordinator CSV. Select &ldquo;Activate Account&rdquo;
@@ -258,7 +258,7 @@ export default function LoginPage() {
         <div className="bg-white rounded-xl border border-[#E2E8F0] p-4 shadow-2xs space-y-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-[#0F172A]">
-              <Sparkles className="h-3.5 w-3.5 text-[#047857]" strokeWidth={1.75} />
+              <Sparkles className="h-3.5 w-3.5 text-brand-primary" strokeWidth={1.75} />
               <span>Instant Persona Evaluation</span>
             </div>
             <span className="text-[10px] text-[#94A3B8]">1-Click Demo</span>

@@ -1,26 +1,133 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
+  /* Master Brand & Shell Design Tokens (Default: Deep Forest Emerald + Charcoal Slate L-Frame) */
+  --brand-primary: #047857;
+  --brand-primary-hover: #065f46;
+  --brand-primary-tint: #ecfdf5;
+  --brand-primary-text: #065f46;
+  --brand-primary-border: #a7f3d0;
+
+  --shell-bg: #111827;
+  --shell-surface: #1f2937;
+  --shell-border: #374151;
+  --shell-text: #f9fafb;
+  --shell-muted: #9ca3af;
+
+  --topbar-bg: #111827;
+  --topbar-text: #f9fafb;
+  --topbar-border: #1f2937;
+
+  --canvas-bg: #f8fafc;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+
+  /* Semantic Feedback Status Colors (Strictly preserved across all themes) */
+  --status-success: #059669;
+  --status-warning: #d97706;
+  --status-danger: #dc2626;
+
+  /* Legacy/Core Aliases */
+  --background: var(--canvas-bg);
   --foreground: #0f172a;
-  --card: #ffffff;
+  --card: var(--card-bg);
   --card-foreground: #0f172a;
-  --border: #e2e8f0;
-  --primary: #047857; /* Deep Forest Emerald */
-  --primary-hover: #065f46;
-  --primary-light: #ecfdf5;
+  --border: var(--card-border);
+  --primary: var(--brand-primary);
+  --primary-hover: var(--brand-primary-hover);
+  --primary-light: var(--brand-primary-tint);
   --primary-foreground: #ffffff;
-  --charcoal: #111827; /* Dark Anchor */
+  --charcoal: var(--shell-bg);
   --muted: #f1f5f9;
   --muted-foreground: #475569;
-  --accent: #ecfdf5;
-  --accent-foreground: #047857;
+  --accent: var(--brand-primary-tint);
+  --accent-foreground: var(--brand-primary-text);
   --success: #059669;
   --warning: #d97706;
   --destructive: #dc2626;
 }
 
+/* Preset 1: Indigo Light (Charcoal sidebar, crisp white topbar, deep indigo accent) */
+[data-theme="indigo-light"] {
+  --brand-primary: #4f46e5;
+  --brand-primary-hover: #4338ca;
+  --brand-primary-tint: #eef2ff;
+  --brand-primary-text: #3730a3;
+  --brand-primary-border: #c7d2fe;
+
+  --shell-bg: #111827;
+  --shell-surface: #1f2937;
+  --shell-border: #374151;
+  --shell-text: #f9fafb;
+  --shell-muted: #9ca3af;
+
+  --topbar-bg: #ffffff;
+  --topbar-text: #0f172a;
+  --topbar-border: #e2e8f0;
+
+  --canvas-bg: #f8fafc;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+
+  --primary: var(--brand-primary);
+  --primary-hover: var(--brand-primary-hover);
+  --primary-light: var(--brand-primary-tint);
+  --charcoal: var(--shell-bg);
+  --accent: var(--brand-primary-tint);
+  --accent-foreground: var(--brand-primary-text);
+}
+
+/* Preset 2: Navy Cobalt (Deep navy sidebar & topbar, vibrant cobalt accent) */
+[data-theme="navy-cobalt"] {
+  --brand-primary: #2563eb;
+  --brand-primary-hover: #1d4ed8;
+  --brand-primary-tint: #eff6ff;
+  --brand-primary-text: #1e40af;
+  --brand-primary-border: #bfdbfe;
+
+  --shell-bg: #0f172a;
+  --shell-surface: #1e293b;
+  --shell-border: #334155;
+  --shell-text: #f8fafc;
+  --shell-muted: #94a3b8;
+
+  --topbar-bg: #0f172a;
+  --topbar-text: #f8fafb;
+  --topbar-border: #1e293b;
+
+  --canvas-bg: #f8fafc;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+
+  --primary: var(--brand-primary);
+  --primary-hover: var(--brand-primary-hover);
+  --primary-light: var(--brand-primary-tint);
+  --charcoal: var(--shell-bg);
+  --accent: var(--brand-primary-tint);
+  --accent-foreground: var(--brand-primary-text);
+}
+
 @theme inline {
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primary-hover: var(--brand-primary-hover);
+  --color-brand-primary-tint: var(--brand-primary-tint);
+  --color-brand-primary-text: var(--brand-primary-text);
+  --color-brand-primary-border: var(--brand-primary-border);
+
+  --color-shell-bg: var(--shell-bg);
+  --color-shell-surface: var(--shell-surface);
+  --color-shell-border: var(--shell-border);
+  --color-shell-text: var(--shell-text);
+  --color-shell-muted: var(--shell-muted);
+
+  --color-topbar-bg: var(--topbar-bg);
+  --color-topbar-text: var(--topbar-text);
+  --color-topbar-border: var(--topbar-border);
+
+  --color-canvas-bg: var(--canvas-bg);
+  --color-card-bg: var(--card-bg);
+  --color-card-border: var(--card-border);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -43,13 +150,20 @@
 }
 
 body {
-  background-color: var(--background);
+  background-color: var(--canvas-bg);
   color: var(--foreground);
   font-family: var(--font-sans);
   font-size: 0.8125rem; /* 13px base for dense tables & UI controls */
   line-height: 1.5;
   letter-spacing: -0.01em;
   font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Smooth theme transition */
+aside, header, nav, button, a, div, span, input, select, textarea {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
 }
 
 h1, h2, h3, h4, h5, h6, .font-heading {
