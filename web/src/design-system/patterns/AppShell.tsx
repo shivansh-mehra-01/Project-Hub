@@ -143,19 +143,19 @@ export const AppShell: React.FC<AppShellProps> = ({
   return (
     <div className="flex min-h-screen bg-[#F8FAFC]">
       {/* ========================================================================= */}
-      {/* 1. DESKTOP FIXED SIDEBAR (240px)                                          */}
+      {/* 1. DESKTOP FIXED SIDEBAR (240px, Dark Anchor #111827)                      */}
       {/* ========================================================================= */}
-      <aside className="hidden lg:flex w-[240px] flex-col border-r border-[#E2E8F0] bg-white fixed inset-y-0 z-30 select-none">
+      <aside className="hidden lg:flex w-[240px] flex-col border-r border-[#1F2937] bg-[#111827] text-white fixed inset-y-0 z-30 select-none">
         {/* Brand & College Tenant Header */}
-        <div className="h-16 flex items-center px-4 border-b border-[#E2E8F0] gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-[#4F46E5] flex items-center justify-center text-white font-bold text-xs shadow-xs shrink-0">
+        <div className="h-16 flex items-center px-4 border-b border-[#1F2937] gap-2.5">
+          <div className="h-8 w-8 rounded-lg bg-[#047857] flex items-center justify-center text-white font-bold text-xs shadow-xs shrink-0 font-heading">
             PH
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="font-bold text-xs text-[#0F172A] tracking-tight truncate">
+            <span className="font-bold text-xs text-white tracking-tight truncate font-heading">
               {college.code} • Project Hub
             </span>
-            <span className="text-[10px] text-[#475569] truncate">
+            <span className="text-[10px] text-[#9CA3AF] truncate">
               {currentPersona.departmentId ? "Dept. of CSE" : "Institutional Admin"}
             </span>
           </div>
@@ -163,23 +163,23 @@ export const AppShell: React.FC<AppShellProps> = ({
 
         {/* Current Role Identity Card */}
         <div className="px-3 pt-3 pb-2">
-          <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] flex flex-col gap-1.5">
+          <div className="p-2.5 rounded-lg bg-[#1F2937] border border-[#374151] flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-bold text-[#64748B] uppercase tracking-wider">
+              <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">
                 Active Persona
               </span>
               <Badge variant="role" role={currentPersona.role} size="sm" dot />
             </div>
-            <div className="text-xs font-semibold text-[#0F172A] truncate">
+            <div className="text-xs font-semibold text-white truncate font-heading">
               {currentPersona.name}
             </div>
             {currentPersona.enrollmentNumber && (
-              <div className="font-mono text-[10px] text-[#64748B] tabular-nums">
+              <div className="font-mono text-[10px] text-[#9CA3AF] tabular-nums">
                 USN: {currentPersona.enrollmentNumber}
               </div>
             )}
             {currentPersona.isProjectCoordinator && (
-              <div className="text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 w-fit">
+              <div className="text-[10px] font-medium text-emerald-300 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800 w-fit">
                 ★ Coordinator Authority
               </div>
             )}
@@ -188,7 +188,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
         {/* Navigation Tabs (Max 4 per role) */}
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-          <div className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">
+          <div className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">
             Menu
           </div>
           {navItems.map((item) => {
@@ -202,14 +202,14 @@ export const AppShell: React.FC<AppShellProps> = ({
                 className={cn(
                   "flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors",
                   isActive
-                    ? "bg-[#EEF2FF] text-[#4F46E5] font-semibold"
-                    : "text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+                    ? "bg-[#047857] text-white font-semibold shadow-xs"
+                    : "text-[#9CA3AF] hover:bg-[#1F2937] hover:text-white"
                 )}
               >
-                <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-[#4F46E5]" : "text-[#64748B]")} />
+                <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-white" : "text-[#9CA3AF]")} />
                 <span className="truncate">{item.label}</span>
                 {item.label === "Batch Ops" && (
-                  <span className="ml-auto text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded">
+                  <span className="ml-auto text-[9px] bg-emerald-900 text-emerald-200 font-bold px-1.5 py-0.2 rounded">
                     ON
                   </span>
                 )}
@@ -219,16 +219,16 @@ export const AppShell: React.FC<AppShellProps> = ({
         </nav>
 
         {/* Persona Switcher Quick Dock & Controls */}
-        <div className="p-3 border-t border-[#E2E8F0] space-y-2 bg-[#F8FAFC]">
+        <div className="p-3 border-t border-[#1F2937] space-y-2 bg-[#111827]">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">
               Switch Persona
             </span>
             <button
               type="button"
               onClick={resetToDefaults}
               title="Reset Campus Mock Data"
-              className="text-[#94A3B8] hover:text-[#4F46E5] text-[10px] flex items-center gap-1 cursor-pointer"
+              className="text-[#9CA3AF] hover:text-emerald-400 text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
             >
               <RotateCcw className="h-3 w-3" />
               <span>Reset</span>
@@ -240,18 +240,18 @@ export const AppShell: React.FC<AppShellProps> = ({
             <button
               type="button"
               onClick={() => setShowRoleMenu(!showRoleMenu)}
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-[#E2E8F0] bg-white text-xs font-medium text-[#0F172A] hover:bg-[#F8FAFC] transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-[#374151] bg-[#1F2937] text-xs font-medium text-white hover:bg-[#252F3F] transition-colors cursor-pointer"
             >
               <span className="flex items-center gap-2 truncate">
-                <Sparkles className="h-3.5 w-3.5 text-[#4F46E5]" />
+                <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
                 <span className="truncate">{currentPersona.role}</span>
               </span>
-              <ChevronDown className="h-3.5 w-3.5 text-[#94A3B8]" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#9CA3AF]" />
             </button>
 
             {/* Persona Switcher Menu Popover */}
             {showRoleMenu && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 rounded-lg border border-[#E2E8F0] bg-white shadow-lg p-1.5 z-50 space-y-0.5 text-xs">
+              <div className="absolute bottom-full left-0 right-0 mb-1 rounded-lg border border-[#374151] bg-[#1F2937] shadow-xl p-1.5 z-50 space-y-0.5 text-xs">
                 {(
                   [
                     "SuperAdmin",
@@ -269,12 +269,12 @@ export const AppShell: React.FC<AppShellProps> = ({
                     className={cn(
                       "w-full text-left px-2.5 py-1.5 rounded-md flex items-center justify-between cursor-pointer transition-colors",
                       currentPersona.role === r
-                        ? "bg-[#EEF2FF] text-[#4F46E5] font-semibold"
-                        : "text-[#475569] hover:bg-[#F1F5F9]"
+                        ? "bg-[#047857] text-white font-semibold"
+                        : "text-[#D1D5DB] hover:bg-[#374151] hover:text-white"
                     )}
                   >
                     <span>{r}</span>
-                    {currentPersona.role === r && <CheckCircle2 className="h-3.5 w-3.5 text-[#4F46E5]" />}
+                    {currentPersona.role === r && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
                   </button>
                 ))}
               </div>
@@ -474,11 +474,11 @@ export const AppShell: React.FC<AppShellProps> = ({
               className={cn(
                 "flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium transition-colors",
                 isActive
-                  ? "text-[#4F46E5] font-semibold"
+                  ? "text-[#047857] font-semibold"
                   : "text-[#64748B] hover:text-[#0F172A]"
               )}
             >
-              <Icon className={cn("h-5 w-5 mb-0.5", isActive ? "text-[#4F46E5]" : "text-[#94A3B8]")} />
+              <Icon className={cn("h-5 w-5 mb-0.5", isActive ? "text-[#047857]" : "text-[#94A3B8]")} />
               <span className="truncate max-w-[64px]">{item.label}</span>
             </Link>
           );

@@ -4,28 +4,30 @@
  */
 
 export const colors = {
-  canvas: "#F8FAFC", // Slate 50
+  canvas: "#F8FAFC", // Porcelain Off-White (Slate 50)
   surface: "#FFFFFF",
   hover: "#F1F5F9", // Slate 100
   border: "#E2E8F0", // Slate 200
   divider: "#CBD5E1", // Slate 300
+  charcoal: "#111827", // Dark Anchor (Navbar / Sidebar)
 
   // Text
   primaryText: "#0F172A", // Slate 900
   secondaryText: "#475569", // Slate 600
   mutedText: "#94A3B8", // Slate 400
 
-  // Brand Accent
-  primary: "#4F46E5", // Deep Indigo
-  primaryHover: "#4338CA",
-  primaryLight: "#EEF2FF", // Indigo 50
+  // Brand Accent: Deep Forest Emerald
+  primary: "#047857", // Deep Forest Emerald
+  primaryHover: "#065F46",
+  primaryLight: "#ECFDF5", // Emerald 50
+  emeraldTint: "#D1FAE5",
 
   // Semantic Status
   status: {
     approved: {
-      bg: "#DCFCE7",
-      text: "#166534",
-      border: "#BBF7D0",
+      bg: "#ECFDF5",
+      text: "#065F46",
+      border: "#A7F3D0",
     },
     pending: {
       bg: "#FEF3C7",
@@ -33,12 +35,12 @@ export const colors = {
       border: "#FDE68A",
     },
     active: {
-      bg: "#DBEAFE",
+      bg: "#EFF6FF",
       text: "#1E40AF",
       border: "#BFDBFE",
     },
     danger: {
-      bg: "#FEE2E2",
+      bg: "#FEF2F2",
       text: "#991B1B",
       border: "#FECACA",
     },
