@@ -26,6 +26,7 @@ import {
   Users2,
   X,
   Shield,
+  ShieldAlert,
   Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -48,7 +49,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentPersona, college, cycle, switchPersona, resetToDefaults } =
+  const { currentPersona, college, cycle, switchPersona, resetToDefaults, tenants, pilotRequests } =
     useProjectHubStore();
 
   const [showRoleMenu, setShowRoleMenu] = useState(false);
@@ -131,10 +132,11 @@ export const AppShell: React.FC<AppShellProps> = ({
     switch (currentPersona.role) {
       case "SuperAdmin":
         return [
-          { label: "Tenants", href: "/admin", icon: Building2 },
+          { label: "Tenants", href: "/admin", icon: Building2, count: tenants.length },
           { label: "Master Templates", href: "/admin/templates", icon: Layers },
-          { label: "Subscriptions", href: "/admin/subscriptions", icon: Shield },
+          { label: "Subscriptions", href: "/admin/subscriptions", icon: Shield, count: pilotRequests.length },
           { label: "Health & Telemetry", href: "/admin/health", icon: Sliders },
+          { label: "Audit Logs", href: "/admin/audit", icon: ShieldAlert },
         ];
       case "CollegeAdmin":
         return [
@@ -329,6 +331,18 @@ export const AppShell: React.FC<AppShellProps> = ({
                   strokeWidth={1.75}
                 />
                 <span className="truncate">{item.label}</span>
+                {item.count !== undefined && (
+                  <span
+                    className={cn(
+                      "ml-auto text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full",
+                      isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-white/10 text-slate-300 border border-white/10"
+                    )}
+                  >
+                    {item.count}
+                  </span>
+                )}
                 {item.label === "Batch Ops" && (
                   <span className="ml-auto text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold px-1.5 py-0.2 rounded font-mono">
                     ON
@@ -620,7 +634,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       {/* 3. MOBILE FIXED BOTTOM TAB BAR (< 768px, 64px height, max 4 tabs)         */}
       {/* ========================================================================= */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 bg-[#111827] border-t border-white/[0.08] z-40 flex items-center justify-around px-2 select-none shadow-lg">
-        {navItems.slice(0, 4).map((item) => {
+        {navItems.slice(0, currentPersona.role === "SuperAdmin" ? 5 : 4).map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.label || pathname === item.href;
 
@@ -629,17 +643,24 @@ export const AppShell: React.FC<AppShellProps> = ({
               key={item.label}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium transition-colors",
+                "flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium transition-colors relative",
                 isActive
                   ? "text-emerald-400 font-semibold"
                   : "text-slate-400 hover:text-white"
               )}
             >
-              <Icon
-                className={cn("h-4 w-4 mb-1", isActive ? "text-emerald-400" : "text-slate-500")}
-                strokeWidth={1.75}
-              />
-              <span className="truncate max-w-[64px]">{item.label}</span>
+              <div className="relative">
+                <Icon
+                  className={cn("h-4 w-4 mb-1", isActive ? "text-emerald-400" : "text-slate-500")}
+                  strokeWidth={1.75}
+                />
+                {item.count !== undefined && item.count > 0 && (
+                  <span className="absolute -top-1 -right-2 text-[8px] font-mono font-bold px-1 rounded-full bg-emerald-500 text-white leading-none">
+                    {item.count}
+                  </span>
+                )}
+              </div>
+              <span className="truncate max-w-[56px] text-center">{item.label}</span>
             </Link>
           );
         })}

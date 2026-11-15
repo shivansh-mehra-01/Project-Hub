@@ -16,6 +16,7 @@ import {
   Compass,
   User,
   Shield,
+  ShieldAlert,
   RotateCcw,
   LogOut,
   Sparkles,
@@ -183,6 +184,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       icon: Shield,
       action: () => {
         router.push("/admin");
+        onClose();
+      },
+    },
+    {
+      id: "nav-superadmin-audit",
+      title: "SuperAdmin Audit Logs",
+      subtitle: "Immutable platform governance & security audit trail",
+      category: "Navigation",
+      icon: ShieldAlert,
+      action: () => {
+        router.push("/admin/audit");
         onClose();
       },
     },

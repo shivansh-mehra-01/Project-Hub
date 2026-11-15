@@ -6,6 +6,8 @@ import {
   Department,
   Evaluation,
   GuideReviewStatusType,
+  PilotRequest,
+  PlatformAuditLog,
   ProblemBankIdea,
   ProjectCycle,
   ProjectStateType,
@@ -15,18 +17,22 @@ import {
   TaskStatusType,
   Team,
   TeamMember,
+  TenantCollege,
   UserPersona,
   WeeklyLog,
 } from "./store-types";
 import {
+  initialAuditLogs,
   initialCollege,
   initialCycle,
   initialDepartments,
   initialEvaluations,
   initialPersonas,
+  initialPilotRequests,
   initialProblemBank,
   initialRubrics,
   initialTeams,
+  initialTenants,
 } from "./seed-data";
 
 export interface FacultyRosterItem {
@@ -88,6 +94,9 @@ interface ProjectHubStoreContextType {
   rubrics: Rubric[];
   problemBank: ProblemBankIdea[];
   facultyRoster: FacultyRosterItem[];
+  tenants: TenantCollege[];
+  pilotRequests: PilotRequest[];
+  auditLogs: PlatformAuditLog[];
   // Actions
   switchPersona: (role: RoleType) => void;
   toggleFacultyCoordinator: (facultyId: string) => void;
@@ -112,6 +121,10 @@ interface ProjectHubStoreContextType {
   rejectGradeUnlock: (evalId: string) => void;
   addDepartment: (name: string, code: string) => void;
   onboardCollege: (collegeData: Partial<College>) => void;
+  onboardTenant: (tenantData: Omit<TenantCollege, "id">) => void;
+  updateTenant: (id: string, updates: Partial<TenantCollege>) => void;
+  approvePilot: (reqId: string) => void;
+  addAuditLog: (entry: Omit<PlatformAuditLog, "id" | "timestamp">) => void;
   updateCycle: (cycleData: Partial<ProjectCycle>) => void;
   updateTeamRepo: (teamId: string, githubUrl: string, jiraUrl: string) => void;
   inviteTeamMember: (teamId: string, enrollmentNumber: string, name?: string) => void;
@@ -133,6 +146,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   const [rubrics, setRubrics] = useState<Rubric[]>(initialRubrics);
   const [problemBank, setProblemBank] = useState<ProblemBankIdea[]>(initialProblemBank);
   const [facultyRoster, setFacultyRoster] = useState<FacultyRosterItem[]>(initialFacultyRoster);
+  const [tenants, setTenants] = useState<TenantCollege[]>(initialTenants);
+  const [pilotRequests, setPilotRequests] = useState<PilotRequest[]>(initialPilotRequests);
+  const [auditLogs, setAuditLogs] = useState<PlatformAuditLog[]>(initialAuditLogs);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load from localStorage on client mount
@@ -150,6 +166,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         if (parsed.rubrics) setRubrics(parsed.rubrics);
         if (parsed.problemBank) setProblemBank(parsed.problemBank);
         if (parsed.facultyRoster) setFacultyRoster(parsed.facultyRoster);
+        if (parsed.tenants) setTenants(parsed.tenants);
+        if (parsed.pilotRequests) setPilotRequests(parsed.pilotRequests);
+        if (parsed.auditLogs) setAuditLogs(parsed.auditLogs);
       }
     } catch (e) {
       console.warn("Could not load from localStorage, using fresh seed data.", e);
@@ -174,6 +193,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
           rubrics,
           problemBank,
           facultyRoster,
+          tenants,
+          pilotRequests,
+          auditLogs,
         })
       );
     } catch (e) {
@@ -190,6 +212,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     rubrics,
     problemBank,
     facultyRoster,
+    tenants,
+    pilotRequests,
+    auditLogs,
   ]);
 
   // Actions
@@ -464,6 +489,79 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     setProblemBank((prev) => [newIdea, ...prev]);
   };
 
+  const addAuditLog = (entry: Omit<PlatformAuditLog, "id" | "timestamp">) => {
+    const newEntry: PlatformAuditLog = {
+      ...entry,
+      id: `audit-${Date.now()}`,
+      timestamp: new Date().toISOString().replace("T", " ").substring(0, 19) + " UTC",
+    };
+    setAuditLogs((prev) => [newEntry, ...prev]);
+  };
+
+  const onboardTenant = (tenantData: Omit<TenantCollege, "id">) => {
+    const newTenant: TenantCollege = {
+      ...tenantData,
+      id: `col-${tenantData.code.toLowerCase()}-${Date.now()}`,
+    };
+    setTenants((prev) => [newTenant, ...prev]);
+    addAuditLog({
+      actor: "admin@projecthub.in (Dev Startup Admin)",
+      action: "TENANT_PROVISIONED",
+      targetTenant: `${newTenant.name} (${newTenant.code})`,
+      ipRegion: "103.21.244.10 • ap-south-1",
+      status: "SUCCESS",
+      details: `Provisioned isolated partition tenant_${newTenant.code.toLowerCase()}_prod with ${newTenant.storageQuotaGb || 50} GB quota and plan ${newTenant.plan}`,
+    });
+  };
+
+  const updateTenant = (id: string, updates: Partial<TenantCollege>) => {
+    setTenants((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t;
+        const updated = { ...t, ...updates };
+        addAuditLog({
+          actor: "admin@projecthub.in (Dev Startup Admin)",
+          action: "TENANT_CONFIG_UPDATED",
+          targetTenant: `${updated.name} (${updated.code})`,
+          ipRegion: "103.21.244.10 • ap-south-1",
+          status: "SUCCESS",
+          details: `Updated tenant configuration: plan=${updated.plan}, status=${updated.status}, storageQuota=${updated.storageQuotaGb || 50}GB`,
+        });
+        return updated;
+      })
+    );
+  };
+
+  const approvePilot = (reqId: string) => {
+    const req = pilotRequests.find((r) => r.id === reqId);
+    if (!req) return;
+    const provisionedCollege: TenantCollege = {
+      id: `col-pilot-${Date.now()}`,
+      name: req.collegeName,
+      code: req.code,
+      domain: req.deanEmail.split("@")[1] || "college.ac.in",
+      plan: "Pilot",
+      status: "Active",
+      students: parseInt(req.intake.replace(/[^0-9]/g, "")) || 1000,
+      departments: 4,
+      storageQuotaGb: 25,
+      storageUsedGb: 1.2,
+      strictSsoEnforced: false,
+      renewalDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+      allocatedSeats: 1000,
+    };
+    setTenants((prev) => [provisionedCollege, ...prev]);
+    setPilotRequests((prev) => prev.filter((r) => r.id !== reqId));
+    addAuditLog({
+      actor: "admin@projecthub.in (Dev Startup Admin)",
+      action: "PILOT_APPROVED",
+      targetTenant: `${req.collegeName} (${req.code})`,
+      ipRegion: "103.21.244.10 • ap-south-1",
+      status: "SUCCESS",
+      details: `90-day evaluation trial issued for ${req.intake} (@${provisionedCollege.domain})`,
+    });
+  };
+
   const resetToDefaults = () => {
     localStorage.removeItem(STORAGE_KEY);
     setCurrentPersona(initialPersonas.studentLead);
@@ -475,6 +573,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     setRubrics(initialRubrics);
     setProblemBank(initialProblemBank);
     setFacultyRoster(initialFacultyRoster);
+    setTenants(initialTenants);
+    setPilotRequests(initialPilotRequests);
+    setAuditLogs(initialAuditLogs);
   };
 
   return (
@@ -489,6 +590,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         rubrics,
         problemBank,
         facultyRoster,
+        tenants,
+        pilotRequests,
+        auditLogs,
         switchPersona,
         toggleFacultyCoordinator,
         approveProposal,
@@ -506,6 +610,10 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         rejectGradeUnlock,
         addDepartment,
         onboardCollege,
+        onboardTenant,
+        updateTenant,
+        approvePilot,
+        addAuditLog,
         updateCycle,
         updateTeamRepo,
         inviteTeamMember,

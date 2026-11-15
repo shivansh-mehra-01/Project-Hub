@@ -183,3 +183,43 @@ export interface ProblemBankIdea {
   taken: boolean;
 }
 
+export interface TenantCollege {
+  id: string;
+  name: string;
+  code: string;
+  domain: string;
+  plan: "Enterprise" | "Standard" | "Pilot";
+  status: "Active" | "Suspended";
+  students: number;
+  departments: number;
+  storageQuotaGb?: number;
+  storageUsedGb?: number;
+  strictSsoEnforced?: boolean;
+  renewalDate?: string;
+  allocatedSeats?: number;
+}
+
+export interface PilotRequest {
+  id: string;
+  collegeName: string;
+  code: string;
+  deanName: string;
+  deanEmail: string;
+  requestedAt: string;
+  intake: string;
+  aisheCode: string;
+  requestedCycle: string;
+}
+
+export interface PlatformAuditLog {
+  id: string;
+  timestamp: string;
+  actor: string;
+  action: string;
+  targetTenant: string;
+  ipRegion: string;
+  status: "SUCCESS" | "FAILED" | "PENDING";
+  details: string;
+}
+
+
