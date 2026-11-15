@@ -351,6 +351,20 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       },
     },
 
+    // 6. Universal Institutional Profile & Account Settings
+    {
+      id: "nav-institutional-account",
+      title: "Profile & Institutional Credentials",
+      subtitle: "Digital signature seal, employee ID & campus SSO",
+      category: "Navigation",
+      icon: User,
+      allowedRoles: ["SuperAdmin", "CollegeAdmin", "HOD", "Faculty"],
+      action: () => {
+        router.push("/account");
+        onClose();
+      },
+    },
+
     // 6. Role Switchers (Strictly isolated by current role)
     ...(isDemoMode
       ? currentPersona.role === "Student" || currentPersona.role === "TeamLead"

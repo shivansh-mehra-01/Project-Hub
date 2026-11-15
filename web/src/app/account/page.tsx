@@ -53,7 +53,7 @@ export default function AccountPage() {
     <AppShell
       pageTitle="Account &amp; Institutional Credentials"
       breadcrumb="User Profile &amp; Security Settings"
-      activeTab="Account"
+      activeTab="Profile"
     >
       {/* Toast Notification */}
       {(saveSuccess || sealSavedToast) && (

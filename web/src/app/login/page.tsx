@@ -112,11 +112,10 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setMode("signin")}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                mode === "signin"
-                  ? "bg-white text-[#0F172A] shadow-xs"
-                  : "text-[#64748B] hover:text-[#0F172A]"
-              }`}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${mode === "signin"
+                ? "bg-white text-[#0F172A] shadow-xs"
+                : "text-[#64748B] hover:text-[#0F172A]"
+                }`}
             >
               Sign In
             </button>
@@ -126,11 +125,10 @@ export default function LoginPage() {
                 setMode("activate");
                 setShowOnboarding(true);
               }}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                mode === "activate"
-                  ? "bg-white text-[#0F172A] shadow-xs"
-                  : "text-[#64748B] hover:text-[#0F172A]"
-              }`}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${mode === "activate"
+                ? "bg-white text-[#0F172A] shadow-xs"
+                : "text-[#64748B] hover:text-[#0F172A]"
+                }`}
             >
               Activate Account
             </button>

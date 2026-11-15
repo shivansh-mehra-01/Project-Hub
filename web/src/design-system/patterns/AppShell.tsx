@@ -42,6 +42,25 @@ export const getAvatarInitials = (name: string): string => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+export const getRoleSubtitle = (role: RoleType, isCoordinator?: boolean): string => {
+  switch (role) {
+    case "Student":
+      return "Student Member";
+    case "TeamLead":
+      return "Student Lead";
+    case "Faculty":
+      return isCoordinator ? "Project Coordinator" : "Faculty Guide";
+    case "HOD":
+      return "Department HOD";
+    case "CollegeAdmin":
+      return "College Administrator";
+    case "SuperAdmin":
+      return "Super Admin";
+    default:
+      return formatRoleLabel(role);
+  }
+};
+
 export interface AppShellProps {
   children: React.ReactNode;
   pageTitle?: string;
@@ -205,7 +224,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     { id: "pharmacy", name: "SISTec Pharmacy & Tech", code: "INST-MP-0205" },
   ];
 
-  // Determine role-based navigation tabs (strictly max 4 primary tabs)
+  // Determine role-based navigation tabs (with dedicated Profile item for all roles)
   const getNavItems = () => {
     switch (currentPersona.role) {
       case "SuperAdmin":
@@ -215,6 +234,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           { label: "Subscriptions", href: "/admin/subscriptions", icon: Shield, count: pilotRequests.length },
           { label: "Health & Telemetry", href: "/admin/health", icon: Sliders },
           { label: "Audit Logs", href: "/admin/audit", icon: ShieldAlert },
+          { label: "Profile", href: "/account", icon: User },
         ];
       case "CollegeAdmin":
         return [
@@ -222,6 +242,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           { label: "Departments & HODs", href: "/college/departments", icon: Users2 },
           { label: "Campus Settings", href: "/college/settings", icon: Sliders },
           { label: "Accreditation", href: "/college/compliance", icon: FileCheck2 },
+          { label: "Profile", href: "/account", icon: User },
         ];
       case "HOD":
         return [
@@ -229,6 +250,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           { label: "Approvals Queue", href: "/hod/approvals", icon: FileCheck2, count: pendingHODCount },
           { label: "NBA Criterion 2 & 3", href: "/hod/nba", icon: GraduationCap },
           { label: "Faculty Setup", href: "/hod/faculty", icon: Sliders },
+          { label: "Profile", href: "/account", icon: User },
         ];
       case "Faculty": {
         const pendingFacultyCount =
@@ -243,7 +265,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           { label: "My Teams", href: "/faculty/teams", icon: Users2 },
           { label: "Live Viva Grading", href: "/faculty/evaluations", icon: GraduationCap },
         ];
-        // Dynamic 4th Tab if ProjectCoordinator = true
+        // Dynamic Tab if ProjectCoordinator = true
         if (currentPersona.isProjectCoordinator) {
           baseItems.push({
             label: "Batch Ops",
@@ -251,6 +273,11 @@ export const AppShell: React.FC<AppShellProps> = ({
             icon: Briefcase,
           });
         }
+        baseItems.push({
+          label: "Profile",
+          href: "/account",
+          icon: User,
+        });
         return baseItems;
       }
       case "Student":
@@ -360,7 +387,14 @@ export const AppShell: React.FC<AppShellProps> = ({
           </div>
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.label || pathname === item.href;
+            const isProfileItem = item.label === "Profile";
+            const isActive =
+              activeTab === item.label ||
+              pathname === item.href ||
+              (isProfileItem &&
+                (activeTab === "Account" ||
+                  pathname === "/account" ||
+                  pathname === "/student/profile"));
 
             return (
               <Link
@@ -400,13 +434,13 @@ export const AppShell: React.FC<AppShellProps> = ({
           })}
         </nav>
 
-        {/* Persona Switcher Quick Dock & Controls (Gated behind Demo Mode + Padded pb-12) */}
-        <div className="p-3 border-t border-white/[0.08] space-y-2 bg-[#111827] pb-12">
+        {/* Unified Bottom-Left Sidebar Footer (Demo Switcher + User Account Card + pb-12 clearance) */}
+        <div className="p-3 border-t border-white/[0.08] space-y-2.5 bg-[#111827] pb-12 relative">
           {isDemoMode && (
-            <>
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
-                  Switch Persona
+                  Demo Switcher
                 </span>
                 <button
                   type="button"
@@ -466,17 +500,97 @@ export const AppShell: React.FC<AppShellProps> = ({
                   </div>
                 )}
               </div>
-            </>
+            </div>
           )}
 
-          {/* Sign Out Link */}
-          <Link
-            href="/login"
-            className="flex items-center gap-2 px-2 py-1 text-[11px] font-medium text-slate-400 hover:text-rose-400 transition-colors"
-          >
-            <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
-            <span>Sign Out / Change Account</span>
-          </Link>
+          {/* Sleek Clickable User Account Footer Card */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowAccountMenu(!showAccountMenu)}
+              className="w-full flex items-center gap-2.5 p-2.5 rounded-lg border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-left transition-colors cursor-pointer group"
+              title="User Account & Preferences"
+            >
+              <div className="h-8 w-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono group-hover:border-emerald-400/40 shrink-0 transition-colors">
+                {getAvatarInitials(currentPersona.name)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-white truncate group-hover:text-emerald-300 transition-colors">
+                  {currentPersona.name}
+                </div>
+                <div className="text-[10px] text-slate-400 truncate">
+                  {getRoleSubtitle(currentPersona.role, currentPersona.isProjectCoordinator)}
+                </div>
+              </div>
+              <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-white shrink-0 transition-colors" strokeWidth={1.75} />
+            </button>
+
+            {/* Upward Account Popover Menu */}
+            {showAccountMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-2 z-50 text-white animate-in fade-in zoom-in-95 duration-100">
+                {/* User Identity Header */}
+                <div className="px-3 py-2 border-b border-white/[0.08] space-y-1">
+                  <div className="text-xs font-bold text-white font-heading truncate">
+                    {currentPersona.name}
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-mono truncate">
+                    {currentPersona.email ||
+                      `${currentPersona.name
+                        .toLowerCase()
+                        .replace(/^(dr\.|prof\.|mr\.|ms\.)\s*/i, "")
+                        .replace(/[^a-z]/g, "")}@sistec.ac.in`}
+                  </div>
+                  <div className="pt-0.5 flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                      <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
+                      <span>{getRoleSubtitle(currentPersona.role, currentPersona.isProjectCoordinator)}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Popover Action Links */}
+                <div className="py-1 space-y-0.5 text-xs">
+                  <Link
+                    href={
+                      currentPersona.role === "Student" || currentPersona.role === "TeamLead"
+                        ? "/student/profile"
+                        : "/account"
+                    }
+                    onClick={() => setShowAccountMenu(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:bg-white/[0.06] hover:text-white transition-colors"
+                  >
+                    <User className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
+                    <span>My Profile &amp; Preferences</span>
+                  </Link>
+
+                  <Link
+                    href={
+                      currentPersona.role === "Student" || currentPersona.role === "TeamLead"
+                        ? "/student/profile"
+                        : "/account"
+                    }
+                    onClick={() => setShowAccountMenu(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:bg-white/[0.06] hover:text-white transition-colors"
+                  >
+                    <Shield className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
+                    <span>Security &amp; SSO Status</span>
+                  </Link>
+                </div>
+
+                {/* Sign Out */}
+                <div className="pt-1 border-t border-white/[0.08]">
+                  <Link
+                    href="/login"
+                    onClick={() => setShowAccountMenu(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/[0.06] hover:text-rose-400 transition-colors text-xs"
+                  >
+                    <LogOut className="h-4 w-4" strokeWidth={1.75} />
+                    <span>Sign Out</span>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </aside>
 
@@ -654,89 +768,7 @@ export const AppShell: React.FC<AppShellProps> = ({
               </div>
             )}
 
-            {/* Interactive User Account Dropdown */}
-            <div className="relative pl-2 border-l border-white/[0.08]">
-              <button
-                type="button"
-                onClick={() => setShowAccountMenu(!showAccountMenu)}
-                className="flex items-center gap-2 rounded-lg p-1 hover:bg-white/5 transition-colors cursor-pointer group"
-                title="Account & Settings"
-              >
-                <div className="h-7 w-7 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold font-mono group-hover:border-emerald-400/40 transition-colors">
-                  {getAvatarInitials(currentPersona.name)}
-                </div>
-                <div className="hidden md:flex flex-col text-left">
-                  <span className="text-xs font-semibold text-white leading-none group-hover:text-emerald-300 transition-colors">
-                    {currentPersona.name}
-                  </span>
-                  <span className="text-[10px] text-slate-400 mt-0.5">
-                    {formatRoleLabel(currentPersona.role)}
-                  </span>
-                </div>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors" strokeWidth={1.75} />
-              </button>
-
-              {/* Account Dropdown Popover */}
-              {showAccountMenu && (
-                <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-2 z-50 text-white animate-in fade-in zoom-in-95 duration-100">
-                  {/* User Identity Header */}
-                  <div className="px-3 py-2.5 border-b border-white/[0.08] space-y-1">
-                    <div className="text-xs font-bold text-white font-heading truncate">
-                      {currentPersona.name}
-                    </div>
-                    <div className="text-[11px] text-slate-400 font-mono truncate">
-                      {currentPersona.email || `${currentPersona.name.toLowerCase().replace(/^(dr\.|prof\.|mr\.|ms\.)\s*/i, "").replace(/[^a-z]/g, "")}@sistec.ac.in`}
-                    </div>
-                    <div className="pt-1 flex items-center gap-1.5">
-                      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-                        <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
-                        <span>{formatRoleLabel(currentPersona.role)}</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="py-1 space-y-0.5 text-xs">
-                    <Link
-                      href={
-                        currentPersona.role === "Student" || currentPersona.role === "TeamLead"
-                          ? "/student/profile"
-                          : "/account"
-                      }
-                      onClick={() => setShowAccountMenu(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:bg-white/[0.06] hover:text-white transition-colors"
-                    >
-                      <User className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
-                      <span>My Profile &amp; Settings</span>
-                    </Link>
-
-                    <Link
-                      href={
-                        currentPersona.role === "Student" || currentPersona.role === "TeamLead"
-                          ? "/student/profile"
-                          : "/account"
-                      }
-                      onClick={() => setShowAccountMenu(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:bg-white/[0.06] hover:text-white transition-colors"
-                    >
-                      <Bell className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
-                      <span>Notification Preferences</span>
-                    </Link>
-                  </div>
-
-                  <div className="pt-1 border-t border-white/[0.08]">
-                    <Link
-                      href="/login"
-                      onClick={() => setShowAccountMenu(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/[0.06] hover:text-rose-400 transition-colors text-xs"
-                    >
-                      <LogOut className="h-4 w-4" strokeWidth={1.75} />
-                      <span>Sign Out</span>
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Top-Right chrome remains clean: Search + Status Pill + Notification Bell + Mobile Switcher */}
           </div>
         </header>
 
