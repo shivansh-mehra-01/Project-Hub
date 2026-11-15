@@ -52,28 +52,14 @@ export const AppShell: React.FC<AppShellProps> = ({
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showMobileRoleMenu, setShowMobileRoleMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState<string>("emerald");
 
-  // Load persisted theme
+  // Enforce strictly Emerald & Charcoal theme
   React.useEffect(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem("projecthub_theme") || "emerald" : "emerald";
-    setCurrentTheme(saved);
-    if (saved === "emerald") {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("projecthub_theme");
       document.documentElement.removeAttribute("data-theme");
-    } else {
-      document.documentElement.setAttribute("data-theme", saved);
     }
   }, []);
-
-  const handleThemeChange = (theme: "emerald" | "indigo-light" | "navy-cobalt") => {
-    setCurrentTheme(theme);
-    localStorage.setItem("projecthub_theme", theme);
-    if (theme === "emerald") {
-      document.documentElement.removeAttribute("data-theme");
-    } else {
-      document.documentElement.setAttribute("data-theme", theme);
-    }
-  };
 
   // Simulated alerts
   const notifications = [
@@ -244,64 +230,8 @@ export const AppShell: React.FC<AppShellProps> = ({
           })}
         </nav>
 
-        {/* Persona Switcher & Theme Selector Dock */}
-        <div className="p-3 border-t border-shell-border space-y-2.5 bg-shell-bg">
-          {/* Theme Preset Switcher */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-shell-muted">
-                Theme
-              </span>
-              <span className="text-[10px] text-shell-muted font-mono capitalize">
-                {currentTheme.replace("-", " ")}
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-1 bg-shell-surface/80 p-1 rounded-lg border border-shell-border">
-              <button
-                type="button"
-                onClick={() => handleThemeChange("emerald")}
-                className={cn(
-                  "flex items-center justify-center gap-1 py-1 rounded text-[10px] font-medium transition-all cursor-pointer",
-                  currentTheme === "emerald"
-                    ? "bg-brand-primary text-white shadow-xs font-semibold"
-                    : "text-shell-muted hover:text-shell-text hover:bg-shell-surface"
-                )}
-                title="Forest Emerald & Charcoal"
-              >
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                <span>Emerald</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleThemeChange("indigo-light")}
-                className={cn(
-                  "flex items-center justify-center gap-1 py-1 rounded text-[10px] font-medium transition-all cursor-pointer",
-                  currentTheme === "indigo-light"
-                    ? "bg-[#4F46E5] text-white shadow-xs font-semibold"
-                    : "text-shell-muted hover:text-shell-text hover:bg-shell-surface"
-                )}
-                title="Indigo Accent & Light Topbar"
-              >
-                <span className="h-2 w-2 rounded-full bg-[#818CF8]" />
-                <span>Indigo</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleThemeChange("navy-cobalt")}
-                className={cn(
-                  "flex items-center justify-center gap-1 py-1 rounded text-[10px] font-medium transition-all cursor-pointer",
-                  currentTheme === "navy-cobalt"
-                    ? "bg-[#2563EB] text-white shadow-xs font-semibold"
-                    : "text-shell-muted hover:text-shell-text hover:bg-shell-surface"
-                )}
-                title="Deep Navy & Cobalt Blue"
-              >
-                <span className="h-2 w-2 rounded-full bg-[#60A5FA]" />
-                <span>Navy</span>
-              </button>
-            </div>
-          </div>
-
+        {/* Persona Switcher Quick Dock & Controls */}
+        <div className="p-3 border-t border-shell-border space-y-2 bg-shell-bg">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-shell-muted">
               Switch Persona
