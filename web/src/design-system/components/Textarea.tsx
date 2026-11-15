@@ -8,9 +8,14 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
 }
 
 export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, label, helperText, error, id, rows = 3, ...props }, ref) => {
+  ({ className, label, helperText, error, id, rows = 3, readOnly, ...props }, ref) => {
     const generatedId = React.useId();
     const textareaId = id || generatedId;
+
+    const isReadOnly =
+      readOnly !== undefined
+        ? readOnly
+        : Boolean(props.disabled) || (props.value !== undefined && !props.onChange);
 
     return (
       <div className="flex flex-col space-y-1.5 w-full">
@@ -23,6 +28,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={textareaId}
           ref={ref}
           rows={rows}
+          readOnly={isReadOnly}
           className={cn(
             "flex w-full rounded-lg border bg-white px-3 py-2 text-xs text-[#0F172A] placeholder:text-[#94A3B8] transition-colors focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/30 focus:border-[#4F46E5] disabled:cursor-not-allowed disabled:bg-[#F8FAFC]",
             error
@@ -43,3 +49,4 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
 );
 
 Textarea.displayName = "Textarea";
+

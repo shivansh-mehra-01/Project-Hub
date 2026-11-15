@@ -10,9 +10,28 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type = "text", label, helperText, error, leftIcon, rightIcon, id, ...props }, ref) => {
+  (
+    {
+      className,
+      type = "text",
+      label,
+      helperText,
+      error,
+      leftIcon,
+      rightIcon,
+      id,
+      readOnly,
+      ...props
+    },
+    ref
+  ) => {
     const generatedId = React.useId();
     const inputId = id || generatedId;
+
+    const isReadOnly =
+      readOnly !== undefined
+        ? readOnly
+        : Boolean(props.disabled) || (props.value !== undefined && !props.onChange);
 
     return (
       <div className="flex flex-col space-y-1.5 w-full">
@@ -31,6 +50,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             id={inputId}
             type={type}
             ref={ref}
+            readOnly={isReadOnly}
             className={cn(
               "flex h-9 w-full rounded-lg border bg-white px-3 py-1.5 text-xs text-[#0F172A] placeholder:text-[#94A3B8] transition-colors focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/30 focus:border-[#4F46E5] disabled:cursor-not-allowed disabled:bg-[#F8FAFC] disabled:text-[#94A3B8]",
               leftIcon && "pl-9",
@@ -59,3 +79,4 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
 );
 
 Input.displayName = "Input";
+

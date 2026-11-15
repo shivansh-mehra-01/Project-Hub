@@ -181,12 +181,14 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 label="Enrollment / USN Number"
                 value={enrollment}
                 disabled
+                readOnly
                 helperText="Locked to institutional registry"
               />
               <Input
                 label="College Email Address"
                 value={initialEmail}
                 disabled
+                readOnly
                 helperText="Verified via SISTec SSO"
               />
             </div>
@@ -261,3 +263,4 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     </Modal>
   );
 };
+

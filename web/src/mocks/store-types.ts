@@ -182,3 +182,4 @@ export interface ProblemBankIdea {
   capacity: number;
   taken: boolean;
 }
+

@@ -32,6 +32,7 @@ export const CollegeAdminView: React.FC = () => {
 
   const [ssoDomain, setSsoDomain] = useState(college.domain);
   const [collegeDisplayName, setCollegeDisplayName] = useState(college.name);
+  const [collegeLogoUrl, setCollegeLogoUrl] = useState(college.logoUrl || "https://sistec.ac.in/assets/logo.png");
   const [isSaved, setIsSaved] = useState(false);
 
   const handleCreateDepartment = () => {
@@ -46,6 +47,7 @@ export const CollegeAdminView: React.FC = () => {
     onboardCollege({
       name: collegeDisplayName,
       domain: ssoDomain,
+      logoUrl: collegeLogoUrl,
     });
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
@@ -190,10 +192,11 @@ export const CollegeAdminView: React.FC = () => {
               value={collegeDisplayName}
               onChange={(e) => setCollegeDisplayName(e.target.value)}
             />
-            <Input label="Institutional Code" value={college.code} disabled />
+            <Input label="Institutional Code" value={college.code} disabled readOnly />
             <Input
               label="College Logo URL"
-              value={college.logoUrl || "https://sistec.ac.in/assets/logo.png"}
+              value={collegeLogoUrl}
+              onChange={(e) => setCollegeLogoUrl(e.target.value)}
               helperText="Rendered on student certificates and NBA Criterion 2 & 3 signed dossiers"
             />
             <Button
@@ -285,3 +288,4 @@ export const CollegeAdminView: React.FC = () => {
     </AppShell>
   );
 };
+

@@ -72,3 +72,4 @@ export const StepperGPS: React.FC<StepperGPSProps> = ({ currentStep, className }
     </div>
   );
 };
+

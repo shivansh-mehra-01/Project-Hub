@@ -205,3 +205,4 @@ export const StudentPortfolioView: React.FC = () => {
     </AppShell>
   );
 };
+

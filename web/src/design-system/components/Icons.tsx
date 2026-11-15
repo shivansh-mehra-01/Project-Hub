@@ -14,3 +14,4 @@ export const GithubIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className,
     />
   </svg>
 );
+

@@ -247,3 +247,4 @@ export const StudentExploreView: React.FC = () => {
     </AppShell>
   );
 };
+

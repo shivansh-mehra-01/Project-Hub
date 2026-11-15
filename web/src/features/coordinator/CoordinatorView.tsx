@@ -127,8 +127,8 @@ export const CoordinatorView: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-3.5">
                 <div className="grid grid-cols-2 gap-3">
-                  <Input label="Academic Year" value="2025-2026" disabled />
-                  <Input label="Project Type" value="Minor (Semester 6)" disabled />
+                  <Input label="Academic Year" value="2025-2026" disabled readOnly />
+                  <Input label="Project Type" value="Minor (Semester 6)" disabled readOnly />
                 </div>
                 <Input
                   label="Proposal Submission Deadline"
@@ -491,3 +491,4 @@ export const CoordinatorView: React.FC = () => {
     </AppShell>
   );
 };
+

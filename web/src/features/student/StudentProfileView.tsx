@@ -41,17 +41,18 @@ export const StudentProfileView: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3.5">
-            <Input label="Student Full Name" value={currentPersona.name} disabled />
+            <Input label="Student Full Name" value={currentPersona.name} disabled readOnly />
             <div className="grid grid-cols-2 gap-3">
               <Input
                 label="University Roll / USN"
                 value={currentPersona.enrollmentNumber || "0176CS221045"}
                 disabled
+                readOnly
               />
-              <Input label="Academic Branch" value="Computer Science & Eng (CSE)" disabled />
+              <Input label="Academic Branch" value="Computer Science & Eng (CSE)" disabled readOnly />
             </div>
-            <Input label="College Email" value={currentPersona.email} disabled />
-            <Input label="Engineering College" value={college.name} disabled />
+            <Input label="College Email" value={currentPersona.email} disabled readOnly />
+            <Input label="Engineering College" value={college.name} disabled readOnly />
 
             <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] text-xs text-[#64748B] flex items-start gap-2">
               <Lock className="h-4 w-4 text-[#94A3B8] shrink-0 mt-0.5" />
