@@ -139,7 +139,7 @@ export const StudentExploreView: React.FC = () => {
               onClick={() => setFilter("problems")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                 filter === "problems"
-                  ? "bg-[#4F46E5] text-white"
+                  ? "bg-[#047857] text-white"
                   : "text-[#64748B] hover:text-[#0F172A]"
               }`}
             >
@@ -150,7 +150,7 @@ export const StudentExploreView: React.FC = () => {
               onClick={() => setFilter("peers")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                 filter === "peers"
-                  ? "bg-[#4F46E5] text-white"
+                  ? "bg-[#047857] text-white"
                   : "text-[#64748B] hover:text-[#0F172A]"
               }`}
             >
@@ -161,7 +161,7 @@ export const StudentExploreView: React.FC = () => {
               onClick={() => setFilter("past")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                 filter === "past"
-                  ? "bg-[#4F46E5] text-white"
+                  ? "bg-[#047857] text-white"
                   : "text-[#64748B] hover:text-[#0F172A]"
               }`}
             >
@@ -290,7 +290,7 @@ export const StudentExploreView: React.FC = () => {
               <Card key={past.id} className="p-4 space-y-3 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-bold text-[#047857] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
                       {past.year}
                     </span>
                     <span className="text-[11px] font-bold text-emerald-600 font-mono">
@@ -320,7 +320,7 @@ export const StudentExploreView: React.FC = () => {
                   variant="ghost"
                   className="w-full mt-2"
                   onClick={() => setInspectingProject(past)}
-                  leftIcon={<Search className="h-3.5 w-3.5" />}
+                  leftIcon={<Search className="h-3.5 w-3.5" strokeWidth={1.75} />}
                 >
                   Inspect Abstract &amp; Repo
                 </Button>
@@ -348,10 +348,10 @@ export const StudentExploreView: React.FC = () => {
         {inspectingProject && (
           <div className="space-y-5 text-xs">
             {/* Domain & Rating */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-[#EEF2FF] border border-indigo-100">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-[#ECFDF5] border border-[#A7F3D0]">
               <div>
                 <span className="text-[10px] text-[#64748B] block">Academic Domain</span>
-                <span className="font-bold text-[#4F46E5]">{inspectingProject.domain}</span>
+                <span className="font-bold text-[#047857]">{inspectingProject.domain}</span>
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-[#64748B] block">Evaluation Outcome</span>
@@ -399,15 +399,15 @@ export const StudentExploreView: React.FC = () => {
                   href={inspectingProject.githubUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="p-3 rounded-lg border border-[#E2E8F0] bg-white hover:border-[#4F46E5] flex items-center justify-between group transition-all"
+                  className="p-3 rounded-lg border border-[#E2E8F0] bg-white hover:border-[#047857] flex items-center justify-between group transition-all"
                 >
                   <div className="flex items-center gap-2">
                     <GithubIcon className="h-4 w-4 text-[#0F172A]" />
-                    <span className="font-mono font-medium text-[#0F172A] group-hover:text-[#4F46E5]">
+                    <span className="font-mono font-medium text-[#0F172A] group-hover:text-[#047857]">
                       {inspectingProject.githubUrl}
                     </span>
                   </div>
-                  <ExternalLink className="h-3.5 w-3.5 text-[#64748B] group-hover:text-[#4F46E5]" />
+                  <ExternalLink className="h-3.5 w-3.5 text-[#64748B] group-hover:text-[#047857]" strokeWidth={1.75} />
                 </a>
 
                 {inspectingProject.publicationUrl && (
@@ -415,15 +415,15 @@ export const StudentExploreView: React.FC = () => {
                     href={inspectingProject.publicationUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="p-3 rounded-lg border border-[#E2E8F0] bg-white hover:border-[#4F46E5] flex items-center justify-between group transition-all"
+                    className="p-3 rounded-lg border border-[#E2E8F0] bg-white hover:border-[#047857] flex items-center justify-between group transition-all"
                   >
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-[#4F46E5]" />
-                      <span className="font-mono font-medium text-[#0F172A] group-hover:text-[#4F46E5]">
+                      <FileText className="h-4 w-4 text-[#047857]" strokeWidth={1.75} />
+                      <span className="font-mono font-medium text-[#0F172A] group-hover:text-[#047857]">
                         {inspectingProject.publicationUrl}
                       </span>
                     </div>
-                    <ExternalLink className="h-3.5 w-3.5 text-[#64748B] group-hover:text-[#4F46E5]" />
+                    <ExternalLink className="h-3.5 w-3.5 text-[#64748B] group-hover:text-[#047857]" strokeWidth={1.75} />
                   </a>
                 )}
               </div>

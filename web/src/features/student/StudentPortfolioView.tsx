@@ -26,7 +26,7 @@ export const StudentPortfolioView: React.FC = () => {
         {/* Profile Card Header */}
         <div className="p-6 rounded-xl border border-[#E2E8F0] bg-white shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-full bg-[#EEF2FF] border border-indigo-200 text-[#4F46E5] flex items-center justify-center font-bold text-xl">
+            <div className="h-14 w-14 rounded-full bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857] flex items-center justify-center font-bold text-xl font-mono">
               SM
             </div>
             <div className="space-y-1">
@@ -50,7 +50,7 @@ export const StudentPortfolioView: React.FC = () => {
               size="sm"
               variant="secondary"
               onClick={handleCopyLink}
-              leftIcon={<Share2 className="h-3.5 w-3.5" />}
+              leftIcon={<Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />}
             >
               {copied ? "Link Copied!" : "Share Verified Transcript"}
             </Button>
@@ -58,7 +58,7 @@ export const StudentPortfolioView: React.FC = () => {
               size="sm"
               variant="primary"
               onClick={() => setShowCertificateModal(true)}
-              leftIcon={<QrCode className="h-3.5 w-3.5" />}
+              leftIcon={<QrCode className="h-3.5 w-3.5" strokeWidth={1.75} />}
             >
               View QR Credential
             </Button>
@@ -73,7 +73,7 @@ export const StudentPortfolioView: React.FC = () => {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded border border-indigo-100">
+                <span className="font-mono text-xs font-bold text-[#047857] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
                   Year 3 • Minor Project (Semester 6)
                 </span>
                 <Badge variant="success" size="sm" dot>
@@ -165,9 +165,9 @@ export const StudentPortfolioView: React.FC = () => {
           </div>
         }
       >
-        <div className="p-6 bg-white border-2 border-indigo-100 rounded-xl space-y-4 text-center">
+        <div className="p-6 bg-white border-2 border-emerald-100 rounded-xl space-y-4 text-center">
           <div className="space-y-1">
-            <span className="text-[10px] font-bold tracking-widest text-[#4F46E5] uppercase">
+            <span className="text-[10px] font-bold tracking-widest text-[#047857] uppercase font-mono">
               Official University Transcript Record
             </span>
             <h4 className="text-base font-bold text-[#0F172A]">Minor Project Engineering Certificate</h4>
@@ -192,7 +192,7 @@ export const StudentPortfolioView: React.FC = () => {
               </div>
             </div>
             <div className="font-mono text-[10px] text-[#64748B] mt-2">
-              Verification Hash: 0x4f46e5...bmsce
+              Verification Hash: 0x047857...sistec
             </div>
           </div>
 

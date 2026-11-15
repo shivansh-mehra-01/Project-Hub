@@ -30,20 +30,20 @@ export const StepperGPS: React.FC<StepperGPSProps> = ({ currentStep, className }
                   className={cn(
                     "h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-all tabular-nums",
                     isCompleted
-                      ? "bg-emerald-600 text-white"
+                      ? "bg-[#047857] text-white"
                       : isCurrent
-                      ? "bg-[#4F46E5] text-white ring-4 ring-[#EEF2FF]"
+                      ? "bg-[#047857] text-white ring-4 ring-[#ECFDF5]"
                       : "bg-[#F1F5F9] text-[#94A3B8] border border-[#E2E8F0]"
                   )}
                 >
-                  {isCompleted ? <Check className="h-3.5 w-3.5" /> : s.step}
+                  {isCompleted ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : s.step}
                 </div>
                 <div className="flex flex-col">
                   <span
                     className={cn(
                       "text-xs font-semibold leading-none",
                       isCurrent
-                        ? "text-[#4F46E5]"
+                        ? "text-[#047857]"
                         : isCompleted
                         ? "text-[#0F172A]"
                         : "text-[#94A3B8]"

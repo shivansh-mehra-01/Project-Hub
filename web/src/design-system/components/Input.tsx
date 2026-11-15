@@ -52,7 +52,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             readOnly={isReadOnly}
             className={cn(
-              "flex h-9 w-full rounded-lg border bg-white px-3 py-1.5 text-xs text-[#0F172A] placeholder:text-[#94A3B8] transition-colors focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/30 focus:border-[#4F46E5] disabled:cursor-not-allowed disabled:bg-[#F8FAFC] disabled:text-[#94A3B8]",
+              "flex h-9 w-full rounded-lg border bg-white px-3 py-1.5 text-xs text-[#0F172A] placeholder:text-[#94A3B8] transition-colors focus:outline-none focus:ring-2 focus:ring-[#047857]/30 focus:border-[#047857] disabled:cursor-not-allowed disabled:bg-[#F8FAFC] disabled:text-[#94A3B8]",
               leftIcon && "pl-9",
               rightIcon && "pr-9",
               error

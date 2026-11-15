@@ -197,64 +197,25 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
     health: "Health & Telemetry",
   };
 
+  const getTenantTelemetry = (code: string) => {
+    switch (code.toUpperCase()) {
+      case "SISTEC":
+        return { usedGb: "14.8", totalGb: "50.0", pct: 29.6, connections: 18 };
+      case "BMSCE":
+        return { usedGb: "31.4", totalGb: "50.0", pct: 62.8, connections: 42 };
+      case "RVCE":
+        return { usedGb: "4.2", totalGb: "25.0", pct: 16.8, connections: 6 };
+      default:
+        return { usedGb: "5.1", totalGb: "25.0", pct: 20.4, connections: 12 };
+    }
+  };
+
   return (
     <AppShell
       pageTitle="Super Admin Console"
       breadcrumb="Platform & Tenant Governance"
       activeTab={tabLabels[activeTab] || "Tenants"}
     >
-      {/* 4 SuperAdmin Navigation Sub-Tabs */}
-      <div className="flex border-b border-[#E2E8F0] gap-4 text-xs font-semibold select-none overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => switchTab("tenants")}
-          className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
-            activeTab === "tenants"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
-              : "text-[#64748B] hover:text-[#0F172A]"
-          }`}
-        >
-          1. Tenants &amp; Partitions ({collegesList.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => switchTab("templates")}
-          className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
-            activeTab === "templates"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
-              : "text-[#64748B] hover:text-[#0F172A]"
-          }`}
-        >
-          2. Master Templates (NBA &amp; SDGs)
-        </button>
-        <button
-          type="button"
-          onClick={() => switchTab("subscriptions")}
-          className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === "subscriptions"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
-              : "text-[#64748B] hover:text-[#0F172A]"
-          }`}
-        >
-          <span>3. Subscriptions &amp; Pilots</span>
-          {pilotRequests.length > 0 && (
-            <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
-              {pilotRequests.length}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => switchTab("health")}
-          className={`pb-2.5 transition-colors cursor-pointer whitespace-nowrap ${
-            activeTab === "health"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
-              : "text-[#64748B] hover:text-[#0F172A]"
-          }`}
-        >
-          4. Health &amp; Telemetry
-        </button>
-      </div>
 
       {/* ========================================================================= */}
       {/* TAB 1: TENANTS & PARTITIONS                                               */}
@@ -356,7 +317,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                   {collegesList.map((col) => (
                     <tr key={col.id} className="hover:bg-[#F8FAFC] transition-colors">
                       <td className="py-3 px-4 font-semibold flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-md bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center font-bold text-xs">
+                        <div className="h-7 w-7 rounded-md bg-[#ECFDF5] text-[#047857] border border-[#A7F3D0] flex items-center justify-center font-bold text-xs font-mono">
                           {col.code.charAt(0)}
                         </div>
                         <span>{col.name}</span>
@@ -389,7 +350,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                             setManagingCollege(col);
                             setTenantSaved(false);
                           }}
-                          className="text-xs font-semibold text-[#4F46E5] hover:underline cursor-pointer"
+                          className="text-xs font-semibold text-[#047857] hover:underline cursor-pointer"
                         >
                           Manage Tenant
                         </button>
@@ -635,27 +596,50 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]">
                   <tr>
-                    <th className="py-2.5 px-4 font-semibold">Tenant Partition</th>
-                    <th className="py-2.5 px-4 font-semibold">Schema Identifier</th>
-                    <th className="py-2.5 px-4 font-semibold">Allocated Storage</th>
-                    <th className="py-2.5 px-4 font-semibold">Active Connections</th>
-                    <th className="py-2.5 px-4 text-right font-semibold">Status</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Tenant Partition</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Schema Identifier</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Allocated Storage</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Active Connections</th>
+                    <th className="py-2.5 px-4 text-right font-semibold text-[11px] uppercase tracking-[0.06em]">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A] font-mono">
-                  {collegesList.map((col) => (
-                    <tr key={col.id} className="hover:bg-[#F8FAFC]">
-                      <td className="py-2.5 px-4 font-sans font-semibold text-[#0F172A]">{col.name}</td>
-                      <td className="py-2.5 px-4 font-bold text-[#4F46E5]">tenant_{col.code.toLowerCase()}_prod</td>
-                      <td className="py-2.5 px-4 tabular-nums">14.8 GB / 50.0 GB</td>
-                      <td className="py-2.5 px-4 tabular-nums">12 connections</td>
-                      <td className="py-2.5 px-4 text-right font-sans">
-                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          Isolated &amp; Healthy
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
+                  {collegesList.map((col) => {
+                    const telem = getTenantTelemetry(col.code);
+                    return (
+                      <tr key={col.id} className="hover:bg-[#F8FAFC] transition-colors">
+                        <td className="py-3 px-4 font-sans font-semibold text-[#0F172A]">{col.name}</td>
+                        <td className="py-3 px-4">
+                          <span className="font-mono text-xs font-semibold text-[#047857] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
+                            tenant_{col.code.toLowerCase()}_prod
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 w-48">
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-xs font-mono tabular-nums text-[#0F172A]">
+                              <span>{telem.usedGb} GB / {telem.totalGb} GB</span>
+                              <span className="text-[10px] text-[#64748B]">{telem.pct}%</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-[#E2E8F0] rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-[#047857] rounded-full transition-all"
+                                style={{ width: `${telem.pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-mono tabular-nums text-xs text-[#0F172A]">
+                          {telem.connections} <span className="text-[#64748B] font-sans text-[11px]">conn</span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-sans">
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#065F46] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#047857]" />
+                            Isolated &amp; Healthy
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </CardContent>
@@ -797,7 +781,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                 <span className="font-bold text-[#0F172A] block">Maintenance Mode</span>
                 <span className="text-[11px] text-[#64748B]">Temporarily block student portal access for maintenance</span>
               </div>
-              <input type="checkbox" className="h-4 w-4 rounded text-[#4F46E5] focus:ring-[#4F46E5]" />
+              <input type="checkbox" className="h-4 w-4 rounded text-[#047857] focus:ring-[#047857] accent-[#047857]" />
             </div>
           </div>
         )}
@@ -820,7 +804,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               </div>
               <div className="flex justify-between">
                 <span className="text-[#64748B]">Assigned Code:</span>
-                <span className="font-mono font-bold text-[#4F46E5]">{reviewingPilot.code}</span>
+                <span className="font-mono font-bold text-[#047857]">{reviewingPilot.code}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#64748B]">Dean / Principal Email:</span>
@@ -832,7 +816,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               </div>
             </div>
 
-            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-900 text-[11px] leading-relaxed">
+            <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] rounded-lg text-[#065F46] text-[11px] leading-relaxed">
               Approval triggers automatic PostgreSQL 17 tenant partition generation and dispatches an onboarding invitation to the dean&apos;s email.
             </div>
 

@@ -63,10 +63,10 @@ export const Badge: React.FC<BadgeProps> = ({
   }
 
   const variantClasses = {
-    success: "bg-[#DCFCE7] text-[#166534] border-[#BBF7D0]",
+    success: "bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]",
     warning: "bg-[#FEF3C7] text-[#92400E] border-[#FDE68A]",
-    info: "bg-[#DBEAFE] text-[#1E40AF] border-[#BFDBFE]",
-    danger: "bg-[#FEE2E2] text-[#991B1B] border-[#FECACA]",
+    info: "bg-[#EFF6FF] text-[#1E40AF] border-[#BFDBFE]",
+    danger: "bg-[#FEF2F2] text-[#991B1B] border-[#FECACA]",
     neutral: "bg-[#F1F5F9] text-[#334155] border-[#E2E8F0]",
     role: "bg-slate-100 text-slate-700 border-slate-200",
     sdg: "bg-emerald-50 text-emerald-800 border-emerald-200",
@@ -75,7 +75,7 @@ export const Badge: React.FC<BadgeProps> = ({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 font-medium rounded-full border transition-colors",
+        "inline-flex items-center gap-1.5 font-medium rounded-full border transition-colors [&>svg]:h-3 [&>svg]:w-3 [&>svg]:stroke-2",
         sizeClasses[size],
         variantClasses[variant],
         className

@@ -79,13 +79,13 @@ export function DataTable<TData, TValue>({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Search */}
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 h-4 w-4 text-[#94A3B8] pointer-events-none top-2.5" />
+          <Search className="absolute left-3 h-4 w-4 text-[#94A3B8] pointer-events-none top-2.5" strokeWidth={1.75} />
           <input
             type="text"
             value={globalFilter ?? ""}
             onChange={(e) => setGlobalFilter(e.target.value)}
             placeholder={searchPlaceholder}
-            className="h-9 w-full rounded-lg border border-[#E2E8F0] bg-white pl-9 pr-3 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+            className="h-9 w-full rounded-lg border border-[#E2E8F0] bg-white pl-9 pr-3 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-[#047857] focus:outline-none focus:ring-2 focus:ring-[#047857]/20"
           />
         </div>
 
@@ -112,7 +112,7 @@ export function DataTable<TData, TValue>({
                 className={cn(
                   "px-2.5 py-1 text-xs font-medium rounded-full border transition-colors cursor-pointer shrink-0",
                   selectedStatus === opt.value
-                    ? "bg-[#4F46E5] text-white border-[#4F46E5]"
+                    ? "bg-[#047857] text-white border-[#047857]"
                     : "bg-white text-[#475569] border-[#E2E8F0] hover:bg-[#F8FAFC]"
                 )}
               >
@@ -127,7 +127,7 @@ export function DataTable<TData, TValue>({
       <div className="rounded-xl border border-[#E2E8F0] bg-white shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#475569] font-medium">
+            <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
@@ -139,7 +139,7 @@ export function DataTable<TData, TValue>({
                         key={header.id}
                         onClick={header.column.getToggleSortingHandler()}
                         className={cn(
-                          "py-3 px-4 font-semibold text-[#475569] select-none",
+                          "py-3 px-4 font-semibold text-[11px] uppercase tracking-[0.06em] text-slate-500 select-none",
                           canSort && "cursor-pointer hover:text-[#0F172A]"
                         )}
                       >
@@ -151,11 +151,11 @@ export function DataTable<TData, TValue>({
                           {canSort && (
                             <span className="text-[#94A3B8]">
                               {isSorted === "asc" ? (
-                                <ChevronUp className="h-3.5 w-3.5 text-[#4F46E5]" />
+                                <ChevronUp className="h-3.5 w-3.5 text-[#047857]" strokeWidth={1.75} />
                               ) : isSorted === "desc" ? (
-                                <ChevronDown className="h-3.5 w-3.5 text-[#4F46E5]" />
+                                <ChevronDown className="h-3.5 w-3.5 text-[#047857]" strokeWidth={1.75} />
                               ) : (
-                                <ChevronsUpDown className="h-3.5 w-3.5" />
+                                <ChevronsUpDown className="h-3.5 w-3.5" strokeWidth={1.75} />
                               )}
                             </span>
                           )}

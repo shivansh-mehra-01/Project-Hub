@@ -120,7 +120,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           onClick={() => switchTab("overview")}
           className={`pb-2.5 transition-colors cursor-pointer ${
             activeTab === "overview"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              ? "border-b-2 border-[#047857] text-[#047857]"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -131,7 +131,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           onClick={() => switchTab("approvals")}
           className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 ${
             activeTab === "approvals"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              ? "border-b-2 border-[#047857] text-[#047857]"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -147,7 +147,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           onClick={() => switchTab("nba")}
           className={`pb-2.5 transition-colors cursor-pointer ${
             activeTab === "nba"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              ? "border-b-2 border-[#047857] text-[#047857]"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -158,7 +158,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           onClick={() => switchTab("faculty")}
           className={`pb-2.5 transition-colors cursor-pointer ${
             activeTab === "faculty"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              ? "border-b-2 border-[#047857] text-[#047857]"
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
@@ -180,8 +180,8 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                   <div className="text-xl font-bold text-[#0F172A] tabular-nums">24 Teams</div>
                   <span className="text-[10px] text-emerald-600 font-medium">96 Students Enrolled</span>
                 </div>
-                <div className="h-9 w-9 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center">
-                  <FileCheck2 className="h-5 w-5" />
+                <div className="h-9 w-9 rounded-lg bg-[#ECFDF5] text-[#047857] flex items-center justify-center">
+                  <FileCheck2 className="h-4 w-4" strokeWidth={1.75} />
                 </div>
               </CardContent>
             </Card>
@@ -403,7 +403,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                               setSelectedTeamIds([]);
                             }
                           }}
-                          className="rounded text-[#4F46E5]"
+                          className="rounded text-[#047857] accent-[#047857]"
                         />
                       </th>
                       <th className="py-3 px-4 font-semibold">Team Code</th>
@@ -423,10 +423,10 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                               type="checkbox"
                               checked={selectedTeamIds.includes(team.id)}
                               onChange={() => toggleSelectTeam(team.id)}
-                              className="rounded text-[#4F46E5]"
+                              className="rounded text-[#047857] accent-[#047857]"
                             />
                           </td>
-                          <td className="py-3 px-4 font-mono font-bold text-[#4F46E5]">
+                          <td className="py-3 px-4 font-mono font-bold text-[#047857]">
                             {team.teamCode}
                           </td>
                           <td className="py-3 px-4 max-w-xs font-semibold truncate">
@@ -567,7 +567,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                       { usn: "0176CS221049", name: "Sanya Saxena", team: "2026-CS-MIN-02", guide: 28.0, viva: 45.0, total: 91.0, grade: "O", nba: "Met (High)" },
                     ].map((row) => (
                       <tr key={row.usn} className="hover:bg-[#F8FAFC]">
-                        <td className="py-2.5 px-4 font-bold text-[#4F46E5]">{row.usn}</td>
+                        <td className="py-2.5 px-4 font-bold text-[#047857]">{row.usn}</td>
                         <td className="py-2.5 px-4 font-sans font-semibold text-[#0F172A]">{row.name}</td>
                         <td className="py-2.5 px-4 text-[#475569]">{row.team}</td>
                         <td className="py-2.5 px-4">{row.guide}</td>
@@ -599,11 +599,11 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
       {activeTab === "nba" && (
         <div className="space-y-6">
           {/* Export Action Card */}
-          <div className="p-5 rounded-xl border border-indigo-100 bg-[#EEF2FF] flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="p-5 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#4F46E5]" />
-                <h3 className="text-sm font-bold text-[#0F172A]">
+                <span className="h-2 w-2 rounded-full bg-[#047857]" />
+                <h3 className="text-sm font-bold text-[#0F172A] font-heading">
                   NBA Accreditation Evidence Synthesis (SAR 2.2 &amp; 3.3)
                 </h3>
               </div>
@@ -742,7 +742,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                     placeholder="Search projects, stack..."
                     value={archiveSearch}
                     onChange={(e) => setArchiveSearch(e.target.value)}
-                    className="h-8 pl-8 pr-2.5 text-xs rounded-lg border border-[#E2E8F0] bg-white focus:outline-none focus:border-[#4F46E5]"
+                    className="h-8 pl-8 pr-2.5 text-xs rounded-lg border border-[#E2E8F0] bg-white focus:outline-none focus:border-[#047857]"
                   />
                 </div>
                 <select
@@ -761,13 +761,13 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]">
                   <tr>
-                    <th className="py-2.5 px-4 font-semibold">Batch</th>
-                    <th className="py-2.5 px-4 font-semibold">Team Code</th>
-                    <th className="py-2.5 px-4 font-semibold">Project Title</th>
-                    <th className="py-2.5 px-4 font-semibold">Faculty Guide</th>
-                    <th className="py-2.5 px-4 font-semibold">Domain &amp; SDG</th>
-                    <th className="py-2.5 px-4 font-semibold">Score</th>
-                    <th className="py-2.5 px-4 text-right font-semibold">SAR Audit</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Batch</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Team Code</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Project Title</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Faculty Guide</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Domain &amp; SDG</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Score</th>
+                    <th className="py-2.5 px-4 text-right font-semibold text-[11px] uppercase tracking-[0.06em]">SAR Audit</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
@@ -786,7 +786,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                     .map((item) => (
                       <tr key={item.code} className="hover:bg-[#F8FAFC]">
                         <td className="py-2.5 px-4 font-mono text-[11px] text-[#64748B]">{item.batch}</td>
-                        <td className="py-2.5 px-4 font-mono font-bold text-[#4F46E5]">{item.code}</td>
+                        <td className="py-2.5 px-4 font-mono font-bold text-[#047857]">{item.code}</td>
                         <td className="py-2.5 px-4 font-semibold max-w-xs truncate">{item.title}</td>
                         <td className="py-2.5 px-4 text-[#475569]">{item.guide}</td>
                         <td className="py-2.5 px-4 text-[#64748B]">{item.domain}</td>
@@ -821,12 +821,12 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]">
                 <tr>
-                  <th className="py-3 px-4 font-semibold">Faculty Name</th>
-                  <th className="py-3 px-4 font-semibold">Institutional Email</th>
-                  <th className="py-3 px-4 font-semibold">Designation</th>
-                  <th className="py-3 px-4 font-semibold">Max Team Capacity</th>
-                  <th className="py-3 px-4 font-semibold">Project Coordinator Authority</th>
-                  <th className="py-3 px-4 text-right font-semibold">Status</th>
+                  <th className="py-3 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Faculty Name</th>
+                  <th className="py-3 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Institutional Email</th>
+                  <th className="py-3 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Designation</th>
+                  <th className="py-3 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Max Team Capacity</th>
+                  <th className="py-3 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Project Coordinator Authority</th>
+                  <th className="py-3 px-4 text-right font-semibold text-[11px] uppercase tracking-[0.06em]">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
@@ -842,7 +842,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                         type="button"
                         onClick={() => toggleFacultyCoordinator(fac.id)}
                         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          fac.isProjectCoordinator ? "bg-[#4F46E5]" : "bg-[#CBD5E1]"
+                          fac.isProjectCoordinator ? "bg-[#047857]" : "bg-[#CBD5E1]"
                         }`}
                       >
                         <span
@@ -933,7 +933,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
               </div>
               <div className="flex justify-between">
                 <span className="text-[#64748B]">Proposed Faculty Mentor:</span>
-                <span className="font-semibold text-[#4F46E5]">{inspectingTeam.guideName}</span>
+                <span className="font-semibold text-[#047857]">{inspectingTeam.guideName}</span>
               </div>
             </div>
 
@@ -944,7 +944,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                   <div key={m.id} className="p-2.5 flex items-center justify-between text-xs">
                     <div>
                       <div className="font-semibold text-[#0F172A]">
-                        {m.name} {m.isLead && <span className="text-[#4F46E5] font-bold">(Lead)</span>}
+                        {m.name} {m.isLead && <span className="text-[#047857] font-bold">(Lead)</span>}
                       </div>
                       <div className="text-[11px] text-[#64748B]">{m.roleDescription}</div>
                     </div>
