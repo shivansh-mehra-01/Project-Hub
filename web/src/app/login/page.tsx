@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
-  Building2,
   CheckCircle2,
   ChevronDown,
   Eye,
@@ -16,9 +15,6 @@ import {
   ShieldCheck,
   Sparkles,
   User,
-  UserCheck,
-  Briefcase,
-  GraduationCap,
 } from "lucide-react";
 import { Button } from "@/design-system/components/Button";
 import { Input } from "@/design-system/components/Input";
@@ -30,7 +26,7 @@ import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { switchPersona, toggleFacultyCoordinator, currentPersona, college } = useProjectHubStore();
+  const { switchPersona, toggleFacultyCoordinator, currentPersona } = useProjectHubStore();
 
   const [mode, setMode] = useState<"signin" | "activate">("signin");
   const [email, setEmail] = useState("0176cs221045@sistec.ac.in");
@@ -54,7 +50,7 @@ export default function LoginPage() {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
-  const [showDemoDrawer, setShowDemoDrawer] = useState(true);
+  const [showDemoDrawer, setShowDemoDrawer] = useState(false);
 
   const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
 
@@ -187,18 +183,18 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-12 bg-white select-none">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden grid lg:grid-cols-12 bg-white select-none">
       {/* ========================================================================= */}
       {/* LEFT: Brand & Trust Panel (Deep Charcoal #111827)                          */}
       {/* ========================================================================= */}
-      <div className="lg:col-span-5 bg-[#111827] text-white p-8 sm:p-10 lg:p-12 flex flex-col justify-between relative overflow-hidden">
+      <div className="lg:col-span-5 bg-[#111827] text-white p-6 sm:p-8 lg:p-10 flex flex-col justify-between relative overflow-hidden h-full">
         {/* Subtle decorative grid overlay */}
         <div className="absolute inset-0 bg-[radial-gradient(#047857_1px,transparent_1px)] [background-size:24px_24px] opacity-15 pointer-events-none" />
         <div className="absolute -top-24 -right-24 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-emerald-700/10 rounded-full blur-3xl pointer-events-none" />
 
         {/* Top: Navigation Back + Brand Emblem */}
-        <div className="relative z-10 space-y-6">
+        <div className="relative z-10 space-y-4">
           <Link
             href="/"
             className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors group"
@@ -208,11 +204,11 @@ export default function LoginPage() {
           </Link>
 
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-brand-primary flex items-center justify-center text-white font-bold text-sm shadow-md font-heading shrink-0">
+            <div className="h-8 w-8 rounded-xl bg-brand-primary flex items-center justify-center text-white font-bold text-xs shadow-md font-heading shrink-0">
               PH
             </div>
             <div>
-              <span className="font-bold text-base text-white tracking-tight font-heading block">
+              <span className="font-bold text-sm sm:text-base text-white tracking-tight font-heading block">
                 Project Hub
               </span>
               <span className="text-[10px] text-emerald-400 font-mono block">
@@ -223,43 +219,43 @@ export default function LoginPage() {
         </div>
 
         {/* Center: Executive Value Statement + Live Audit Preview Card */}
-        <div className="relative z-10 space-y-6 my-auto py-10 lg:py-0">
-          <div className="space-y-3">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight font-heading leading-tight">
+        <div className="relative z-10 space-y-5 my-auto py-4">
+          <div className="space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-heading leading-tight max-w-md">
               Institutional Governance for Engineering Projects
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-md">
+            <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
               Deterministic NBA Criterion 2 &amp; 3 attainment calculation, verified weekly student logbooks, and multi-campus lifecycle automation.
             </p>
           </div>
 
           {/* Pure-React Live Audit Preview Card (Matching Reference Specs) */}
-          <div className="rounded-2xl border border-white/10 bg-[#1F2937]/95 p-5 shadow-2xl backdrop-blur-md max-w-md w-full space-y-4">
+          <div className="rounded-2xl border border-white/10 bg-[#1F2937]/95 p-4 sm:p-5 shadow-2xl backdrop-blur-md max-w-sm w-full space-y-3.5">
             {/* Top Row: CO-PO Attainment + Bar Chart */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-400 font-mono font-medium">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono font-medium">
                 <span>CO-PO Attainment</span>
                 <span className="text-[10px] text-slate-400">Direct Assessment</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold font-mono text-emerald-400 tabular-nums">
+                  <span className="text-xl sm:text-2xl font-bold font-mono text-emerald-400 tabular-nums">
                     84.5%
                   </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-semibold text-emerald-400">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-semibold text-emerald-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                     Verified
                   </span>
                 </div>
 
                 {/* Stylized Bar Graph Visualization */}
-                <div className="flex items-end gap-1.5 h-8 px-2 py-1 bg-black/30 rounded-lg border border-white/5">
-                  <span className="w-1.5 h-4 rounded-full bg-emerald-500/50" />
-                  <span className="w-1.5 h-5 rounded-full bg-emerald-500/70" />
-                  <span className="w-1.5 h-3 rounded-full bg-emerald-500/40" />
-                  <span className="w-1.5 h-7 rounded-full bg-white shadow-xs animate-pulse" />
-                  <span className="w-1.5 h-5 rounded-full bg-emerald-500/70" />
-                  <span className="w-1.5 h-6 rounded-full bg-emerald-500" />
+                <div className="flex items-end gap-1.5 h-7 px-2 py-1 bg-black/30 rounded-lg border border-white/5">
+                  <span className="w-1.5 h-3 rounded-full bg-emerald-500/50" />
+                  <span className="w-1.5 h-4 rounded-full bg-emerald-500/70" />
+                  <span className="w-1.5 h-2.5 rounded-full bg-emerald-500/40" />
+                  <span className="w-1.5 h-6 rounded-full bg-white shadow-xs animate-pulse" />
+                  <span className="w-1.5 h-4 rounded-full bg-emerald-500/70" />
+                  <span className="w-1.5 h-5 rounded-full bg-emerald-500" />
                 </div>
               </div>
             </div>
@@ -275,14 +271,14 @@ export default function LoginPage() {
                   Signed by Prof. S. K. Verma • Week 5
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-medium text-emerald-400">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-medium text-emerald-400">
                 <CheckCircle2 className="w-3 h-3 stroke-[2]" />
                 <span>Signed</span>
               </span>
             </div>
 
             {/* Bottom Sub-row: PostgreSQL Row-Level Security */}
-            <div className="pt-2 border-t border-white/[0.04] flex items-center justify-between text-[10px] font-mono text-slate-400">
+            <div className="pt-1.5 border-t border-white/[0.04] flex items-center justify-between text-[10px] font-mono text-slate-400">
               <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
                 Multi-Tenant Row-Level Isolation
@@ -293,7 +289,7 @@ export default function LoginPage() {
         </div>
 
         {/* Bottom: Security & Compliance Footer Badges */}
-        <div className="relative z-10 pt-6 border-t border-white/[0.08] flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-slate-400 font-mono">
+        <div className="relative z-10 pt-4 border-t border-white/[0.08] flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] sm:text-[11px] text-slate-400 font-mono">
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" strokeWidth={1.75} />
             Zero Public Signup
@@ -306,19 +302,19 @@ export default function LoginPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* RIGHT: Authentication Canvas (Clean White)                                */}
+      {/* RIGHT: Authentication Canvas (Clean White, Fixed Viewport on Desktop)     */}
       {/* ========================================================================= */}
-      <div className="lg:col-span-7 bg-[#FFFFFF] flex flex-col justify-center items-center p-6 sm:p-12 relative min-h-screen overflow-y-auto">
-        <div className="w-full max-w-md space-y-5 my-auto py-6">
+      <div className="lg:col-span-7 bg-[#FFFFFF] flex flex-col justify-center items-center px-4 sm:px-6 py-6 lg:py-8 h-full relative overflow-y-auto lg:overflow-hidden">
+        <div className="w-full max-w-[390px] my-auto space-y-3.5 flex flex-col justify-center">
           {/* Dynamic Tenant Resolution Pill */}
           <div className="flex justify-center">
             {activeTenant.isMatched ? (
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs animate-in fade-in duration-200">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs animate-in fade-in duration-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Verified Tenant: {activeTenant.short}</span>
               </div>
             ) : (
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs">
+              <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs">
                 <ShieldCheck className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.75} />
                 <span>Institutional Single Sign-On Portal</span>
               </div>
@@ -326,14 +322,14 @@ export default function LoginPage() {
           </div>
 
           {/* Main Auth Form Card */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-5">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-3.5">
             {/* Two-Mode Segmented Tabs */}
-            <div className="flex p-1 bg-slate-100 rounded-xl border border-slate-200">
+            <div className="flex p-1 bg-slate-100 rounded-xl border border-slate-200/80">
               <button
                 type="button"
                 onClick={() => setMode("signin")}
                 className={cn(
-                  "flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer",
+                  "flex-1 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer",
                   mode === "signin"
                     ? "bg-white text-slate-900 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -345,7 +341,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => setMode("activate")}
                 className={cn(
-                  "flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer",
+                  "flex-1 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer",
                   mode === "activate"
                     ? "bg-white text-slate-900 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -357,13 +353,13 @@ export default function LoginPage() {
 
             {/* TAB 1: SIGN IN MODE */}
             {mode === "signin" && (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {/* Institutional SSO Buttons */}
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <button
                     type="button"
                     onClick={() => handleQuickPersona("Student")}
-                    className="w-full h-10 flex items-center justify-center gap-2.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer shadow-2xs"
+                    className="w-full h-9 flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer shadow-2xs"
                   >
                     <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
                       <path
@@ -389,7 +385,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => handleQuickPersona("Student")}
-                    className="w-full h-10 flex items-center justify-center gap-2.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer shadow-2xs"
+                    className="w-full h-9 flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer shadow-2xs"
                   >
                     <svg className="h-4 w-4 shrink-0" viewBox="0 0 23 23">
                       <path fill="#f35325" d="M1 1h10v10H1z" />
@@ -402,16 +398,16 @@ export default function LoginPage() {
                 </div>
 
                 {/* Divider */}
-                <div className="relative flex items-center justify-center my-2">
+                <div className="relative flex items-center justify-center my-1">
                   <div className="border-t border-slate-200 w-full" />
-                  <span className="bg-white px-2.5 text-[10px] uppercase font-bold tracking-wider text-slate-400 absolute font-mono">
+                  <span className="bg-white px-2 text-[10px] uppercase font-bold tracking-wider text-slate-400 absolute font-mono">
                     Or
                   </span>
                 </div>
 
                 {/* Credentials Form */}
-                <form onSubmit={handleSignIn} className="space-y-3.5">
-                  <div className="space-y-1.5">
+                <form onSubmit={handleSignIn} className="space-y-2.5">
+                  <div className="space-y-1">
                     <label className="block text-xs font-semibold text-slate-700">
                       Institutional Email
                     </label>
@@ -427,13 +423,13 @@ export default function LoginPage() {
                           if (emailError) setEmailError("");
                         }}
                         placeholder="name@sistec.ac.in"
-                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                        className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                       />
                     </div>
                     {emailError && <p className="text-[11px] text-rose-600 mt-1">{emailError}</p>}
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="block text-xs font-semibold text-slate-700">
                         Password
@@ -459,7 +455,7 @@ export default function LoginPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full h-10 pl-9 pr-10 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono transition-colors"
+                        className="w-full h-9 pl-9 pr-10 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono transition-colors"
                       />
                       <button
                         type="button"
@@ -482,16 +478,16 @@ export default function LoginPage() {
                         type="checkbox"
                         checked={rememberSession}
                         onChange={(e) => setRememberSession(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 text-brand-primary accent-brand-primary focus:ring-0"
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-brand-primary accent-brand-primary focus:ring-0"
                       />
-                      <span>Remember campus session (30 days)</span>
+                      <span className="text-[11px]">Remember campus session (30 days)</span>
                     </label>
                   </div>
 
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full h-10 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-70 mt-2"
+                    className="w-full h-9.5 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-70 mt-1"
                   >
                     {isLoading ? (
                       <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -508,27 +504,27 @@ export default function LoginPage() {
 
             {/* TAB 2: ACTIVATE ACCOUNT MODE */}
             {mode === "activate" && (
-              <div className="space-y-4">
-                <div className="p-3 bg-emerald-50/80 rounded-xl border border-emerald-200 text-emerald-950 text-xs space-y-1">
+              <div className="space-y-3">
+                <div className="p-2.5 bg-emerald-50/80 rounded-xl border border-emerald-200 text-emerald-950 text-xs space-y-1">
                   <div className="font-semibold flex items-center gap-1.5 text-emerald-900">
                     <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" strokeWidth={1.75} />
                     <span>CSV Pre-Provisioned Accounts Only</span>
                   </div>
                   <p className="text-[11px] text-emerald-800 leading-relaxed">
-                    Student &amp; faculty profiles are imported directly from institutional ERP by the Department Coordinator. Enter your official details to set credentials.
+                    Imported from institutional ERP by the Department Coordinator. Enter your official details to set credentials.
                   </p>
                 </div>
 
                 {activationSuccess ? (
                   <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-center space-y-2 animate-in fade-in duration-200">
-                    <CheckCircle2 className="w-7 h-7 text-emerald-600 mx-auto" />
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto" />
                     <div className="text-xs font-bold text-emerald-950">Account Activated Successfully!</div>
                     <p className="text-[11px] text-emerald-800">
                       Redirecting you to your authenticated campus workspace...
                     </p>
                   </div>
                 ) : (
-                  <form onSubmit={handleActivateSubmit} className="space-y-3">
+                  <form onSubmit={handleActivateSubmit} className="space-y-2.5">
                     <div className="space-y-1">
                       <label className="block text-xs font-semibold text-slate-700">
                         Official College Email
@@ -542,7 +538,7 @@ export default function LoginPage() {
                           value={activationEmail}
                           onChange={(e) => setActivationEmail(e.target.value)}
                           placeholder="usn@sistec.ac.in"
-                          className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                          className="w-full h-8.5 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                         />
                       </div>
                     </div>
@@ -560,7 +556,7 @@ export default function LoginPage() {
                           value={activationId}
                           onChange={(e) => setActivationId(e.target.value)}
                           placeholder="e.g. 0176CS221045 or FAC-CSE-028"
-                          className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono uppercase"
+                          className="w-full h-8.5 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono uppercase"
                         />
                       </div>
                     </div>
@@ -575,7 +571,7 @@ export default function LoginPage() {
                           value={activationPassword}
                           onChange={(e) => setActivationPassword(e.target.value)}
                           placeholder="••••••••"
-                          className="w-full h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                          className="w-full h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                         />
                       </div>
                       <div className="space-y-1">
@@ -587,7 +583,7 @@ export default function LoginPage() {
                           value={activationConfirmPassword}
                           onChange={(e) => setActivationConfirmPassword(e.target.value)}
                           placeholder="••••••••"
-                          className="w-full h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                          className="w-full h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                         />
                       </div>
                     </div>
@@ -599,7 +595,7 @@ export default function LoginPage() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="w-full h-10 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-70 mt-2"
+                      className="w-full h-9.5 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-70 mt-1"
                     >
                       {isLoading ? (
                         <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -617,31 +613,29 @@ export default function LoginPage() {
           </div>
 
           {/* Zero-Public-Signup Footer Note */}
-          <div className="text-center space-y-1">
-            <p className="text-xs text-slate-500">
+          <div className="text-center">
+            <p className="text-[11px] text-slate-500">
               Access restricted to authorized university personnel.
-            </p>
-            <p className="text-[11px] text-slate-400">
-              Accounts are provisioned exclusively by department coordinators or campus IT.
             </p>
           </div>
 
-          {/* Gated Sandbox Persona Switcher (7 Roles) */}
+          {/* Gated Sandbox Persona Switcher (Upward Floating Popover - Never Scrolls Page) */}
           {isDemoMode && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2.5">
+            <div className="relative w-full pt-1">
               <button
                 type="button"
                 onClick={() => setShowDemoDrawer(!showDemoDrawer)}
-                className="w-full flex items-center justify-between text-left cursor-pointer group"
+                className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50/90 hover:bg-slate-100 text-left transition-colors cursor-pointer group"
+                title="Toggle Instant Demo Evaluation Roster"
               >
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-emerald-600" strokeWidth={1.75} />
-                  <span className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 transition-colors">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.75} />
+                  <span className="text-xs font-semibold text-slate-700 group-hover:text-emerald-800 transition-colors">
                     1-Click Evaluation Roster (7 Roles)
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                  <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-mono">
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                  <span className="bg-white border border-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-mono">
                     Instant Demo
                   </span>
                   <ChevronDown
@@ -654,84 +648,91 @@ export default function LoginPage() {
                 </div>
               </button>
 
+              {/* Upward Floating Popover Menu so it NEVER expands the page height */}
               {showDemoDrawer && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-2 border-t border-slate-200/80 animate-in fade-in duration-150">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPersona("SuperAdmin")}
-                    className="p-2 rounded-lg border border-slate-200 bg-white text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                  >
-                    <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                      Super Admin
-                    </div>
-                    <div className="text-[9px] text-slate-500 truncate">Platform Ops</div>
-                  </button>
+                <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-slate-200 bg-white shadow-2xl p-2.5 z-40 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="flex items-center justify-between px-1 pb-1.5 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span>Select Evaluation Persona</span>
+                    <span className="text-emerald-700 font-mono">Bypasses Password</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPersona("SuperAdmin")}
+                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
+                    >
+                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
+                        Super Admin
+                      </div>
+                      <div className="text-[9px] text-slate-500 truncate">Platform Ops</div>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPersona("CollegeAdmin")}
-                    className="p-2 rounded-lg border border-slate-200 bg-white text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                  >
-                    <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                      College Admin
-                    </div>
-                    <div className="text-[9px] text-slate-500 truncate">Principal / Dean</div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPersona("CollegeAdmin")}
+                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
+                    >
+                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
+                        College Admin
+                      </div>
+                      <div className="text-[9px] text-slate-500 truncate">Principal / Dean</div>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPersona("HOD")}
-                    className="p-2 rounded-lg border border-slate-200 bg-white text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                  >
-                    <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                      Department HOD
-                    </div>
-                    <div className="text-[9px] text-slate-500 truncate">Dr. R. K. Sharma</div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPersona("HOD")}
+                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
+                    >
+                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
+                        Department HOD
+                      </div>
+                      <div className="text-[9px] text-slate-500 truncate">Dr. R. K. Sharma</div>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPersona("Coordinator")}
-                    className="p-2 rounded-lg border border-slate-200 bg-white text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                  >
-                    <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                      Project Coordinator
-                    </div>
-                    <div className="text-[9px] text-slate-500 truncate">Batch Ops &amp; Pairing</div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPersona("Coordinator")}
+                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
+                    >
+                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
+                        Coordinator
+                      </div>
+                      <div className="text-[9px] text-slate-500 truncate">Batch Pairing</div>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPersona("Faculty")}
-                    className="p-2 rounded-lg border border-slate-200 bg-white text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                  >
-                    <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                      Faculty Guide
-                    </div>
-                    <div className="text-[9px] text-slate-500 truncate">Prof. S. K. Verma</div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPersona("Faculty")}
+                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
+                    >
+                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
+                        Faculty Guide
+                      </div>
+                      <div className="text-[9px] text-slate-500 truncate">Prof. S. K. Verma</div>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPersona("TeamLead")}
-                    className="p-2 rounded-lg border border-slate-200 bg-white text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                  >
-                    <div className="text-[11px] font-semibold text-emerald-800 group-hover:text-emerald-900">
-                      Team Lead
-                    </div>
-                    <div className="text-[9px] text-slate-500 truncate">Shivansh Mehra</div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPersona("TeamLead")}
+                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
+                    >
+                      <div className="text-[11px] font-semibold text-emerald-800 group-hover:text-emerald-900">
+                        Team Lead
+                      </div>
+                      <div className="text-[9px] text-slate-500 truncate">Shivansh Mehra</div>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleQuickPersona("Student")}
-                    className="p-2 rounded-lg border border-slate-200 bg-white text-left hover:bg-emerald-50/30 hover:border-emerald-500/40 transition-colors cursor-pointer group col-span-2 sm:col-span-1"
-                  >
-                    <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                      Student Member
-                    </div>
-                    <div className="text-[9px] text-slate-500 truncate">Aarav Sharma</div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPersona("Student")}
+                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group col-span-2 sm:col-span-1"
+                    >
+                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
+                        Student Member
+                      </div>
+                      <div className="text-[9px] text-slate-500 truncate">Aarav Sharma</div>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
