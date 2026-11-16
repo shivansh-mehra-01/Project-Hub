@@ -69,14 +69,7 @@ export interface AppShellProps {
   activeTab?: string;
 }
 
-export interface AppShellContextValue {
-  isInsideShell: boolean;
-  setOverrides?: (overrides: { pageTitle?: string; breadcrumb?: string; activeTab?: string }) => void;
-}
-
-export const AppShellContext = React.createContext<AppShellContextValue>({
-  isInsideShell: false,
-});
+export const AppShellContext = React.createContext<boolean>(false);
 
 export const AppShell: React.FC<AppShellProps> = ({
   children,
@@ -84,20 +77,20 @@ export const AppShell: React.FC<AppShellProps> = ({
   breadcrumb,
   activeTab,
 }) => {
-  const parentContext = useContext(AppShellContext);
-
-  useEffect(() => {
-    if (parentContext.isInsideShell && parentContext.setOverrides) {
-      parentContext.setOverrides({ pageTitle, breadcrumb, activeTab });
-    }
-  }, [parentContext, pageTitle, breadcrumb, activeTab]);
+  const isInsideShell = useContext(AppShellContext);
 
   // If already mounted within an outer AppShell (e.g. from DashboardLayout), pass children through cleanly
-  if (parentContext.isInsideShell) {
+  if (isInsideShell) {
     return <>{children}</>;
   }
 
-  return <AppShellInner pageTitle={pageTitle} breadcrumb={breadcrumb} activeTab={activeTab}>{children}</AppShellInner>;
+  return (
+    <AppShellContext.Provider value={true}>
+      <AppShellInner pageTitle={pageTitle} breadcrumb={breadcrumb} activeTab={activeTab}>
+        {children}
+      </AppShellInner>
+    </AppShellContext.Provider>
+  );
 };
 
 const AppShellInner: React.FC<AppShellProps> = ({
@@ -279,20 +272,10 @@ const AppShellInner: React.FC<AppShellProps> = ({
     currentPersona.isProjectCoordinator
   );
 
-  const [innerOverrides, setInnerOverrides] = useState<{
-    pageTitle?: string;
-    breadcrumb?: string;
-    activeTab?: string;
-  }>({});
-
-  useEffect(() => {
-    setInnerOverrides({});
-  }, [pathname]);
-
   const breadcrumbsInfo = getBreadcrumbs(pathname, currentPersona.role);
-  const displayTitle = pageTitle || innerOverrides.pageTitle || breadcrumbsInfo.pageTitle;
-  const displayBreadcrumb = breadcrumb || innerOverrides.breadcrumb || breadcrumbsInfo.breadcrumb;
-  const currentActiveTab = activeTab || innerOverrides.activeTab;
+  const displayTitle = pageTitle || breadcrumbsInfo.pageTitle;
+  const displayBreadcrumb = breadcrumb || breadcrumbsInfo.breadcrumb;
+  const currentActiveTab = activeTab;
 
   const primaryItems = navItems.filter((i) => i.section !== "COORDINATOR" && i.label !== "Profile");
   const coordinatorItems = navItems.filter((i) => i.section === "COORDINATOR");
@@ -358,8 +341,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
   };
 
   return (
-    <AppShellContext.Provider value={{ isInsideShell: true, setOverrides: setInnerOverrides }}>
-      <div className="flex min-h-screen bg-canvas-bg">
+    <div className="flex min-h-screen bg-canvas-bg">
       {/* ========================================================================= */}
       {/* 1. DESKTOP FIXED SIDEBAR (240px, Dark L-Frame Anchor)                     */}
       {/* ========================================================================= */}
@@ -774,6 +756,5 @@ const AppShellInner: React.FC<AppShellProps> = ({
         onClose={() => setShowCommandPalette(false)}
       />
     </div>
-  </AppShellContext.Provider>
   );
 };
