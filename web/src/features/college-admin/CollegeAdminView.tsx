@@ -318,7 +318,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
 
           {/* Departmental Performance Summary */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
                 <CardTitle>Departmental Performance Summary</CardTitle>
                 <CardDescription>
@@ -330,7 +330,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
               </Button>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-500 font-semibold text-[11px] uppercase tracking-wider">
                   <tr>
                     <th className="py-3 px-4">Branch Code</th>
@@ -711,7 +711,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-500 font-semibold text-[11px] uppercase tracking-wider">
                   <tr>
                     <th className="py-3 px-4">Engineering Department</th>

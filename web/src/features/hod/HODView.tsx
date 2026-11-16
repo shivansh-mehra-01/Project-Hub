@@ -517,7 +517,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
               </Button>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-slate-500">
                   <tr>
                     <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Faculty Member</th>
@@ -664,7 +664,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           {approvalSubTab === "allotments" || approvalSubTab === "proposals" ? (
             <Card>
               <CardContent className="p-0 overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full min-w-[640px] text-left text-xs">
                   <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-slate-500">
                     <tr>
                       <th className="py-3 px-4 w-10">
@@ -933,7 +933,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                 </Button>
               </CardHeader>
               <CardContent className="p-0 overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full min-w-[640px] text-left text-xs">
                   <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-slate-500">
                     <tr>
                       <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">University USN</th>
@@ -1058,7 +1058,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
               </div>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-slate-500">
                   <tr>
                     <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Course Outcome</th>
@@ -1134,7 +1134,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
               </div>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-slate-500">
                   <tr>
                     <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Batch</th>
@@ -1203,7 +1203,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
             </Button>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[640px] text-left text-xs">
               <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-slate-500">
                 <tr>
                   <th className="py-3 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Faculty Name</th>

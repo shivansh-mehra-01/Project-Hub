@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   Layers,
   LogOut,
+  Menu,
   RotateCcw,
   Search,
   Sliders,
@@ -111,7 +112,34 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCampusMenu, setShowCampusMenu] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState("Gandhi Nagar (Main)");
+
+  // Close mobile drawer on route navigation
+  useEffect(() => {
+    setIsMobileDrawerOpen(false);
+  }, [pathname]);
+
+  // Drawer Escape key listener and body scroll lock
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isMobileDrawerOpen) {
+        setIsMobileDrawerOpen(false);
+      }
+    };
+
+    if (isMobileDrawerOpen) {
+      document.body.style.overflow = "hidden";
+      window.addEventListener("keydown", handleKeyDown);
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMobileDrawerOpen]);
 
   // Enforce strictly Emerald & Charcoal theme
   useEffect(() => {
@@ -322,6 +350,51 @@ const AppShellInner: React.FC<AppShellProps> = ({
     );
   };
 
+  const renderMobileNavItem = (item: SidebarNavItem) => {
+    const Icon = item.icon;
+    const isProfileItem = item.label === "Profile";
+    const isActive =
+      currentActiveTab === item.label ||
+      pathname === item.href ||
+      (isProfileItem &&
+        (currentActiveTab === "Account" ||
+          pathname === "/account" ||
+          pathname === "/student/profile"));
+
+    return (
+      <Link
+        key={item.label}
+        href={item.href}
+        prefetch={true}
+        onClick={() => setIsMobileDrawerOpen(false)}
+        className={cn(
+          "flex items-center gap-3 px-3 py-2.5 min-h-[44px] text-xs font-medium rounded-lg transition-colors",
+          isActive
+            ? "bg-brand-primary text-white font-semibold shadow-xs"
+            : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
+        )}
+      >
+        <Icon
+          className={cn("h-4 w-4 shrink-0", isActive ? "text-white" : "text-slate-400")}
+          strokeWidth={1.75}
+        />
+        <span className="truncate">{item.label}</span>
+        {item.count !== undefined && (
+          <span
+            className={cn(
+              "ml-auto text-[10px] font-mono font-bold px-2 py-0.5 rounded-full",
+              isActive
+                ? "bg-white/20 text-white"
+                : "bg-white/10 text-slate-300 border border-white/10"
+            )}
+          >
+            {item.count}
+          </span>
+        )}
+      </Link>
+    );
+  };
+
   const handleLogout = () => {
     logout();
     router.replace("/login");
@@ -348,9 +421,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
   return (
     <div className="flex min-h-screen bg-canvas-bg">
       {/* ========================================================================= */}
-      {/* 1. DESKTOP FIXED SIDEBAR (240px, Dark L-Frame Anchor)                     */}
+      {/* 1. DESKTOP FIXED SIDEBAR (256px, Dark L-Frame Anchor)                     */}
       {/* ========================================================================= */}
-      <aside className="hidden lg:flex w-[240px] flex-col border-r border-white/[0.08] bg-[#111827] text-white fixed inset-y-0 z-30 select-none">
+      <aside className="hidden lg:flex w-64 flex-col border-r border-white/[0.08] bg-[#111827] text-white fixed inset-y-0 z-30 select-none">
         
         {/* Top-Left Brand Lockup & Multi-Campus Switcher (Locked to 56px / h-14) */}
         <div className="h-14 flex items-center justify-between px-4 border-b border-white/[0.08] relative">
@@ -435,7 +508,20 @@ const AppShellInner: React.FC<AppShellProps> = ({
         </nav>
 
         {/* Unified Bottom-Left Sidebar Footer */}
-        <div className="p-3 border-t border-white/[0.08] bg-[#111827] pb-12">
+        <div className="p-3 border-t border-white/[0.08] bg-[#111827]">
+          {/* User Profile Mini Block */}
+          <div className="px-3 py-2 mb-2 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center justify-between">
+            <div className="min-w-0 pr-2">
+              <p className="text-xs font-semibold text-white truncate">{currentPersona.name}</p>
+              <p className="text-[10px] text-slate-400 font-mono truncate">
+                {getRoleSubtitle(currentPersona.role, currentPersona.isProjectCoordinator)}
+              </p>
+            </div>
+            <div className="w-7 h-7 rounded-full bg-brand-primary/20 border border-brand-primary/40 flex items-center justify-center text-emerald-400 font-bold text-xs font-mono shrink-0">
+              {getAvatarInitials(currentPersona.name)}
+            </div>
+          </div>
+
           {/* Minimal Log out Action */}
           <button
             type="button"
@@ -449,37 +535,47 @@ const AppShellInner: React.FC<AppShellProps> = ({
       </aside>
 
       {/* ========================================================================= */}
-      {/* 2. MAIN CANVAS WRAPPER (offset on desktop by 240px)                       */}
+      {/* 2. MAIN CANVAS WRAPPER (offset on desktop by 256px / lg:pl-64)             */}
       {/* ========================================================================= */}
-      <div className="flex-1 lg:pl-[240px] flex flex-col min-w-0 pb-16 lg:pb-0">
+      <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
         
         {/* Top Header (Locked to 56px / h-14 with 1px Hairline Border) */}
-        <header className="h-14 border-b border-white/[0.08] bg-[#111827] sticky top-0 z-20 px-4 sm:px-6 flex items-center justify-between select-none">
+        <header className="h-14 border-b border-white/[0.08] bg-[#111827] sticky top-0 z-20 px-3 sm:px-6 flex items-center justify-between select-none">
           
-          {/* Breadcrumb Hierarchy */}
-          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+          {/* Breadcrumb Hierarchy & Mobile Menu Toggle */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+            {/* Mobile / Tablet Drawer Toggle Button (44x44px touch target) */}
+            <button
+              type="button"
+              onClick={() => setIsMobileDrawerOpen(true)}
+              aria-label="Open navigation menu"
+              className="lg:hidden h-11 w-11 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer mr-0.5 shrink-0"
+            >
+              <Menu className="w-5 h-5" strokeWidth={1.75} />
+            </button>
+
             <CollabexLogo variant="dark" size="sm" className="lg:hidden shrink-0" />
             <span className="hidden sm:inline-block lg:hidden h-3.5 w-px bg-white/20" />
-            <span className="text-sm font-semibold text-white tracking-tight font-heading truncate">
+            <span className="text-sm font-semibold text-white tracking-tight font-heading truncate max-w-[140px] sm:max-w-[240px] md:max-w-none">
               {displayTitle}
             </span>
             {displayBreadcrumb && (
               <>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" strokeWidth={1.75} />
-                <span className="text-xs font-normal text-slate-400 truncate hidden sm:inline">
+                <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0 hidden sm:inline" strokeWidth={1.75} />
+                <span className="text-xs font-normal text-slate-400 truncate hidden md:inline">
                   {displayBreadcrumb}
                 </span>
               </>
             )}
           </div>
 
-          {/* Center/Right Actions: Command Search + Dark Status Pill + Notifications */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Center/Right Actions: Command Search + Status Pill + Notifications */}
+          <div className="flex items-center gap-1.5 sm:gap-3">
             {/* Global Command Search (⌘K) */}
             <button
               type="button"
               onClick={() => setShowCommandPalette(true)}
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 text-xs px-2.5 sm:px-3 py-1.5 rounded-md flex items-center gap-2 transition-colors cursor-pointer group"
+              className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 text-xs px-2 sm:px-3 py-1.5 min-h-[36px] sm:min-h-0 rounded-md flex items-center gap-2 transition-colors cursor-pointer group"
               title="Search campus or jump to... (⌘K)"
             >
               <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200" strokeWidth={1.75} />
@@ -511,24 +607,25 @@ const AppShellInner: React.FC<AppShellProps> = ({
               <button
                 type="button"
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                 title="Notifications"
+                aria-label="Notifications"
               >
                 <Bell className="h-4 w-4" strokeWidth={1.75} />
-                <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span className="absolute top-2.5 right-2.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
               </button>
 
               {/* Notification Popover */}
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-3 z-50 space-y-2 text-white animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-3 z-50 space-y-2 text-white animate-in fade-in zoom-in-95 duration-100">
                   <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
                     <span className="text-xs font-bold text-white font-heading">Notifications</span>
                     <button
                       type="button"
                       onClick={() => setShowNotifications(false)}
-                      className="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                      className="text-slate-400 hover:text-white p-1 cursor-pointer"
                     >
-                      <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      <X className="h-4 w-4" strokeWidth={1.75} />
                     </button>
                   </div>
                   <div className="divide-y divide-white/[0.04] max-h-64 overflow-y-auto">
@@ -546,63 +643,104 @@ const AppShellInner: React.FC<AppShellProps> = ({
               )}
             </div>
 
-            {/* Mobile Logout Button (< 1024px) */}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="lg:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5 text-xs font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
-              title="Log out"
-            >
-              <LogOut className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
-              <span>Log out</span>
-            </button>
-
-
+            {/* Role Badge Indicator */}
+            <span className="inline-flex items-center text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+              {formatRoleLabel(currentPersona.role)}
+            </span>
           </div>
         </header>
 
-        {/* Main Content Area (Protected by Centralized RouteGuard) */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1200px] w-full mx-auto space-y-6">
+        {/* Main Content Area (Protected by Centralized RouteGuard, Responsive Container) */}
+        <main className="flex-1 min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7 max-w-[1440px] w-full mx-auto space-y-6">
           <RouteGuard>{children}</RouteGuard>
         </main>
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. MOBILE FIXED BOTTOM TAB BAR (< 768px, 64px height, max 4 tabs)         */}
+      {/* 3. MOBILE SLIDE-OVER NAVIGATION DRAWER (< 1024px)                         */}
       {/* ========================================================================= */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 bg-[#111827] border-t border-white/[0.08] z-40 flex items-center justify-around px-2 select-none shadow-lg">
-        {navItems.slice(0, currentPersona.role === "SuperAdmin" ? 5 : 4).map((item) => {
-          const Icon = item.icon;
-          const isActive = currentActiveTab === item.label || pathname === item.href;
+      {isMobileDrawerOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop overlay */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={() => setIsMobileDrawerOpen(false)}
+            aria-hidden="true"
+          />
 
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              prefetch={true}
-              className={cn(
-                "flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium transition-colors relative",
-                isActive
-                  ? "text-emerald-400 font-semibold"
-                  : "text-slate-400 hover:text-white"
-              )}
-            >
-              <div className="relative">
-                <Icon
-                  className={cn("h-4 w-4 mb-1", isActive ? "text-emerald-400" : "text-slate-500")}
-                  strokeWidth={1.75}
-                />
-                {item.count !== undefined && item.count > 0 && (
-                  <span className="absolute -top-1 -right-2 text-[8px] font-mono font-bold px-1 rounded-full bg-emerald-500 text-white leading-none">
-                    {item.count}
-                  </span>
-                )}
+          {/* Slide-Over Drawer Panel */}
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation drawer"
+            className="relative w-72 max-w-[calc(100vw-3rem)] bg-[#111827] text-white flex flex-col h-full shadow-2xl z-10 border-r border-white/10 animate-in slide-in-from-left duration-200 select-none"
+          >
+            {/* Drawer Header (56px / h-14) */}
+            <div className="h-14 flex items-center justify-between px-4 border-b border-white/[0.08]">
+              <CollabexLogo variant="dark" size="sm" />
+              <button
+                type="button"
+                onClick={() => setIsMobileDrawerOpen(false)}
+                className="h-11 w-11 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Close menu"
+              >
+                <X className="w-5 h-5" strokeWidth={1.75} />
+              </button>
+            </div>
+
+            {/* Role & User Context Banner */}
+            <div className="px-4 py-3 bg-white/[0.03] border-b border-white/[0.06] flex items-center justify-between">
+              <div className="min-w-0 pr-2">
+                <p className="text-xs font-semibold text-white truncate">{currentPersona.name}</p>
+                <p className="text-[10px] text-slate-400 font-mono truncate">
+                  {getRoleSubtitle(currentPersona.role, currentPersona.isProjectCoordinator)}
+                </p>
               </div>
-              <span className="truncate max-w-[56px] text-center">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+              <div className="w-7 h-7 rounded-full bg-brand-primary/20 border border-brand-primary/40 flex items-center justify-center text-emerald-400 font-bold text-xs font-mono shrink-0">
+                {getAvatarInitials(currentPersona.name)}
+              </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
+              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
+                Menu
+              </div>
+              {primaryItems.map(renderMobileNavItem)}
+
+              {coordinatorItems.length > 0 && (
+                <>
+                  <div className="pt-3 pb-1 px-2 border-t border-white/[0.06] text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400 mt-2">
+                    Coordinator
+                  </div>
+                  {coordinatorItems.map(renderMobileNavItem)}
+                </>
+              )}
+
+              {profileItem && (
+                <div className="pt-2 mt-1 border-t border-white/[0.06]">
+                  {renderMobileNavItem(profileItem)}
+                </div>
+              )}
+            </nav>
+
+            {/* Drawer Footer with Logout Button */}
+            <div className="p-3 border-t border-white/[0.08] bg-[#111827]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileDrawerOpen(false);
+                  handleLogout();
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 min-h-[44px] text-xs font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 shrink-0" strokeWidth={1.75} />
+                <span>Log out</span>
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 4. GLOBAL COMMAND PALETTE MODAL                                           */}

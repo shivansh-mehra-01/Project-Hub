@@ -89,6 +89,13 @@
   --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+  position: relative;
+}
+
 body {
   background-color: var(--canvas-bg);
   color: var(--foreground);
@@ -97,6 +104,15 @@ body {
   line-height: 1.5;
   letter-spacing: -0.01em;
   font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Prevent unwanted iOS auto-zoom on mobile form inputs */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
 /* Smooth theme transition */

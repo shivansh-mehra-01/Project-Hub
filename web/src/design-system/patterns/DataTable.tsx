@@ -79,24 +79,24 @@ export function DataTable<TData, TValue>({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Search */}
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 h-4 w-4 text-[#94A3B8] pointer-events-none top-2.5" strokeWidth={1.75} />
+          <Search className="absolute left-3 h-4 w-4 text-[#94A3B8] pointer-events-none top-3 sm:top-2.5" strokeWidth={1.75} />
           <input
             type="text"
             value={globalFilter ?? ""}
             onChange={(e) => setGlobalFilter(e.target.value)}
             placeholder={searchPlaceholder}
-            className="h-9 w-full rounded-lg border border-[#E2E8F0] bg-white pl-9 pr-3 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+            className="h-11 sm:h-9 min-h-[44px] sm:min-h-[36px] w-full rounded-lg border border-[#E2E8F0] bg-white pl-9 pr-3 text-base sm:text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 transition-colors"
           />
         </div>
 
         {/* Status Filter Pills */}
         {statusOptions && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          <div className="flex flex-wrap items-center gap-1.5 pb-1 sm:pb-0">
             <button
               type="button"
               onClick={() => setSelectedStatus("ALL")}
               className={cn(
-                "px-2.5 py-1 text-xs font-medium rounded-full border transition-colors cursor-pointer shrink-0",
+                "px-2.5 py-1.5 sm:py-1 min-h-[36px] sm:min-h-0 text-xs font-medium rounded-full border transition-colors cursor-pointer shrink-0",
                 selectedStatus === "ALL"
                   ? "bg-[#0F172A] text-white border-[#0F172A]"
                   : "bg-white text-[#475569] border-[#E2E8F0] hover:bg-[#F8FAFC]"
@@ -110,7 +110,7 @@ export function DataTable<TData, TValue>({
                 type="button"
                 onClick={() => setSelectedStatus(opt.value)}
                 className={cn(
-                  "px-2.5 py-1 text-xs font-medium rounded-full border transition-colors cursor-pointer shrink-0",
+                  "px-2.5 py-1.5 sm:py-1 min-h-[36px] sm:min-h-0 text-xs font-medium rounded-full border transition-colors cursor-pointer shrink-0",
                   selectedStatus === opt.value
                     ? "bg-brand-primary text-white border-brand-primary"
                     : "bg-white text-[#475569] border-[#E2E8F0] hover:bg-[#F8FAFC]"
@@ -124,9 +124,9 @@ export function DataTable<TData, TValue>({
       </div>
 
       {/* Table Container */}
-      <div className="rounded-xl border border-[#E2E8F0] bg-white shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+      <div className="rounded-xl border border-[#E2E8F0] bg-white shadow-2xs overflow-hidden w-full">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full min-w-[640px] text-left text-xs border-collapse">
             <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>

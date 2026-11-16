@@ -408,7 +408,7 @@ export const CoordinatorView: React.FC = () => {
           {/* CSV Verification Preview Table */}
           {isCsvUploaded && (
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <CardTitle>CSV Parsing &amp; Verification Preview</CardTitle>
                   <CardDescription>
@@ -420,7 +420,7 @@ export const CoordinatorView: React.FC = () => {
                 </Badge>
               </CardHeader>
               <CardContent className="p-0 overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full min-w-[640px] text-left text-xs">
                   <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]">
                     <tr>
                       <th className="py-2.5 px-4 font-semibold">Row</th>
@@ -514,7 +514,7 @@ export const CoordinatorView: React.FC = () => {
                   />
                 </div>
               ) : (
-                <table className="w-full text-left text-xs">
+                <table className="w-full min-w-[640px] text-left text-xs">
                   <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B]">
                     <tr>
                       <th className="py-2.5 px-4 font-semibold">Team Code</th>

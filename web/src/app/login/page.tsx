@@ -259,8 +259,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 select-none">
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-10 lg:gap-14">
+    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4 sm:p-6 lg:p-8 select-none">
+      <div className="w-full max-w-6xl mx-auto px-2 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-8 sm:gap-10 lg:gap-14">
         {/* ========================================================================= */}
         {/* LEFT COLUMN: Minimal Brand & Value Proposition                            */}
         {/* ========================================================================= */}
@@ -279,29 +279,29 @@ export default function LoginPage() {
           </div>
 
           {/* Bold Display Headline & Subtext */}
-          <div className="space-y-3">
-            <h1 className="text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 font-heading leading-tight">
+          <div className="space-y-2 sm:space-y-3">
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 font-heading leading-tight">
               Plan. Track. Achieve.
             </h1>
-            <p className="text-base text-slate-600 leading-relaxed max-w-md">
+            <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md">
               The complete workspace for college projects and NBA compliance.
             </p>
           </div>
 
           {/* Minimal Single-Line 3-Item Feature Strip */}
-          <div className="border-t border-slate-200/80 pt-6 flex flex-wrap lg:flex-nowrap items-center gap-4 text-xs text-slate-500 whitespace-nowrap font-medium">
-            <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#047857]" strokeWidth={2} />
+          <div className="border-t border-slate-200/80 pt-5 sm:pt-6 flex flex-wrap lg:flex-nowrap items-center gap-3 sm:gap-4 text-xs text-slate-500 font-medium">
+            <span className="inline-flex items-center gap-1.5 whitespace-normal sm:whitespace-nowrap">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#047857] shrink-0" strokeWidth={2} />
               <span>Manage Projects Efficiently</span>
             </span>
             <span className="hidden lg:inline-block h-3.5 w-px bg-slate-300" />
-            <span className="inline-flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#047857]" strokeWidth={2} />
+            <span className="inline-flex items-center gap-1.5 whitespace-normal sm:whitespace-nowrap">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#047857] shrink-0" strokeWidth={2} />
               <span>Ensure NBA Compliance</span>
             </span>
             <span className="hidden lg:inline-block h-3.5 w-px bg-slate-300" />
-            <span className="inline-flex items-center gap-1.5">
-              <TrendingUp className="w-3.5 h-3.5 text-[#047857]" strokeWidth={2} />
+            <span className="inline-flex items-center gap-1.5 whitespace-normal sm:whitespace-nowrap">
+              <TrendingUp className="w-3.5 h-3.5 text-[#047857] shrink-0" strokeWidth={2} />
               <span>Track Progress with Ease</span>
             </span>
           </div>
@@ -315,12 +315,12 @@ export default function LoginPage() {
         {/* ========================================================================= */}
         {/* RIGHT COLUMN: Unboxed, Clean Login Form                                   */}
         {/* ========================================================================= */}
-        <div className="max-w-sm w-full mx-auto">
+        <div className="max-w-sm sm:max-w-md w-full mx-auto">
           {/* VIEW 1: STANDARD LOGIN */}
           {viewMode === "login" && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-3xl font-bold text-slate-900 font-heading tracking-tight">
+                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 font-heading tracking-tight">
                   Login
                 </h2>
               </div>
@@ -343,7 +343,7 @@ export default function LoginPage() {
                         setEmail(e.target.value);
                         if (emailError) setEmailError("");
                       }}
-                      className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                      className="w-full h-11 sm:h-10 min-h-[44px] pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-base sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                     />
                   </div>
                 </div>
@@ -362,12 +362,12 @@ export default function LoginPage() {
                       autoComplete="current-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full h-10 pl-9 pr-10 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono transition-colors"
+                      className="w-full h-11 sm:h-10 min-h-[44px] pl-9 pr-11 rounded-lg border border-slate-200 bg-white text-base sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono transition-colors"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                      className="absolute inset-y-0 right-0 pr-3 h-11 w-11 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
                       title={showPassword ? "Hide password" : "Show password"}
                       tabIndex={-1}
                     >
@@ -400,7 +400,7 @@ export default function LoginPage() {
                   type="submit"
                   disabled={isLoading}
                   aria-busy={isLoading}
-                  className="w-full h-10 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-medium text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-xs"
+                  className="w-full h-11 sm:h-10 min-h-[44px] rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-medium text-base sm:text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-xs"
                 >
                   {isLoading ? (
                     <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -413,11 +413,11 @@ export default function LoginPage() {
                 </button>
 
                 {/* Right-aligned Forgot Password Link */}
-                <div className="flex justify-end pt-0.5">
+                <div className="flex justify-end pt-1">
                   <button
                     type="button"
                     onClick={() => switchToOtp()}
-                    className="text-sm font-medium text-[#047857] hover:underline cursor-pointer"
+                    className="text-sm font-medium text-[#047857] hover:underline cursor-pointer min-h-[36px] flex items-center"
                   >
                     Forgot password?
                   </button>
@@ -430,7 +430,7 @@ export default function LoginPage() {
           {viewMode === "otp" && (
             <div className="space-y-6">
               <div className="space-y-1">
-                <h2 className="text-3xl font-bold text-slate-900 font-heading tracking-tight">
+                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 font-heading tracking-tight">
                   {otpStep === 1 ? "Reset Password" : "Verification Code"}
                 </h2>
                 <p className="text-xs text-slate-500">
@@ -459,7 +459,7 @@ export default function LoginPage() {
                           setOtpEmail(e.target.value);
                           if (otpError) setOtpError("");
                         }}
-                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                        className="w-full h-11 sm:h-10 min-h-[44px] pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-base sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                       />
                     </div>
                   </div>
@@ -474,7 +474,7 @@ export default function LoginPage() {
                     type="submit"
                     disabled={isOtpLoading}
                     aria-busy={isOtpLoading}
-                    className="w-full h-10 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-medium text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-xs"
+                    className="w-full h-11 sm:h-10 min-h-[44px] rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-medium text-base sm:text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-xs"
                   >
                     {isOtpLoading ? (
                       <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -490,7 +490,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={switchToLogin}
-                      className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline inline-flex items-center gap-1 cursor-pointer min-h-[36px]"
                     >
                       <span>&larr; Back to Login</span>
                     </button>
@@ -512,7 +512,7 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setOtpCode(devOtp)}
-                        className="text-[11px] font-semibold text-amber-800 underline hover:text-amber-950 cursor-pointer"
+                        className="text-[11px] font-semibold text-amber-800 underline hover:text-amber-950 cursor-pointer min-h-[36px] flex items-center"
                       >
                         Auto-filled
                       </button>
@@ -527,7 +527,7 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setOtpStep(1)}
-                        className="text-[11px] text-[#047857] hover:underline font-medium cursor-pointer"
+                        className="text-[11px] text-[#047857] hover:underline font-medium cursor-pointer min-h-[32px] flex items-center"
                       >
                         Edit Email
                       </button>
@@ -546,7 +546,7 @@ export default function LoginPage() {
                           setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
                           if (otpError) setOtpError("");
                         }}
-                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono tracking-widest"
+                        className="w-full h-11 sm:h-10 min-h-[44px] pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-base sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono tracking-widest"
                       />
                     </div>
                   </div>
@@ -564,12 +564,12 @@ export default function LoginPage() {
                         autoComplete="new-password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full h-10 pl-9 pr-10 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                        className="w-full h-11 sm:h-10 min-h-[44px] pl-9 pr-11 rounded-lg border border-slate-200 bg-white text-base sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                       />
                       <button
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                        className="absolute inset-y-0 right-0 pr-3 h-11 w-11 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
                         title={showNewPassword ? "Hide password" : "Show password"}
                         tabIndex={-1}
                       >
@@ -595,7 +595,7 @@ export default function LoginPage() {
                         autoComplete="new-password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                        className="w-full h-11 sm:h-10 min-h-[44px] pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-base sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                       />
                     </div>
                   </div>
@@ -610,7 +610,7 @@ export default function LoginPage() {
                     type="submit"
                     disabled={isOtpLoading}
                     aria-busy={isOtpLoading}
-                    className="w-full h-10 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-medium text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-xs"
+                    className="w-full h-11 sm:h-10 min-h-[44px] rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-medium text-base sm:text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-xs"
                   >
                     {isOtpLoading ? (
                       <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -628,7 +628,7 @@ export default function LoginPage() {
                       onClick={() => handleRequestOtp()}
                       disabled={isOtpLoading || cooldown > 0}
                       className={cn(
-                        "font-medium cursor-pointer transition-colors",
+                        "font-medium cursor-pointer transition-colors min-h-[36px] flex items-center",
                         cooldown > 0
                           ? "text-slate-400 cursor-not-allowed"
                           : "text-slate-500 hover:text-[#047857] underline"
@@ -639,7 +639,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={switchToLogin}
-                      className="text-slate-600 hover:text-slate-900 hover:underline cursor-pointer font-medium"
+                      className="text-slate-600 hover:text-slate-900 hover:underline cursor-pointer font-medium min-h-[36px] flex items-center"
                     >
                       &larr; Back to Login
                     </button>

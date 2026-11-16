@@ -48,7 +48,7 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-xs transition-opacity"
@@ -61,13 +61,13 @@ export const Modal: React.FC<ModalProps> = ({
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative w-full rounded-xl bg-white shadow-xl border border-[#E2E8F0] z-10 overflow-hidden transform transition-all my-8",
+          "relative w-[calc(100vw-24px)] sm:w-full max-h-[90dvh] flex flex-col rounded-xl bg-white shadow-xl border border-[#E2E8F0] z-10 overflow-hidden transform transition-all my-auto sm:my-8",
           maxWidthClasses[maxWidth]
         )}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b border-[#E2E8F0] bg-[#F8FAFC]">
-          <div className="space-y-1 pr-6">
+        {/* Sticky Header */}
+        <div className="sticky top-0 z-10 flex items-start justify-between p-4 sm:p-5 border-b border-[#E2E8F0] bg-[#F8FAFC] shrink-0">
+          <div className="space-y-1 pr-4">
             {title && (
               <h3 className="text-base font-semibold text-[#0F172A] tracking-tight">
                 {title}
@@ -80,19 +80,19 @@ export const Modal: React.FC<ModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors cursor-pointer"
+            className="rounded-lg p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors cursor-pointer"
           >
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 max-h-[calc(100vh-220px)] overflow-y-auto">{children}</div>
+        {/* Scrollable Content */}
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">{children}</div>
 
-        {/* Footer */}
+        {/* Sticky Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-2.5 p-4 bg-[#F8FAFC] border-t border-[#E2E8F0]">
+          <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2.5 p-3 sm:p-4 bg-[#F8FAFC] border-t border-[#E2E8F0] shrink-0">
             {footer}
           </div>
         )}

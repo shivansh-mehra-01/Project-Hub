@@ -591,7 +591,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
             </div>
 
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-500 font-semibold text-[11px] uppercase tracking-wider">
                   <tr>
                     <th className="py-3 px-4">College Name</th>
@@ -1007,7 +1007,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-500 font-semibold text-[11px] uppercase tracking-wider">
                   <tr>
                     <th className="py-3 px-4">College Tenant</th>
@@ -1095,7 +1095,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-500 font-semibold text-[11px] uppercase tracking-wider">
                   <tr>
                     <th className="py-2.5 px-4">Tier Plan</th>
@@ -1186,7 +1186,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-500 font-semibold text-[11px] uppercase tracking-wider">
                   <tr>
                     <th className="py-2.5 px-4">Tenant Partition</th>
@@ -1294,11 +1294,11 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               </div>
 
               {/* Recent Automated Queue Table */}
-              <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div className="rounded-xl border border-slate-200 overflow-x-auto">
                 <div className="p-2.5 bg-slate-50 text-[11px] font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200">
                   Recent Async Worker Jobs
                 </div>
-                <table className="w-full text-left text-xs">
+                <table className="w-full min-w-[640px] text-left text-xs">
                   <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-500 font-semibold text-[10px] uppercase">
                     <tr>
                       <th className="py-2 px-3">Job ID</th>
@@ -1414,7 +1414,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
             </div>
 
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-500 font-semibold text-[11px] uppercase tracking-wider">
                   <tr>
                     <th className="py-3 px-4">Timestamp (UTC)</th>

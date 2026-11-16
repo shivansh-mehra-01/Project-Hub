@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Inter, JetBrains_Mono } from "next/font/google";
 import { QueryProvider } from "@/lib/query-provider";
 import { ProjectHubStoreProvider } from "@/mocks/ProjectHubStore";
@@ -35,6 +35,13 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#111827",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -43,9 +50,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${plusJakartaSans.variable} ${inter.variable} ${jetbrainsMono.variable} scroll-smooth`}
+      className={`${plusJakartaSans.variable} ${inter.variable} ${jetbrainsMono.variable} scroll-smooth overflow-x-hidden max-w-full`}
     >
-      <body className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans antialiased">
+      <body className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans antialiased overflow-x-hidden max-w-full">
         <QueryProvider>
           <ProjectHubStoreProvider>{children}</ProjectHubStoreProvider>
           <ToastContainer />

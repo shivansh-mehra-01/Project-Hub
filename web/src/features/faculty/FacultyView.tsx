@@ -336,7 +336,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                   />
                 </div>
               ) : (
-                <table className="w-full text-left text-xs">
+                <table className="w-full min-w-[640px] text-left text-xs">
                   <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-slate-500">
                     <tr>
                       <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Team Code</th>

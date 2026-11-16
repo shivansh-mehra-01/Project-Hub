@@ -30,7 +30,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           rows={rows}
           readOnly={isReadOnly}
           className={cn(
-            "flex w-full rounded-lg border bg-white px-3 py-2 text-xs text-[#0F172A] placeholder:text-[#94A3B8] transition-colors focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary disabled:cursor-not-allowed disabled:bg-[#F8FAFC]",
+            "flex min-h-[44px] w-full rounded-lg border bg-white px-3 py-2 text-base sm:text-xs text-[#0F172A] placeholder:text-[#94A3B8] transition-colors focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary disabled:cursor-not-allowed disabled:bg-[#F8FAFC]",
             error
               ? "border-[#DC2626] focus:border-[#DC2626] focus:ring-[#DC2626]/20"
               : "border-[#E2E8F0] hover:border-[#CBD5E1]",
