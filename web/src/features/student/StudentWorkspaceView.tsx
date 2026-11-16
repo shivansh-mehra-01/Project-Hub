@@ -48,8 +48,8 @@ export const StudentWorkspaceView: React.FC = () => {
     uploadArtifact,
   } = useProjectHubStore();
 
-  // Demo mode gate
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
+  // Demo mode gate: strictly requires NEXT_PUBLIC_DEMO_MODE === "true"
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
   // Lifecycle state simulator: Off-Season, Pre-Approval Setup, Post-Approval Active
   const [lifecycleState, setLifecycleState] = useState<"offseason" | "preapproval" | "active">("active");

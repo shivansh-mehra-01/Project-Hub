@@ -208,94 +208,162 @@ export const StudentExploreView: React.FC = () => {
 
         {/* 1. Problem Bank Grid */}
         {filter === "problems" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {problemBank.map((pb) => (
-              <Card key={pb.id} className="hover:border-[#CBD5E1] transition-all flex flex-col justify-between">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="sdg" sdgNumber={pb.sdgNumber} size="sm">
-                      {pb.domain}
-                    </Badge>
-                    <span className="text-[10px] text-[#64748B]">Capacity: {pb.capacity}</span>
-                  </div>
-                  <CardTitle className="pt-2 text-sm">{pb.title}</CardTitle>
-                  <CardDescription className="line-clamp-3">{pb.abstract}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 text-xs pt-0">
-                  <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
-                    <div className="text-[11px] text-[#64748B]">Faculty Mentor:</div>
-                    <div className="font-semibold text-[#0F172A]">{pb.facultyName}</div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="text-[10px] font-semibold text-[#64748B]">Prerequisites:</div>
-                    <div className="flex flex-wrap gap-1">
-                      {pb.prerequisites.map((p, i) => (
-                        <span
-                          key={i}
-                          className="px-1.5 py-0.5 rounded bg-white text-[#475569] border border-[#CBD5E1] text-[10px] font-mono"
-                        >
-                          {p}
-                        </span>
-                      ))}
+          problemBank.length === 0 ? (
+            <EmptyState
+              title="No Problem Statements Available"
+              description="Faculty members have not posted any open research topics in the problem bank yet."
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {problemBank.map((pb) => (
+                <Card key={pb.id} className="hover:border-[#CBD5E1] transition-all flex flex-col justify-between">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="sdg" sdgNumber={pb.sdgNumber} size="sm">
+                        {pb.domain}
+                      </Badge>
+                      <span className="text-[10px] text-[#64748B]">Capacity: {pb.capacity}</span>
                     </div>
-                  </div>
+                    <CardTitle className="pt-2 text-sm">{pb.title}</CardTitle>
+                    <CardDescription className="line-clamp-3">{pb.abstract}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-xs pt-0">
+                    <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
+                      <div className="text-[11px] text-[#64748B]">Faculty Mentor:</div>
+                      <div className="font-semibold text-[#0F172A]">{pb.facultyName}</div>
+                    </div>
 
-                  <Button
-                    size="sm"
-                    variant={hasActiveProject || pb.taken ? "secondary" : requestedId === pb.id ? "secondary" : "primary"}
-                    className="w-full"
-                    disabled={hasActiveProject || pb.taken || requestedId === pb.id}
-                    onClick={() => !hasActiveProject && setRequestedId(pb.id)}
-                  >
-                    {hasActiveProject
-                      ? "Topic Requests Locked"
-                      : pb.taken
-                      ? "Topic Allocated"
-                      : requestedId === pb.id
-                      ? "Request Submitted to Faculty"
-                      : "Request Topic Allotment"}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-semibold text-[#64748B]">Prerequisites:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {pb.prerequisites.map((p, i) => (
+                          <span
+                            key={i}
+                            className="px-1.5 py-0.5 rounded bg-white text-[#475569] border border-[#CBD5E1] text-[10px] font-mono"
+                          >
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      variant={hasActiveProject || pb.taken ? "secondary" : requestedId === pb.id ? "secondary" : "primary"}
+                      className="w-full"
+                      disabled={hasActiveProject || pb.taken || requestedId === pb.id}
+                      onClick={() => !hasActiveProject && setRequestedId(pb.id)}
+                    >
+                      {hasActiveProject
+                        ? "Topic Requests Locked"
+                        : pb.taken
+                        ? "Topic Allocated"
+                        : requestedId === pb.id
+                        ? "Request Submitted to Faculty"
+                        : "Request Topic Allotment"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )
         )}
 
         {/* 2. Open Peers Grid */}
         {filter === "peers" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {openPeers.map((peer) => {
-              const isInvited = invitedPeerIds.includes(peer.id);
+          openPeers.length === 0 ? (
+            <EmptyState
+              title="No Available Peers"
+              description="All students in this cohort have already formed or joined project teams."
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {openPeers.map((peer) => {
+                const isInvited = invitedPeerIds.includes(peer.id);
 
-              return (
-                <Card key={peer.id} className="p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-[#0F172A]">{peer.name}</h4>
-                      <span className="font-mono text-[11px] text-[#64748B]">{peer.usn}</span>
+                return (
+                  <Card key={peer.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="text-sm font-bold text-[#0F172A]">{peer.name}</h4>
+                        <span className="font-mono text-[11px] text-[#64748B]">{peer.usn}</span>
+                      </div>
+                      <Badge variant={isInvited ? "success" : "info"} size="sm" dot>
+                        {isInvited ? "Invited" : "Open for Team"}
+                      </Badge>
                     </div>
-                    <Badge variant={isInvited ? "success" : "info"} size="sm" dot>
-                      {isInvited ? "Invited" : "Open for Team"}
-                    </Badge>
-                  </div>
 
-                  <div className="space-y-1.5 text-xs">
-                    <div>
-                      <span className="text-[#64748B]">Domain Interest: </span>
-                      <span className="font-semibold text-[#0F172A]">{peer.interest}</span>
+                    <div className="space-y-1.5 text-xs">
+                      <div>
+                        <span className="text-[#64748B]">Domain Interest: </span>
+                        <span className="font-semibold text-[#0F172A]">{peer.interest}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#64748B]">Looking For: </span>
+                        <span className="text-[#475569]">{peer.lookingFor}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {peer.skills.map((s, i) => (
+                          <span
+                            key={i}
+                            className="px-2 py-0.5 rounded-md bg-[#F1F5F9] text-[#334155] border border-[#E2E8F0] font-mono text-[10px]"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[#64748B]">Looking For: </span>
-                      <span className="text-[#475569]">{peer.lookingFor}</span>
+
+                    <Button
+                      size="sm"
+                      variant={isInvited ? "secondary" : "primary"}
+                      className="w-full"
+                      disabled={isInvited}
+                      onClick={() => handleSendPeerInvite(peer)}
+                      leftIcon={isInvited ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <Send className="h-3.5 w-3.5" />}
+                    >
+                      {isInvited ? "Invite Sent ✓" : "Send Team Invite"}
+                    </Button>
+                  </Card>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {/* 3. Past Projects Grid */}
+        {filter === "past" && (
+          pastProjects.length === 0 ? (
+            <EmptyState
+              title="No Past Projects"
+              description="No archived project records found for this academic department."
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {pastProjects.map((past) => (
+                <Card key={past.id} className="p-4 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
+                        {past.year}
+                      </span>
+                      <span className="text-[11px] font-bold text-emerald-600 font-mono">
+                        {past.rating}
+                      </span>
                     </div>
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {peer.skills.map((s, i) => (
+
+                    <div>
+                      <h4 className="text-sm font-bold text-[#0F172A] leading-snug">{past.title}</h4>
+                      <p className="text-xs text-[#64748B] mt-1">Guided by: {past.guide}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1">
+                      {past.tags.map((t, i) => (
                         <span
                           key={i}
-                          className="px-2 py-0.5 rounded-md bg-[#F1F5F9] text-[#334155] border border-[#E2E8F0] font-mono text-[10px]"
+                          className="px-2 py-0.5 rounded bg-white border border-[#E2E8F0] text-[10px] font-mono text-[#475569]"
                         >
-                          {s}
+                          {t}
                         </span>
                       ))}
                     </div>
@@ -303,64 +371,17 @@ export const StudentExploreView: React.FC = () => {
 
                   <Button
                     size="sm"
-                    variant={isInvited ? "secondary" : "primary"}
-                    className="w-full"
-                    disabled={isInvited}
-                    onClick={() => handleSendPeerInvite(peer)}
-                    leftIcon={isInvited ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <Send className="h-3.5 w-3.5" />}
+                    variant="ghost"
+                    className="w-full mt-2"
+                    onClick={() => setInspectingProject(past)}
+                    leftIcon={<Search className="h-3.5 w-3.5" strokeWidth={1.75} />}
                   >
-                    {isInvited ? "Invite Sent ✓" : "Send Team Invite"}
+                    Inspect Abstract &amp; Repo
                   </Button>
                 </Card>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 3. Past Projects Grid */}
-        {filter === "past" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {pastProjects.map((past) => (
-              <Card key={past.id} className="p-4 space-y-3 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
-                      {past.year}
-                    </span>
-                    <span className="text-[11px] font-bold text-emerald-600 font-mono">
-                      {past.rating}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-bold text-[#0F172A] leading-snug">{past.title}</h4>
-                    <p className="text-xs text-[#64748B] mt-1">Guided by: {past.guide}</p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1">
-                    {past.tags.map((t, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-0.5 rounded bg-white border border-[#E2E8F0] text-[10px] font-mono text-[#475569]"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="w-full mt-2"
-                  onClick={() => setInspectingProject(past)}
-                  leftIcon={<Search className="h-3.5 w-3.5" strokeWidth={1.75} />}
-                >
-                  Inspect Abstract &amp; Repo
-                </Button>
-              </Card>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
         )}
       </div>
 

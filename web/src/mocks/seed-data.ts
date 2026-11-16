@@ -124,7 +124,7 @@ export const initialPersonas: Record<string, UserPersona> = {
     role: "Faculty",
     collegeId: "col-sistec-01",
     departmentId: "dept-cse-01",
-    isProjectCoordinator: false,
+    isProjectCoordinator: true,
     employeeId: "EMP-CSE-014",
   },
   facultyCoordinator: {

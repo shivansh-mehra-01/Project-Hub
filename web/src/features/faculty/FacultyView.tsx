@@ -494,7 +494,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
 
                 const displayRepo = team.githubUrl
                   ? team.githubUrl.replace(/^https?:\/\//, "")
-                  : "github.com/sistec-cse/iot-energy-monitor";
+                  : "No repository linked";
 
                 return (
                   <Card
@@ -1041,7 +1041,12 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                 Repository Activity Telemetry
               </span>
               <p className="text-[11px] text-slate-600">
-                Connected to <span className="font-mono font-bold text-slate-800">{inspectingTeam.githubUrl || "github.com/sistec-cse/iot-energy-monitor"}</span>
+                Connected to{" "}
+                {inspectingTeam.githubUrl ? (
+                  <span className="font-mono font-bold text-slate-800">{inspectingTeam.githubUrl}</span>
+                ) : (
+                  <span className="font-sans italic text-slate-500">No repository linked</span>
+                )}
               </p>
               <div className="text-[10px] text-emerald-700 font-mono pt-1">
                 48 commits on master • Last pushed 3 hours ago (Verified)

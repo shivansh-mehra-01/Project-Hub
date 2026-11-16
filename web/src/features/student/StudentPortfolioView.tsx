@@ -373,7 +373,9 @@ export const StudentPortfolioView: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-[#64748B]">Repository Link:</span>
-                    <div className="font-mono text-[11px] text-[#475569] truncate">github.com/sistec-cse/...</div>
+                    <div className="font-mono text-[11px] text-[#475569] truncate">
+                      {majorTeam.githubUrl ? majorTeam.githubUrl.replace(/^https?:\/\//, "") : "No repository linked"}
+                    </div>
                   </div>
                   <div>
                     <span className="text-[#64748B]">Team Lead:</span>
@@ -451,7 +453,7 @@ export const StudentPortfolioView: React.FC = () => {
               </li>
               <li className="flex items-center gap-2">
                 <Check className="h-3.5 w-3.5 text-emerald-700" />
-                <span>Connected VCS Repository: github.com/sistec-cse/iot-energy-monitor</span>
+                <span>Connected VCS Repository: {minorTeam?.githubUrl ? minorTeam.githubUrl.replace(/^https?:\/\//, "") : "No repository linked"}</span>
               </li>
             </ul>
           </div>

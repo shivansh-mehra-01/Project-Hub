@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
+import { getSidebarNav, getBreadcrumbs, RouteGuard } from "@/navigation";
 
 export const getAvatarInitials = (name: string): string => {
   const cleaned = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.|Er\.)\s+/i, "").trim();
@@ -76,7 +77,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentPersona, college, cycle, switchPersona, resetToDefaults, tenants, pilotRequests, teams } =
+  const { currentPersona, college, cycle, switchPersona, resetToDefaults, tenants, pilotRequests, teams, logout } =
     useProjectHubStore();
 
   const pendingHODCount = teams.filter((t) => t.state === "PendingHOD").length || 1;
@@ -88,8 +89,8 @@ export const AppShell: React.FC<AppShellProps> = ({
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState("Gandhi Nagar (Main)");
 
-  // Demo mode gate: defaults to true unless explicitly disabled in env
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
+  // Production UI Hygiene: Demo mode switcher strictly requires NEXT_PUBLIC_DEMO_MODE === "true"
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
   // Enforce strictly Emerald & Charcoal theme
   useEffect(() => {
@@ -223,76 +224,36 @@ export const AppShell: React.FC<AppShellProps> = ({
     { id: "pharmacy", name: "SISTec Pharmacy & Tech", code: "INST-MP-0205" },
   ];
 
-  // Determine role-based navigation tabs (with dedicated Profile item for all roles)
-  const getNavItems = () => {
-    switch (currentPersona.role) {
-      case "SuperAdmin":
-        return [
-          { label: "Tenants", href: "/admin", icon: Building2, count: tenants.length },
-          { label: "Master Templates", href: "/admin/templates", icon: Layers },
-          { label: "Subscriptions", href: "/admin/subscriptions", icon: Shield, count: pilotRequests.length },
-          { label: "Health & Telemetry", href: "/admin/health", icon: Sliders },
-          { label: "Audit Logs", href: "/admin/audit", icon: ShieldAlert },
-          { label: "Profile", href: "/account", icon: User },
-        ];
-      case "CollegeAdmin":
-        return [
-          { label: "Overview", href: "/college", icon: LayoutDashboard },
-          { label: "Departments & HODs", href: "/college/departments", icon: Users2 },
-          { label: "Campus Settings", href: "/college/settings", icon: Sliders },
-          { label: "Accreditation", href: "/college/compliance", icon: FileCheck2 },
-          { label: "Profile", href: "/account", icon: User },
-        ];
-      case "HOD":
-        return [
-          { label: "Overview", href: "/hod", icon: LayoutDashboard },
-          { label: "Approvals Queue", href: "/hod/approvals", icon: FileCheck2, count: pendingHODCount },
-          { label: "NBA Criterion 2 & 3", href: "/hod/nba", icon: GraduationCap },
-          { label: "Faculty Setup", href: "/hod/faculty", icon: Sliders },
-          { label: "Profile", href: "/account", icon: User },
-        ];
-      case "Faculty": {
-        const pendingFacultyCount =
-          teams.reduce((acc, t) => {
-            const unreviewedLogs = t.weeklyLogs.filter((l) => l.guideStatus === "Pending").length;
-            const isProposalPending = t.state === "PendingGuide" ? 1 : 0;
-            return acc + unreviewedLogs + isProposalPending;
-          }, 0) || 2;
+  // Live badge counts dictionary passed to centralized navigation engine
+  const pendingFacultyCount =
+    teams.reduce((acc, t) => {
+      const unreviewedLogs = t.weeklyLogs.filter((l) => l.guideStatus === "Pending").length;
+      const isProposalPending = t.state === "PendingGuide" ? 1 : 0;
+      return acc + unreviewedLogs + isProposalPending;
+    }, 0) || 2;
 
-        const baseItems = [
-          { label: "Action Queue", href: "/faculty", icon: FileCheck2, count: pendingFacultyCount },
-          { label: "My Teams", href: "/faculty/teams", icon: Users2 },
-          { label: "Live Viva Grading", href: "/faculty/evaluations", icon: GraduationCap },
-        ];
-        // Dynamic Tab if ProjectCoordinator = true
-        if (currentPersona.isProjectCoordinator) {
-          baseItems.push({
-            label: "Batch Ops",
-            href: "/coordinator",
-            icon: Briefcase,
-          });
-        }
-        baseItems.push({
-          label: "Profile",
-          href: "/account",
-          icon: User,
-        });
-        return baseItems;
-      }
-      case "Student":
-      case "TeamLead":
-        return [
-          { label: "Workspace", href: "/student", icon: FolderGit2 },
-          { label: "Explore", href: "/student/explore", icon: Compass },
-          { label: "Portfolio", href: "/student/portfolio", icon: GraduationCap },
-          { label: "Profile", href: "/student/profile", icon: User },
-        ];
-      default:
-        return [];
-    }
+  const liveBadgeCounts: Record<string, number> = {
+    tenants: tenants.length,
+    pilotRequests: pilotRequests.length,
+    pendingHODCount,
+    pendingFacultyCount,
   };
 
-  const navItems = getNavItems();
+  // Centralized Navigation Engine: pure selectors determine strictly authorized items
+  const navItems = getSidebarNav(
+    currentPersona.role,
+    liveBadgeCounts,
+    currentPersona.isProjectCoordinator
+  );
+
+  const breadcrumbsInfo = getBreadcrumbs(pathname, currentPersona.role);
+  const displayTitle = pageTitle || breadcrumbsInfo.pageTitle;
+  const displayBreadcrumb = breadcrumb || breadcrumbsInfo.breadcrumb;
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
 
   const handleRoleSwitch = (role: RoleType) => {
     switchPersona(role);
@@ -503,13 +464,14 @@ export const AppShell: React.FC<AppShellProps> = ({
           )}
 
           {/* Minimal Log out Action */}
-          <Link
-            href="/login"
-            className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-slate-400 hover:bg-white/[0.06] hover:text-white transition-colors"
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-slate-400 hover:bg-white/[0.06] hover:text-white transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4 text-slate-400" strokeWidth={1.75} />
             <span>Log out</span>
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -524,20 +486,47 @@ export const AppShell: React.FC<AppShellProps> = ({
           {/* Breadcrumb Hierarchy */}
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
             <span className="text-sm font-semibold text-white tracking-tight font-heading truncate">
-              {pageTitle || "Project Hub"}
+              {displayTitle}
             </span>
-            {breadcrumb && (
+            {displayBreadcrumb && (
               <>
                 <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" strokeWidth={1.75} />
                 <span className="text-xs font-normal text-slate-400 truncate hidden sm:inline">
-                  {breadcrumb}
+                  {displayBreadcrumb}
                 </span>
               </>
             )}
           </div>
 
-          {/* Center/Right Actions: Global Command Search + Dark Status Pill + Notifications */}
+          {/* Center/Right Actions: Mode Toggle + Command Search + Dark Status Pill + Notifications */}
           <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Faculty Coordinator Context Toggle Pill */}
+            {currentPersona.role === "Faculty" && currentPersona.isProjectCoordinator && (
+              <div className="hidden sm:inline-flex items-center p-0.5 rounded-lg bg-white/5 border border-white/10 text-xs">
+                <Link
+                  href="/faculty"
+                  className={cn(
+                    "px-2.5 py-1 rounded-md transition-all text-xs font-medium cursor-pointer",
+                    !pathname.startsWith("/coordinator")
+                      ? "bg-brand-primary text-white font-semibold shadow-xs"
+                      : "text-slate-400 hover:text-slate-200"
+                  )}
+                >
+                  Guide Mode
+                </Link>
+                <Link
+                  href="/coordinator"
+                  className={cn(
+                    "px-2.5 py-1 rounded-md transition-all text-xs font-medium cursor-pointer",
+                    pathname.startsWith("/coordinator")
+                      ? "bg-brand-primary text-white font-semibold shadow-xs"
+                      : "text-slate-400 hover:text-slate-200"
+                  )}
+                >
+                  Coordinator Mode
+                </Link>
+              </div>
+            )}
             
             {/* Global Command Search (⌘K) */}
             <button
@@ -691,9 +680,9 @@ export const AppShell: React.FC<AppShellProps> = ({
           </div>
         </header>
 
-        {/* Main Content Area (Max width 1200px) */}
+        {/* Main Content Area (Protected by Centralized RouteGuard) */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1200px] w-full mx-auto space-y-6">
-          {children}
+          <RouteGuard>{children}</RouteGuard>
         </main>
       </div>
 

@@ -59,7 +59,7 @@ export const initialFacultyRoster: FacultyRosterItem[] = [
     name: "Prof. S. K. Verma",
     email: "sk.verma@sistec.ac.in",
     designation: "Associate Professor",
-    isProjectCoordinator: false,
+    isProjectCoordinator: true,
     maxTeams: 4,
     guidedCount: 2,
   },
@@ -86,7 +86,7 @@ export const initialFacultyRoster: FacultyRosterItem[] = [
     name: "Dr. Manisha Sharma",
     email: "manisha.sharma@sistec.ac.in",
     designation: "Associate Professor",
-    isProjectCoordinator: false,
+    isProjectCoordinator: true,
     maxTeams: 4,
     guidedCount: 1,
   },
@@ -108,7 +108,10 @@ interface ProjectHubStoreContextType {
   individualEvaluations: IndividualEvaluation[];
   exceptionAuditLogs: ExceptionAuditLog[];
   courseExitSurveys: CourseExitSurvey[];
+  isAuthenticated: boolean;
   // Actions
+  logout: () => void;
+  login: (persona?: UserPersona) => void;
   switchPersona: (role: RoleType) => void;
   toggleFacultyCoordinator: (facultyId: string) => void;
   approveProposal: (teamId: string, role: RoleType) => void;
@@ -155,7 +158,7 @@ interface ProjectHubStoreContextType {
 
 const ProjectHubStoreContext = createContext<ProjectHubStoreContextType | null>(null);
 
-const STORAGE_KEY = "projecthub_campus_store_v2";
+const STORAGE_KEY = "projecthub_campus_store_v3";
 
 export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentPersona, setCurrentPersona] = useState<UserPersona>(initialPersonas.studentLead);
@@ -173,6 +176,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   const [individualEvaluations, setIndividualEvaluations] = useState<IndividualEvaluation[]>(initialIndividualEvaluations);
   const [exceptionAuditLogs, setExceptionAuditLogs] = useState<ExceptionAuditLog[]>(initialExceptionAuditLogs);
   const [courseExitSurveys, setCourseExitSurveys] = useState<CourseExitSurvey[]>(initialCourseExitSurveys);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load from localStorage on client mount
@@ -251,7 +255,17 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   ]);
 
   // Actions
+  const logout = () => {
+    setIsAuthenticated(false);
+  };
+
+  const login = (persona?: UserPersona) => {
+    if (persona) setCurrentPersona(persona);
+    setIsAuthenticated(true);
+  };
+
   const switchPersona = (role: RoleType) => {
+    setIsAuthenticated(true);
     let target = initialPersonas.studentLead;
     if (role === "SuperAdmin") target = initialPersonas.superAdmin;
     else if (role === "CollegeAdmin") target = initialPersonas.collegeAdmin;
@@ -870,6 +884,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         individualEvaluations,
         exceptionAuditLogs,
         courseExitSurveys,
+        isAuthenticated,
+        logout,
+        login,
         switchPersona,
         toggleFacultyCoordinator,
         approveProposal,

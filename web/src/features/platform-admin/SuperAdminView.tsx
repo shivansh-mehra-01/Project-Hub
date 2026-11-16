@@ -769,7 +769,13 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                 </div>
 
                 <CardContent className="p-3 space-y-2 max-h-[640px] overflow-y-auto">
-                  {filteredPos.map((po) => {
+                  {filteredPos.length === 0 ? (
+                    <EmptyState
+                      title="No matching POs"
+                      description="No NBA program outcomes match your search filter."
+                    />
+                  ) : (
+                    filteredPos.map((po) => {
                     const isExpanded = expandedPo === po.code;
                     return (
                       <div
@@ -837,8 +843,9 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                         )}
                       </div>
                     );
-                  })}
-                </CardContent>
+                  })
+                )}
+              </CardContent>
               </Card>
             </div>
 
@@ -874,7 +881,13 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                 </div>
 
                 <CardContent className="p-3 space-y-1.5 max-h-[640px] overflow-y-auto">
-                  {filteredSdgs.map((sdg) => {
+                  {filteredSdgs.length === 0 ? (
+                    <EmptyState
+                      title="No matching UN SDGs"
+                      description="No sustainable development goals match your search filter."
+                    />
+                  ) : (
+                    filteredSdgs.map((sdg) => {
                     const isActive = !!activeSdgs[sdg.num];
                     return (
                       <div
@@ -909,8 +922,9 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                         </label>
                       </div>
                     );
-                  })}
-                </CardContent>
+                  })
+                )}
+              </CardContent>
               </Card>
             </div>
           </div>
