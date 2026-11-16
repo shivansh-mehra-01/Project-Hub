@@ -579,6 +579,13 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     clearAuthSession();
     setIsLiveSession(false);
     setIsAuthenticated(false);
+    setCurrentPersona(initialPersonas.studentLead);
+    setTeams([]);
+    setEvaluations([]);
+    setIndividualEvaluations([]);
+    setExceptionAuditLogs([]);
+    setCourseExitSurveys([]);
+    setAuditLogs([]);
   };
 
   const login = (persona?: UserPersona) => {

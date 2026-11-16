@@ -90,6 +90,8 @@ public class AuthController : ControllerBase
         }
 
         user.LastLoginAtUtc = DateTime.UtcNow;
+        user.PasswordResetOtpHashed = null;
+        user.PasswordResetOtpExpiresAtUtc = null;
         await _context.SaveChangesAsync();
 
         return Ok(new AuthResponse
@@ -130,6 +132,18 @@ public class AuthController : ControllerBase
         if (user.College != null && !user.College.IsActive)
         {
             return BadRequest(new { message = "Campus workspace subscription is inactive or suspended. Contact your college administration." });
+        }
+
+        // Throttle rapid duplicate requests within 30-second cooldown window
+        if (user.PasswordResetOtpExpiresAtUtc.HasValue && user.PasswordResetOtpExpiresAtUtc.Value > DateTime.UtcNow)
+        {
+            var issuedAtUtc = user.PasswordResetOtpExpiresAtUtc.Value.AddMinutes(-10);
+            var elapsed = DateTime.UtcNow - issuedAtUtc;
+            if (elapsed < TimeSpan.FromSeconds(30))
+            {
+                var remainingSeconds = Math.Max(1, (int)Math.Ceiling((TimeSpan.FromSeconds(30) - elapsed).TotalSeconds));
+                return BadRequest(new { message = $"Please wait {remainingSeconds} seconds before requesting another verification code." });
+            }
         }
 
         // Generate cryptographically secure 6-digit OTP
@@ -173,9 +187,9 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "Email, OTP, and new password are required." });
         }
 
-        if (request.NewPassword.Length < 6)
+        if (request.NewPassword.Length < 8)
         {
-            return BadRequest(new { message = "Password must be at least 6 characters in length." });
+            return BadRequest(new { message = "Password must be at least 8 characters in length." });
         }
 
         var email = request.Email.Trim().ToLowerInvariant();
@@ -199,6 +213,9 @@ public class AuthController : ControllerBase
 
         if (!user.PasswordResetOtpExpiresAtUtc.HasValue || user.PasswordResetOtpExpiresAtUtc.Value < DateTime.UtcNow)
         {
+            user.PasswordResetOtpHashed = null;
+            user.PasswordResetOtpExpiresAtUtc = null;
+            await _context.SaveChangesAsync();
             return BadRequest(new { message = "Verification code has expired or is invalid. Please request a new code." });
         }
 

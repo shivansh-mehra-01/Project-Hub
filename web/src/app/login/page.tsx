@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -14,8 +14,15 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
-import { authApi, setAuthSession, UserProfileDto } from "@/lib/api";
+import {
+  authApi,
+  setAuthSession,
+  getAuthToken,
+  getUserProfile,
+  UserProfileDto,
+} from "@/lib/api";
 import { showToast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -39,8 +46,30 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [otpError, setOtpError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [devOtp, setDevOtp] = useState<string | null>(null);
   const [isOtpLoading, setIsOtpLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Reset all auth form fields and errors to pristine state
+  const resetAuthFormState = () => {
+    setEmail("");
+    setPassword("");
+    setShowPassword(false);
+    setEmailError("");
+    setIsLoading(false);
+    setOtpEmail("");
+    setOtpCode("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowNewPassword(false);
+    setOtpError("");
+    setSuccessMessage("");
+    setDevOtp(null);
+    setIsOtpLoading(false);
+    setCooldown(0);
+    setOtpStep(1);
+  };
 
   const navigateToWorkspace = (user: UserProfileDto) => {
     if (user.role === "SuperAdmin") {
@@ -66,10 +95,33 @@ export default function LoginPage() {
     }
   };
 
+  // Guard: Redirect if already authenticated with active session
+  useEffect(() => {
+    const token = getAuthToken();
+    const profile = getUserProfile();
+    if (token && profile) {
+      navigateToWorkspace(profile);
+    } else {
+      resetAuthFormState();
+    }
+  }, []);
+
+  // 30-Second Resend OTP Cooldown Timer
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const interval = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldown]);
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !email.includes("@")) {
-      setEmailError("Please enter your valid college email address.");
+    const cleanEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      setEmailError("Please enter a valid official college email address.");
       return;
     }
     if (!password) {
@@ -82,12 +134,13 @@ export default function LoginPage() {
 
     try {
       const auth = await authApi.login({
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         password: password,
       });
 
       setAuthSession(auth.token, auth.user, true);
       showToast(`Welcome back, ${auth.user.fullName}!`, "success");
+      resetAuthFormState();
       navigateToWorkspace(auth.user);
     } catch (err: any) {
       if (err.status === 401) {
@@ -102,29 +155,43 @@ export default function LoginPage() {
 
   const switchToOtp = (initialEmail?: string) => {
     const target = initialEmail || email;
-    setOtpEmail(target);
-    setOtpStep(1);
-    setOtpError("");
-    setDevOtp(null);
+    resetAuthFormState();
+    if (target && target.includes("@")) {
+      setOtpEmail(target.trim().toLowerCase());
+    }
     setViewMode("otp");
   };
 
-  const handleRequestOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otpEmail || !otpEmail.includes("@")) {
+  const switchToLogin = () => {
+    resetAuthFormState();
+    setViewMode("login");
+  };
+
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (cooldown > 0) return;
+
+    const cleanEmail = otpEmail.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
       setOtpError("Please enter a valid official college email address.");
       return;
     }
 
     setOtpError("");
+    setSuccessMessage("");
     setIsOtpLoading(true);
 
     try {
       const res = await authApi.requestPasswordOtp({
-        email: otpEmail.trim().toLowerCase(),
+        email: cleanEmail,
       });
 
-      showToast(res.message || "Verification code dispatched to your email.", "success");
+      setCooldown(30);
+      const msg = res.message || "Verification code dispatched to your email.";
+      setSuccessMessage(msg);
+      showToast(msg, "success");
       if (res.devOtp) {
         setDevOtp(res.devOtp);
         setOtpCode(res.devOtp);
@@ -139,12 +206,14 @@ export default function LoginPage() {
 
   const handleResetPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpCode || otpCode.trim().length !== 6) {
-      setOtpError("Please enter the 6-digit verification code.");
+    const cleanOtp = otpCode.trim();
+
+    if (!cleanOtp || cleanOtp.length !== 6 || !/^\d{6}$/.test(cleanOtp)) {
+      setOtpError("Please enter a valid 6-digit numeric verification code.");
       return;
     }
-    if (!newPassword || newPassword.length < 6) {
-      setOtpError("Password must be at least 6 characters long.");
+    if (!newPassword || newPassword.length < 8) {
+      setOtpError("Password must be at least 8 characters in length.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -158,12 +227,13 @@ export default function LoginPage() {
     try {
       const auth = await authApi.resetPassword({
         email: otpEmail.trim().toLowerCase(),
-        otp: otpCode.trim(),
+        otp: cleanOtp,
         newPassword: newPassword,
       });
 
       setAuthSession(auth.token, auth.user, true);
       showToast("Password set successfully! Entering your workspace...", "success");
+      resetAuthFormState();
       navigateToWorkspace(auth.user);
     } catch (err: any) {
       setOtpError(err.message || "Invalid or expired verification code.");
@@ -261,7 +331,7 @@ export default function LoginPage() {
                 </h2>
               </div>
 
-              <form onSubmit={handleSignIn} className="space-y-4">
+              <form onSubmit={handleSignIn} className="space-y-4" noValidate>
                 {/* Your Email Address Input */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-slate-700">
@@ -273,7 +343,7 @@ export default function LoginPage() {
                     </div>
                     <input
                       type="email"
-                      autoComplete="email"
+                      autoComplete="username"
                       value={email}
                       onChange={(e) => {
                         setEmail(e.target.value);
@@ -305,6 +375,7 @@ export default function LoginPage() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
                       title={showPassword ? "Hide password" : "Show password"}
+                      tabIndex={-1}
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4 stroke-[1.75]" />
@@ -334,6 +405,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={isLoading}
+                  aria-busy={isLoading}
                   className="w-full h-10 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-medium text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-xs"
                 >
                   {isLoading ? (
@@ -376,7 +448,7 @@ export default function LoginPage() {
 
               {/* STEP 1: Enter Email & Request OTP */}
               {otpStep === 1 && (
-                <form onSubmit={handleRequestOtp} className="space-y-4">
+                <form onSubmit={handleRequestOtp} className="space-y-4" noValidate>
                   <div className="space-y-1.5">
                     <label className="block text-xs font-semibold text-slate-700">
                       Your Email Address
@@ -387,7 +459,7 @@ export default function LoginPage() {
                       </div>
                       <input
                         type="email"
-                        autoComplete="email"
+                        autoComplete="off"
                         value={otpEmail}
                         onChange={(e) => {
                           setOtpEmail(e.target.value);
@@ -407,6 +479,7 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={isOtpLoading}
+                    aria-busy={isOtpLoading}
                     className="w-full h-10 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-medium text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-xs"
                   >
                     {isOtpLoading ? (
@@ -422,11 +495,7 @@ export default function LoginPage() {
                   <div className="flex justify-start pt-1">
                     <button
                       type="button"
-                      onClick={() => {
-                        setViewMode("login");
-                        setOtpStep(1);
-                        setOtpError("");
-                      }}
+                      onClick={switchToLogin}
                       className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline inline-flex items-center gap-1 cursor-pointer"
                     >
                       <span>&larr; Back to Login</span>
@@ -437,7 +506,7 @@ export default function LoginPage() {
 
               {/* STEP 2: Enter OTP & Set New Password */}
               {otpStep === 2 && (
-                <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                <form onSubmit={handleResetPasswordSubmit} className="space-y-4" noValidate>
                   {devOtp && (
                     <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
                       <div className="space-y-0.5">
@@ -475,10 +544,12 @@ export default function LoginPage() {
                       </div>
                       <input
                         type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
                         maxLength={6}
                         value={otpCode}
                         onChange={(e) => {
-                          setOtpCode(e.target.value.replace(/\D/g, ""));
+                          setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
                           if (otpError) setOtpError("");
                         }}
                         className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono tracking-widest"
@@ -488,7 +559,7 @@ export default function LoginPage() {
 
                   <div className="space-y-1.5">
                     <label className="block text-xs font-semibold text-slate-700">
-                      New Password
+                      New Password (min 8 chars)
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -506,6 +577,7 @@ export default function LoginPage() {
                         onClick={() => setShowNewPassword(!showNewPassword)}
                         className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
                         title={showNewPassword ? "Hide password" : "Show password"}
+                        tabIndex={-1}
                       >
                         {showNewPassword ? (
                           <EyeOff className="h-4 w-4 stroke-[1.75]" />
@@ -543,6 +615,7 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={isOtpLoading}
+                    aria-busy={isOtpLoading}
                     className="w-full h-10 rounded-lg bg-[#047857] hover:bg-[#065F46] text-white font-medium text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70 shadow-xs"
                   >
                     {isOtpLoading ? (
@@ -558,19 +631,20 @@ export default function LoginPage() {
                   <div className="flex items-center justify-between pt-1 text-xs">
                     <button
                       type="button"
-                      onClick={handleRequestOtp}
-                      disabled={isOtpLoading}
-                      className="text-slate-500 hover:text-[#047857] underline cursor-pointer"
+                      onClick={() => handleRequestOtp()}
+                      disabled={isOtpLoading || cooldown > 0}
+                      className={cn(
+                        "font-medium cursor-pointer transition-colors",
+                        cooldown > 0
+                          ? "text-slate-400 cursor-not-allowed"
+                          : "text-slate-500 hover:text-[#047857] underline"
+                      )}
                     >
-                      Resend OTP
+                      {cooldown > 0 ? `Resend OTP in ${cooldown}s` : "Resend OTP"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setViewMode("login");
-                        setOtpStep(1);
-                        setOtpError("");
-                      }}
+                      onClick={switchToLogin}
                       className="text-slate-600 hover:text-slate-900 hover:underline cursor-pointer font-medium"
                     >
                       &larr; Back to Login
