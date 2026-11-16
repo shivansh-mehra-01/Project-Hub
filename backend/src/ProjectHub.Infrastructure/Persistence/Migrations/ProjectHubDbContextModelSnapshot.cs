@@ -33,6 +33,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<bool>("AllowInterdisciplinaryTeams")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("CollegeId")
                         .HasColumnType("uuid");
 
@@ -44,6 +47,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("FinalSubmissionDeadlineUtc")
                         .HasColumnType("timestamp with time zone");
@@ -88,7 +94,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CollegeId", "AcademicYear", "Name")
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("CollegeId", "DepartmentId", "AcademicYear", "Name")
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
@@ -1379,7 +1387,14 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ProjectHub.Domain.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("College");
+
+                    b.Navigation("Department");
                 });
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.CourseExitSurvey", b =>

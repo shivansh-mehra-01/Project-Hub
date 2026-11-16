@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using ProjectHub.Application.Interfaces;
 using ProjectHub.Infrastructure.Data;
 using ProjectHub.Infrastructure.Persistence;
 
@@ -13,6 +15,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment("Development");
+
         builder.ConfigureServices(services =>
         {
             var descriptorsToRemove = services.Where(d =>
@@ -43,5 +47,20 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                        .UseInternalServiceProvider(inMemoryServiceProvider);
             });
         });
+    }
+
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        var host = base.CreateHost(builder);
+
+        using (var scope = host.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+            var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+            db.Database.EnsureCreated();
+            DbInitializer.SeedAsync(db, tenantContext).GetAwaiter().GetResult();
+        }
+
+        return host;
     }
 }

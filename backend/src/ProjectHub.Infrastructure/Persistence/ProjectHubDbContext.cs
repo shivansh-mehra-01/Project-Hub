@@ -99,7 +99,7 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
     {
         modelBuilder.Entity<TEntity>().HasQueryFilter(e =>
             !e.IsDeleted &&
-            (_tenantContext.IsSuperAdmin || (_tenantContext.CollegeId.HasValue && e.CollegeId == _tenantContext.CollegeId.Value)));
+            (_tenantContext.IsSuperAdmin || (Guid?)e.CollegeId == _tenantContext.CollegeId));
     }
 
     private void ConfigureSoftDeleteFilter<TEntity>(ModelBuilder modelBuilder)

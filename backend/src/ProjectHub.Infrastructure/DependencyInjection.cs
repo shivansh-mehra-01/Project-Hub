@@ -5,6 +5,7 @@ using ProjectHub.Application.Interfaces;
 using ProjectHub.Infrastructure.Data;
 using ProjectHub.Infrastructure.Interceptors;
 using ProjectHub.Infrastructure.Persistence;
+using ProjectHub.Infrastructure.Security;
 using ProjectHub.Infrastructure.Services;
 
 namespace ProjectHub.Infrastructure;
@@ -18,6 +19,7 @@ public static class DependencyInjection
         // Register Scoped Tenant and User Contexts
         services.AddScoped<ITenantContext, TenantContext>();
         services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
 
         // Register EF Core Interceptors
         services.AddScoped<AuditSaveChangesInterceptor>();

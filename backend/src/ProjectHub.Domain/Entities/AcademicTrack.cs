@@ -9,6 +9,15 @@ namespace ProjectHub.Domain.Entities;
 public class AcademicTrack : BaseEntity, ITenantEntity
 {
     public Guid CollegeId { get; set; }
+
+    /// <summary>
+    /// Department scope: null = overarching institutional session opened by CollegeAdmin;
+    /// non-null = branch-level academic project track launched by an HOD.
+    /// </summary>
+    public Guid? DepartmentId { get; set; }
+
+    public bool AllowInterdisciplinaryTeams { get; set; } = false;
+
     public string Name { get; set; } = string.Empty; // "Minor Project", "Major Phase-I", "Major Phase-II", "Capstone"
     public string AcademicYear { get; set; } = "2025-2026";
     public bool IsActive { get; set; } = true;
@@ -44,6 +53,7 @@ public class AcademicTrack : BaseEntity, ITenantEntity
 
     // Navigations
     public CollegeTenant? College { get; set; }
+    public Department? Department { get; set; }
     public ICollection<ProjectTeam> Teams { get; set; } = new List<ProjectTeam>();
     public ICollection<CourseOutcomeDefinition> CourseOutcomes { get; set; } = new List<CourseOutcomeDefinition>();
     public ICollection<ProblemBankStatement> ProblemStatements { get; set; } = new List<ProblemBankStatement>();

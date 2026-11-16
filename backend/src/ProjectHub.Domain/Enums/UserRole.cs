@@ -1,5 +1,8 @@
+using System.Text.Json.Serialization;
+
 namespace ProjectHub.Domain.Enums;
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum UserRole
 {
     SuperAdmin = 1,

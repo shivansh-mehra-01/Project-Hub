@@ -1,12 +1,15 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ProjectHub.Api.Endpoints;
 using ProjectHub.Api.Extensions;
 using ProjectHub.Api.Middleware;
 using ProjectHub.Application;
+using ProjectHub.Application.Interfaces;
 using ProjectHub.Infrastructure;
+using ProjectHub.Infrastructure.Persistence;
 using Scalar.AspNetCore;
 using Serilog;
 
@@ -26,6 +29,12 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
+
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 
 // 3. Application & Infrastructure Layers
 builder.Services.AddApplication();
@@ -83,10 +92,8 @@ app.UseSerilogRequestLogging();
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
-app.UseAuthorization();
-
-// Tenant resolution executes post-authentication to distinguish JWT vs X-College-Id header (Refinement 1)
 app.UseTenantResolution();
+app.UseAuthorization();
 
 // OpenAPI Spec & Scalar UI
 app.MapOpenApi("/openapi/v1.json");
@@ -98,10 +105,35 @@ app.MapScalarApiReference("/scalar/v1", options =>
 
 // System Endpoints
 app.MapHealthEndpoints();
+app.MapControllers();
 
 // Root Redirect to Scalar UI
 app.MapGet("/", () => Results.Redirect("/scalar/v1"))
    .ExcludeFromDescription();
+
+// Database Initialization & Seed in Development
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+    var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+    try
+    {
+        if (db.Database.IsRelational())
+        {
+            await db.Database.MigrateAsync();
+        }
+        else
+        {
+            await db.Database.EnsureCreatedAsync();
+        }
+        await DbInitializer.SeedAsync(db, tenantContext);
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Database migration/seed skipped or encountered an issue during startup.");
+    }
+}
 
 try
 {

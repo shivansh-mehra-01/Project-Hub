@@ -31,6 +31,8 @@ public class UserAccount : BaseEntity, ITenantEntity
     }
 
     public UserRole Role { get; set; } = UserRole.Student;
+    public string? PasswordHash { get; set; }
+    public bool IsActivated { get; set; } = true;
     public bool IsProjectCoordinator { get; set; } = false;
     public bool IsActive { get; set; } = true;
     public int MaxMentorTeams { get; set; } = 4;

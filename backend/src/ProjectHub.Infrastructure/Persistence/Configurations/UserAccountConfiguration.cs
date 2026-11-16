@@ -28,6 +28,9 @@ public class UserAccountConfiguration : IEntityTypeConfiguration<UserAccount>
             .HasConversion<string>()
             .HasMaxLength(50);
 
+        builder.Property(u => u.PasswordHash)
+            .HasMaxLength(500);
+
         // Composite unique filtered indexes
         builder.HasIndex(u => new { u.CollegeId, u.Email })
             .IsUnique()

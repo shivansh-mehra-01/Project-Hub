@@ -20,7 +20,7 @@ public class AcademicTrackConfiguration : IEntityTypeConfiguration<AcademicTrack
             .IsRequired()
             .HasMaxLength(20);
 
-        builder.HasIndex(t => new { t.CollegeId, t.AcademicYear, t.Name })
+        builder.HasIndex(t => new { t.CollegeId, t.DepartmentId, t.AcademicYear, t.Name })
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");
 
@@ -28,5 +28,10 @@ public class AcademicTrackConfiguration : IEntityTypeConfiguration<AcademicTrack
             .WithMany(c => c.AcademicTracks)
             .HasForeignKey(t => t.CollegeId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(t => t.Department)
+            .WithMany()
+            .HasForeignKey(t => t.DepartmentId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

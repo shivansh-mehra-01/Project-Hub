@@ -34,6 +34,7 @@ public static class DbInitializer
 
     // Deterministic Track & Team IDs
     public static readonly Guid MinorTrackId = Guid.Parse("30000000-0000-0000-0000-000000000001");
+    public static readonly Guid CollegeSessionTrackId = Guid.Parse("30000000-0000-0000-0000-000000000002");
     public static readonly Guid Team01Id = Guid.Parse("40000000-0000-0000-0000-000000000001");
 
     public static async Task SeedAsync(ProjectHubDbContext context, ITenantContext tenantContext)
@@ -216,8 +217,24 @@ public static class DbInitializer
     {
         if (await context.Users.IgnoreQueryFilters().AnyAsync(u => u.CollegeId == SistecTenantId)) return;
 
+        var defaultHash = Security.PasswordHelper.HashPassword("ProjectHub@2026");
+
         var users = new List<UserAccount>
         {
+            new()
+            {
+                Id = SuperAdminUserId,
+                CollegeId = SistecTenantId, // partition default
+                DepartmentId = null,
+                FullName = "Dev Startup Admin",
+                Email = "admin@projecthub.in",
+                EnrollmentOrEmployeeCode = "EMP-SUPER-001",
+                Role = UserRole.SuperAdmin,
+                PasswordHash = defaultHash,
+                IsActivated = true,
+                IsProjectCoordinator = false,
+                IsActive = true
+            },
             new()
             {
                 Id = PrincipalChoudharyUserId,
@@ -227,6 +244,8 @@ public static class DbInitializer
                 Email = "principal@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "EMP-PRIN-001",
                 Role = UserRole.CollegeAdmin,
+                PasswordHash = defaultHash,
+                IsActivated = true,
                 IsProjectCoordinator = false,
                 IsActive = true
             },
@@ -239,6 +258,8 @@ public static class DbInitializer
                 Email = "hod.cse@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "EMP-CSE-001",
                 Role = UserRole.HOD,
+                PasswordHash = defaultHash,
+                IsActivated = true,
                 IsProjectCoordinator = false,
                 IsActive = true
             },
@@ -251,6 +272,8 @@ public static class DbInitializer
                 Email = "priya.nair@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "EMP-CSE-009",
                 Role = UserRole.Faculty,
+                PasswordHash = defaultHash,
+                IsActivated = true,
                 IsProjectCoordinator = true,
                 IsActive = true,
                 MaxMentorTeams = 4
@@ -264,6 +287,8 @@ public static class DbInitializer
                 Email = "sk.verma@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "EMP-CSE-014",
                 Role = UserRole.Faculty,
+                PasswordHash = defaultHash,
+                IsActivated = true,
                 IsProjectCoordinator = true,
                 IsActive = true,
                 MaxMentorTeams = 4
@@ -277,6 +302,8 @@ public static class DbInitializer
                 Email = "0176cs221045@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "0176CS221045",
                 Role = UserRole.Student,
+                PasswordHash = defaultHash,
+                IsActivated = true,
                 IsProjectCoordinator = false,
                 IsActive = true,
                 GitHubHandle = "shivansh-m",
@@ -291,6 +318,8 @@ public static class DbInitializer
                 Email = "0176cs221002@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "0176CS221002",
                 Role = UserRole.Student,
+                PasswordHash = defaultHash,
+                IsActivated = true,
                 IsProjectCoordinator = false,
                 IsActive = true,
                 GitHubHandle = "aarav-s"
@@ -304,6 +333,8 @@ public static class DbInitializer
                 Email = "0176cs221021@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "0176CS221021",
                 Role = UserRole.Student,
+                PasswordHash = defaultHash,
+                IsActivated = true,
                 IsProjectCoordinator = false,
                 IsActive = true,
                 GitHubHandle = "diya-p"
@@ -324,26 +355,54 @@ public static class DbInitializer
 
     private static async Task SeedAcademicTracksAsync(ProjectHubDbContext context)
     {
-        if (await context.AcademicTracks.IgnoreQueryFilters().AnyAsync(t => t.CollegeId == SistecTenantId && t.Name == "Minor Project")) return;
-
-        var minorTrack = new AcademicTrack
+        // 1. College-level overarching session (DepartmentId == null) opened by CollegeAdmin
+        if (!await context.AcademicTracks.IgnoreQueryFilters().AnyAsync(t => t.CollegeId == SistecTenantId && t.AcademicYear == "2026-2027" && t.DepartmentId == null))
         {
-            Id = MinorTrackId,
-            CollegeId = SistecTenantId,
-            Name = "Minor Project",
-            AcademicYear = "2025-2026",
-            IsActive = true,
-            ProposalDeadlineUtc = new DateTime(2026, 3, 31, 23, 59, 59, DateTimeKind.Utc),
-            FinalSubmissionDeadlineUtc = new DateTime(2026, 5, 15, 23, 59, 59, DateTimeKind.Utc),
-            GuideWeightPct = 30,
-            MidTermWeightPct = 30,
-            FinalVivaWeightPct = 40,
-            SharedProjectRubricPct = 60,
-            IndividualStudentRubricPct = 40
-        };
+            var collegeSession = new AcademicTrack
+            {
+                Id = CollegeSessionTrackId,
+                CollegeId = SistecTenantId,
+                DepartmentId = null,
+                AllowInterdisciplinaryTeams = true,
+                Name = "Institutional Academic Session",
+                AcademicYear = "2026-2027",
+                IsActive = true,
+                ProposalDeadlineUtc = new DateTime(2026, 9, 30, 23, 59, 59, DateTimeKind.Utc),
+                FinalSubmissionDeadlineUtc = new DateTime(2027, 5, 31, 23, 59, 59, DateTimeKind.Utc),
+                GuideWeightPct = 30,
+                MidTermWeightPct = 30,
+                FinalVivaWeightPct = 40,
+                SharedProjectRubricPct = 60,
+                IndividualStudentRubricPct = 40
+            };
+            collegeSession.ValidateWeights();
+            await context.AcademicTracks.AddAsync(collegeSession);
+        }
 
-        minorTrack.ValidateWeights();
-        await context.AcademicTracks.AddAsync(minorTrack);
+        // 2. Department-level active project track (DepartmentId != null) launched by CSE HOD
+        if (!await context.AcademicTracks.IgnoreQueryFilters().AnyAsync(t => t.CollegeId == SistecTenantId && t.Name == "Minor Project" && t.DepartmentId == CseDepartmentId))
+        {
+            var minorTrack = new AcademicTrack
+            {
+                Id = MinorTrackId,
+                CollegeId = SistecTenantId,
+                DepartmentId = CseDepartmentId,
+                AllowInterdisciplinaryTeams = false,
+                Name = "Minor Project",
+                AcademicYear = "2025-2026",
+                IsActive = true,
+                ProposalDeadlineUtc = new DateTime(2026, 3, 31, 23, 59, 59, DateTimeKind.Utc),
+                FinalSubmissionDeadlineUtc = new DateTime(2026, 5, 15, 23, 59, 59, DateTimeKind.Utc),
+                GuideWeightPct = 30,
+                MidTermWeightPct = 30,
+                FinalVivaWeightPct = 40,
+                SharedProjectRubricPct = 60,
+                IndividualStudentRubricPct = 40
+            };
+            minorTrack.ValidateWeights();
+            await context.AcademicTracks.AddAsync(minorTrack);
+        }
+
         await context.SaveChangesAsync();
     }
 
