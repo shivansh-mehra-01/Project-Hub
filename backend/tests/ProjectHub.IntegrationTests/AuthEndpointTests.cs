@@ -124,54 +124,103 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Activate_PreprovisionedUser_ActivatesAccountSuccessfully()
+    public async Task Login_UnactivatedAccount_ReturnsBadRequestWithActivationPrompt()
     {
-        // 1. Arrange: Seed a pre-provisioned inactive user
-        var unactivatedEmail = "new.student@sistec.ac.in";
-        var registrationCode = "0187CS231999";
-
-        using (var scope = _factory.Services.CreateScope())
+        // Act: Attempt to login before setting initial password
+        var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            var seedTenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
-            seedTenantContext.IsSuperAdmin = true;
+            Email = "rohan.verma@sistec.ac.in",
+            Password = "AnyPassword123!"
+        });
 
-            var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
-            db.Users.Add(new UserAccount
-            {
-                Id = Guid.NewGuid(),
-                CollegeId = DbInitializer.SistecTenantId,
-                DepartmentId = DbInitializer.CseDepartmentId,
-                FullName = "Preprovisioned Candidate",
-                Email = unactivatedEmail,
-                EnrollmentOrEmployeeCode = registrationCode,
-                Role = UserRole.Student,
-                IsActive = true,
-                IsActivated = false
-            });
-            await db.SaveChangesAsync();
-        }
+        // Assert: 400 Bad Request with guidance to use Set/Forgot Password OTP
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Account not activated yet", content);
+    }
 
-        // 2. Act: Activate account
-        var response = await _client.PostAsJsonAsync("/api/auth/activate", new ActivateRequest
+    [Fact]
+    public async Task RequestPasswordOtp_ValidEmail_DispatchesOtpAndReturnsDevOtpInDevelopment()
+    {
+        // Act: Request OTP for pre-provisioned candidate
+        var response = await _client.PostAsJsonAsync("/api/auth/request-password-otp", new RequestPasswordOtpRequest
         {
-            Email = unactivatedEmail,
-            EnrollmentOrEmployeeCode = registrationCode,
-            NewPassword = "BrandNewSecurePassword@2026"
+            Email = "rohan.verma@sistec.ac.in"
         });
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
+        var result = await response.Content.ReadFromJsonAsync<RequestPasswordOtpResponse>();
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.DevOtp);
+        Assert.Equal(6, result.DevOtp.Length);
+    }
+
+    [Fact]
+    public async Task RequestPasswordOtp_UnknownEmail_ReturnsNotFound()
+    {
+        // Act: Request OTP for unknown user
+        var response = await _client.PostAsJsonAsync("/api/auth/request-password-otp", new RequestPasswordOtpRequest
+        {
+            Email = "unknown.student@sistec.ac.in"
+        });
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResetPassword_ValidOtp_ActivatesAccountAndEnablesLogin()
+    {
+        // 1. Request OTP
+        var otpResponse = await _client.PostAsJsonAsync("/api/auth/request-password-otp", new RequestPasswordOtpRequest
+        {
+            Email = "rohan.verma@sistec.ac.in"
+        });
+        otpResponse.EnsureSuccessStatusCode();
+        var otpResult = await otpResponse.Content.ReadFromJsonAsync<RequestPasswordOtpResponse>();
+        Assert.NotNull(otpResult?.DevOtp);
+
+        // 2. Reset / Set password
+        var resetResponse = await _client.PostAsJsonAsync("/api/auth/reset-password", new ResetPasswordRequest
+        {
+            Email = "rohan.verma@sistec.ac.in",
+            Otp = otpResult.DevOtp,
+            NewPassword = "RohanSecurePassword@2026"
+        });
+
+        // Assert: Returns signed JWT and activated profile
+        Assert.Equal(HttpStatusCode.OK, resetResponse.StatusCode);
+        var auth = await resetResponse.Content.ReadFromJsonAsync<AuthResponse>();
         Assert.NotNull(auth);
         Assert.False(string.IsNullOrWhiteSpace(auth.Token));
-        Assert.Equal(unactivatedEmail, auth.User.Email);
+        Assert.Equal("rohan.verma@sistec.ac.in", auth.User.Email);
 
-        // Verify user can now log in with the new password
+        // 3. Verify user can now log in directly with their new password
         var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Email = unactivatedEmail,
-            Password = "BrandNewSecurePassword@2026"
+            Email = "rohan.verma@sistec.ac.in",
+            Password = "RohanSecurePassword@2026"
         });
         Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+        var loginAuth = await loginResponse.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.NotNull(loginAuth);
+        Assert.Equal(auth.User.Id, loginAuth.User.Id);
+    }
+
+    [Fact]
+    public async Task ResetPassword_InvalidOtp_ReturnsBadRequest()
+    {
+        // Act: Attempt password reset with invalid OTP
+        var response = await _client.PostAsJsonAsync("/api/auth/reset-password", new ResetPasswordRequest
+        {
+            Email = "rohan.verma@sistec.ac.in",
+            Otp = "999999",
+            NewPassword = "ValidPassword@2026"
+        });
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

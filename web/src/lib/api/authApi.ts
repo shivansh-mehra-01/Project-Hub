@@ -1,8 +1,10 @@
 import { apiClient } from "./apiClient";
 import {
-  ActivateRequest,
   AuthResponse,
   LoginRequest,
+  RequestPasswordOtpRequest,
+  RequestPasswordOtpResponse,
+  ResetPasswordRequest,
   ResolveTenantResponse,
 } from "./types";
 
@@ -19,8 +21,17 @@ export const authApi = {
       skipAuth: true,
     }),
 
-  activate: (data: ActivateRequest) =>
-    apiClient.post<AuthResponse>("/api/auth/activate", data, {
+  requestPasswordOtp: (data: RequestPasswordOtpRequest) =>
+    apiClient.post<RequestPasswordOtpResponse>(
+      "/api/auth/request-password-otp",
+      data,
+      {
+        skipAuth: true,
+      }
+    ),
+
+  resetPassword: (data: ResetPasswordRequest) =>
+    apiClient.post<AuthResponse>("/api/auth/reset-password", data, {
       skipAuth: true,
     }),
 };

@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantContext, TenantContext>();
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
+        services.AddScoped<IEmailSender, LoggingEmailSender>();
 
         // Register EF Core Interceptors
         services.AddScoped<AuditSaveChangesInterceptor>();

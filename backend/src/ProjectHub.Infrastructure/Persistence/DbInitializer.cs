@@ -31,6 +31,7 @@ public static class DbInitializer
     public static readonly Guid StudentShivanshUserId = Guid.Parse("20000000-0000-0000-0000-000000000005");
     public static readonly Guid StudentAaravUserId = Guid.Parse("20000000-0000-0000-0000-000000000006");
     public static readonly Guid StudentDiyaUserId = Guid.Parse("20000000-0000-0000-0000-000000000007");
+    public static readonly Guid StudentRohanUserId = Guid.Parse("20000000-0000-0000-0000-000000000008");
 
     // Deterministic Track & Team IDs
     public static readonly Guid MinorTrackId = Guid.Parse("30000000-0000-0000-0000-000000000001");
@@ -338,6 +339,20 @@ public static class DbInitializer
                 IsProjectCoordinator = false,
                 IsActive = true,
                 GitHubHandle = "diya-p"
+            },
+            new()
+            {
+                Id = StudentRohanUserId,
+                CollegeId = SistecTenantId,
+                DepartmentId = CseDepartmentId,
+                FullName = "Rohan Verma",
+                Email = "rohan.verma@sistec.ac.in",
+                EnrollmentOrEmployeeCode = "0176CS221088",
+                Role = UserRole.Student,
+                PasswordHash = null,
+                IsActivated = false,
+                IsProjectCoordinator = false,
+                IsActive = true
             }
         };
 

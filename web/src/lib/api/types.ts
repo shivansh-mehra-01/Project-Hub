@@ -43,9 +43,19 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface ActivateRequest {
+export interface RequestPasswordOtpRequest {
   email: string;
-  enrollmentOrEmployeeCode: string;
+}
+
+export interface RequestPasswordOtpResponse {
+  message: string;
+  devOtp?: string;
+  expiresAtUtc: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  otp: string;
   newPassword: string;
 }
 

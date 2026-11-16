@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -17,17 +18,23 @@ public class AuthController : ControllerBase
 {
     private readonly ProjectHubDbContext _context;
     private readonly IJwtTokenService _jwtTokenService;
+    private readonly IEmailSender _emailSender;
+    private readonly IWebHostEnvironment _environment;
     private readonly ITenantContext _tenantContext;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         ProjectHubDbContext context,
         IJwtTokenService jwtTokenService,
+        IEmailSender emailSender,
+        IWebHostEnvironment environment,
         ITenantContext tenantContext,
         ILogger<AuthController> logger)
     {
         _context = context;
         _jwtTokenService = jwtTokenService;
+        _emailSender = emailSender;
+        _environment = environment;
         _tenantContext = tenantContext;
         _logger = logger;
     }
@@ -103,6 +110,11 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid email credentials or account is inactive." });
         }
 
+        if (!user.IsActivated || string.IsNullOrWhiteSpace(user.PasswordHash))
+        {
+            return BadRequest(new { message = "Account not activated yet. Click 'First time here / Forgot password' to set your password." });
+        }
+
         if (!PasswordHelper.VerifyPassword(request.Password, user.PasswordHash))
         {
             return Unauthorized(new { message = "Invalid email or password." });
@@ -130,53 +142,132 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Activates a pre-provisioned user account using Email + Enrollment/Employee code and establishes password.
+    /// Generates a 6-digit verification OTP valid for 10 minutes to set or reset institutional password.
     /// </summary>
-    [HttpPost("activate")]
+    [HttpPost("request-password-otp")]
+    [AllowAnonymous]
+    [ProducesResponseType<RequestPasswordOtpResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RequestPasswordOtp([FromBody] RequestPasswordOtpRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
+        {
+            return BadRequest(new { message = "A valid college email address is required." });
+        }
+
+        var email = request.Email.Trim().ToLowerInvariant();
+
+        var user = await _context.Users
+            .IgnoreQueryFilters()
+            .Include(u => u.College)
+            .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
+
+        if (user == null)
+        {
+            return NotFound(new { message = "No registered user account found for this institutional email address." });
+        }
+
+        if (user.College != null && !user.College.IsActive)
+        {
+            return BadRequest(new { message = "Campus workspace subscription is inactive or suspended. Contact your college administration." });
+        }
+
+        // Generate cryptographically secure 6-digit OTP
+        var otpNumber = RandomNumberGenerator.GetInt32(100000, 1000000);
+        var otp = otpNumber.ToString("D6");
+
+        _tenantContext.CollegeId = user.CollegeId;
+        user.PasswordResetOtpHashed = PasswordHelper.HashPassword(otp);
+        user.PasswordResetOtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(10);
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("======================================================================");
+        _logger.LogInformation("[CAMPUS NOTIFICATION] Dispatched 6-digit Password Reset OTP for {Email}: {Otp}", email, otp);
+        _logger.LogInformation("======================================================================");
+
+        await _emailSender.SendPasswordResetOtpAsync(user.Email, user.FullName, otp);
+
+        string? devOtp = _environment.IsDevelopment() ? otp : null;
+
+        return Ok(new RequestPasswordOtpResponse
+        {
+            Success = true,
+            Message = "A 6-digit verification code has been dispatched to your institutional email. Code expires in 10 minutes.",
+            DevOtp = devOtp
+        });
+    }
+
+    /// <summary>
+    /// Verifies the 6-digit OTP, updates the user's password, activates the account, and returns signed JWT Bearer Token.
+    /// </summary>
+    [HttpPost("reset-password")]
     [AllowAnonymous]
     [ProducesResponseType<AuthResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Activate([FromBody] ActivateRequest request)
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Email) ||
-            string.IsNullOrWhiteSpace(request.EnrollmentOrEmployeeCode) ||
-            string.IsNullOrWhiteSpace(request.NewPassword))
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Otp) || string.IsNullOrWhiteSpace(request.NewPassword))
         {
-            return BadRequest(new { message = "Email, identification code, and new password are required." });
+            return BadRequest(new { message = "Email, OTP, and new password are required." });
         }
 
         if (request.NewPassword.Length < 6)
         {
-            return BadRequest(new { message = "Password must be at least 6 characters long." });
+            return BadRequest(new { message = "Password must be at least 6 characters in length." });
         }
 
         var email = request.Email.Trim().ToLowerInvariant();
-        var code = request.EnrollmentOrEmployeeCode.Trim().ToUpperInvariant();
+        var otp = request.Otp.Trim();
 
         var user = await _context.Users
             .IgnoreQueryFilters()
             .Include(u => u.College)
             .Include(u => u.Department)
-            .FirstOrDefaultAsync(u => u.Email == email && u.EnrollmentOrEmployeeCode == code && !u.IsDeleted);
+            .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
 
         if (user == null)
         {
-            return NotFound(new { message = "No matching account found for the provided email and registration code." });
+            return NotFound(new { message = "No registered user account found for this institutional email address." });
+        }
+
+        if (user.College != null && !user.College.IsActive)
+        {
+            return BadRequest(new { message = "Campus workspace subscription is inactive or suspended. Contact your college administration." });
+        }
+
+        if (!user.PasswordResetOtpExpiresAtUtc.HasValue || user.PasswordResetOtpExpiresAtUtc.Value < DateTime.UtcNow)
+        {
+            return BadRequest(new { message = "Verification code has expired or is invalid. Please request a new code." });
+        }
+
+        if (!PasswordHelper.VerifyPassword(otp, user.PasswordResetOtpHashed))
+        {
+            return BadRequest(new { message = "Invalid verification code. Please check the 6-digit code sent to your email." });
         }
 
         _tenantContext.CollegeId = user.CollegeId;
-        _tenantContext.UserId = user.Id;
-        _tenantContext.Role = user.Role;
-
         user.PasswordHash = PasswordHelper.HashPassword(request.NewPassword);
         user.IsActivated = true;
         user.IsActive = true;
+        user.PasswordResetOtpHashed = null;
+        user.PasswordResetOtpExpiresAtUtc = null;
         user.LastLoginAtUtc = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
         var token = _jwtTokenService.GenerateToken(user, out var expiresAtUtc);
+
+        _tenantContext.UserId = user.Id;
+        _tenantContext.Role = user.Role;
+        if (user.Role == UserRole.SuperAdmin)
+        {
+            _tenantContext.IsSuperAdmin = true;
+        }
+
+        _logger.LogInformation("Password established and account activated for {Email} ({Role})", user.Email, user.Role);
 
         return Ok(new AuthResponse
         {

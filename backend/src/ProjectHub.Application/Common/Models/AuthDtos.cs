@@ -19,10 +19,22 @@ public record LoginRequest
     public string Password { get; init; } = string.Empty;
 }
 
-public record ActivateRequest
+public record RequestPasswordOtpRequest
 {
     public string Email { get; init; } = string.Empty;
-    public string EnrollmentOrEmployeeCode { get; init; } = string.Empty;
+}
+
+public record RequestPasswordOtpResponse
+{
+    public bool Success { get; init; }
+    public string Message { get; init; } = string.Empty;
+    public string? DevOtp { get; init; }
+}
+
+public record ResetPasswordRequest
+{
+    public string Email { get; init; } = string.Empty;
+    public string Otp { get; init; } = string.Empty;
     public string NewPassword { get; init; } = string.Empty;
 }
 
