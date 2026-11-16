@@ -14,10 +14,13 @@ import {
   Users2,
   Check,
   AlertCircle,
+  AlertTriangle,
   FileText,
   Upload,
   Link as LinkIcon,
   Settings,
+  FileUp,
+  ShieldCheck,
 } from "lucide-react";
 import { AppShell } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
@@ -29,7 +32,7 @@ import { Input } from "@/design-system/components/Input";
 import { Textarea } from "@/design-system/components/Textarea";
 import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
-import { TaskStatusType } from "@/mocks/store-types";
+import { ArtifactSlot, TaskStatusType } from "@/mocks/store-types";
 import { GithubIcon } from "@/design-system/components/Icons";
 
 export const StudentWorkspaceView: React.FC = () => {
@@ -42,6 +45,7 @@ export const StudentWorkspaceView: React.FC = () => {
     approveProposal,
     inviteTeamMember,
     updateTeamRepo,
+    uploadArtifact,
   } = useProjectHubStore();
 
   // Demo mode gate
@@ -52,6 +56,16 @@ export const StudentWorkspaceView: React.FC = () => {
 
   // Post-approval sub-tabs
   const [subTab, setSubTab] = useState<"board" | "logs" | "overview" | "evaluations">("board");
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("subtab");
+      if (tabParam === "logs" || tabParam === "overview" || tabParam === "evaluations" || tabParam === "board") {
+        setSubTab(tabParam as "board" | "logs" | "overview" | "evaluations");
+      }
+    }
+  }, []);
 
   // New Task Modal
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -77,6 +91,11 @@ export const StudentWorkspaceView: React.FC = () => {
   const [showRepoModal, setShowRepoModal] = useState(false);
   const [repoSuccess, setRepoSuccess] = useState(false);
 
+  // Document Vault Upload State
+  const [uploadModalSlot, setUploadModalSlot] = useState<ArtifactSlot | null>(null);
+  const [customFileName, setCustomFileName] = useState("");
+  const [uploadToast, setUploadToast] = useState<string | null>(null);
+
   // Active student team
   const myTeam =
     teams.find(
@@ -88,7 +107,7 @@ export const StudentWorkspaceView: React.FC = () => {
     teams[0] || {
       id: "team-default",
       teamCode: "2026-CS-MIN-01",
-      title: "Smart IoT Energy Monitoring & Telemetry for University Labs",
+      title: "Smart IoT Energy Monitoring & Anomaly Detection for Campus Labs",
       abstract: "Edge telemetric hardware monitoring energy dissipation across university labs with LSTM anomaly prediction.",
       domain: "IoT & Smart Systems",
       sdgNumber: 7,
@@ -102,6 +121,48 @@ export const StudentWorkspaceView: React.FC = () => {
       weeklyLogs: [],
       health: "Healthy",
     };
+
+  // Proposal Title & Similarity Check
+  const [proposalTitle, setProposalTitle] = useState(myTeam.title);
+
+  // Archived department project repository for title overlap checks
+  const archivedProjects = [
+    {
+      title: "IoT Smart Energy Metering & Power Analysis for Institutional Labs (2024-CS-MAJ-08)",
+      keywords: ["iot", "smart", "energy", "monitoring", "metering", "power", "campus", "labs"],
+    },
+    {
+      title: "Campus Grid Anomaly Detection and Surge Prediction Engine (2025-CS-MAJ-02)",
+      keywords: ["campus", "grid", "anomaly", "detection", "surge", "prediction", "energy"],
+    },
+    {
+      title: "Automated Solar Microgrid with MPPT Tracking Firmware (2024-CS-MIN-04)",
+      keywords: ["automated", "solar", "microgrid", "mppt", "tracking"],
+    },
+  ];
+
+  const titleSimilarityMatch = React.useMemo(() => {
+    if (!proposalTitle || proposalTitle.trim().length < 5) return null;
+    const inputWords = proposalTitle
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !["and", "for", "the", "with", "system"].includes(w));
+    if (inputWords.length === 0) return null;
+
+    let bestMatch: { title: string; score: number } | null = null;
+    for (const arch of archivedProjects) {
+      const matching = inputWords.filter((w) => arch.keywords.includes(w));
+      const score = Math.min(
+        95,
+        Math.round((matching.length / Math.max(inputWords.length, 3)) * 100)
+      );
+      if (!bestMatch || score > bestMatch.score) {
+        bestMatch = { title: arch.title, score };
+      }
+    }
+    return bestMatch && bestMatch.score >= 65 ? bestMatch : null;
+  }, [proposalTitle]);
 
   const isTeamLead = currentPersona.role === "TeamLead" || myTeam.members.some((m) => m.isLead && m.name === currentPersona.name);
 
@@ -320,7 +381,25 @@ export const StudentWorkspaceView: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3.5">
-                <Input label="Project Title" defaultValue={myTeam.title} />
+                <div className="space-y-1.5">
+                  <Input
+                    label="Project Title"
+                    value={proposalTitle}
+                    onChange={(e) => setProposalTitle(e.target.value)}
+                  />
+                  {titleSimilarityMatch && (
+                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-900 space-y-1 animate-in fade-in duration-150">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-950 font-heading">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                        <span>Advisory: {titleSimilarityMatch.score}% keyword overlap with archived project</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                        Similar to: <strong className="font-semibold">&ldquo;{titleSimilarityMatch.title}&rdquo;</strong>.
+                        This advisory is non-blocking, but your Faculty Guide recommends highlighting novel edge LSTM regression to avoid duplication in SAR audits.
+                      </p>
+                    </div>
+                  )}
+                </div>
                 <Textarea
                   label="Problem Abstract & Technical Approach"
                   defaultValue={myTeam.abstract}
@@ -544,7 +623,150 @@ export const StudentWorkspaceView: React.FC = () => {
 
           {/* SUB-TAB B: FRIDAY LOGS & DELIVERABLE VAULT */}
           {subTab === "logs" && (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            <div className="space-y-6">
+              {uploadToast && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2 animate-in fade-in duration-200">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>{uploadToast}</span>
+                </div>
+              )}
+
+              {/* 4-Slot Official Capstone Document Vault */}
+              <Card>
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <CardTitle>4-Slot Official Capstone Document Vault</CardTitle>
+                      <Badge variant="neutral" size="sm">
+                        NBA Criterion 2 &amp; 3
+                      </Badge>
+                    </div>
+                    <CardDescription>
+                      Mandatory institutional milestone artifacts with versioning and plagiarism verification.
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 font-mono">Vault Status:</span>
+                    <Badge variant="success" size="sm" dot>
+                      {(myTeam.artifacts || []).filter((a) => a.status === "Approved").length || 3} of 4 Approved
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      {
+                        slot: "Synopsis" as ArtifactSlot,
+                        title: "1. Approved Synopsis PDF",
+                        fallbackFile: "2026-CS-MIN-01-Synopsis-Approved.pdf",
+                        fallbackSize: "1.8 MB",
+                        defaultStatus: "Approved",
+                        reqText: "Signed Guide Proposal Synopsis",
+                      },
+                      {
+                        slot: "MidTermPPT" as ArtifactSlot,
+                        title: "2. Mid-Term Review PPT",
+                        fallbackFile: "2026-CS-MIN-01-MidTerm-Deck.pptx",
+                        fallbackSize: "14.2 MB",
+                        defaultStatus: "Approved",
+                        reqText: "Defense Presentation Slide Deck",
+                      },
+                      {
+                        slot: "PlagiarismReport" as ArtifactSlot,
+                        title: "3. Plagiarism Report",
+                        fallbackFile: "Turnitin-Originality-8pct.pdf",
+                        fallbackSize: "620 KB",
+                        defaultStatus: "Approved",
+                        similarity: 8,
+                        reqText: "Turnitin / DrillBit Report (< 15%)",
+                      },
+                      {
+                        slot: "FinalThesis" as ArtifactSlot,
+                        title: "4. Final Thesis PDF",
+                        fallbackFile: undefined,
+                        fallbackSize: undefined,
+                        defaultStatus: "Pending",
+                        reqText: "Complete B.Tech Dissertation",
+                      },
+                    ].map((item) => {
+                      const artifact = (myTeam.artifacts || []).find((a) => a.slot === item.slot);
+                      const isUploaded = Boolean(artifact?.fileName || item.fallbackFile);
+                      const fileName = artifact?.fileName || item.fallbackFile;
+                      const fileSize = artifact?.fileSize || item.fallbackSize;
+                      const status = artifact?.status || item.defaultStatus;
+                      const similarity = artifact?.similarityScore ?? item.similarity;
+
+                      return (
+                        <div
+                          key={item.slot}
+                          className="p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] flex flex-col justify-between space-y-3"
+                        >
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-[#0F172A] font-heading truncate">
+                                {item.title}
+                              </span>
+                              <Badge
+                                variant={status === "Approved" ? "success" : status === "Uploaded" ? "info" : "warning"}
+                                size="sm"
+                                dot
+                              >
+                                {status}
+                              </Badge>
+                            </div>
+
+                            <p className="text-[10px] text-[#64748B]">{item.reqText}</p>
+
+                            {isUploaded ? (
+                              <div className="p-2 rounded bg-white border border-[#CBD5E1] space-y-1">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="font-mono font-medium text-slate-800 truncate max-w-[130px]">
+                                    {fileName}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-slate-400 shrink-0">
+                                    {fileSize}
+                                  </span>
+                                </div>
+                                {similarity !== undefined && (
+                                  <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-semibold font-mono">
+                                    <ShieldCheck className="h-3 w-3" />
+                                    <span>{similarity}% Similarity (Pass)</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="p-2.5 rounded bg-white border border-dashed border-[#CBD5E1] text-center text-[11px] text-[#94A3B8]">
+                                Awaiting thesis draft submission
+                              </div>
+                            )}
+                          </div>
+
+                          <Button
+                            size="sm"
+                            variant={isUploaded ? "secondary" : "primary"}
+                            onClick={() => {
+                              setUploadModalSlot(item.slot);
+                              setCustomFileName(
+                                fileName ||
+                                  (item.slot === "FinalThesis"
+                                    ? "2026-CS-MIN-01-Final-Thesis-Draft.pdf"
+                                    : "document.pdf")
+                              );
+                            }}
+                            className="w-full text-xs"
+                            leftIcon={<Upload className="h-3 w-3" />}
+                          >
+                            {isUploaded ? "Replace Artifact" : "Upload Document"}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Two columns: Submission Form & Verified History */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               {/* Friday Submission Form (5 cols) */}
               <div className="md:col-span-5 space-y-4">
                 <Card>
@@ -637,6 +859,7 @@ export const StudentWorkspaceView: React.FC = () => {
                   </CardContent>
                 </Card>
               </div>
+            </div>
             </div>
           )}
 
@@ -914,6 +1137,77 @@ export const StudentWorkspaceView: React.FC = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Document Vault Upload Modal */}
+      <Modal
+        isOpen={!!uploadModalSlot}
+        onClose={() => setUploadModalSlot(null)}
+        title={`Upload Deliverable: ${
+          uploadModalSlot === "Synopsis"
+            ? "Approved Synopsis PDF"
+            : uploadModalSlot === "MidTermPPT"
+            ? "Mid-Term Review PPT"
+            : uploadModalSlot === "PlagiarismReport"
+            ? "Plagiarism Report (Turnitin)"
+            : "Final Capstone Thesis PDF"
+        }`}
+        description="Attach official deliverable to lock submission timestamp for accreditation review."
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <Button variant="ghost" size="sm" onClick={() => setUploadModalSlot(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                if (!uploadModalSlot) return;
+                const slot = uploadModalSlot;
+                const name = customFileName.trim() || `${myTeam.teamCode}-${slot}.pdf`;
+                const size =
+                  slot === "MidTermPPT" ? "14.2 MB" : slot === "FinalThesis" ? "4.8 MB" : "1.8 MB";
+                const sim = slot === "PlagiarismReport" ? 8 : undefined;
+                uploadArtifact(myTeam.id, slot, name, size, sim);
+                setUploadModalSlot(null);
+                setUploadToast(`Deliverable "${name}" successfully archived in Document Vault.`);
+                setTimeout(() => setUploadToast(null), 3500);
+              }}
+            >
+              Upload &amp; Commit to Vault
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3.5 text-xs">
+          <div className="border-2 border-dashed border-[#CBD5E1] rounded-xl p-6 text-center bg-[#F8FAFC] space-y-2">
+            <div className="h-10 w-10 mx-auto rounded-full bg-brand-primary-tint text-brand-primary flex items-center justify-center">
+              <Upload className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+            <div className="text-xs font-semibold text-slate-800">
+              Drag and drop your deliverable file here, or click to browse
+            </div>
+            <p className="text-[10px] text-slate-500 font-mono">
+              Accepted formats: .pdf, .pptx, .docx (Max file size: 50MB)
+            </p>
+          </div>
+
+          <Input
+            label="File Name / Label"
+            value={customFileName}
+            onChange={(e) => setCustomFileName(e.target.value)}
+            placeholder="e.g. 2026-CS-MIN-01-Deliverable.pdf"
+          />
+
+          {uploadModalSlot === "PlagiarismReport" && (
+            <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-800 space-y-0.5">
+              <span className="font-semibold block">Automatic Turnitin Anti-Plagiarism Verification</span>
+              <p className="text-[11px] leading-tight">
+                Simulated similarity parsing verified: <strong>8% Originality match</strong> (&lt; 15% threshold satisfied).
+              </p>
+            </div>
+          )}
+        </div>
       </Modal>
     </AppShell>
   );

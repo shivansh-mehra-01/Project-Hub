@@ -53,13 +53,16 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
     addFaculty,
     lockDepartmentSAR,
     bulkApproveProposals,
+    exceptionAuditLogs,
+    reviewExceptionOverride,
+    courseExitSurveys,
   } = useProjectHubStore();
 
   const [activeTab, setActiveTab] = useState<"overview" | "approvals" | "nba" | "faculty">(initialTab);
   const [activeCohort, setActiveCohort] = useState<"minor" | "major">("minor");
-  const [approvalSubTab, setApprovalSubTab] = useState<"allotments" | "proposals" | "unlocks" | "results">(
-    "allotments"
-  );
+  const [approvalSubTab, setApprovalSubTab] = useState<
+    "allotments" | "proposals" | "unlocks" | "overrides" | "results"
+  >("allotments");
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [inspectingTeam, setInspectingTeam] = useState<Team | null>(null);
   const [returnModalTeam, setReturnModalTeam] = useState<Team | null>(null);
@@ -87,6 +90,22 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
     setActiveTab(initialTab);
   }, [initialTab]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const subtabParam = params.get("subtab");
+      if (
+        subtabParam === "allotments" ||
+        subtabParam === "proposals" ||
+        subtabParam === "unlocks" ||
+        subtabParam === "overrides" ||
+        subtabParam === "results"
+      ) {
+        setApprovalSubTab(subtabParam);
+      }
+    }
+  }, []);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -101,6 +120,62 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
   const allPendingApprovals = teams.filter(
     (t) => t.state === "PendingHOD" || t.state === "PendingCoordinator"
   );
+  const pendingOverrides = exceptionAuditLogs.filter((e) => e.status === "PendingHOD");
+
+  // Dynamic 80/20 CO-PO Attainment Calculation using courseExitSurveys
+  const surveyCount = courseExitSurveys.length;
+  const avgSurvey = React.useMemo(() => {
+    if (surveyCount === 0) {
+      return { po2: 90.0, po3: 92.0, po5: 90.0, po9: 94.0, po10: 95.0 };
+    }
+    const sum = courseExitSurveys.reduce(
+      (acc, s) => ({
+        po2: acc.po2 + s.ratings.po2,
+        po3: acc.po3 + s.ratings.po3,
+        po5: acc.po5 + s.ratings.po5,
+        po9: acc.po9 + s.ratings.po9,
+        po10: acc.po10 + s.ratings.po10,
+      }),
+      { po2: 0, po3: 0, po5: 0, po9: 0, po10: 0 }
+    );
+    return {
+      po2: (sum.po2 / (surveyCount * 3)) * 100,
+      po3: (sum.po3 / (surveyCount * 3)) * 100,
+      po5: (sum.po5 / (surveyCount * 3)) * 100,
+      po9: (sum.po9 / (surveyCount * 3)) * 100,
+      po10: (sum.po10 / (surveyCount * 3)) * 100,
+    };
+  }, [courseExitSurveys, surveyCount]);
+
+  const coAttainments = [
+    {
+      code: "CO1: Problem Formulation & Feasibility",
+      pos: ["PO1", "PO2", "PO3", "PSO1"],
+      direct: 84.2,
+      indirect: Number(((avgSurvey.po2 + avgSurvey.po3) / 2).toFixed(1)),
+    },
+    {
+      code: "CO2: Architecture & System Design",
+      pos: ["PO2", "PO3", "PO5", "PSO2"],
+      direct: 81.4,
+      indirect: Number(((avgSurvey.po3 + avgSurvey.po5) / 2).toFixed(1)),
+    },
+    {
+      code: "CO3: Prototype Implementation & Testing",
+      pos: ["PO3", "PO4", "PO5", "PO9"],
+      direct: 79.6,
+      indirect: Number(((avgSurvey.po3 + avgSurvey.po5 + avgSurvey.po9) / 3).toFixed(1)),
+    },
+    {
+      code: "CO4: Technical Viva, Ethics & Report",
+      pos: ["PO7", "PO9", "PO10", "PSO1"],
+      direct: 85.0,
+      indirect: Number(((avgSurvey.po9 + avgSurvey.po10) / 2).toFixed(1)),
+    },
+  ].map((item) => ({
+    ...item,
+    blended: Number((0.8 * item.direct + 0.2 * item.indirect).toFixed(1)),
+  }));
 
   const toggleSelectTeam = (id: string) => {
     if (selectedTeamIds.includes(id)) {
@@ -539,6 +614,17 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
               </button>
               <button
                 type="button"
+                onClick={() => setApprovalSubTab("overrides")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                  approvalSubTab === "overrides"
+                    ? "bg-white text-[#0F172A] shadow-xs"
+                    : "text-[#64748B] hover:text-[#0F172A]"
+                }`}
+              >
+                Exception Overrides ({pendingOverrides.length})
+              </button>
+              <button
+                type="button"
                 onClick={() => setApprovalSubTab("results")}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                   approvalSubTab === "results"
@@ -754,6 +840,79 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                 )}
               </CardContent>
             </Card>
+          ) : approvalSubTab === "overrides" ? (
+            /* Mid-Term Administrative Exception Overrides Queue */
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Mid-Term Administrative Exception Overrides</CardTitle>
+                  <CardDescription>
+                    Governance exception requests submitted by Project Coordinator (Prof. Priya Nair) requiring HOD sign-off.
+                  </CardDescription>
+                </div>
+                <Badge variant={pendingOverrides.length > 0 ? "warning" : "neutral"} size="sm" dot={pendingOverrides.length > 0}>
+                  {pendingOverrides.length} Pending Actions
+                </Badge>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {pendingOverrides.length === 0 ? (
+                  <EmptyState
+                    title="No Pending Exception Overrides"
+                    description="All coordinator exception requests have been audited and resolved."
+                  />
+                ) : (
+                  pendingOverrides.map((log) => (
+                    <div
+                      key={log.id}
+                      className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-xs text-brand-primary">
+                            {log.teamCode}
+                          </span>
+                          <span className="text-xs font-bold text-slate-900">
+                            {log.description}
+                          </span>
+                          <Badge variant="neutral" size="sm">
+                            {log.type}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-slate-700">
+                          <strong>Audit Reason:</strong> &ldquo;{log.reason}&rdquo;
+                        </p>
+                        <div className="text-[11px] text-slate-500 font-mono">
+                          Requested by: {log.requestedBy} • {new Date(log.requestedAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => {
+                            reviewExceptionOverride(log.id, "Approved");
+                            showToast(`Override approved for ${log.teamCode}`);
+                          }}
+                          leftIcon={<Check className="h-3.5 w-3.5 stroke-[2]" />}
+                        >
+                          Endorse &amp; Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            reviewExceptionOverride(log.id, "Rejected", "Rejected by HOD");
+                            showToast(`Override rejected for ${log.teamCode}`);
+                          }}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
           ) : (
             /* Consolidated Results Sub-Tab */
             <Card>
@@ -880,102 +1039,63 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
             </div>
           </div>
 
-          {/* Live CO-PO Attainment Matrix */}
+          {/* Live CO-PO Attainment Matrix (80/20 AICTE/NBA Direct + Indirect Blend) */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <CardTitle>Direct Course Outcome (CO) to PO/PSO Attainment Matrix</CardTitle>
+                <CardTitle>Direct + Indirect CO–PO Attainment Matrix (80/20 AICTE/NBA Blend)</CardTitle>
                 <CardDescription>
-                  Calculated against standard 80/20 threshold benchmarks (&gt;= 70% Target Met).
+                  Blends continuous rubric evaluations (80% direct evidence) with longitudinal Course Exit Surveys (20% indirect student feedback).
                 </CardDescription>
               </div>
-              <Badge variant="success" size="sm" dot>
-                Target Attainment Met (82.5% Avg)
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="neutral" size="sm">
+                  {surveyCount} Survey{surveyCount === 1 ? "" : "s"} Collected
+                </Badge>
+                <Badge variant="success" size="sm" dot>
+                  Blended Attainment: {(coAttainments.reduce((acc, c) => acc + c.blended, 0) / coAttainments.length).toFixed(1)}% (Target Met)
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-center text-xs">
+              <table className="w-full text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-slate-500">
                   <tr>
-                    <th className="py-2.5 px-3 text-left font-semibold text-[11px] uppercase tracking-[0.06em]">Course Outcome</th>
-                    <th className="py-2.5 px-2 font-semibold text-[11px] uppercase tracking-[0.06em]">PO1</th>
-                    <th className="py-2.5 px-2 font-semibold text-[11px] uppercase tracking-[0.06em]">PO2</th>
-                    <th className="py-2.5 px-2 font-semibold text-[11px] uppercase tracking-[0.06em]">PO3</th>
-                    <th className="py-2.5 px-2 font-semibold text-[11px] uppercase tracking-[0.06em]">PO4</th>
-                    <th className="py-2.5 px-2 font-semibold text-[11px] uppercase tracking-[0.06em]">PO5</th>
-                    <th className="py-2.5 px-2 font-semibold text-[11px] uppercase tracking-[0.06em]">PO7</th>
-                    <th className="py-2.5 px-2 font-semibold text-[11px] uppercase tracking-[0.06em]">PO9</th>
-                    <th className="py-2.5 px-2 font-semibold text-[11px] uppercase tracking-[0.06em]">PO10</th>
-                    <th className="py-2.5 px-2 font-semibold text-[11px] uppercase tracking-[0.06em]">PSO1</th>
-                    <th className="py-2.5 px-2 font-semibold text-[11px] uppercase tracking-[0.06em]">PSO2</th>
-                    <th className="py-2.5 px-3 font-semibold text-right text-[11px] uppercase tracking-[0.06em]">Attainment %</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Course Outcome</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Mapped POs / PSOs</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Direct Rubrics (80%)</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Indirect Survey (20%)</th>
+                    <th className="py-2.5 px-4 font-semibold text-[11px] uppercase tracking-[0.06em]">Blended Attainment</th>
+                    <th className="py-2.5 px-4 text-right font-semibold text-[11px] uppercase tracking-[0.06em]">Accreditation Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A] font-mono tabular-nums">
-                  <tr className="hover:bg-[#F8FAFC] transition-colors">
-                    <td className="py-2.5 px-3 text-left font-sans font-semibold">
-                      CO1: Problem Formulation &amp; Feasibility
-                    </td>
-                    <td>3</td>
-                    <td>3</td>
-                    <td>2</td>
-                    <td>2</td>
-                    <td>1</td>
-                    <td>-</td>
-                    <td>2</td>
-                    <td>2</td>
-                    <td>3</td>
-                    <td>2</td>
-                    <td className="text-right text-emerald-700 font-bold">84.2%</td>
-                  </tr>
-                  <tr className="hover:bg-[#F8FAFC] transition-colors">
-                    <td className="py-2.5 px-3 text-left font-sans font-semibold">
-                      CO2: Architecture &amp; System Design
-                    </td>
-                    <td>2</td>
-                    <td>2</td>
-                    <td>3</td>
-                    <td>2</td>
-                    <td>3</td>
-                    <td>2</td>
-                    <td>2</td>
-                    <td>2</td>
-                    <td>3</td>
-                    <td>3</td>
-                    <td className="text-right text-emerald-700 font-bold">81.4%</td>
-                  </tr>
-                  <tr className="hover:bg-[#F8FAFC] transition-colors">
-                    <td className="py-2.5 px-3 text-left font-sans font-semibold">
-                      CO3: Prototype Implementation &amp; Testing
-                    </td>
-                    <td>2</td>
-                    <td>1</td>
-                    <td>3</td>
-                    <td>3</td>
-                    <td>3</td>
-                    <td>2</td>
-                    <td>3</td>
-                    <td>3</td>
-                    <td>3</td>
-                    <td>3</td>
-                    <td className="text-right text-emerald-700 font-bold">79.6%</td>
-                  </tr>
-                  <tr className="hover:bg-[#F8FAFC] transition-colors">
-                    <td className="py-2.5 px-3 text-left font-sans font-semibold">
-                      CO4: Technical Viva, Ethics &amp; Report
-                    </td>
-                    <td>1</td>
-                    <td>1</td>
-                    <td>1</td>
-                    <td>2</td>
-                    <td>1</td>
-                    <td>3</td>
-                    <td>3</td>
-                    <td>3</td>
-                    <td>2</td>
-                    <td>2</td>
-                    <td className="text-right text-emerald-700 font-bold">85.0%</td>
-                  </tr>
+                  {coAttainments.map((co) => (
+                    <tr key={co.code} className="hover:bg-[#F8FAFC] transition-colors">
+                      <td className="py-3 px-4 font-sans font-semibold text-slate-900">
+                        {co.code}
+                      </td>
+                      <td className="py-3 px-4 font-sans">
+                        <div className="flex flex-wrap gap-1">
+                          {co.pos.map((p) => (
+                            <span key={p} className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700">
+                              {p}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-700">{co.direct}%</td>
+                      <td className="py-3 px-4 font-bold text-slate-700">{co.indirect}%</td>
+                      <td className="py-3 px-4">
+                        <span className="font-bold text-brand-primary text-sm">{co.blended}%</span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-sans">
+                        <Badge variant="success" size="sm" dot>
+                          {co.blended >= 70 ? "Target Met (Level 3)" : "Sub-Target"}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </CardContent>

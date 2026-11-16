@@ -2,13 +2,18 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import {
+  ArtifactSlot,
   College,
+  CourseExitSurvey,
   Department,
   Evaluation,
+  ExceptionAuditLog,
   GuideReviewStatusType,
+  IndividualEvaluation,
   PilotRequest,
   PlatformAuditLog,
   ProblemBankIdea,
+  ProjectArtifact,
   ProjectCycle,
   ProjectStateType,
   RoleType,
@@ -24,9 +29,12 @@ import {
 import {
   initialAuditLogs,
   initialCollege,
+  initialCourseExitSurveys,
   initialCycle,
   initialDepartments,
   initialEvaluations,
+  initialExceptionAuditLogs,
+  initialIndividualEvaluations,
   initialPersonas,
   initialPilotRequests,
   initialProblemBank,
@@ -97,6 +105,9 @@ interface ProjectHubStoreContextType {
   tenants: TenantCollege[];
   pilotRequests: PilotRequest[];
   auditLogs: PlatformAuditLog[];
+  individualEvaluations: IndividualEvaluation[];
+  exceptionAuditLogs: ExceptionAuditLog[];
+  courseExitSurveys: CourseExitSurvey[];
   // Actions
   switchPersona: (role: RoleType) => void;
   toggleFacultyCoordinator: (facultyId: string) => void;
@@ -133,6 +144,12 @@ interface ProjectHubStoreContextType {
   updateTeamRepo: (teamId: string, githubUrl: string, jiraUrl: string) => void;
   inviteTeamMember: (teamId: string, enrollmentNumber: string, name?: string) => void;
   postProblemIdea: (idea: Omit<ProblemBankIdea, "id" | "taken">) => void;
+  uploadArtifact: (teamId: string, slot: ArtifactSlot, fileName: string, fileSize: string, similarityScore?: number) => void;
+  continueProjectToNextTrack: (teamId: string, nextTrack?: "Major Phase-I" | "Major Phase-II") => Team;
+  saveIndividualEvaluations: (teamId: string, evaluations: IndividualEvaluation[]) => void;
+  submitExceptionOverride: (override: Omit<ExceptionAuditLog, "id" | "requestedAt" | "status">) => void;
+  reviewExceptionOverride: (overrideId: string, decision: "Approved" | "Rejected", remarks?: string) => void;
+  submitCourseExitSurvey: (survey: Omit<CourseExitSurvey, "id" | "submittedAt">) => void;
   resetToDefaults: () => void;
 }
 
@@ -153,6 +170,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   const [tenants, setTenants] = useState<TenantCollege[]>(initialTenants);
   const [pilotRequests, setPilotRequests] = useState<PilotRequest[]>(initialPilotRequests);
   const [auditLogs, setAuditLogs] = useState<PlatformAuditLog[]>(initialAuditLogs);
+  const [individualEvaluations, setIndividualEvaluations] = useState<IndividualEvaluation[]>(initialIndividualEvaluations);
+  const [exceptionAuditLogs, setExceptionAuditLogs] = useState<ExceptionAuditLog[]>(initialExceptionAuditLogs);
+  const [courseExitSurveys, setCourseExitSurveys] = useState<CourseExitSurvey[]>(initialCourseExitSurveys);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load from localStorage on client mount
@@ -173,6 +193,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         if (parsed.tenants) setTenants(parsed.tenants);
         if (parsed.pilotRequests) setPilotRequests(parsed.pilotRequests);
         if (parsed.auditLogs) setAuditLogs(parsed.auditLogs);
+        if (parsed.individualEvaluations) setIndividualEvaluations(parsed.individualEvaluations);
+        if (parsed.exceptionAuditLogs) setExceptionAuditLogs(parsed.exceptionAuditLogs);
+        if (parsed.courseExitSurveys) setCourseExitSurveys(parsed.courseExitSurveys);
       }
     } catch (e) {
       console.warn("Could not load from localStorage, using fresh seed data.", e);
@@ -200,6 +223,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
           tenants,
           pilotRequests,
           auditLogs,
+          individualEvaluations,
+          exceptionAuditLogs,
+          courseExitSurveys,
         })
       );
     } catch (e) {
@@ -219,6 +245,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     tenants,
     pilotRequests,
     auditLogs,
+    individualEvaluations,
+    exceptionAuditLogs,
+    courseExitSurveys,
   ]);
 
   // Actions
@@ -608,6 +637,202 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     });
   };
 
+  const uploadArtifact = (
+    teamId: string,
+    slot: ArtifactSlot,
+    fileName: string,
+    fileSize: string,
+    similarityScore?: number
+  ) => {
+    setTeams((prev) =>
+      prev.map((t) => {
+        if (t.id !== teamId) return t;
+        const existing = t.artifacts || [];
+        const now = new Date().toISOString().split("T")[0];
+        const updated = existing.some((a) => a.slot === slot)
+          ? existing.map((a) =>
+              a.slot === slot
+                ? {
+                    ...a,
+                    fileName,
+                    fileSize,
+                    uploadedAt: now,
+                    status: "Approved" as const,
+                    similarityScore: similarityScore ?? a.similarityScore,
+                  }
+                : a
+            )
+          : [
+              ...existing,
+              {
+                slot,
+                name:
+                  slot === "Synopsis"
+                    ? "Approved Project Synopsis"
+                    : slot === "MidTermPPT"
+                    ? "Mid-Term Review Presentation"
+                    : slot === "PlagiarismReport"
+                    ? "Turnitin Similarity & Originality Report"
+                    : "Final Comprehensive Capstone Thesis",
+                fileName,
+                fileSize,
+                uploadedAt: now,
+                status: "Approved" as const,
+                similarityScore,
+              },
+            ];
+        return { ...t, artifacts: updated };
+      })
+    );
+  };
+
+  const continueProjectToNextTrack = (
+    teamId: string,
+    nextTrack: "Major Phase-I" | "Major Phase-II" = "Major Phase-I"
+  ) => {
+    const existingTeam = teams.find((t) => t.id === teamId) || teams[0];
+    const lineageId = existingTeam.projectLineageId || `lin-${existingTeam.teamCode.toLowerCase()}`;
+    const newTeamCode = existingTeam.teamCode.replace("MIN", nextTrack === "Major Phase-I" ? "MAJ-1" : "MAJ-2");
+    const newTeam: Team = {
+      ...existingTeam,
+      id: `tm-${Date.now()}`,
+      teamCode: newTeamCode,
+      title: `${existingTeam.title} (${nextTrack})`,
+      trackName: nextTrack,
+      projectLineageId: lineageId,
+      state: "Active",
+      health: "Healthy",
+      missedLogsCount: 0,
+      artifacts: [
+        {
+          slot: "Synopsis",
+          name: `${nextTrack} Preliminary Proposal`,
+          status: "Pending",
+        },
+        {
+          slot: "MidTermPPT",
+          name: `${nextTrack} Defense Deck`,
+          status: "Pending",
+        },
+        {
+          slot: "PlagiarismReport",
+          name: "Turnitin Originality Report",
+          status: "Pending",
+        },
+        {
+          slot: "FinalThesis",
+          name: `${nextTrack} Complete Thesis`,
+          status: "Pending",
+        },
+      ],
+      tasks: [
+        {
+          id: `tsk-${Date.now()}-1`,
+          teamId: `tm-${Date.now()}`,
+          title: `Architect ${nextTrack} Phase Extensions & Scale Benchmark`,
+          assigneeName: existingTeam.members.find((m) => m.isLead)?.name || "Lead",
+          status: "Todo",
+          dueDate: "2026-08-15",
+          tag: "Architecture",
+        },
+      ],
+      weeklyLogs: [],
+    };
+    setTeams((prev) => [newTeam, ...prev]);
+    addAuditLog({
+      actor: currentPersona.name,
+      action: "TRACK_CONTINUITY_INITIATED",
+      targetTenant: `Team ${newTeamCode} (${nextTrack})`,
+      ipRegion: "Student Workspace",
+      status: "SUCCESS",
+      details: `Project carried forward from ${existingTeam.teamCode} under Lineage ID ${lineageId}`,
+    });
+    return newTeam;
+  };
+
+  const saveIndividualEvaluations = (teamId: string, evals: IndividualEvaluation[]) => {
+    setIndividualEvaluations((prev) => {
+      const filtered = prev.filter((e) => e.teamId !== teamId);
+      return [...filtered, ...evals];
+    });
+  };
+
+  const submitExceptionOverride = (override: Omit<ExceptionAuditLog, "id" | "requestedAt" | "status">) => {
+    const newLog: ExceptionAuditLog = {
+      ...override,
+      id: `exc-${Date.now()}`,
+      requestedAt: new Date().toISOString(),
+      status: "PendingHOD",
+    };
+    setExceptionAuditLogs((prev) => [newLog, ...prev]);
+    addAuditLog({
+      actor: override.requestedBy,
+      action: `EXCEPTION_${override.type.toUpperCase()}_REQUESTED`,
+      targetTenant: `Team ${override.teamCode}`,
+      ipRegion: "Coordinator Desk",
+      status: "PENDING",
+      details: `${override.description} — Reason: ${override.reason}`,
+    });
+  };
+
+  const reviewExceptionOverride = (
+    overrideId: string,
+    decision: "Approved" | "Rejected",
+    remarks?: string
+  ) => {
+    const target = exceptionAuditLogs.find((e) => e.id === overrideId);
+    if (!target) return;
+    const reviewedAt = new Date().toISOString();
+    setExceptionAuditLogs((prev) =>
+      prev.map((e) =>
+        e.id === overrideId
+          ? {
+              ...e,
+              status: decision,
+              reviewedBy: "Dr. Ravindra Kumar Sharma (HOD)",
+              reviewedAt,
+            }
+          : e
+      )
+    );
+    if (decision === "Approved") {
+      if (target.type === "ReassignGuide" && target.newGuideId) {
+        assignGuide(target.teamId, target.newGuideId);
+      } else if (target.type === "RemoveMember" && target.targetMemberUsn) {
+        setTeams((prev) =>
+          prev.map((t) =>
+            t.id === target.teamId
+              ? {
+                  ...t,
+                  members: t.members.filter((m) => m.enrollmentNumber !== target.targetMemberUsn),
+                }
+              : t
+          )
+        );
+      }
+    }
+    addAuditLog({
+      actor: "Dr. Ravindra Kumar Sharma (HOD)",
+      action: `EXCEPTION_${target.type.toUpperCase()}_${decision.toUpperCase()}`,
+      targetTenant: `Team ${target.teamCode}`,
+      ipRegion: "HOD Approval Desk",
+      status: decision === "Approved" ? "SUCCESS" : "FAILED",
+      details: `${target.description} was ${decision.toLowerCase()} by HOD. Remarks: ${remarks || "None"}`,
+    });
+  };
+
+  const submitCourseExitSurvey = (survey: Omit<CourseExitSurvey, "id" | "submittedAt">) => {
+    const newSurvey: CourseExitSurvey = {
+      ...survey,
+      id: `surv-${Date.now()}`,
+      submittedAt: new Date().toISOString(),
+    };
+    setCourseExitSurveys((prev) => [
+      newSurvey,
+      ...prev.filter((s) => s.enrollmentNumber !== survey.enrollmentNumber),
+    ]);
+  };
+
   const resetToDefaults = () => {
     localStorage.removeItem(STORAGE_KEY);
     setCurrentPersona(initialPersonas.studentLead);
@@ -622,6 +847,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     setTenants(initialTenants);
     setPilotRequests(initialPilotRequests);
     setAuditLogs(initialAuditLogs);
+    setIndividualEvaluations(initialIndividualEvaluations);
+    setExceptionAuditLogs(initialExceptionAuditLogs);
+    setCourseExitSurveys(initialCourseExitSurveys);
   };
 
   return (
@@ -639,6 +867,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         tenants,
         pilotRequests,
         auditLogs,
+        individualEvaluations,
+        exceptionAuditLogs,
+        courseExitSurveys,
         switchPersona,
         toggleFacultyCoordinator,
         approveProposal,
@@ -668,6 +899,12 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         updateTeamRepo,
         inviteTeamMember,
         postProblemIdea,
+        uploadArtifact,
+        continueProjectToNextTrack,
+        saveIndividualEvaluations,
+        submitExceptionOverride,
+        reviewExceptionOverride,
+        submitCourseExitSurvey,
         resetToDefaults,
       }}
     >

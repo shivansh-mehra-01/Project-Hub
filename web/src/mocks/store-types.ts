@@ -109,6 +109,18 @@ export interface WeeklyLog {
   hoursSpent: number;
 }
 
+export type ArtifactSlot = "Synopsis" | "MidTermPPT" | "PlagiarismReport" | "FinalThesis";
+
+export interface ProjectArtifact {
+  slot: ArtifactSlot;
+  name: string;
+  fileName?: string;
+  fileSize?: string;
+  uploadedAt?: string;
+  status: "Pending" | "Uploaded" | "Approved" | "NeedsRevision";
+  similarityScore?: number;
+}
+
 export interface Team {
   id: string;
   collegeId: string;
@@ -130,7 +142,13 @@ export interface Team {
   weeklyLogs: WeeklyLog[];
   scoreTotal?: number;
   health: "Healthy" | "AtRisk" | "NeedsReview";
+  trackName?: "Minor Project" | "Major Phase-I" | "Major Phase-II";
+  projectLineageId?: string;
+  artifacts?: ProjectArtifact[];
+  missedLogsCount?: number;
 }
+
+export type ProjectTeam = Team;
 
 export interface RubricCriterion {
   id: string;
@@ -223,6 +241,60 @@ export interface PlatformAuditLog {
   ipRegion: string;
   status: "SUCCESS" | "FAILED" | "PENDING";
   details: string;
+}
+
+export interface IndividualEvaluation {
+  id: string;
+  teamId: string;
+  teamCode: string;
+  enrollmentNumber: string;
+  studentName: string;
+  moduleOwnership: number; // max 15 (40% sub-component)
+  vivaScore: number;       // max 15 (40% sub-component)
+  logDiscipline: number;   // max 10 (40% sub-component)
+  individualTotal: number; // sum of moduleOwnership + vivaScore + logDiscipline (max 40)
+  sharedTeamScore: number; // shared team rubric score (max 60)
+  finalTotalScore: number; // sum of individualTotal + sharedTeamScore (max 100)
+  verifiedLogsCount: number;
+  verifiedCommitsCount: number;
+  remarks?: string;
+  isFinalized: boolean;
+}
+
+export interface ExceptionAuditLog {
+  id: string;
+  teamId: string;
+  teamCode: string;
+  teamTitle: string;
+  type: "ReassignGuide" | "RemoveMember" | "ReVivaUnlock" | "DeadlineExtension";
+  description: string;
+  reason: string;
+  requestedBy: string;
+  requestedAt: string;
+  status: "PendingHOD" | "Approved" | "Rejected";
+  reviewedBy?: string;
+  reviewedAt?: string;
+  targetMemberUsn?: string;
+  targetMemberName?: string;
+  newGuideId?: string;
+  newGuideName?: string;
+}
+
+export interface CourseExitSurvey {
+  id: string;
+  studentId: string;
+  studentName: string;
+  enrollmentNumber: string;
+  teamId: string;
+  ratings: {
+    po2: number; // 1-3 Problem Analysis
+    po3: number; // 1-3 Design & Development
+    po5: number; // 1-3 Modern Tools Usage
+    po9: number; // 1-3 Individual & Team Work
+    po10: number; // 1-3 Communication & Defense
+  };
+  feedback?: string;
+  submittedAt: string;
 }
 
 

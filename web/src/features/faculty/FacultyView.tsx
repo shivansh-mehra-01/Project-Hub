@@ -57,6 +57,8 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
     submitEvaluationScores,
     lockEvaluation,
     postProblemIdea,
+    saveIndividualEvaluations,
+    individualEvaluations,
   } = useProjectHubStore();
 
   const [activeTab, setActiveTab] = useState<"queue" | "teams" | "grading">(initialTab);
@@ -77,6 +79,23 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
   // Panel assigned defense teams (with verified non-guide conflict-of-interest check)
   const assignedDefenseTeams = [
     {
+      id: "eval-team-01",
+      teamCode: "2026-CS-MIN-01",
+      title: "Smart IoT Energy Monitoring & Anomaly Detection for Campus Labs",
+      leadName: "Shivansh Mehra",
+      domain: "IoT & Cloud Infrastructure (SDG 7)",
+      abstract: "Edge telemetric acquisition across campus lab circuits with LSTM anomaly regression models.",
+      guideName: "Prof. S. K. Verma",
+      commits: "28 commits (Verified)",
+      attendance: "100% (5/5 weeks)",
+      members: [
+        { name: "Shivansh Mehra", role: "Edge Firmware & Lead", usn: "0176CS221045", logs: 5, commits: 28 },
+        { name: "Aarav Sharma", role: "LSTM ML Pipeline", usn: "0176CS221002", logs: 4, commits: 16 },
+        { name: "Diya Patel", role: "Next.js Web Dashboard", usn: "0176CS221021", logs: 4, commits: 12 },
+      ],
+      defaultScores: { "crit-01": 9.5, "crit-02": 14.5, "crit-03": 14.0, "crit-04": 9.0 },
+    },
+    {
       id: "eval-team-04",
       teamCode: "2026-CS-MIN-04",
       title: "Automated Solar Microgrid with MPPT Tracking",
@@ -87,9 +106,9 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
       commits: "48 commits (Verified)",
       attendance: "100% (5/5 weeks)",
       members: [
-        { name: "Devansh Patel (Lead)", role: "Firmware & Embedded 40%", usn: "0176CS221019" },
-        { name: "Meera Sen", role: "Power Electronics 35%", usn: "0176CS221033" },
-        { name: "Kunal Jain", role: "Telemetry Dashboard 25%", usn: "0176CS221027" },
+        { name: "Devansh Patel (Lead)", role: "Firmware & Embedded 40%", usn: "0176CS221019", logs: 5, commits: 48 },
+        { name: "Meera Sen", role: "Power Electronics 35%", usn: "0176CS221033", logs: 5, commits: 32 },
+        { name: "Kunal Jain", role: "Telemetry Dashboard 25%", usn: "0176CS221027", logs: 5, commits: 18 },
       ],
       defaultScores: { "crit-01": 9.5, "crit-02": 14.5, "crit-03": 14.0, "crit-04": 9.0 },
     },
@@ -104,9 +123,9 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
       commits: "36 commits (Verified)",
       attendance: "100% (5/5 weeks)",
       members: [
-        { name: "Neha Singhal (Lead)", role: "Smart Contract Architecture 40%", usn: "0176CS221039" },
-        { name: "Tarun Sharma", role: "Zero-Knowledge Circuit 35%", usn: "0176CS221051" },
-        { name: "Pooja Verma", role: "Verification Portal 25%", usn: "0176CS221043" },
+        { name: "Neha Singhal (Lead)", role: "Smart Contract Architecture 40%", usn: "0176CS221039", logs: 5, commits: 36 },
+        { name: "Tarun Sharma", role: "Zero-Knowledge Circuit 35%", usn: "0176CS221051", logs: 4, commits: 22 },
+        { name: "Pooja Verma", role: "Verification Portal 25%", usn: "0176CS221043", logs: 5, commits: 14 },
       ],
       defaultScores: { "crit-01": 8.5, "crit-02": 13.0, "crit-03": 12.5, "crit-04": 8.0 },
     },
@@ -121,9 +140,9 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
       commits: "52 commits (Verified)",
       attendance: "100% (5/5 weeks)",
       members: [
-        { name: "Vikram Rathore (Lead)", role: "ROS2 & LiDAR SLAM 45%", usn: "0176CS221058" },
-        { name: "Ananya Dixit", role: "Motor Controller & PCB 30%", usn: "0176CS221008" },
-        { name: "Siddharth Rao", role: "Warehouse Fleet Planner 25%", usn: "0176CS221048" },
+        { name: "Vikram Rathore (Lead)", role: "ROS2 & LiDAR SLAM 45%", usn: "0176CS221058", logs: 5, commits: 52 },
+        { name: "Ananya Dixit", role: "Motor Controller & PCB 30%", usn: "0176CS221008", logs: 5, commits: 26 },
+        { name: "Siddharth Rao", role: "Warehouse Fleet Planner 25%", usn: "0176CS221048", logs: 4, commits: 19 },
       ],
       defaultScores: { "crit-01": 9.0, "crit-02": 14.0, "crit-03": 13.5, "crit-04": 9.0 },
     },
@@ -137,6 +156,15 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
   const activeRubric = rubrics[0];
   const [scores, setScores] = useState<Record<string, number>>(currentDefenseTeam.defaultScores);
   const [vivaFeedback, setVivaFeedback] = useState("Solid hardware prototype demonstration with verified telemetry streaming.");
+
+  // Individual Student Grading Matrix State (40% Weight: Module Ownership 15, Viva Q&A 15, Log Discipline 10)
+  const [individualScores, setIndividualScores] = useState<
+    Record<string, { moduleOwnership: number; vivaScore: number; logDiscipline: number }>
+  >({
+    "0176CS221045": { moduleOwnership: 14.5, vivaScore: 14.0, logDiscipline: 9.5 },
+    "0176CS221002": { moduleOwnership: 13.5, vivaScore: 13.0, logDiscipline: 8.5 },
+    "0176CS221021": { moduleOwnership: 13.0, vivaScore: 12.5, logDiscipline: 9.0 },
+  });
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -189,7 +217,32 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
     setLockedDefenseTeamIds((prev) => [...prev, currentDefenseTeam.id]);
     submitEvaluationScores(evaluations[0]?.id || "eval-01", scores, vivaFeedback);
     lockEvaluation(evaluations[0]?.id || "eval-01");
-    showToast(`Panel marks for ${currentDefenseTeam.teamCode} locked & submitted to NBA SAR Criterion 3.`);
+
+    // Save 40% individual student grading matrix
+    const sharedScaled = Number(((totalScore / (activeRubric?.totalMarks || 50)) * 60).toFixed(1));
+    const evaluationsToSave = currentDefenseTeam.members.map((m) => {
+      const ind = individualScores[m.usn] || { moduleOwnership: 13.0, vivaScore: 12.5, logDiscipline: 8.5 };
+      const indivTotal = Number((ind.moduleOwnership + ind.vivaScore + ind.logDiscipline).toFixed(1));
+      return {
+        id: `indiv-eval-${m.usn}-${Date.now()}`,
+        teamId: currentDefenseTeam.id,
+        teamCode: currentDefenseTeam.teamCode,
+        enrollmentNumber: m.usn,
+        studentName: m.name,
+        moduleOwnership: ind.moduleOwnership,
+        vivaScore: ind.vivaScore,
+        logDiscipline: ind.logDiscipline,
+        individualTotal: indivTotal,
+        sharedTeamScore: sharedScaled,
+        finalTotalScore: Number((sharedScaled + indivTotal).toFixed(1)),
+        verifiedLogsCount: m.logs ?? 4,
+        verifiedCommitsCount: m.commits ?? 20,
+        isFinalized: true,
+      };
+    });
+    saveIndividualEvaluations(currentDefenseTeam.id, evaluationsToSave);
+
+    showToast(`Shared (60%) & individual marks (40%) for ${currentDefenseTeam.teamCode} locked and submitted to NBA SAR.`);
   };
 
   const handlePostIdea = () => {
@@ -451,9 +504,18 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-xs text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
-                          {team.teamCode}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-xs text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
+                            {team.teamCode}
+                          </span>
+                          {((team.missedLogsCount !== undefined && team.missedLogsCount >= 2) ||
+                            team.health === "AtRisk") && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                              At Risk (2+ Missed Logs)
+                            </span>
+                          )}
+                        </div>
                         <Badge variant={team.state === "Active" ? "success" : "warning"} size="sm" dot>
                           {formattedState}
                         </Badge>
@@ -625,19 +687,28 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
 
             {/* Right Panel: Rubric Score Inputs (7 cols) */}
             <div className="lg:col-span-7 space-y-4">
+              {/* Card 1: Shared Project Defense Rubric (60% Weight) */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-3">
                   <div>
-                    <CardTitle>{activeRubric.title}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle>{activeRubric.title}</CardTitle>
+                      <Badge variant="neutral" size="sm">
+                        60% Shared Weight
+                      </Badge>
+                    </div>
                     <CardDescription>
-                      Evaluation scores are mapped to NBA Course Outcomes (CO1–CO4).
+                      Shared team rubric criteria mapped to NBA Course Outcomes (CO1–CO4).
                     </CardDescription>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs font-semibold text-[#64748B]">Total Score:</span>
+                    <span className="text-xs font-semibold text-[#64748B]">Shared Total (60%):</span>
                     <div className="text-xl font-mono font-bold text-brand-primary tabular-nums">
-                      {totalScore} / {activeRubric.totalMarks}
+                      {((totalScore / activeRubric.totalMarks) * 60).toFixed(1)} / 60
                     </div>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      ({totalScore} / {activeRubric.totalMarks} raw)
+                    </span>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -674,6 +745,146 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                       </div>
                     </div>
                   ))}
+                </CardContent>
+              </Card>
+
+              {/* Card 2: Individual Student Assessment Matrix (40% Weight) */}
+              <Card>
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <CardTitle>Individual Student Assessment Matrix</CardTitle>
+                      <Badge variant="neutral" size="sm">
+                        40% Individual Weight
+                      </Badge>
+                    </div>
+                    <CardDescription>
+                      Assign distinct marks per student based on module ownership (15m), viva defense (15m), and log discipline (10m).
+                    </CardDescription>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] text-slate-500 font-medium">Max Individual:</span>
+                    <div className="text-sm font-mono font-bold text-slate-800">40 Marks</div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    {currentDefenseTeam.members.map((m) => {
+                      const ind = individualScores[m.usn] || { moduleOwnership: 13.0, vivaScore: 12.5, logDiscipline: 8.5 };
+                      const indivTotal = Number((ind.moduleOwnership + ind.vivaScore + ind.logDiscipline).toFixed(1));
+                      const sharedScaled = Number(((totalScore / activeRubric.totalMarks) * 60).toFixed(1));
+                      const finalTotal = Number((sharedScaled + indivTotal).toFixed(1));
+
+                      return (
+                        <div
+                          key={m.usn}
+                          className="p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-3"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-[#0F172A]">{m.name}</span>
+                                <span className="font-mono text-[11px] text-[#64748B]">({m.usn})</span>
+                              </div>
+                              <span className="text-[11px] text-slate-500">{m.role}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-200 font-mono">
+                                <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                {m.logs ?? 4} Logs Verified
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-300 font-mono">
+                                <GitCommit className="h-3 w-3 text-slate-600" />
+                                {m.commits ?? 20} Commits
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-[#E2E8F0]/80">
+                            <div>
+                              <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                                Module Ownership (/15)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                max="15"
+                                disabled={isCurrentDefenseLocked}
+                                value={ind.moduleOwnership}
+                                onChange={(e) =>
+                                  setIndividualScores({
+                                    ...individualScores,
+                                    [m.usn]: {
+                                      ...ind,
+                                      moduleOwnership: Math.min(15, Math.max(0, parseFloat(e.target.value) || 0)),
+                                    },
+                                  })
+                                }
+                                className="w-full h-8 text-center font-mono font-bold text-xs bg-white rounded border border-[#CBD5E1] text-[#0F172A] focus:border-brand-primary focus:outline-hidden disabled:bg-slate-100"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                                Viva Q&amp;A (/15)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                max="15"
+                                disabled={isCurrentDefenseLocked}
+                                value={ind.vivaScore}
+                                onChange={(e) =>
+                                  setIndividualScores({
+                                    ...individualScores,
+                                    [m.usn]: {
+                                      ...ind,
+                                      vivaScore: Math.min(15, Math.max(0, parseFloat(e.target.value) || 0)),
+                                    },
+                                  })
+                                }
+                                className="w-full h-8 text-center font-mono font-bold text-xs bg-white rounded border border-[#CBD5E1] text-[#0F172A] focus:border-brand-primary focus:outline-hidden disabled:bg-slate-100"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                                Log Discipline (/10)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                max="10"
+                                disabled={isCurrentDefenseLocked}
+                                value={ind.logDiscipline}
+                                onChange={(e) =>
+                                  setIndividualScores({
+                                    ...individualScores,
+                                    [m.usn]: {
+                                      ...ind,
+                                      logDiscipline: Math.min(10, Math.max(0, parseFloat(e.target.value) || 0)),
+                                    },
+                                  })
+                                }
+                                className="w-full h-8 text-center font-mono font-bold text-xs bg-white rounded border border-[#CBD5E1] text-[#0F172A] focus:border-brand-primary focus:outline-hidden disabled:bg-slate-100"
+                              />
+                            </div>
+                            <div className="flex flex-col justify-end">
+                              <span className="text-[10px] text-slate-500">Student Final Score:</span>
+                              <div className="font-mono text-sm font-bold text-brand-primary tabular-nums">
+                                {finalTotal} / 100
+                                <span className="text-[10px] font-normal text-slate-500 ml-1">
+                                  ({indivTotal} ind + {sharedScaled} team)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
                   <Textarea
                     label="Panel Evaluator Remarks & Recommendations"
@@ -686,7 +897,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
 
                   <div className="pt-2 border-t border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <span className="text-[11px] text-[#64748B]">
-                      Scores automatically feed SAR Criterion 3 direct attainment calculations.
+                      Blended scores (60% team + 40% individual) feed SAR Criterion 3 attainment and student marksheets.
                     </span>
                     <Button
                       size="md"

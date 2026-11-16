@@ -15,15 +15,21 @@ import {
   MapPin,
   ShieldCheck,
   ShieldAlert,
+  UserCog,
+  UserX,
+  RotateCcw,
 } from "lucide-react";
 import { AppShell } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
 import { Input } from "@/design-system/components/Input";
+import { Textarea } from "@/design-system/components/Textarea";
 import { Modal } from "@/design-system/components/Modal";
+import { SlideOverDrawer } from "@/design-system/components/SlideOverDrawer";
 import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
+import { Team } from "@/mocks/store-types";
 
 interface VivaPanel {
   panelId: string;
@@ -42,13 +48,33 @@ export const CoordinatorView: React.FC = () => {
     approveProposal,
     cycle,
     updateCycle,
+    submitExceptionOverride,
+    exceptionAuditLogs,
   } = useProjectHubStore();
 
   const [activeSubTab, setActiveSubTab] = useState<"roster" | "allocator" | "panels" | "reports">("roster");
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "allocator" || tabParam === "panels" || tabParam === "reports" || tabParam === "roster") {
+        setActiveSubTab(tabParam as "roster" | "allocator" | "panels" | "reports");
+      }
+    }
+  }, []);
   const [isCsvUploaded, setIsCsvUploaded] = useState(true);
   const [isAutoMatching, setIsAutoMatching] = useState(false);
   const [matchSuccess, setMatchSuccess] = useState(false);
   const [submittedToHOD, setSubmittedToHOD] = useState(false);
+
+  // Team Override Drawer State
+  const [overrideTeam, setOverrideTeam] = useState<Team | null>(null);
+  const [overrideType, setOverrideType] = useState<"ReassignGuide" | "RemoveMember" | "ReVivaUnlock">("ReassignGuide");
+  const [overrideNewGuideId, setOverrideNewGuideId] = useState("");
+  const [overrideTargetMemberUsn, setOverrideTargetMemberUsn] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideToast, setOverrideToast] = useState<string | null>(null);
 
   // Cycle Parameters State
   const [proposalDeadline, setProposalDeadline] = useState(cycle.proposalDeadline || "2026-03-31");
@@ -231,6 +257,16 @@ export const CoordinatorView: React.FC = () => {
 
   return (
     <AppShell pageTitle="Project Coordinator Batch Operations" breadcrumb="CSE Minor Project — Semester 6 (2026)">
+      {overrideToast && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-medium flex items-center justify-between shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>{overrideToast}</span>
+          </div>
+          <span className="font-mono text-[11px] text-emerald-700">Status: Pending HOD Endorsement</span>
+        </div>
+      )}
+
       {/* 4 Coordinator Sub-Tabs */}
       <div className="flex border-b border-[#E2E8F0] gap-4 text-xs font-semibold select-none overflow-x-auto">
         <button
@@ -486,13 +522,24 @@ export const CoordinatorView: React.FC = () => {
                       <th className="py-2.5 px-4 font-semibold">Members</th>
                       <th className="py-2.5 px-4 font-semibold">Assigned Guide</th>
                       <th className="py-2.5 px-4 font-semibold">State</th>
-                      <th className="py-2.5 px-4 text-right font-semibold">Reassign</th>
+                      <th className="py-2.5 px-4 text-right font-semibold">Actions / Override</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E2E8F0] text-[#0F172A]">
                     {teams.map((t) => (
                       <tr key={t.id} className="hover:bg-[#F8FAFC]">
-                        <td className="py-2.5 px-4 font-mono font-bold text-brand-primary">{t.teamCode}</td>
+                        <td className="py-2.5 px-4">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-mono font-bold text-brand-primary">{t.teamCode}</span>
+                            {((t.missedLogsCount !== undefined && t.missedLogsCount >= 2) ||
+                              t.health === "AtRisk") && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                                At Risk (2+ Missed Logs)
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-2.5 px-4 max-w-xs">
                           <div className="font-semibold truncate">{t.title}</div>
                           <div className="text-[10px] text-[#64748B]">{t.domain}</div>
@@ -523,18 +570,33 @@ export const CoordinatorView: React.FC = () => {
                           </Badge>
                         </td>
                         <td className="py-2.5 px-4 text-right">
-                          <select
-                            className="h-7 text-xs rounded border border-[#E2E8F0] bg-white px-2 text-[#0F172A] focus:outline-none"
-                            value={t.guideId || ""}
-                            onChange={(e) => assignGuide(t.id, e.target.value)}
-                          >
-                            <option value="">Select Mentor...</option>
-                            {facultyRoster.map((fac) => (
-                              <option key={fac.id} value={fac.id}>
-                                {fac.name} ({fac.guidedCount}/{fac.maxTeams})
-                              </option>
-                            ))}
-                          </select>
+                          <div className="flex items-center justify-end gap-2">
+                            <select
+                              className="h-7 text-xs rounded border border-[#E2E8F0] bg-white px-2 text-[#0F172A] focus:outline-none"
+                              value={t.guideId || ""}
+                              onChange={(e) => assignGuide(t.id, e.target.value)}
+                            >
+                              <option value="">Select Mentor...</option>
+                              {facultyRoster.map((fac) => (
+                                <option key={fac.id} value={fac.id}>
+                                  {fac.name} ({fac.guidedCount}/{fac.maxTeams})
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                setOverrideTeam(t);
+                                setOverrideNewGuideId(t.guideId || "");
+                                setOverrideTargetMemberUsn(t.members[0]?.enrollmentNumber || "");
+                                setOverrideReason("");
+                              }}
+                              className="text-[11px] shrink-0"
+                            >
+                              Team Override
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -847,6 +909,196 @@ export const CoordinatorView: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Team Override & Exception Governance Drawer */}
+      <SlideOverDrawer
+        isOpen={!!overrideTeam}
+        onClose={() => setOverrideTeam(null)}
+        title={overrideTeam ? `Team Override: ${overrideTeam.teamCode}` : "Team Override"}
+        subtitle="Audited Administrative Exception Workflow • Requires HOD Sign-Off"
+        footer={
+          overrideTeam && (
+            <div className="flex items-center justify-between w-full">
+              <Button variant="ghost" size="sm" onClick={() => setOverrideTeam(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={overrideReason.trim().length < 15}
+                onClick={() => {
+                  if (!overrideTeam) return;
+                  const newGuide = facultyRoster.find((f) => f.id === overrideNewGuideId);
+                  const targetMember = overrideTeam.members.find(
+                    (m) => m.enrollmentNumber === overrideTargetMemberUsn
+                  );
+
+                  let desc = "";
+                  if (overrideType === "ReassignGuide") {
+                    desc = `Reassign Faculty Guide to ${newGuide?.name || "New Mentor"}`;
+                  } else if (overrideType === "RemoveMember") {
+                    desc = `Remove dropped member ${targetMember?.name || "Student"} (${overrideTargetMemberUsn})`;
+                  } else {
+                    desc = `Unlock Individual Re-Viva Defense for ${targetMember?.name || "Student"} (${overrideTargetMemberUsn})`;
+                  }
+
+                  submitExceptionOverride({
+                    teamId: overrideTeam.id,
+                    teamCode: overrideTeam.teamCode,
+                    teamTitle: overrideTeam.title,
+                    type: overrideType,
+                    description: desc,
+                    reason: overrideReason.trim(),
+                    requestedBy: "Prof. Priya Nair (Coordinator)",
+                    targetMemberUsn: overrideTargetMemberUsn,
+                    targetMemberName: targetMember?.name,
+                    newGuideId: overrideNewGuideId,
+                    newGuideName: newGuide?.name,
+                  });
+
+                  setOverrideToast(`Exception override "${desc}" submitted to HOD approval queue.`);
+                  setTimeout(() => setOverrideToast(null), 5000);
+                  setOverrideTeam(null);
+                  setOverrideReason("");
+                }}
+              >
+                Submit for HOD Sign-Off
+              </Button>
+            </div>
+          )
+        }
+      >
+        {overrideTeam && (
+          <div className="space-y-5 text-xs">
+            {/* Team Snapshot */}
+            <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-mono font-bold text-brand-primary">{overrideTeam.teamCode}</span>
+                <Badge variant={overrideTeam.health === "AtRisk" ? "danger" : "neutral"} size="sm">
+                  {overrideTeam.health === "AtRisk" ? "At Risk" : overrideTeam.state}
+                </Badge>
+              </div>
+              <h4 className="font-semibold text-slate-900">{overrideTeam.title}</h4>
+              <div className="flex items-center justify-between text-[11px] text-[#64748B] pt-1 border-t border-[#E2E8F0]">
+                <span>Guide: {overrideTeam.guideName || "Unassigned"}</span>
+                <span>{overrideTeam.members.length} enrolled members</span>
+              </div>
+            </div>
+
+            {/* Override Action Selector */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-900 block">Select Override Type</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: "ReassignGuide" as const, label: "Reassign Guide", icon: UserCog },
+                  { id: "RemoveMember" as const, label: "Remove Member", icon: UserX },
+                  { id: "ReVivaUnlock" as const, label: "Re-Viva Unlock", icon: RotateCcw },
+                ].map((act) => {
+                  const Icon = act.icon;
+                  const isSelected = overrideType === act.id;
+                  return (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => setOverrideType(act.id)}
+                      className={`p-2.5 rounded-lg border text-center transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
+                        isSelected
+                          ? "bg-brand-primary-tint border-brand-primary-border text-brand-primary font-bold shadow-xs"
+                          : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" strokeWidth={1.75} />
+                      <span className="text-[11px] leading-tight">{act.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Action Specific Parameters */}
+            {overrideType === "ReassignGuide" && (
+              <div className="space-y-1.5 p-3 rounded-lg border border-slate-200 bg-white">
+                <label className="font-semibold text-slate-800 block">New Faculty Guide Designation</label>
+                <select
+                  value={overrideNewGuideId}
+                  onChange={(e) => setOverrideNewGuideId(e.target.value)}
+                  className="w-full h-8 text-xs rounded-lg border border-[#E2E8F0] bg-white px-2.5 text-[#0F172A] focus:outline-hidden focus:border-brand-primary"
+                >
+                  <option value="">Select Replacement Mentor...</option>
+                  {facultyRoster.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} ({f.guidedCount}/{f.maxTeams} teams) — {f.designation}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-500 block">
+                  Current Guide: <strong>{overrideTeam.guideName || "Unassigned"}</strong>
+                </span>
+              </div>
+            )}
+
+            {overrideType === "RemoveMember" && (
+              <div className="space-y-1.5 p-3 rounded-lg border border-slate-200 bg-white">
+                <label className="font-semibold text-slate-800 block">Select Member to Drop / Deregister</label>
+                <select
+                  value={overrideTargetMemberUsn}
+                  onChange={(e) => setOverrideTargetMemberUsn(e.target.value)}
+                  className="w-full h-8 text-xs rounded-lg border border-[#E2E8F0] bg-white px-2.5 text-[#0F172A] focus:outline-hidden focus:border-brand-primary"
+                >
+                  <option value="">Select Student...</option>
+                  {overrideTeam.members.map((m) => (
+                    <option key={m.enrollmentNumber} value={m.enrollmentNumber}>
+                      {m.name} ({m.enrollmentNumber}) {m.isLead ? "— Team Lead" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-amber-700 leading-tight">
+                  Warning: Removing a member will adjust the active roster size. Minimum team size constraint is {cycle.minTeamSize || 2} members.
+                </p>
+              </div>
+            )}
+
+            {overrideType === "ReVivaUnlock" && (
+              <div className="space-y-1.5 p-3 rounded-lg border border-slate-200 bg-white">
+                <label className="font-semibold text-slate-800 block">Target Student for Re-Viva</label>
+                <select
+                  value={overrideTargetMemberUsn}
+                  onChange={(e) => setOverrideTargetMemberUsn(e.target.value)}
+                  className="w-full h-8 text-xs rounded-lg border border-[#E2E8F0] bg-white px-2.5 text-[#0F172A] focus:outline-hidden focus:border-brand-primary"
+                >
+                  <option value="">Select Student...</option>
+                  {overrideTeam.members.map((m) => (
+                    <option key={m.enrollmentNumber} value={m.enrollmentNumber}>
+                      {m.name} ({m.enrollmentNumber})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  Re-viva unlocks individual assessment inputs in the Faculty Viva panel while preserving team shared score.
+                </p>
+              </div>
+            )}
+
+            {/* Mandatory Audit Reason */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-900 block flex items-center justify-between">
+                <span>Mandatory Exception Justification</span>
+                <span className="text-[10px] font-normal text-slate-500">Min 15 chars</span>
+              </label>
+              <Textarea
+                rows={3}
+                required
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                placeholder="e.g. Student suffered verified medical emergency on viva date; hospital discharge slip verified by coordinator..."
+              />
+              <p className="text-[10px] text-slate-500 leading-tight">
+                This reason is cryptographically committed to the permanent department compliance audit log and requires formal endorsement by the HOD.
+              </p>
+            </div>
+          </div>
+        )}
+      </SlideOverDrawer>
     </AppShell>
   );
 };
