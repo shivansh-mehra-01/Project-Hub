@@ -2,7 +2,7 @@ import React from "react";
 import { AppShell } from "@/design-system/patterns/AppShell";
 
 export const metadata = {
-  title: "Project Hub — Institutional Governance",
+  title: "Collabex — Institutional Governance",
   description: "Enterprise Academic Project Governance and NBA Accreditation Management",
 };
 

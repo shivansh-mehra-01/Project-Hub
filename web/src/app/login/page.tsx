@@ -51,6 +51,7 @@ export default function LoginPage() {
   const [devOtp, setDevOtp] = useState<string | null>(null);
   const [isOtpLoading, setIsOtpLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
   // Reset all auth form fields and errors to pristine state
   const resetAuthFormState = () => {
@@ -75,28 +76,28 @@ export default function LoginPage() {
   const navigateToWorkspace = (user: UserProfileDto) => {
     if (user.role === "SuperAdmin") {
       switchPersona("SuperAdmin");
-      router.push("/admin");
+      router.replace("/admin");
     } else if (user.role === "CollegeAdmin") {
       switchPersona("CollegeAdmin");
-      router.push("/college");
+      router.replace("/college");
     } else if (user.role === "HOD") {
       switchPersona("HOD");
-      router.push("/hod");
+      router.replace("/hod");
     } else if (user.role === "Faculty") {
       switchPersona("Faculty");
       if (user.isProjectCoordinator) {
         toggleFacultyCoordinator("usr-fac-verma");
-        router.push("/coordinator");
+        router.replace("/coordinator");
       } else {
-        router.push("/faculty");
+        router.replace("/faculty");
       }
     } else {
       switchPersona("Student");
-      router.push("/student");
+      router.replace("/student");
     }
   };
 
-  // Guard: Redirect if already authenticated with active session
+  // Guard: Redirect immediately if already authenticated with active session
   useEffect(() => {
     const token = getAuthToken();
     const profile = getUserProfile();
@@ -104,6 +105,7 @@ export default function LoginPage() {
       navigateToWorkspace(profile);
     } else {
       resetAuthFormState();
+      setIsCheckingSession(false);
     }
   }, []);
 
@@ -242,6 +244,19 @@ export default function LoginPage() {
       setIsOtpLoading(false);
     }
   };
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 text-slate-600 select-none">
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-5 rounded-full border-2 border-emerald-700 border-t-transparent animate-spin text-emerald-700" />
+          <span className="text-xs text-slate-600 font-mono">
+            Verifying session credentials...
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 select-none">

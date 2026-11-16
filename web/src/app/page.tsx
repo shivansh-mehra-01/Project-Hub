@@ -36,6 +36,7 @@ import { Input } from "@/design-system/components/Input";
 import { Select } from "@/design-system/components/Select";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
+import { CollabexLogo } from "@/components/brand/CollabexLogo";
 
 export default function MarketingHomePage() {
   const router = useRouter();
@@ -82,12 +83,7 @@ export default function MarketingHomePage() {
         <div className="max-w-[1240px] h-full mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           {/* Left Brand Mark */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="h-8 w-8 rounded-lg bg-brand-primary flex items-center justify-center text-white font-bold text-xs shadow-xs font-heading group-hover:bg-brand-primary-hover transition-colors">
-              PH
-            </div>
-            <span className="font-heading font-bold text-base tracking-tight text-white flex items-center gap-1.5">
-              <span>Project Hub</span>
-            </span>
+            <CollabexLogo variant="dark" size="md" />
           </Link>
 
           {/* Center Smooth-Scroll Links (Desktop) */}
@@ -193,12 +189,7 @@ export default function MarketingHomePage() {
               <div className="rounded-2xl border border-slate-300 bg-white shadow-2xl overflow-hidden flex flex-col text-slate-800 transition-all hover:shadow-3xl">
                 {/* Mock Window Top Bar */}
                 <div className="bg-[#111827] px-3.5 py-2.5 flex items-center justify-between border-b border-slate-800 text-white select-none">
-                  <div className="flex items-center gap-2">
-                    <div className="h-5 w-5 rounded bg-brand-primary flex items-center justify-center text-white font-bold text-[10px] font-heading">
-                      PH
-                    </div>
-                    <span className="font-heading font-semibold text-xs tracking-tight text-white">Project Hub</span>
-                  </div>
+                  <CollabexLogo variant="dark" size="sm" />
                   <div className="flex items-center gap-3 text-slate-400">
                     <Search className="h-3.5 w-3.5 hover:text-white cursor-pointer" />
                     <Sliders className="h-3.5 w-3.5 hover:text-white cursor-pointer" />
@@ -761,7 +752,7 @@ export default function MarketingHomePage() {
                 Engineered for NBA Tier-1 &amp; Tier-2 Criterion 2 &amp; 3 Compliance
               </h2>
               <p className="text-sm sm:text-base text-emerald-100 leading-relaxed">
-                Eliminate manual paperwork. Project Hub automates continuous assessment logging, CO-to-PO/PSO
+                Eliminate manual paperwork. Collabex automates continuous assessment logging, CO-to-PO/PSO
                 direct attainment calculations, and official sample packaging.
               </p>
             </div>
@@ -895,10 +886,7 @@ export default function MarketingHomePage() {
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-[#1F2937]">
             <div className="space-y-1">
               <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 rounded-lg bg-brand-primary flex items-center justify-center text-white font-bold text-xs font-heading">
-                  PH
-                </div>
-                <span className="font-heading font-bold text-base text-white">Project Hub</span>
+                <CollabexLogo variant="dark" size="md" />
               </div>
               <p className="text-xs text-[#9CA3AF] max-w-sm">
                 Purpose-built B2B SaaS for engineering colleges to manage Minor &amp; Major capstone projects
@@ -927,7 +915,7 @@ export default function MarketingHomePage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B7280]">
             <div>
-              &copy; 2026 Project Hub SaaS. Multi-tenant academic project management.
+              &copy; 2026 Collabex SaaS. Multi-tenant academic project management.
             </div>
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-brand-primary" />

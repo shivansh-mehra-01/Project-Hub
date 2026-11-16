@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import {
   ArtifactSlot,
   College,
@@ -575,7 +575,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   }, [currentPersona.role, isAuthenticated]);
 
   // Actions
-  const logout = () => {
+  const logout = React.useCallback(() => {
     clearAuthSession();
     setIsLiveSession(false);
     setIsAuthenticated(false);
@@ -586,7 +586,38 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     setExceptionAuditLogs([]);
     setCourseExitSurveys([]);
     setAuditLogs([]);
-  };
+  }, []);
+
+  // Multi-tab logout sync & global session-expired listener
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleStorage = (event: StorageEvent) => {
+      // If logout occurred in another browser tab
+      if (
+        event.key === "collabex_logout_event" ||
+        (event.key === "projecthub_jwt_token" && !event.newValue)
+      ) {
+        logout();
+        if (window.location.pathname !== "/login") {
+          showToast("You have been signed out in another tab.", "info");
+          window.location.replace("/login");
+        }
+      }
+    };
+
+    const handleSessionExpired = () => {
+      logout();
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("collabex:session-expired", handleSessionExpired);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("collabex:session-expired", handleSessionExpired);
+    };
+  }, [logout]);
 
   const login = (persona?: UserPersona) => {
     if (persona) setCurrentPersona(persona);

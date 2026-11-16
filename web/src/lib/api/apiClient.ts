@@ -50,7 +50,15 @@ export function clearAuthSession(): void {
   sessionStorage.removeItem(USER_KEY);
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  try {
+    // Notify all open tabs of logout via localStorage event
+    localStorage.setItem("collabex_logout_event", Date.now().toString());
+  } catch {
+    // Quota or private browsing mode
+  }
 }
+
+let isHandlingSessionExpiry = false;
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined | null>;
@@ -103,12 +111,27 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
   }
 
   if (response.status === 401) {
-    clearAuthSession();
-    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-      showToast("Your session has expired. Please sign in again.", "warning");
-      window.location.href = "/login";
+    const isAuthAttempt =
+      endpoint.includes("/auth/login") ||
+      endpoint.includes("/auth/reset-password") ||
+      endpoint.includes("/auth/request-password-otp");
+
+    if (!isAuthAttempt) {
+      clearAuthSession();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("collabex:session-expired"));
+        if (!isHandlingSessionExpiry && window.location.pathname !== "/login") {
+          isHandlingSessionExpiry = true;
+          showToast("Your session has expired. Please sign in again.", "warning");
+          // Use location.replace so expired session is removed from browser history
+          window.location.replace("/login");
+          setTimeout(() => {
+            isHandlingSessionExpiry = false;
+          }, 3000);
+        }
+      }
+      throw new ApiError("Your session has expired. Please sign in again.", 401);
     }
-    throw new ApiError("Session expired or unauthorized.", 401);
   }
 
   let data: any = null;

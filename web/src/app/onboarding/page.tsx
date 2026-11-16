@@ -14,11 +14,11 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
       <OnboardingModal
         isOpen={isOpen}
-        onClose={() => router.push("/login")}
+        onClose={() => router.replace("/login")}
         onComplete={() => {
           setIsOpen(false);
           switchPersona("TeamLead");
-          router.push("/student");
+          router.replace("/student");
         }}
       />
     </div>

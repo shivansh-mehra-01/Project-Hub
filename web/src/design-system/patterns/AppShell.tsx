@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CollabexLogo } from "@/components/brand/CollabexLogo";
+import { getAuthToken } from "@/lib/api";
 import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
@@ -323,8 +324,26 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   const handleLogout = () => {
     logout();
-    router.push("/login");
+    router.replace("/login");
   };
+
+  // Back-Forward Cache (bfcache) protection:
+  // If page is restored from bfcache or navigated back/forward without a valid token,
+  // immediately purge memory state and hard-replace to /login.
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      const token = getAuthToken();
+      if ((event.persisted || !token) && !token) {
+        logout();
+        window.location.replace("/login");
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [logout]);
 
   return (
     <div className="flex min-h-screen bg-canvas-bg">

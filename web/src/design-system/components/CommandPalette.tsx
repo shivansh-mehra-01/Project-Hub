@@ -49,6 +49,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     departments,
     facultyRoster,
     tenants,
+    logout,
   } = useProjectHubStore();
   const [query, setQuery] = useState("");
 
@@ -117,7 +118,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       category: "Actions" as const,
       icon: LogOut,
       action: () => {
-        router.push("/login");
+        logout();
+        router.replace("/login");
         onClose();
       },
     },
