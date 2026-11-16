@@ -136,7 +136,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         // Assert: 400 Bad Request with guidance to use Set/Forgot Password OTP
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Account not activated yet", content);
+        Assert.Contains("Account password not set yet", content);
     }
 
     [Fact]

@@ -112,7 +112,7 @@ public class AuthController : ControllerBase
 
         if (!user.IsActivated || string.IsNullOrWhiteSpace(user.PasswordHash))
         {
-            return BadRequest(new { message = "Account not activated yet. Click 'First time here / Forgot password' to set your password." });
+            return BadRequest(new { message = "Account password not set yet. Click 'Forgot password?' to set your password." });
         }
 
         if (!PasswordHelper.VerifyPassword(request.Password, user.PasswordHash))
