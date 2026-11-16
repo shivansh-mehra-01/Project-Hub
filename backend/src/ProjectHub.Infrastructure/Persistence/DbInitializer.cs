@@ -38,7 +38,7 @@ public static class DbInitializer
     public static readonly Guid CollegeSessionTrackId = Guid.Parse("30000000-0000-0000-0000-000000000002");
     public static readonly Guid Team01Id = Guid.Parse("40000000-0000-0000-0000-000000000001");
 
-    public static async Task SeedAsync(ProjectHubDbContext context, ITenantContext tenantContext)
+    public static async Task SeedAsync(ProjectHubDbContext context, ITenantContext tenantContext, bool isDevelopment = false)
     {
         var originalSuperAdmin = tenantContext.IsSuperAdmin;
         tenantContext.IsSuperAdmin = true;
@@ -52,6 +52,11 @@ public static class DbInitializer
             await SeedPersonasAsync(context);
             await SeedAcademicTracksAsync(context);
             await SeedTeamAndArtifactsAsync(context);
+
+            if (isDevelopment)
+            {
+                PrintSeededAccountsTable();
+            }
         }
         finally
         {
@@ -218,7 +223,7 @@ public static class DbInitializer
     {
         if (await context.Users.IgnoreQueryFilters().AnyAsync(u => u.CollegeId == SistecTenantId)) return;
 
-        var defaultHash = Security.PasswordHelper.HashPassword("ProjectHub@2026");
+        var defaultHash = Security.PasswordHelper.HashPassword("Pass@1234");
 
         var users = new List<UserAccount>
         {
@@ -290,7 +295,7 @@ public static class DbInitializer
                 Role = UserRole.Faculty,
                 PasswordHash = defaultHash,
                 IsActivated = true,
-                IsProjectCoordinator = true,
+                IsProjectCoordinator = false,
                 IsActive = true,
                 MaxMentorTeams = 4
             },
@@ -582,5 +587,31 @@ public static class DbInitializer
 
         await context.WeeklyLogbooks.AddRangeAsync(weeklyLogs);
         await context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Displays a formatted startup table in the console log of all 7 seeded role accounts with working credentials.
+    /// </summary>
+    public static void PrintSeededAccountsTable()
+    {
+        Console.WriteLine();
+        Console.ForegroundColor = ConsoleColor.DarkGreen;
+        Console.WriteLine("====================================================================================================");
+        Console.WriteLine("                      PROJECT HUB - SEEDED ROLE ACCOUNTS (Password: Pass@1234)                      ");
+        Console.WriteLine("====================================================================================================");
+        Console.ResetColor();
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "ROLE", "NAME", "EMAIL", "DESIGNATION"));
+        Console.WriteLine(new string('-', 100));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "SuperAdmin", "Dev Startup Admin", "admin@projecthub.in", "Platform Administrator"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "CollegeAdmin", "Dr. Keshvendra Choudhary", "principal@sistec.ac.in", "Campus Principal / Dean"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "HOD", "Dr. Ravindra Kumar Sharma", "hod.cse@sistec.ac.in", "Head of Dept (CSE)"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "ProjectCoordinator", "Prof. Priya Nair", "priya.nair@sistec.ac.in", "Project Coordinator"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "FacultyGuide", "Prof. S. K. Verma", "sk.verma@sistec.ac.in", "Faculty Mentor / Guide"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "TeamLead", "Shivansh Mehra", "0176cs221045@sistec.ac.in", "Student Team Lead"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "Student", "Aarav Sharma", "0176cs221002@sistec.ac.in", "Student Team Member"));
+        Console.ForegroundColor = ConsoleColor.DarkGreen;
+        Console.WriteLine("====================================================================================================");
+        Console.ResetColor();
+        Console.WriteLine();
     }
 }

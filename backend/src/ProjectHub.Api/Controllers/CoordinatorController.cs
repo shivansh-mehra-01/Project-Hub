@@ -32,7 +32,7 @@ public class CoordinatorController : ControllerBase
         var updated = 0;
         var warnings = new List<string>();
 
-        var defaultHash = Infrastructure.Security.PasswordHelper.HashPassword("ProjectHub@2026");
+        var defaultHash = Infrastructure.Security.PasswordHelper.HashPassword("Pass@1234");
 
         foreach (var row in request.Rows)
         {

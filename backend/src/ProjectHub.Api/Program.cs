@@ -127,7 +127,7 @@ if (app.Environment.IsDevelopment())
         {
             await db.Database.EnsureCreatedAsync();
         }
-        await DbInitializer.SeedAsync(db, tenantContext);
+        await DbInitializer.SeedAsync(db, tenantContext, isDevelopment: true);
     }
     catch (Exception ex)
     {

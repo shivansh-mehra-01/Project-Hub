@@ -26,8 +26,8 @@ export default function LoginPage() {
   const [otpStep, setOtpStep] = useState<1 | 2>(1);
 
   // Standard Login State
-  const [email, setEmail] = useState("0176cs221045@sistec.ac.in");
-  const [password, setPassword] = useState("ProjectHub@2026");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -274,7 +274,6 @@ export default function LoginPage() {
                         setEmail(e.target.value);
                         if (emailError) setEmailError("");
                       }}
-                      placeholder=""
                       className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                     />
                   </div>
@@ -294,7 +293,6 @@ export default function LoginPage() {
                       autoComplete="current-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder=""
                       className="w-full h-10 pl-9 pr-10 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono transition-colors"
                     />
                     <button
@@ -390,7 +388,6 @@ export default function LoginPage() {
                           setOtpEmail(e.target.value);
                           if (otpError) setOtpError("");
                         }}
-                        placeholder=""
                         className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                       />
                     </div>
@@ -477,7 +474,6 @@ export default function LoginPage() {
                           setOtpCode(e.target.value.replace(/\D/g, ""));
                           if (otpError) setOtpError("");
                         }}
-                        placeholder=""
                         className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono tracking-widest"
                       />
                     </div>
@@ -496,7 +492,6 @@ export default function LoginPage() {
                         autoComplete="new-password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder=""
                         className="w-full h-10 pl-9 pr-10 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                       />
                       <button
@@ -527,7 +522,6 @@ export default function LoginPage() {
                         autoComplete="new-password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder=""
                         className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                       />
                     </div>

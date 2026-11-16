@@ -28,7 +28,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
             Email = "0176cs221045@sistec.ac.in",
-            Password = "ProjectHub@2026"
+            Password = "Pass@1234"
         });
 
         // Assert
@@ -49,7 +49,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
             Email = "priya.nair@sistec.ac.in",
-            Password = "ProjectHub@2026"
+            Password = "Pass@1234"
         });
 
         // Assert
@@ -68,7 +68,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
             Email = "hod.cse@sistec.ac.in",
-            Password = "ProjectHub@2026"
+            Password = "Pass@1234"
         });
 
         // Assert

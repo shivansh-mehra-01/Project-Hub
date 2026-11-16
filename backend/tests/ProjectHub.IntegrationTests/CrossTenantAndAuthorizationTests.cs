@@ -35,7 +35,7 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
             Email = email,
-            Password = "ProjectHub@2026"
+            Password = "Pass@1234"
         });
         response.EnsureSuccessStatusCode();
         var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
