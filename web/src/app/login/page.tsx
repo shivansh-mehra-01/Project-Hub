@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { showToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { CollabexLogo } from "@/components/brand/CollabexLogo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -249,31 +250,9 @@ export default function LoginPage() {
         {/* LEFT COLUMN: Minimal Brand & Value Proposition                            */}
         {/* ========================================================================= */}
         <div className="space-y-6 sm:space-y-8 max-w-lg">
-          {/* Top Brand Lockup with Real Geometric SVG Brand Mark */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#047857] flex items-center justify-center text-white shadow-xs shrink-0">
-              <svg
-                className="w-5 h-5 text-white"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="4.5" r="2.5" fill="currentColor" />
-                <circle cx="4.5" cy="17.5" r="2.5" fill="currentColor" />
-                <circle cx="19.5" cy="17.5" r="2.5" fill="currentColor" />
-                <circle cx="12" cy="12" r="1.75" fill="white" fillOpacity="0.3" />
-                <line x1="12" y1="7" x2="12" y2="10.25" />
-                <line x1="6.5" y1="16" x2="10.5" y2="13.25" />
-                <line x1="17.5" y1="16" x2="13.5" y2="13.25" />
-                <line x1="7" y1="17.5" x2="17" y2="17.5" strokeDasharray="1.5 1.5" />
-              </svg>
-            </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900 font-heading">
-              Collabex
-            </span>
+          {/* Top Brand Lockup: Lockup A (collabex + flowing 4-node metaball icon) */}
+          <div>
+            <CollabexLogo variant="light" size="lg" />
           </div>
 
           {/* Subtle Pill Badge */}

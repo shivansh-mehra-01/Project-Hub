@@ -30,6 +30,9 @@ export const metadata: Metadata = {
   title: "Collabex — Academic Project Governance & NBA Compliance",
   description:
     "Production-grade, multi-tenant B2B SaaS platform for engineering colleges to manage Minor & Major academic projects and automate NBA Criterion 2 & 3 compliance.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

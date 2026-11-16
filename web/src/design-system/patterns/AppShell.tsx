@@ -30,6 +30,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CollabexLogo } from "@/components/brand/CollabexLogo";
 import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
@@ -333,62 +334,32 @@ const AppShellInner: React.FC<AppShellProps> = ({
       <aside className="hidden lg:flex w-[240px] flex-col border-r border-white/[0.08] bg-[#111827] text-white fixed inset-y-0 z-30 select-none">
         
         {/* Top-Left Brand Lockup & Multi-Campus Switcher (Locked to 56px / h-14) */}
-        <div className="h-14 flex items-center px-4 border-b border-white/[0.08] gap-2.5 relative">
-          <div className="h-7 w-7 rounded-lg bg-[#047857] flex items-center justify-center text-white shadow-xs shrink-0">
-            <svg
-              className="w-4 h-4 text-white"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="4.5" r="2.5" fill="currentColor" />
-              <circle cx="4.5" cy="17.5" r="2.5" fill="currentColor" />
-              <circle cx="19.5" cy="17.5" r="2.5" fill="currentColor" />
-              <circle cx="12" cy="12" r="1.75" fill="white" fillOpacity="0.3" />
-              <line x1="12" y1="7" x2="12" y2="10.25" />
-              <line x1="6.5" y1="16" x2="10.5" y2="13.25" />
-              <line x1="17.5" y1="16" x2="13.5" y2="13.25" />
-              <line x1="7" y1="17.5" x2="17" y2="17.5" strokeDasharray="1.5 1.5" />
-            </svg>
-          </div>
+        <div className="h-14 flex items-center justify-between px-4 border-b border-white/[0.08] relative">
+          <CollabexLogo variant="dark" size="sm" />
 
           {currentPersona.role === "SuperAdmin" ? (
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-xs text-white tracking-tight truncate font-heading">
-                Collabex • Platform
-              </span>
-              <span className="text-[10px] text-slate-400 truncate">
-                Global Tenant Control
-              </span>
-            </div>
+            <span className="text-[10px] font-mono text-emerald-400/90 font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+              Platform
+            </span>
           ) : isCollegeAdminMultiCampus ? (
-            <div className="flex-1 min-w-0 relative">
+            <div className="relative">
               <button
                 type="button"
                 onClick={() => setShowCampusMenu(!showCampusMenu)}
-                className="w-full flex items-center justify-between text-left group cursor-pointer"
+                className="flex items-center gap-1 px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] text-slate-300 hover:text-white transition-colors cursor-pointer"
                 title="Switch campus branch"
               >
-                <div className="flex flex-col min-w-0">
-                  <span className="font-bold text-xs text-white tracking-tight truncate font-heading group-hover:text-emerald-300 transition-colors">
-                    {college.code} • {selectedBranch.split(" ")[0]}
-                  </span>
-                  <span className="text-[10px] text-slate-400 truncate">
-                    Institutional Admin
-                  </span>
-                </div>
+                <span className="font-semibold text-white">{college.code}</span>
+                <span className="text-[10px] text-slate-400 font-mono hidden xl:inline">({selectedBranch.split(" ")[0]})</span>
                 <ChevronsUpDown
-                  className="w-3.5 h-3.5 text-slate-400 group-hover:text-white shrink-0 ml-1 transition-colors"
+                  className="w-3 h-3 text-slate-400 shrink-0 ml-0.5"
                   strokeWidth={1.75}
                 />
               </button>
 
               {/* Multi-Campus Dropdown */}
               {showCampusMenu && (
-                <div className="absolute top-full left-0 mt-2 w-[216px] rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-1.5 z-50 space-y-0.5 text-xs animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute top-full right-0 mt-2 w-[216px] rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-1.5 z-50 space-y-0.5 text-xs animate-in fade-in zoom-in-95 duration-100">
                   <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold border-b border-white/[0.08]">
                     Campus Branches
                   </div>
@@ -415,14 +386,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
               )}
             </div>
           ) : (
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-xs text-white tracking-tight truncate font-heading">
-                {college.code} • {selectedBranch.split(" ")[0]}
-              </span>
-              <span className="text-[10px] text-slate-400 truncate">
-                {currentPersona.departmentId ? "Dept. of CSE" : "Institutional Admin"}
-              </span>
-            </div>
+            <span className="text-[10px] font-mono font-medium text-slate-400 px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+              {college.code}
+            </span>
           )}
         </div>
 
@@ -473,6 +439,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
           
           {/* Breadcrumb Hierarchy */}
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <CollabexLogo variant="dark" size="sm" iconOnly className="lg:hidden shrink-0" />
             <span className="text-sm font-semibold text-white tracking-tight font-heading truncate">
               {displayTitle}
             </span>
