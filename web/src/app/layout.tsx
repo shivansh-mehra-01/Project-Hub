@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Inter, JetBrains_Mono } from "next/font/google";
 import { QueryProvider } from "@/lib/query-provider";
 import { ProjectHubStoreProvider } from "@/mocks/ProjectHubStore";
+import { ToastContainer } from "@/design-system/components/ToastContainer";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -44,6 +45,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans antialiased">
         <QueryProvider>
           <ProjectHubStoreProvider>{children}</ProjectHubStoreProvider>
+          <ToastContainer />
         </QueryProvider>
       </body>
     </html>

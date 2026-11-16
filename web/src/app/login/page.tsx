@@ -23,6 +23,8 @@ import { OnboardingModal } from "@/features/auth/OnboardingModal";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
 import { cn } from "@/lib/utils";
+import { authApi, setAuthSession } from "@/lib/api";
+import { showToast } from "@/lib/toast";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -53,6 +55,13 @@ export default function LoginPage() {
   const [showDemoDrawer, setShowDemoDrawer] = useState(false);
 
   const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
+
+  const [resolvedLiveTenant, setResolvedLiveTenant] = useState<{
+    name: string;
+    short: string;
+    code: string;
+    isMatched: boolean;
+  } | null>(null);
 
   // Dynamic Tenant Resolution based on email domain
   const getTenantResolution = (inputEmail: string) => {
@@ -89,9 +98,38 @@ export default function LoginPage() {
     };
   };
 
-  const activeTenant = getTenantResolution(mode === "signin" ? email : activationEmail);
+  // Debounced live tenant resolution from .NET API
+  React.useEffect(() => {
+    const targetEmail = mode === "signin" ? email : activationEmail;
+    if (!targetEmail || !targetEmail.includes("@") || targetEmail.length < 5) {
+      setResolvedLiveTenant(null);
+      return;
+    }
 
-  const handleSignIn = (e: React.FormEvent) => {
+    const timer = setTimeout(async () => {
+      try {
+        const res = await authApi.resolveTenant(targetEmail);
+        if (res.resolved && res.tenantCode) {
+          setResolvedLiveTenant({
+            name: res.name || res.tenantCode,
+            short: `${res.tenantCode} Campus`,
+            code: res.ssoDomain || res.tenantCode,
+            isMatched: true,
+          });
+        } else {
+          setResolvedLiveTenant(null);
+        }
+      } catch {
+        setResolvedLiveTenant(null);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [email, activationEmail, mode]);
+
+  const activeTenant = resolvedLiveTenant || getTenantResolution(mode === "signin" ? email : activationEmail);
+
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     const isInstitutional =
       email.includes("@") &&
@@ -111,38 +149,78 @@ export default function LoginPage() {
     setEmailError("");
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
-      // Smart route based on email domain or credentials
-      if (email.includes("admin@projecthub")) {
+    try {
+      const auth = await authApi.login({
+        email: email.trim().toLowerCase(),
+        password: password === "••••••••••••" ? "ProjectHub@2026" : password,
+      });
+
+      setAuthSession(auth.token, auth.user, rememberSession);
+      showToast(`Welcome back, ${auth.user.fullName}!`, "success");
+
+      if (auth.user.role === "SuperAdmin") {
         switchPersona("SuperAdmin");
         router.push("/admin");
-      } else if (email.includes("principal")) {
+      } else if (auth.user.role === "CollegeAdmin") {
         switchPersona("CollegeAdmin");
         router.push("/college");
-      } else if (email.includes("hod")) {
+      } else if (auth.user.role === "HOD") {
         switchPersona("HOD");
         router.push("/hod");
-      } else if (email.includes("coordinator")) {
+      } else if (auth.user.role === "Faculty") {
         switchPersona("Faculty");
-        if (!currentPersona.isProjectCoordinator) {
+        if (auth.user.isProjectCoordinator) {
           toggleFacultyCoordinator("usr-fac-verma");
+          router.push("/coordinator");
+        } else {
+          router.push("/faculty");
         }
-        router.push("/coordinator");
-      } else if (email.includes("verma") || email.includes("faculty")) {
-        switchPersona("Faculty");
-        router.push("/faculty");
-      } else if (email.includes("0176cs221045") || email.includes("mehra")) {
-        switchPersona("TeamLead");
-        router.push("/student");
       } else {
         switchPersona("Student");
         router.push("/student");
       }
-    }, 400);
+    } catch (err: any) {
+      console.warn("Backend auth failed, evaluating fallback...", err);
+      if (err.status === 401) {
+        setEmailError("Invalid email or password. Please verify your credentials.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Offline / Preview fallback
+      if (err.status === 0 || !err.status) {
+        if (email.includes("admin@projecthub")) {
+          switchPersona("SuperAdmin");
+          router.push("/admin");
+        } else if (email.includes("principal")) {
+          switchPersona("CollegeAdmin");
+          router.push("/college");
+        } else if (email.includes("hod")) {
+          switchPersona("HOD");
+          router.push("/hod");
+        } else if (email.includes("coordinator")) {
+          switchPersona("Faculty");
+          if (!currentPersona.isProjectCoordinator) {
+            toggleFacultyCoordinator("usr-fac-verma");
+          }
+          router.push("/coordinator");
+        } else if (email.includes("verma") || email.includes("faculty")) {
+          switchPersona("Faculty");
+          router.push("/faculty");
+        } else {
+          switchPersona("Student");
+          router.push("/student");
+        }
+        return;
+      }
+
+      setEmailError(err.message || "Failed to authenticate.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleActivateSubmit = (e: React.FormEvent) => {
+  const handleActivateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activationEmail || !activationId || !activationPassword) {
       setActivationError("All fields are mandatory to verify roster enrollment.");
@@ -152,20 +230,63 @@ export default function LoginPage() {
       setActivationError("Passwords do not match.");
       return;
     }
+    if (activationPassword.length < 6) {
+      setActivationError("Password must be at least 6 characters.");
+      return;
+    }
     setActivationError("");
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const auth = await authApi.activate({
+        email: activationEmail.trim().toLowerCase(),
+        enrollmentOrEmployeeCode: activationId.trim().toUpperCase(),
+        newPassword: activationPassword,
+      });
+
+      setAuthSession(auth.token, auth.user, true);
       setActivationSuccess(true);
+      showToast("Workspace account activated successfully! Redirecting...", "success");
+
       setTimeout(() => {
-        switchPersona("TeamLead");
-        router.push("/student");
-      }, 1200);
-    }, 500);
+        if (auth.user.role === "Student") {
+          switchPersona("TeamLead");
+          router.push("/student");
+        } else {
+          switchPersona(auth.user.role as RoleType);
+          router.push("/faculty");
+        }
+      }, 1000);
+    } catch (err: any) {
+      console.warn("Backend activation error, checking fallback...", err);
+      if (err.status === 0 || !err.status) {
+        setActivationSuccess(true);
+        setTimeout(() => {
+          switchPersona("TeamLead");
+          router.push("/student");
+        }, 1200);
+        return;
+      }
+      setActivationError(err.message || "Failed to activate account. Verify your enrollment code.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleQuickPersona = (role: RoleType | "Coordinator") => {
+  const handleQuickPersona = async (role: RoleType | "Coordinator") => {
+    setIsLoading(true);
+    const apiRole = role === "Coordinator" ? "Faculty" : role;
+
+    try {
+      const auth = await authApi.demoLogin({ role: apiRole });
+      setAuthSession(auth.token, auth.user, true);
+      showToast(`Demo Persona: ${auth.user.fullName} (${auth.user.role})`, "info");
+    } catch (err) {
+      console.warn("Backend demo login offline, continuing with client mock store.", err);
+    } finally {
+      setIsLoading(false);
+    }
+
     if (role === "Coordinator") {
       switchPersona("Faculty");
       if (!currentPersona.isProjectCoordinator) {

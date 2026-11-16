@@ -33,7 +33,7 @@ postgres_data/
 redis_data/
 
 # IDE & OS
-api
+/api
 backend/src/ProjectHub.WebApi
 .vscode/
 .idea/
