@@ -13,6 +13,7 @@ export interface SidebarNavItem {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   iconName: IconName;
   count?: number;
+  section?: "MENU" | "COORDINATOR";
 }
 
 export interface BreadcrumbInfo {
@@ -64,6 +65,7 @@ export const getSidebarNav = (
       icon: getRouteIcon(route.iconName),
       iconName: route.iconName,
       count,
+      section: route.coordinatorOnly ? "COORDINATOR" : "MENU",
     };
   });
 };

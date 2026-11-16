@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
-import { getSidebarNav, getBreadcrumbs, RouteGuard } from "@/navigation";
+import { getSidebarNav, getBreadcrumbs, RouteGuard, SidebarNavItem } from "@/navigation";
 
 export const getAvatarInitials = (name: string): string => {
   const cleaned = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.|Er\.)\s+/i, "").trim();
@@ -69,7 +69,38 @@ export interface AppShellProps {
   activeTab?: string;
 }
 
+export interface AppShellContextValue {
+  isInsideShell: boolean;
+  setOverrides?: (overrides: { pageTitle?: string; breadcrumb?: string; activeTab?: string }) => void;
+}
+
+export const AppShellContext = React.createContext<AppShellContextValue>({
+  isInsideShell: false,
+});
+
 export const AppShell: React.FC<AppShellProps> = ({
+  children,
+  pageTitle,
+  breadcrumb,
+  activeTab,
+}) => {
+  const parentContext = useContext(AppShellContext);
+
+  useEffect(() => {
+    if (parentContext.isInsideShell && parentContext.setOverrides) {
+      parentContext.setOverrides({ pageTitle, breadcrumb, activeTab });
+    }
+  }, [parentContext, pageTitle, breadcrumb, activeTab]);
+
+  // If already mounted within an outer AppShell (e.g. from DashboardLayout), pass children through cleanly
+  if (parentContext.isInsideShell) {
+    return <>{children}</>;
+  }
+
+  return <AppShellInner pageTitle={pageTitle} breadcrumb={breadcrumb} activeTab={activeTab}>{children}</AppShellInner>;
+};
+
+const AppShellInner: React.FC<AppShellProps> = ({
   children,
   pageTitle,
   breadcrumb,
@@ -217,12 +248,14 @@ export const AppShell: React.FC<AppShellProps> = ({
     ];
   })();
 
-  // Available campus branches for multi-campus institutional switcher
-  const campusBranches = [
+  // Registered campus branches for multi-campus institutional switcher
+  const campuses = [
     { id: "main", name: "Gandhi Nagar (Main Campus)", code: "INST-MP-0176" },
     { id: "ratibad", name: "Ratibad Campus", code: "INST-MP-0192" },
     { id: "pharmacy", name: "SISTec Pharmacy & Tech", code: "INST-MP-0205" },
   ];
+  const isCollegeAdminMultiCampus =
+    currentPersona.role === "CollegeAdmin" && campuses.length > 1;
 
   // Live badge counts dictionary passed to centralized navigation engine
   const pendingFacultyCount =
@@ -246,9 +279,68 @@ export const AppShell: React.FC<AppShellProps> = ({
     currentPersona.isProjectCoordinator
   );
 
+  const [innerOverrides, setInnerOverrides] = useState<{
+    pageTitle?: string;
+    breadcrumb?: string;
+    activeTab?: string;
+  }>({});
+
+  useEffect(() => {
+    setInnerOverrides({});
+  }, [pathname]);
+
   const breadcrumbsInfo = getBreadcrumbs(pathname, currentPersona.role);
-  const displayTitle = pageTitle || breadcrumbsInfo.pageTitle;
-  const displayBreadcrumb = breadcrumb || breadcrumbsInfo.breadcrumb;
+  const displayTitle = pageTitle || innerOverrides.pageTitle || breadcrumbsInfo.pageTitle;
+  const displayBreadcrumb = breadcrumb || innerOverrides.breadcrumb || breadcrumbsInfo.breadcrumb;
+  const currentActiveTab = activeTab || innerOverrides.activeTab;
+
+  const primaryItems = navItems.filter((i) => i.section !== "COORDINATOR" && i.label !== "Profile");
+  const coordinatorItems = navItems.filter((i) => i.section === "COORDINATOR");
+  const profileItem = navItems.find((i) => i.label === "Profile");
+
+  const renderNavItem = (item: SidebarNavItem) => {
+    const Icon = item.icon;
+    const isProfileItem = item.label === "Profile";
+    const isActive =
+      currentActiveTab === item.label ||
+      pathname === item.href ||
+      (isProfileItem &&
+        (currentActiveTab === "Account" ||
+          pathname === "/account" ||
+          pathname === "/student/profile"));
+
+    return (
+      <Link
+        key={item.label}
+        href={item.href}
+        prefetch={true}
+        className={cn(
+          "flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors",
+          isActive
+            ? "bg-brand-primary text-white font-semibold shadow-xs"
+            : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
+        )}
+      >
+        <Icon
+          className={cn("h-4 w-4 shrink-0", isActive ? "text-white" : "text-slate-400")}
+          strokeWidth={1.75}
+        />
+        <span className="truncate">{item.label}</span>
+        {item.count !== undefined && (
+          <span
+            className={cn(
+              "ml-auto text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full",
+              isActive
+                ? "bg-white/20 text-white"
+                : "bg-white/10 text-slate-300 border border-white/10"
+            )}
+          >
+            {item.count}
+          </span>
+        )}
+      </Link>
+    );
+  };
 
   const handleLogout = () => {
     logout();
@@ -266,7 +358,8 @@ export const AppShell: React.FC<AppShellProps> = ({
   };
 
   return (
-    <div className="flex min-h-screen bg-canvas-bg">
+    <AppShellContext.Provider value={{ isInsideShell: true, setOverrides: setInnerOverrides }}>
+      <div className="flex min-h-screen bg-canvas-bg">
       {/* ========================================================================= */}
       {/* 1. DESKTOP FIXED SIDEBAR (240px, Dark L-Frame Anchor)                     */}
       {/* ========================================================================= */}
@@ -287,7 +380,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                 Global Tenant Control
               </span>
             </div>
-          ) : (
+          ) : isCollegeAdminMultiCampus ? (
             <div className="flex-1 min-w-0 relative">
               <button
                 type="button"
@@ -300,7 +393,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                     {college.code} • {selectedBranch.split(" ")[0]}
                   </span>
                   <span className="text-[10px] text-slate-400 truncate">
-                    {currentPersona.departmentId ? "Dept. of CSE" : "Institutional Admin"}
+                    Institutional Admin
                   </span>
                 </div>
                 <ChevronsUpDown
@@ -311,11 +404,11 @@ export const AppShell: React.FC<AppShellProps> = ({
 
               {/* Multi-Campus Dropdown */}
               {showCampusMenu && (
-                <div className="absolute top-full left-0 mt-2 w-52 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-1.5 z-50 space-y-0.5 text-xs animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute top-full left-0 mt-2 w-[216px] rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-1.5 z-50 space-y-0.5 text-xs animate-in fade-in zoom-in-95 duration-100">
                   <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold border-b border-white/[0.08]">
                     Campus Branches
                   </div>
-                  {campusBranches.map((branch) => (
+                  {campuses.map((branch) => (
                     <button
                       key={branch.id}
                       type="button"
@@ -337,61 +430,39 @@ export const AppShell: React.FC<AppShellProps> = ({
                 </div>
               )}
             </div>
+          ) : (
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-xs text-white tracking-tight truncate font-heading">
+                {college.code} • {selectedBranch.split(" ")[0]}
+              </span>
+              <span className="text-[10px] text-slate-400 truncate">
+                {currentPersona.departmentId ? "Dept. of CSE" : "Institutional Admin"}
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Navigation Tabs (Max 4 per role) */}
+        {/* Navigation Tabs */}
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
           <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
             Menu
           </div>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isProfileItem = item.label === "Profile";
-            const isActive =
-              activeTab === item.label ||
-              pathname === item.href ||
-              (isProfileItem &&
-                (activeTab === "Account" ||
-                  pathname === "/account" ||
-                  pathname === "/student/profile"));
+          {primaryItems.map(renderNavItem)}
 
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors",
-                  isActive
-                    ? "bg-brand-primary text-white font-semibold shadow-xs"
-                    : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
-                )}
-              >
-                <Icon
-                  className={cn("h-4 w-4 shrink-0", isActive ? "text-white" : "text-slate-400")}
-                  strokeWidth={1.75}
-                />
-                <span className="truncate">{item.label}</span>
-                {item.count !== undefined && (
-                  <span
-                    className={cn(
-                      "ml-auto text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full",
-                      isActive
-                        ? "bg-white/20 text-white"
-                        : "bg-white/10 text-slate-300 border border-white/10"
-                    )}
-                  >
-                    {item.count}
-                  </span>
-                )}
-                {item.label === "Batch Ops" && (
-                  <span className="ml-auto text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold px-1.5 py-0.2 rounded font-mono">
-                    ON
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+          {coordinatorItems.length > 0 && (
+            <>
+              <div className="pt-3 pb-1 px-2 border-t border-white/[0.06] text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400 mt-2">
+                Coordinator
+              </div>
+              {coordinatorItems.map(renderNavItem)}
+            </>
+          )}
+
+          {profileItem && (
+            <div className="pt-2 mt-1">
+              {renderNavItem(profileItem)}
+            </div>
+          )}
         </nav>
 
         {/* Unified Bottom-Left Sidebar Footer (Demo Switcher + User Account Card + pb-12 clearance) */}
@@ -498,36 +569,8 @@ export const AppShell: React.FC<AppShellProps> = ({
             )}
           </div>
 
-          {/* Center/Right Actions: Mode Toggle + Command Search + Dark Status Pill + Notifications */}
+          {/* Center/Right Actions: Command Search + Dark Status Pill + Notifications */}
           <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Faculty Coordinator Context Toggle Pill */}
-            {currentPersona.role === "Faculty" && currentPersona.isProjectCoordinator && (
-              <div className="hidden sm:inline-flex items-center p-0.5 rounded-lg bg-white/5 border border-white/10 text-xs">
-                <Link
-                  href="/faculty"
-                  className={cn(
-                    "px-2.5 py-1 rounded-md transition-all text-xs font-medium cursor-pointer",
-                    !pathname.startsWith("/coordinator")
-                      ? "bg-brand-primary text-white font-semibold shadow-xs"
-                      : "text-slate-400 hover:text-slate-200"
-                  )}
-                >
-                  Guide Mode
-                </Link>
-                <Link
-                  href="/coordinator"
-                  className={cn(
-                    "px-2.5 py-1 rounded-md transition-all text-xs font-medium cursor-pointer",
-                    pathname.startsWith("/coordinator")
-                      ? "bg-brand-primary text-white font-semibold shadow-xs"
-                      : "text-slate-400 hover:text-slate-200"
-                  )}
-                >
-                  Coordinator Mode
-                </Link>
-              </div>
-            )}
-            
             {/* Global Command Search (⌘K) */}
             <button
               type="button"
@@ -692,12 +735,13 @@ export const AppShell: React.FC<AppShellProps> = ({
       <nav className="lg:hidden fixed bottom-0 inset-x-0 h-16 bg-[#111827] border-t border-white/[0.08] z-40 flex items-center justify-around px-2 select-none shadow-lg">
         {navItems.slice(0, currentPersona.role === "SuperAdmin" ? 5 : 4).map((item) => {
           const Icon = item.icon;
-          const isActive = activeTab === item.label || pathname === item.href;
+          const isActive = currentActiveTab === item.label || pathname === item.href;
 
           return (
             <Link
               key={item.label}
               href={item.href}
+              prefetch={true}
               className={cn(
                 "flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium transition-colors relative",
                 isActive
@@ -730,5 +774,6 @@ export const AppShell: React.FC<AppShellProps> = ({
         onClose={() => setShowCommandPalette(false)}
       />
     </div>
+  </AppShellContext.Provider>
   );
 };

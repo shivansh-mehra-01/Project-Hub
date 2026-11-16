@@ -85,6 +85,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     currentPersona.isProjectCoordinator
   );
 
+  // Prefetch reachable routes on command palette open for instantaneous SPA transitions
+  useEffect(() => {
+    if (isOpen) {
+      baseItems.forEach((item) => {
+        if (item.path) {
+          router.prefetch(item.path);
+        }
+      });
+    }
+  }, [isOpen, baseItems, router]);
+
   // Map to executable command items
   const allItems = [
     ...baseItems.map((item) => ({

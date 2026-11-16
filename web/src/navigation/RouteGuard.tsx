@@ -18,18 +18,18 @@ export const RouteGuard: React.FC<RouteGuardProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
   const { currentPersona, isAuthenticated } = useProjectHubStore();
-  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
     // 1. Allow public routes without any check
     if (PUBLIC_ROUTES.includes(pathname)) {
-      setIsAuthorized(true);
+      setIsRedirecting(false);
       return;
     }
 
     // 2. Validate authentication: if logged out or unauthenticated, redirect to /login
     if (!isAuthenticated || !currentPersona) {
-      setIsAuthorized(false);
+      setIsRedirecting(true);
       router.replace("/login");
       return;
     }
@@ -42,23 +42,23 @@ export const RouteGuard: React.FC<RouteGuardProps> = ({ children }) => {
     );
 
     if (!authorized) {
-      setIsAuthorized(false);
+      setIsRedirecting(true);
       // Clean redirect to authorized home route
       const homeRoute = ROLE_HOME_ROUTES[currentPersona.role] || "/login";
       router.replace(homeRoute);
       return;
     }
 
-    setIsAuthorized(true);
+    setIsRedirecting(false);
   }, [pathname, currentPersona, isAuthenticated, router]);
 
-  // While checking on client or when unauthorized, render fallback or null
-  if (isAuthorized === false && !PUBLIC_ROUTES.includes(pathname)) {
+  // While redirecting an unauthorized user, show clean light porcelain screen
+  if (isRedirecting && !PUBLIC_ROUTES.includes(pathname)) {
     return (
-      <div className="min-h-screen bg-[#111827] flex items-center justify-center p-6 text-white select-none">
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 text-slate-600 select-none">
         <div className="flex items-center gap-3">
-          <div className="w-5 h-5 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
-          <span className="text-xs text-slate-300 font-mono">
+          <div className="w-5 h-5 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
+          <span className="text-xs text-slate-600 font-mono">
             Redirecting to authorized workspace...
           </span>
         </div>
