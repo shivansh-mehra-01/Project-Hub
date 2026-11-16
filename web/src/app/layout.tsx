@@ -27,7 +27,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Project Hub — Academic Project & NBA Compliance SaaS",
+  title: "Collabex — Academic Project Governance & NBA Compliance",
   description:
     "Production-grade, multi-tenant B2B SaaS platform for engineering colleges to manage Minor & Major academic projects and automate NBA Criterion 2 & 3 compliance.",
 };

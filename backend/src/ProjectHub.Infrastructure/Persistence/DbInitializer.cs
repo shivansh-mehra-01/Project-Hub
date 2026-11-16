@@ -597,7 +597,7 @@ public static class DbInitializer
         Console.WriteLine();
         Console.ForegroundColor = ConsoleColor.DarkGreen;
         Console.WriteLine("====================================================================================================");
-        Console.WriteLine("                      PROJECT HUB - SEEDED ROLE ACCOUNTS (Password: Pass@1234)                      ");
+        Console.WriteLine("                        COLLABEX - SEEDED ROLE ACCOUNTS (Password: Pass@1234)                       ");
         Console.WriteLine("====================================================================================================");
         Console.ResetColor();
         Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "ROLE", "NAME", "EMAIL", "DESIGNATION"));

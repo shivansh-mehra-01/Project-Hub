@@ -95,7 +95,7 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
       headers,
     });
   } catch (networkError: any) {
-    const msg = `Unable to reach Project Hub API at ${API_BASE_URL}. Ensure the backend service is running.`;
+    const msg = `Unable to reach Collabex API at ${API_BASE_URL}. Ensure the backend service is running.`;
     if (!options.suppressToast) {
       showToast(msg, "warning");
     }
@@ -128,7 +128,32 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
     if (data && typeof data === "object") {
       errorMessage = data.message || data.title || data.error || errorMessage;
     } else if (typeof data === "string" && data.trim()) {
-      errorMessage = data;
+      if (
+        data.includes("<html") ||
+        data.includes("<!DOCTYPE") ||
+        data.includes("System.") ||
+        data.includes("Exception:") ||
+        response.status >= 500
+      ) {
+        errorMessage =
+          response.status >= 500
+            ? "An unexpected server error occurred. Please try again."
+            : "Invalid server response.";
+      } else {
+        errorMessage = data.trim();
+      }
+    }
+
+    if (
+      response.status >= 500 &&
+      (!errorMessage || errorMessage.includes("System.") || errorMessage.includes("Exception:"))
+    ) {
+      errorMessage = "An unexpected server error occurred. Please try again.";
+    }
+
+    // Cap message length to prevent UI deformation
+    if (errorMessage.length > 180) {
+      errorMessage = errorMessage.substring(0, 177) + "...";
     }
 
     if ((response.status === 400 || response.status === 403) && !options.suppressToast) {

@@ -191,13 +191,18 @@ export default function LoginPage() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <polygon points="12 2 2 7 12 12 22 7 12 2" fill="white" fillOpacity="0.18" />
-                <polyline points="2 17 12 22 22 17" />
-                <polyline points="2 12 12 17 22 12" />
+                <circle cx="12" cy="4.5" r="2.5" fill="currentColor" />
+                <circle cx="4.5" cy="17.5" r="2.5" fill="currentColor" />
+                <circle cx="19.5" cy="17.5" r="2.5" fill="currentColor" />
+                <circle cx="12" cy="12" r="1.75" fill="white" fillOpacity="0.3" />
+                <line x1="12" y1="7" x2="12" y2="10.25" />
+                <line x1="6.5" y1="16" x2="10.5" y2="13.25" />
+                <line x1="17.5" y1="16" x2="13.5" y2="13.25" />
+                <line x1="7" y1="17.5" x2="17" y2="17.5" strokeDasharray="1.5 1.5" />
               </svg>
             </div>
             <span className="text-xl font-bold tracking-tight text-slate-900 font-heading">
-              ProjectHub
+              Collabex
             </span>
           </div>
 
@@ -311,8 +316,8 @@ export default function LoginPage() {
                 </div>
 
                 {emailError && (
-                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1">
-                    <p>{emailError}</p>
+                  <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1 max-h-24 overflow-hidden">
+                    <p className="line-clamp-2">{emailError}</p>
                     {emailError.toLowerCase().includes("forgot password") && (
                       <button
                         type="button"
@@ -394,7 +399,9 @@ export default function LoginPage() {
                   </div>
 
                   {otpError && (
-                    <p className="text-xs text-rose-600">{otpError}</p>
+                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs max-h-24 overflow-hidden">
+                      <p className="line-clamp-2">{otpError}</p>
+                    </div>
                   )}
 
                   <button
@@ -528,7 +535,9 @@ export default function LoginPage() {
                   </div>
 
                   {otpError && (
-                    <p className="text-xs text-rose-600">{otpError}</p>
+                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs max-h-24 overflow-hidden">
+                      <p className="line-clamp-2">{otpError}</p>
+                    </div>
                   )}
 
                   <button

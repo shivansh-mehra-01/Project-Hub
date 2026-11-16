@@ -31,6 +31,11 @@ public class UserAccountConfiguration : IEntityTypeConfiguration<UserAccount>
         builder.Property(u => u.PasswordHash)
             .HasMaxLength(500);
 
+        builder.Property(u => u.PasswordResetOtpHashed)
+            .HasMaxLength(256);
+
+        builder.Property(u => u.PasswordResetOtpExpiresAtUtc);
+
         // Composite unique filtered indexes
         builder.HasIndex(u => new { u.CollegeId, u.Email })
             .IsUnique()

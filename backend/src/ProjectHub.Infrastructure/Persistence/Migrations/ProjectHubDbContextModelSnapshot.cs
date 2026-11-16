@@ -1091,6 +1091,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<string>("GitHubHandle")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsActivated")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -1108,6 +1111,17 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("MaxMentorTeams")
                         .HasColumnType("integer");
+
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("PasswordResetOtpExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PasswordResetOtpHashed")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("Role")
                         .IsRequired()

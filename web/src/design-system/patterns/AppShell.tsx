@@ -334,14 +334,31 @@ const AppShellInner: React.FC<AppShellProps> = ({
         
         {/* Top-Left Brand Lockup & Multi-Campus Switcher (Locked to 56px / h-14) */}
         <div className="h-14 flex items-center px-4 border-b border-white/[0.08] gap-2.5 relative">
-          <div className="h-7 w-7 rounded-lg bg-brand-primary flex items-center justify-center text-white font-bold text-xs shadow-xs shrink-0 font-heading">
-            PH
+          <div className="h-7 w-7 rounded-lg bg-[#047857] flex items-center justify-center text-white shadow-xs shrink-0">
+            <svg
+              className="w-4 h-4 text-white"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="4.5" r="2.5" fill="currentColor" />
+              <circle cx="4.5" cy="17.5" r="2.5" fill="currentColor" />
+              <circle cx="19.5" cy="17.5" r="2.5" fill="currentColor" />
+              <circle cx="12" cy="12" r="1.75" fill="white" fillOpacity="0.3" />
+              <line x1="12" y1="7" x2="12" y2="10.25" />
+              <line x1="6.5" y1="16" x2="10.5" y2="13.25" />
+              <line x1="17.5" y1="16" x2="13.5" y2="13.25" />
+              <line x1="7" y1="17.5" x2="17" y2="17.5" strokeDasharray="1.5 1.5" />
+            </svg>
           </div>
 
           {currentPersona.role === "SuperAdmin" ? (
             <div className="flex flex-col min-w-0">
               <span className="font-bold text-xs text-white tracking-tight truncate font-heading">
-                Project Hub • Platform
+                Collabex • Platform
               </span>
               <span className="text-[10px] text-slate-400 truncate">
                 Global Tenant Control

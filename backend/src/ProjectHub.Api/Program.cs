@@ -86,6 +86,29 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Global Exception Handling Middleware - Production Safe Error Formatting
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "Unhandled server error processing {Method} {Path}", context.Request.Method, context.Request.Path);
+        if (!context.Response.HasStarted)
+        {
+            context.Response.Clear();
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                message = "An unexpected server error occurred. Please try again."
+            });
+        }
+    }
+});
+
 // 8. Middleware Pipeline
 app.UseSerilogRequestLogging();
 
@@ -99,7 +122,7 @@ app.UseAuthorization();
 app.MapOpenApi("/openapi/v1.json");
 app.MapScalarApiReference("/scalar/v1", options =>
 {
-    options.WithTitle("Project Hub API Documentation");
+    options.WithTitle("Collabex API Documentation");
     options.WithTheme(ScalarTheme.Default);
 });
 
@@ -137,7 +160,7 @@ if (app.Environment.IsDevelopment())
 
 try
 {
-    Log.Information("Starting Project Hub API (.NET 10 LTS)");
+    Log.Information("Starting Collabex API (.NET 10 LTS)");
     app.Run();
 }
 catch (Exception ex)
