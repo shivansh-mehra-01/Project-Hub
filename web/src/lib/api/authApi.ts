@@ -5,17 +5,9 @@ import {
   RequestPasswordOtpRequest,
   RequestPasswordOtpResponse,
   ResetPasswordRequest,
-  ResolveTenantResponse,
 } from "./types";
 
 export const authApi = {
-  resolveTenant: (email: string) =>
-    apiClient.get<ResolveTenantResponse>("/api/auth/resolve-tenant", {
-      params: { email },
-      skipAuth: true,
-      suppressToast: true,
-    }),
-
   login: (data: LoginRequest) =>
     apiClient.post<AuthResponse>("/api/auth/login", data, {
       skipAuth: true,

@@ -22,36 +22,6 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task ResolveTenant_ValidInstitutionalDomain_ReturnsTenantInfo()
-    {
-        // Act: Query sistec.ac.in domain
-        var response = await _client.GetAsync("/api/auth/resolve-tenant?email=test.student@sistec.ac.in");
-
-        // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var result = await response.Content.ReadFromJsonAsync<ResolveTenantResponse>();
-        Assert.NotNull(result);
-        Assert.True(result.Resolved);
-        Assert.Equal("SISTEC", result.TenantCode);
-        Assert.Equal("sistec.ac.in", result.SsoDomain);
-        Assert.Equal(DbInitializer.SistecTenantId, result.CollegeId);
-    }
-
-    [Fact]
-    public async Task ResolveTenant_UnregisteredDomain_ReturnsResolvedFalse()
-    {
-        // Act: Query unregistered domain
-        var response = await _client.GetAsync("/api/auth/resolve-tenant?email=external@unregistered-univ.org");
-
-        // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var result = await response.Content.ReadFromJsonAsync<ResolveTenantResponse>();
-        Assert.NotNull(result);
-        Assert.False(result.Resolved);
-        Assert.Null(result.CollegeId);
-    }
-
-    [Fact]
     public async Task Login_StudentRole_ValidCredentials_ReturnsValidJwtAndProfile()
     {
         // Act

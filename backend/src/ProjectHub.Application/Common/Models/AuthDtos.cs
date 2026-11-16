@@ -2,17 +2,6 @@ using ProjectHub.Domain.Enums;
 
 namespace ProjectHub.Application.Common.Models;
 
-public record ResolveTenantResponse
-{
-    public bool Resolved { get; init; }
-    public Guid? CollegeId { get; init; }
-    public string? Name { get; init; }
-    public string? TenantCode { get; init; }
-    public string? SsoDomain { get; init; }
-    public string? CrestUrl { get; init; }
-    public string? Message { get; init; }
-}
-
 public record LoginRequest
 {
     public string Email { get; init; } = string.Empty;

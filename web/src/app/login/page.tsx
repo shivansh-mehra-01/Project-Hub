@@ -1,16 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRight,
+  CheckCircle2,
+  ChevronLeft,
   Eye,
   EyeOff,
   KeyRound,
   Lock,
   Mail,
-  ChevronLeft,
+  ShieldCheck,
+  TrendingUp,
 } from "lucide-react";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { authApi, setAuthSession, UserProfileDto } from "@/lib/api";
@@ -40,78 +41,6 @@ export default function LoginPage() {
   const [otpError, setOtpError] = useState("");
   const [devOtp, setDevOtp] = useState<string | null>(null);
   const [isOtpLoading, setIsOtpLoading] = useState(false);
-
-  // Dynamic Tenant Resolution
-  const [resolvedLiveTenant, setResolvedLiveTenant] = useState<{
-    name: string;
-    short: string;
-    code: string;
-    isMatched: boolean;
-  } | null>(null);
-
-  const getTenantResolution = (inputEmail: string) => {
-    const lower = inputEmail.toLowerCase().trim();
-    if (lower.includes("@sistec.ac.in") || lower.includes("sistec")) {
-      return {
-        name: "Sagar Institute of Science & Technology",
-        short: "SISTec Bhopal",
-        code: "INST-MP-0176",
-        isMatched: true,
-      };
-    }
-    if (lower.includes("@bmsce.ac.in") || lower.includes("bmsce")) {
-      return {
-        name: "B.M.S. College of Engineering",
-        short: "BMSCE Bangalore",
-        code: "INST-KA-0042",
-        isMatched: true,
-      };
-    }
-    if (lower.includes("@rvce.edu.in") || lower.includes("rvce")) {
-      return {
-        name: "R.V. College of Engineering",
-        short: "RVCE Bangalore",
-        code: "INST-KA-0019",
-        isMatched: true,
-      };
-    }
-    return null;
-  };
-
-  // Debounced live tenant resolution from .NET API
-  useEffect(() => {
-    const targetEmail = viewMode === "login" ? email : otpEmail;
-    if (!targetEmail || !targetEmail.includes("@") || targetEmail.length < 5) {
-      setResolvedLiveTenant(null);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      try {
-        const res = await authApi.resolveTenant(targetEmail);
-        if (res.resolved && res.tenantCode) {
-          setResolvedLiveTenant({
-            name: res.name || res.tenantCode,
-            short:
-              res.name && res.name.toLowerCase().includes("sagar")
-                ? "SISTec Bhopal"
-                : res.name || `${res.tenantCode} Campus`,
-            code: res.ssoDomain || res.tenantCode,
-            isMatched: true,
-          });
-        } else {
-          setResolvedLiveTenant(getTenantResolution(targetEmail));
-        }
-      } catch {
-        setResolvedLiveTenant(getTenantResolution(targetEmail));
-      }
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [email, otpEmail, viewMode]);
-
-  const activeTenant =
-    resolvedLiveTenant || getTenantResolution(viewMode === "login" ? email : otpEmail);
 
   const navigateToWorkspace = (user: UserProfileDto) => {
     if (user.role === "SuperAdmin") {
@@ -244,16 +173,28 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center px-6 sm:px-10 lg:px-16 py-12 select-none">
-      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-[1.1fr_auto_1fr] items-center gap-10 lg:gap-16">
+    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 select-none">
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-10 lg:gap-14">
         {/* ========================================================================= */}
         {/* LEFT COLUMN: Minimal Brand & Value Proposition                            */}
         {/* ========================================================================= */}
         <div className="space-y-6 sm:space-y-8 max-w-lg">
-          {/* Top Brand Lockup */}
+          {/* Top Brand Lockup with Real Geometric SVG Brand Mark */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#047857] flex items-center justify-center text-white font-bold text-sm shadow-xs font-heading shrink-0">
-              PH
+            <div className="w-10 h-10 rounded-xl bg-[#047857] flex items-center justify-center text-white shadow-xs shrink-0">
+              <svg
+                className="w-5 h-5 text-white"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polygon points="12 2 2 7 12 12 22 7 12 2" fill="white" fillOpacity="0.18" />
+                <polyline points="2 17 12 22 22 17" />
+                <polyline points="2 12 12 17 22 12" />
+              </svg>
             </div>
             <span className="text-xl font-bold tracking-tight text-slate-900 font-heading">
               ProjectHub
@@ -278,20 +219,29 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Minimal 3-Item Feature Strip */}
-          <div className="pt-6 sm:pt-8 border-t border-slate-200/60 flex flex-wrap items-center gap-y-2 text-xs sm:text-sm text-slate-500 font-medium">
-            <span>Manage Projects Efficiently</span>
-            <span className="hidden sm:inline-block w-px h-3.5 bg-slate-300 mx-3" />
-            <span>Ensure NBA Compliance</span>
-            <span className="hidden sm:inline-block w-px h-3.5 bg-slate-300 mx-3" />
-            <span>Track Progress with Ease</span>
+          {/* Minimal Single-Line 3-Item Feature Strip */}
+          <div className="border-t border-slate-200/80 pt-6 flex flex-wrap lg:flex-nowrap items-center gap-4 text-xs text-slate-500 whitespace-nowrap font-medium">
+            <span className="inline-flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#047857]" strokeWidth={2} />
+              <span>Manage Projects Efficiently</span>
+            </span>
+            <span className="hidden lg:inline-block h-3.5 w-px bg-slate-300" />
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#047857]" strokeWidth={2} />
+              <span>Ensure NBA Compliance</span>
+            </span>
+            <span className="hidden lg:inline-block h-3.5 w-px bg-slate-300" />
+            <span className="inline-flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-[#047857]" strokeWidth={2} />
+              <span>Track Progress with Ease</span>
+            </span>
           </div>
         </div>
 
         {/* ========================================================================= */}
         {/* CENTER DIVIDER: Vertical Faded Gradient Line                              */}
         {/* ========================================================================= */}
-        <div className="hidden lg:block w-px h-80 bg-gradient-to-b from-transparent via-slate-200 to-transparent" />
+        <div className="hidden lg:block w-px h-[380px] bg-gradient-to-b from-transparent via-slate-300 to-transparent" />
 
         {/* ========================================================================= */}
         {/* RIGHT COLUMN: Unboxed, Clean Login Form                                   */}
@@ -309,17 +259,9 @@ export default function LoginPage() {
               <form onSubmit={handleSignIn} className="space-y-4">
                 {/* Your Email Address Input */}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Your Email Address
-                    </label>
-                    {activeTenant?.isMatched && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#047857] animate-in fade-in duration-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#047857]" />
-                        {activeTenant.short}
-                      </span>
-                    )}
-                  </div>
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Your Email Address
+                  </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                       <Mail className="h-4 w-4" strokeWidth={1.75} />
@@ -332,8 +274,8 @@ export default function LoginPage() {
                         setEmail(e.target.value);
                         if (emailError) setEmailError("");
                       }}
-                      placeholder="you@college.edu"
-                      className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                      placeholder=""
+                      className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                     />
                   </div>
                 </div>
@@ -352,8 +294,8 @@ export default function LoginPage() {
                       autoComplete="current-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full h-10 pl-9 pr-10 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono transition-colors"
+                      placeholder=""
+                      className="w-full h-10 pl-9 pr-10 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono transition-colors"
                     />
                     <button
                       type="button"
@@ -433,17 +375,9 @@ export default function LoginPage() {
               {otpStep === 1 && (
                 <form onSubmit={handleRequestOtp} className="space-y-4">
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-semibold text-slate-700">
-                        Your Email Address
-                      </label>
-                      {activeTenant?.isMatched && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#047857] animate-in fade-in duration-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#047857]" />
-                          {activeTenant.short}
-                        </span>
-                      )}
-                    </div>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Your Email Address
+                    </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                         <Mail className="h-4 w-4" strokeWidth={1.75} />
@@ -456,8 +390,8 @@ export default function LoginPage() {
                           setOtpEmail(e.target.value);
                           if (otpError) setOtpError("");
                         }}
-                        placeholder="you@college.edu"
-                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                        placeholder=""
+                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                       />
                     </div>
                   </div>
@@ -543,8 +477,8 @@ export default function LoginPage() {
                           setOtpCode(e.target.value.replace(/\D/g, ""));
                           if (otpError) setOtpError("");
                         }}
-                        placeholder="123456"
-                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono tracking-widest"
+                        placeholder=""
+                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono tracking-widest"
                       />
                     </div>
                   </div>
@@ -562,8 +496,8 @@ export default function LoginPage() {
                         autoComplete="new-password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="At least 6 characters"
-                        className="w-full h-10 pl-9 pr-10 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                        placeholder=""
+                        className="w-full h-10 pl-9 pr-10 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                       />
                       <button
                         type="button"
@@ -593,8 +527,8 @@ export default function LoginPage() {
                         autoComplete="new-password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Repeat new password"
-                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
+                        placeholder=""
+                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-colors font-mono"
                       />
                     </div>
                   </div>

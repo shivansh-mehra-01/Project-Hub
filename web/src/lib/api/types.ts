@@ -28,16 +28,6 @@ export type ExceptionActionType =
 export type SprintTaskStatus = "Todo" | "InProgress" | "Done";
 
 // --- Auth DTOs ---
-export interface ResolveTenantResponse {
-  resolved: boolean;
-  collegeId?: string;
-  name?: string;
-  tenantCode?: string;
-  ssoDomain?: string;
-  crestUrl?: string;
-  message?: string;
-}
-
 export interface LoginRequest {
   email: string;
   password: string;

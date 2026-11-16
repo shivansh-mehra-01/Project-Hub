@@ -42,47 +42,6 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Resolves college tenant by user institutional email domain (e.g. sistec.ac.in -> SISTec Bhopal).
     /// </summary>
-    [HttpGet("resolve-tenant")]
-    [AllowAnonymous]
-    [ProducesResponseType<ResolveTenantResponse>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> ResolveTenant([FromQuery] string email)
-    {
-        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
-        {
-            return Ok(new ResolveTenantResponse
-            {
-                Resolved = false,
-                Message = "Please enter a valid institutional email address."
-            });
-        }
-
-        var domain = email.Split('@').Last().Trim().ToLowerInvariant();
-
-        var tenant = await _context.CollegeTenants
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.SsoDomain == domain && t.IsActive && !t.IsDeleted);
-
-        if (tenant == null)
-        {
-            return Ok(new ResolveTenantResponse
-            {
-                Resolved = false,
-                Message = $"No institutional workspace registered for domain '@{domain}'."
-            });
-        }
-
-        return Ok(new ResolveTenantResponse
-        {
-            Resolved = true,
-            CollegeId = tenant.Id,
-            Name = tenant.Name,
-            TenantCode = tenant.TenantCode,
-            SsoDomain = tenant.SsoDomain,
-            CrestUrl = tenant.CrestUrl
-        });
-    }
-
     /// <summary>
     /// Standard password login returning signed JWT Bearer Token.
     /// </summary>
