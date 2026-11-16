@@ -1,11 +1,14 @@
+using System.Security.Claims;
 using ProjectHub.Application.Interfaces;
+using ProjectHub.Domain.Enums;
 
 namespace ProjectHub.Api.Middleware;
 
 /// <summary>
-/// Resolves tenant context per request.
-/// Strictly enforces verified JWT college_id claims for authenticated endpoints,
-/// allowing X-College-Id header fallback ONLY on unauthenticated pre-login endpoints.
+/// Resolves tenant and execution context per request.
+/// Strictly enforces verified JWT claims for authenticated requests:
+/// college_id, department_id, sub/user_id, role, is_super_admin, and is_coordinator.
+/// Unauthenticated pre-login endpoints fall back to X-College-Id header solely for institutional discovery.
 /// </summary>
 public class TenantResolutionMiddleware
 {
@@ -22,17 +25,62 @@ public class TenantResolutionMiddleware
     {
         if (context.User?.Identity?.IsAuthenticated == true)
         {
-            // Authenticated endpoint: Enforce college_id strictly from verified JWT claim
-            var collegeIdClaim = context.User.FindFirst("college_id")?.Value;
+            var user = context.User;
 
+            // 1. CollegeId (Tenant Partition)
+            var collegeIdClaim = user.FindFirst("college_id")?.Value;
             if (!string.IsNullOrWhiteSpace(collegeIdClaim) && Guid.TryParse(collegeIdClaim, out var collegeId))
             {
                 tenantContext.CollegeId = collegeId;
             }
             else
             {
-                // User may be a SuperAdmin or have no tenant binding
                 tenantContext.CollegeId = null;
+            }
+
+            // 2. DepartmentId
+            var deptIdClaim = user.FindFirst("department_id")?.Value ?? user.FindFirst("dept_id")?.Value;
+            if (!string.IsNullOrWhiteSpace(deptIdClaim) && Guid.TryParse(deptIdClaim, out var deptId))
+            {
+                tenantContext.DepartmentId = deptId;
+            }
+            else
+            {
+                tenantContext.DepartmentId = null;
+            }
+
+            // 3. UserId
+            var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                              ?? user.FindFirst("sub")?.Value 
+                              ?? user.FindFirst("user_id")?.Value;
+            if (!string.IsNullOrWhiteSpace(userIdClaim) && Guid.TryParse(userIdClaim, out var userId))
+            {
+                tenantContext.UserId = userId;
+            }
+
+            // 4. Role
+            var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
+            if (!string.IsNullOrWhiteSpace(roleClaim) && Enum.TryParse<UserRole>(roleClaim, ignoreCase: true, out var role))
+            {
+                tenantContext.Role = role;
+            }
+
+            // 5. IsSuperAdmin
+            var isSuperAdminClaim = user.FindFirst("is_super_admin")?.Value;
+            if (bool.TryParse(isSuperAdminClaim, out var isSuper) && isSuper)
+            {
+                tenantContext.IsSuperAdmin = true;
+            }
+            else if (tenantContext.Role == UserRole.SuperAdmin)
+            {
+                tenantContext.IsSuperAdmin = true;
+            }
+
+            // 6. IsProjectCoordinator
+            var isCoordClaim = user.FindFirst("is_coordinator")?.Value;
+            if (bool.TryParse(isCoordClaim, out var isCoord) && isCoord)
+            {
+                tenantContext.IsProjectCoordinator = true;
             }
         }
         else
@@ -56,4 +104,3 @@ public static class TenantResolutionMiddlewareExtensions
         return builder.UseMiddleware<TenantResolutionMiddleware>();
     }
 }
-

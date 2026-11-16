@@ -9,13 +9,17 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.3" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.OpenApi" Version="2.13.0" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.21.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ProjectHub.Core\ProjectHub.Core.csproj" />
+    <ProjectReference Include="..\ProjectHub.Domain\ProjectHub.Domain.csproj" />
     <ProjectReference Include="..\ProjectHub.Application\ProjectHub.Application.csproj" />
     <ProjectReference Include="..\ProjectHub.Infrastructure\ProjectHub.Infrastructure.csproj" />
   </ItemGroup>

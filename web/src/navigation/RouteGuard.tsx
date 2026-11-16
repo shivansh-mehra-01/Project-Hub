@@ -52,12 +52,12 @@ export const RouteGuard: React.FC<RouteGuardProps> = ({ children }) => {
     setIsRedirecting(false);
   }, [pathname, currentPersona, isAuthenticated, router]);
 
-  // While redirecting an unauthorized user, show clean light porcelain screen
+  // While redirecting an unauthorized user, show crisp light porcelain transition screen
   if (isRedirecting && !PUBLIC_ROUTES.includes(pathname)) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 text-slate-600 select-none">
         <div className="flex items-center gap-3">
-          <div className="w-5 h-5 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
+          <div className="w-5 h-5 rounded-full border-2 border-emerald-700 border-t-transparent animate-spin text-emerald-700" />
           <span className="text-xs text-slate-600 font-mono">
             Redirecting to authorized workspace...
           </span>

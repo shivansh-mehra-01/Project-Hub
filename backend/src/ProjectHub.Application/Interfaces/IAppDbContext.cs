@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using ProjectHub.Core.Entities;
+using ProjectHub.Domain.Entities;
 
 namespace ProjectHub.Application.Interfaces;
 
@@ -8,21 +8,29 @@ namespace ProjectHub.Application.Interfaces;
 /// </summary>
 public interface IAppDbContext
 {
-    DbSet<College> Colleges { get; }
+    // Platform Entities
+    DbSet<CollegeTenant> CollegeTenants { get; }
+    DbSet<MasterNbaOutcome> MasterNbaOutcomes { get; }
+    DbSet<MasterSdgCatalog> MasterSdgCatalogs { get; }
+    DbSet<PlatformAuditLog> PlatformAuditLogs { get; }
+
+    // Campus Tenant Entities
     DbSet<Department> Departments { get; }
-    DbSet<User> Users { get; }
-    DbSet<CollegeMembership> CollegeMemberships { get; }
-    DbSet<ProjectCycle> ProjectCycles { get; }
-    DbSet<Team> Teams { get; }
+    DbSet<UserAccount> Users { get; }
+    DbSet<AcademicTrack> AcademicTracks { get; }
+    DbSet<CourseOutcomeDefinition> CourseOutcomeDefinitions { get; }
+    DbSet<ProblemBankStatement> ProblemBankStatements { get; }
+    DbSet<ProjectTeam> ProjectTeams { get; }
     DbSet<TeamMember> TeamMembers { get; }
-    DbSet<TaskItem> TaskItems { get; }
-    DbSet<WeeklyLog> WeeklyLogs { get; }
-    DbSet<Rubric> Rubrics { get; }
-    DbSet<RubricCriterion> RubricCriteria { get; }
-    DbSet<Evaluation> Evaluations { get; }
-    DbSet<EvaluationScore> EvaluationScores { get; }
-    DbSet<AuditLog> AuditLogs { get; }
+    DbSet<SprintTask> SprintTasks { get; }
+    DbSet<TeamArtifact> TeamArtifacts { get; }
+    DbSet<WeeklyLogbook> WeeklyLogbooks { get; }
+    DbSet<VivaPanel> VivaPanels { get; }
+    DbSet<VivaPanelEvaluator> VivaPanelEvaluators { get; }
+    DbSet<VivaEvaluation> VivaEvaluations { get; }
+    DbSet<IndividualStudentScore> IndividualStudentScores { get; }
+    DbSet<CourseExitSurvey> CourseExitSurveys { get; }
+    DbSet<ExceptionAuditLog> ExceptionAuditLogs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
-

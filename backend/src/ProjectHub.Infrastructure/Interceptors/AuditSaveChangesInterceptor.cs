@@ -2,14 +2,14 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using ProjectHub.Application.Interfaces;
-using ProjectHub.Core.Common;
-using ProjectHub.Core.Entities;
+using ProjectHub.Domain.Common;
+using ProjectHub.Domain.Entities;
 
 namespace ProjectHub.Infrastructure.Interceptors;
 
 /// <summary>
 /// Immutable audit logging interceptor for Entity Framework Core.
-/// Captures all insert, update, and delete mutations and updates audit metadata.
+/// Captures significant platform and tenant mutations into PlatformAuditLog.
 /// </summary>
 public class AuditSaveChangesInterceptor : SaveChangesInterceptor
 {
@@ -24,7 +24,7 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
 
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
     {
-        ApplyAuditMetadataAndLogs(eventData.Context);
+        ApplyPlatformAuditLogs(eventData.Context);
         return base.SavingChanges(eventData, result);
     }
 
@@ -33,87 +33,65 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        ApplyAuditMetadataAndLogs(eventData.Context);
+        ApplyPlatformAuditLogs(eventData.Context);
         return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
-    private void ApplyAuditMetadataAndLogs(DbContext? context)
+    private void ApplyPlatformAuditLogs(DbContext? context)
     {
         if (context == null) return;
 
         var utcNow = DateTime.UtcNow;
         var userEmail = _currentUser.Email ?? "system";
-        var auditEntries = new List<AuditLog>();
+        var auditEntries = new List<PlatformAuditLog>();
 
         foreach (var entry in context.ChangeTracker.Entries().ToList())
         {
-            if (entry.Entity is AuditLog) continue;
+            if (entry.Entity is PlatformAuditLog or ExceptionAuditLog) continue;
 
-            // Handle auditable timestamps & actors
-            if (entry.Entity is IAuditableEntity auditable)
-            {
-                if (entry.State == EntityState.Added)
-                {
-                    auditable.CreatedAtUtc = utcNow;
-                    auditable.CreatedBy ??= userEmail;
-                }
-                else if (entry.State == EntityState.Modified)
-                {
-                    auditable.UpdatedAtUtc = utcNow;
-                    auditable.UpdatedBy = userEmail;
-                }
-            }
-
-            // Create immutable audit log records for tracked actions
             if (entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
             {
-                var action = entry.State.ToString();
-                var entityName = entry.Entity.GetType().Name;
+                // Only create platform audit logs for significant entities (e.g. CollegeTenant, Department, UserAccount, ProjectTeam)
+                var entityType = entry.Entity.GetType();
+                var entityName = entityType.Name;
 
-                // Resolve primary key or fallback
-                var primaryKey = entry.Properties.FirstOrDefault(p => p.Metadata.IsPrimaryKey())?.CurrentValue?.ToString() 
-                                 ?? Guid.NewGuid().ToString();
-
-                // Resolve CollegeId
-                Guid? collegeId = null;
-                if (entry.Entity is ITenantEntity tenantEntity && tenantEntity.CollegeId != Guid.Empty)
+                if (entry.Entity is CollegeTenant or Department or UserAccount or ProjectTeam or AcademicTrack)
                 {
-                    collegeId = tenantEntity.CollegeId;
+                    Guid? targetTenantId = null;
+                    if (entry.Entity is ITenantEntity tenantEntity)
+                    {
+                        targetTenantId = tenantEntity.CollegeId;
+                    }
+                    else if (entry.Entity is CollegeTenant collegeTenant)
+                    {
+                        targetTenantId = collegeTenant.Id;
+                    }
+
+                    var propertyValues = new Dictionary<string, object?>();
+                    foreach (var prop in entry.Properties)
+                    {
+                        if (prop.Metadata.IsPrimaryKey()) continue;
+                        if (entry.State == EntityState.Modified && !prop.IsModified) continue;
+                        propertyValues[prop.Metadata.Name] = prop.CurrentValue;
+                    }
+
+                    auditEntries.Add(new PlatformAuditLog
+                    {
+                        ActorUserId = _currentUser.UserId,
+                        ActorEmail = userEmail,
+                        Action = $"{entry.State}_{entityName}",
+                        TargetTenantId = targetTenantId,
+                        TargetEntity = entityName,
+                        MetadataJson = JsonSerializer.Serialize(propertyValues),
+                        OccurredAtUtc = utcNow
+                    });
                 }
-                else if (_tenantContext.CollegeId.HasValue)
-                {
-                    collegeId = _tenantContext.CollegeId;
-                }
-
-                var propertyValues = new Dictionary<string, object?>();
-                foreach (var prop in entry.Properties)
-                {
-                    if (prop.Metadata.IsPrimaryKey()) continue;
-
-                    if (entry.State == EntityState.Modified && !prop.IsModified)
-                        continue;
-
-                    propertyValues[prop.Metadata.Name] = prop.CurrentValue;
-                }
-
-                auditEntries.Add(new AuditLog
-                {
-                    CollegeId = collegeId,
-                    UserId = _currentUser.UserId,
-                    UserEmail = userEmail,
-                    EntityName = entityName,
-                    EntityId = primaryKey,
-                    Action = action,
-                    ChangesJson = JsonSerializer.Serialize(propertyValues),
-                    TimestampUtc = utcNow
-                });
             }
         }
 
         if (auditEntries.Count > 0)
         {
-            context.Set<AuditLog>().AddRange(auditEntries);
+            context.Set<PlatformAuditLog>().AddRange(auditEntries);
         }
     }
 }
-

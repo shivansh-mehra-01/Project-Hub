@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
-using ProjectHub.Core.Enums;
+using ProjectHub.Domain.Enums;
 
 namespace ProjectHub.Api.Extensions;
 

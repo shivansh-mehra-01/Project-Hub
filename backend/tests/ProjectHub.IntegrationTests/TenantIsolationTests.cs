@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectHub.Application.Interfaces;
-using ProjectHub.Core.Entities;
-using ProjectHub.Core.Enums;
-using ProjectHub.Infrastructure.Data;
+using ProjectHub.Domain.Entities;
+using ProjectHub.Domain.Enums;
+using ProjectHub.Infrastructure.Persistence;
 using Xunit;
 
 namespace ProjectHub.IntegrationTests;
@@ -23,10 +23,13 @@ public class TenantIsolationTests : IClassFixture<CustomWebApplicationFactory>
         var tenantA = Guid.NewGuid();
         var tenantB = Guid.NewGuid();
 
-        // 1. Seed data for Tenant A and Tenant B under an unrestricted scope
+        // 1. Seed data for Tenant A and Tenant B under an authorized SuperAdmin scope
         using (var seedScope = _factory.Services.CreateScope())
         {
-            var db = seedScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var seedTenantContext = seedScope.ServiceProvider.GetRequiredService<ITenantContext>();
+            seedTenantContext.IsSuperAdmin = true;
+
+            var db = seedScope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
 
             // Add departments for both tenants
             db.Departments.Add(new Department
@@ -48,13 +51,14 @@ public class TenantIsolationTests : IClassFixture<CustomWebApplicationFactory>
             await db.SaveChangesAsync();
         }
 
-        // 2. Query under Tenant A context
+        // 2. Query under Tenant A context (non-SuperAdmin)
         using (var tenantAScope = _factory.Services.CreateScope())
         {
             var tenantContext = tenantAScope.ServiceProvider.GetRequiredService<ITenantContext>();
             tenantContext.CollegeId = tenantA;
+            tenantContext.IsSuperAdmin = false;
 
-            var db = tenantAScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var db = tenantAScope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
             var departments = await db.Departments.ToListAsync();
 
             Assert.All(departments, d => Assert.Equal(tenantA, d.CollegeId));
@@ -62,13 +66,14 @@ public class TenantIsolationTests : IClassFixture<CustomWebApplicationFactory>
             Assert.DoesNotContain(departments, d => d.Code == "CS-B");
         }
 
-        // 3. Query under Tenant B context
+        // 3. Query under Tenant B context (non-SuperAdmin)
         using (var tenantBScope = _factory.Services.CreateScope())
         {
             var tenantContext = tenantBScope.ServiceProvider.GetRequiredService<ITenantContext>();
             tenantContext.CollegeId = tenantB;
+            tenantContext.IsSuperAdmin = false;
 
-            var db = tenantBScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var db = tenantBScope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
             var departments = await db.Departments.ToListAsync();
 
             Assert.All(departments, d => Assert.Equal(tenantB, d.CollegeId));
@@ -76,5 +81,68 @@ public class TenantIsolationTests : IClassFixture<CustomWebApplicationFactory>
             Assert.DoesNotContain(departments, d => d.Code == "CS-A");
         }
     }
-}
 
+    [Fact]
+    public async Task CrossTenantWrite_ByNonSuperAdmin_ThrowsUnauthorizedAccessException()
+    {
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+
+        using var scope = _factory.Services.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenantContext.CollegeId = tenantA;
+        tenantContext.IsSuperAdmin = false;
+
+        var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+
+        // Attempt to insert an entity explicitly stamped with tenant B
+        db.Departments.Add(new Department
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = tenantB,
+            Name = "Illegal Cross-Tenant Dept",
+            Code = "ILL-01"
+        });
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => db.SaveChangesAsync());
+    }
+
+    [Fact]
+    public void AcademicTrack_ValidateWeights_EnforcesSumOf100()
+    {
+        var validTrack = new AcademicTrack
+        {
+            GuideWeightPct = 30,
+            MidTermWeightPct = 30,
+            FinalVivaWeightPct = 40,
+            SharedProjectRubricPct = 60,
+            IndividualStudentRubricPct = 40
+        };
+
+        // Should not throw
+        validTrack.ValidateWeights();
+
+        var invalidWeightsTrack = new AcademicTrack
+        {
+            GuideWeightPct = 30,
+            MidTermWeightPct = 30,
+            FinalVivaWeightPct = 50 // Sum 110 != 100
+        };
+
+        Assert.Throws<InvalidOperationException>(() => invalidWeightsTrack.ValidateWeights());
+    }
+
+    [Fact]
+    public void VivaPanelEvaluator_EnsureEvaluatorNotGuide_EnforcesDomainGuard()
+    {
+        var guideUserId = Guid.NewGuid();
+        var externalUserId = Guid.NewGuid();
+
+        // Different user should pass
+        VivaPanelEvaluator.ValidateEvaluatorNotTeamGuide(externalUserId, guideUserId);
+
+        // Same user as guide should throw domain violation
+        Assert.Throws<InvalidOperationException>(() =>
+            VivaPanelEvaluator.ValidateEvaluatorNotTeamGuide(guideUserId, guideUserId));
+    }
+}

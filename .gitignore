@@ -33,6 +33,7 @@ postgres_data/
 redis_data/
 
 # IDE & OS
+api
 .vscode/
 .idea/
 *.swp
