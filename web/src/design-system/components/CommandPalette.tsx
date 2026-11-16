@@ -52,8 +52,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
   } = useProjectHubStore();
   const [query, setQuery] = useState("");
 
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
-
   // Keyboard shortcut listener for Cmd+K / Ctrl+K & Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -111,95 +109,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
         onClose();
       },
     })),
-
-    // Demo role switchers: only present in demo mode
-    ...(isDemoMode
-      ? [
-          {
-            id: "role-switch-lead",
-            title: "Switch to Team Lead",
-            subtitle: "Persona: Shivansh Mehra (Project Lead)",
-            category: "Role Switch" as const,
-            icon: UserCheck,
-            action: () => {
-              switchPersona("TeamLead");
-              router.push("/student");
-              onClose();
-            },
-          },
-          {
-            id: "role-switch-student",
-            title: "Switch to Student Member",
-            subtitle: "Persona: Aarav Sharma (Member)",
-            category: "Role Switch" as const,
-            icon: User,
-            action: () => {
-              switchPersona("Student");
-              router.push("/student");
-              onClose();
-            },
-          },
-          {
-            id: "role-switch-faculty",
-            title: "Switch to Faculty Guide",
-            subtitle: "Persona: Prof. S. K. Verma",
-            category: "Role Switch" as const,
-            icon: User,
-            action: () => {
-              switchPersona("Faculty");
-              router.push("/faculty");
-              onClose();
-            },
-          },
-          {
-            id: "role-switch-hod",
-            title: "Switch to Department HOD",
-            subtitle: "Persona: Dr. Ravindra Kumar Sharma (CSE)",
-            category: "Role Switch" as const,
-            icon: User,
-            action: () => {
-              switchPersona("HOD");
-              router.push("/hod");
-              onClose();
-            },
-          },
-          {
-            id: "role-switch-college",
-            title: "Switch to College Admin",
-            subtitle: "Persona: Dr. Keshvendra Choudhary (Principal Office)",
-            category: "Role Switch" as const,
-            icon: User,
-            action: () => {
-              switchPersona("CollegeAdmin");
-              router.push("/college");
-              onClose();
-            },
-          },
-          {
-            id: "role-switch-superadmin",
-            title: "Switch to Super Admin",
-            subtitle: "Persona: Platform Dev Startup Admin",
-            category: "Role Switch" as const,
-            icon: User,
-            action: () => {
-              switchPersona("SuperAdmin");
-              router.push("/admin");
-              onClose();
-            },
-          },
-          {
-            id: "action-reset",
-            title: "Reset Campus Mock Data",
-            subtitle: "Restore default SISTec records and cycle configurations",
-            category: "Actions" as const,
-            icon: RotateCcw,
-            action: () => {
-              resetToDefaults();
-              onClose();
-            },
-          },
-        ]
-      : []),
 
     {
       id: "action-signout",

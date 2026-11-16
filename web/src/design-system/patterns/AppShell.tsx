@@ -101,20 +101,15 @@ const AppShellInner: React.FC<AppShellProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentPersona, college, cycle, switchPersona, resetToDefaults, tenants, pilotRequests, teams, logout } =
+  const { currentPersona, college, cycle, switchPersona, tenants, pilotRequests, teams, logout } =
     useProjectHubStore();
 
   const pendingHODCount = teams.filter((t) => t.state === "PendingHOD").length || 1;
 
-  const [showRoleMenu, setShowRoleMenu] = useState(false);
-  const [showMobileRoleMenu, setShowMobileRoleMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCampusMenu, setShowCampusMenu] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState("Gandhi Nagar (Main)");
-
-  // Production UI Hygiene: Demo mode switcher strictly requires NEXT_PUBLIC_DEMO_MODE === "true"
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
   // Enforce strictly Emerald & Charcoal theme
   useEffect(() => {
@@ -330,16 +325,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
     router.push("/login");
   };
 
-  const handleRoleSwitch = (role: RoleType) => {
-    switchPersona(role);
-    setShowRoleMenu(false);
-    if (role === "SuperAdmin") router.push("/admin");
-    else if (role === "CollegeAdmin") router.push("/college");
-    else if (role === "HOD") router.push("/hod");
-    else if (role === "Faculty") router.push("/faculty");
-    else if (role === "Student" || role === "TeamLead") router.push("/student");
-  };
-
   return (
     <div className="flex min-h-screen bg-canvas-bg">
       {/* ========================================================================= */}
@@ -447,75 +432,8 @@ const AppShellInner: React.FC<AppShellProps> = ({
           )}
         </nav>
 
-        {/* Unified Bottom-Left Sidebar Footer (Demo Switcher + User Account Card + pb-12 clearance) */}
-        <div className="p-3 border-t border-white/[0.08] space-y-2.5 bg-[#111827] pb-12 relative">
-          {isDemoMode && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
-                  Demo Switcher
-                </span>
-                <button
-                  type="button"
-                  onClick={resetToDefaults}
-                  title="Reset Campus Mock Data"
-                  className="text-slate-400 hover:text-emerald-400 text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  <RotateCcw className="h-3 w-3" strokeWidth={1.75} />
-                  <span>Reset</span>
-                </button>
-              </div>
-
-              {/* Quick Persona Selector Dropdown Trigger */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowRoleMenu(!showRoleMenu)}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] text-xs font-medium text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                >
-                  <span className="flex items-center gap-2 truncate">
-                    <UserCog className="w-4 h-4 stroke-[1.75] text-slate-400 shrink-0" />
-                    <span className="truncate text-xs">{formatRoleLabel(currentPersona.role)}</span>
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
-                </button>
-
-                {/* Persona Switcher Menu Popover */}
-                {showRoleMenu && (
-                  <div className="absolute bottom-full left-0 right-0 mb-1 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-1.5 z-50 space-y-0.5 text-xs animate-in fade-in zoom-in-95 duration-100">
-                    {(
-                      [
-                        "SuperAdmin",
-                        "CollegeAdmin",
-                        "HOD",
-                        "Faculty",
-                        "Student",
-                        "TeamLead",
-                      ] as RoleType[]
-                    ).map((r) => (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => handleRoleSwitch(r)}
-                        className={cn(
-                          "w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between cursor-pointer transition-colors",
-                          currentPersona.role === r
-                            ? "bg-brand-primary text-white font-semibold"
-                            : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
-                        )}
-                      >
-                        <span>{formatRoleLabel(r)}</span>
-                        {currentPersona.role === r && (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-white" strokeWidth={2} />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
+        {/* Unified Bottom-Left Sidebar Footer */}
+        <div className="p-3 border-t border-white/[0.08] bg-[#111827] pb-12">
           {/* Minimal Log out Action */}
           <button
             type="button"
@@ -624,82 +542,16 @@ const AppShellInner: React.FC<AppShellProps> = ({
               )}
             </div>
 
-            {/* Mobile Persona Switcher Button (< 1024px) */}
-            {isDemoMode && (
-              <div className="relative lg:hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowMobileRoleMenu(!showMobileRoleMenu)}
-                  className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-[11px] font-semibold text-slate-200 hover:bg-white/10 transition-colors cursor-pointer"
-                  title="Switch Persona"
-                >
-                  <UserCog className="w-3.5 h-3.5 stroke-[1.75] text-slate-400" />
-                  <span className="truncate max-w-[90px]">{formatRoleLabel(currentPersona.role)}</span>
-                  <ChevronDown className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-                </button>
-
-                {showMobileRoleMenu && (
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-2 z-50 space-y-1 text-xs text-white">
-                    <div className="flex items-center justify-between px-2 py-1 border-b border-white/[0.08]">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Switch Persona
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          resetToDefaults();
-                          setShowMobileRoleMenu(false);
-                        }}
-                        className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        <RotateCcw className="h-2.5 w-2.5" strokeWidth={1.75} />
-                        <span>Reset</span>
-                      </button>
-                    </div>
-                    {(
-                      [
-                        "SuperAdmin",
-                        "CollegeAdmin",
-                        "HOD",
-                        "Faculty",
-                        "Student",
-                        "TeamLead",
-                      ] as RoleType[]
-                    ).map((r) => (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => {
-                          handleRoleSwitch(r);
-                          setShowMobileRoleMenu(false);
-                        }}
-                        className={cn(
-                          "w-full text-left px-2.5 py-1.5 rounded-md flex items-center justify-between cursor-pointer transition-colors",
-                          currentPersona.role === r
-                            ? "bg-brand-primary text-white font-semibold"
-                            : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
-                        )}
-                      >
-                        <span>{formatRoleLabel(r)}</span>
-                        {currentPersona.role === r && (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-white" strokeWidth={2} />
-                        )}
-                      </button>
-                    ))}
-                    <div className="pt-1 border-t border-white/[0.08]">
-                      <Link
-                        href="/login"
-                        onClick={() => setShowMobileRoleMenu(false)}
-                        className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium text-slate-400 hover:text-rose-400 transition-colors"
-                      >
-                        <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
-                        <span>Sign Out</span>
-                      </Link>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Mobile Logout Button (< 1024px) */}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="lg:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5 text-xs font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              title="Log out"
+            >
+              <LogOut className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.75} />
+              <span>Log out</span>
+            </button>
 
 
           </div>

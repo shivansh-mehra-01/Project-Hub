@@ -2,7 +2,6 @@ import { apiClient } from "./apiClient";
 import {
   ActivateRequest,
   AuthResponse,
-  DemoLoginRequest,
   LoginRequest,
   ResolveTenantResponse,
 } from "./types";
@@ -17,11 +16,6 @@ export const authApi = {
 
   login: (data: LoginRequest) =>
     apiClient.post<AuthResponse>("/api/auth/login", data, {
-      skipAuth: true,
-    }),
-
-  demoLogin: (data: DemoLoginRequest) =>
-    apiClient.post<AuthResponse>("/api/auth/demo-login", data, {
       skipAuth: true,
     }),
 

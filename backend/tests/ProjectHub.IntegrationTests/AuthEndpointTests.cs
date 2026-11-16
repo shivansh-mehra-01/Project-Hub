@@ -52,12 +52,13 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task DemoLogin_StudentRole_ReturnsValidJwtAndProfile()
+    public async Task Login_StudentRole_ValidCredentials_ReturnsValidJwtAndProfile()
     {
         // Act
-        var response = await _client.PostAsJsonAsync("/api/auth/demo-login", new DemoLoginRequest
+        var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Role = "Student"
+            Email = "0176cs221045@sistec.ac.in",
+            Password = "ProjectHub@2026"
         });
 
         // Assert
@@ -72,12 +73,13 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task DemoLogin_FacultyRole_ReturnsValidJwtAndProfile()
+    public async Task Login_FacultyRole_ValidCredentials_ReturnsValidJwtAndProfile()
     {
         // Act
-        var response = await _client.PostAsJsonAsync("/api/auth/demo-login", new DemoLoginRequest
+        var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Role = "Faculty"
+            Email = "priya.nair@sistec.ac.in",
+            Password = "ProjectHub@2026"
         });
 
         // Assert
@@ -87,24 +89,6 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         Assert.False(string.IsNullOrWhiteSpace(auth.Token));
         Assert.Equal(UserRole.Faculty, auth.User.Role);
         Assert.Equal(DbInitializer.SistecTenantId, auth.User.CollegeId);
-    }
-
-    [Fact]
-    public async Task DemoLogin_HodRole_ReturnsValidJwtAndProfile()
-    {
-        // Act
-        var response = await _client.PostAsJsonAsync("/api/auth/demo-login", new DemoLoginRequest
-        {
-            Role = "HOD"
-        });
-
-        // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
-        Assert.NotNull(auth);
-        Assert.False(string.IsNullOrWhiteSpace(auth.Token));
-        Assert.Equal(UserRole.HOD, auth.User.Role);
-        Assert.Equal("hod.cse@sistec.ac.in", auth.User.Email);
     }
 
     [Fact]

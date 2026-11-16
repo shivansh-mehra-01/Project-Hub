@@ -17,20 +17,17 @@ public class AuthController : ControllerBase
 {
     private readonly ProjectHubDbContext _context;
     private readonly IJwtTokenService _jwtTokenService;
-    private readonly IWebHostEnvironment _environment;
     private readonly ITenantContext _tenantContext;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         ProjectHubDbContext context,
         IJwtTokenService jwtTokenService,
-        IWebHostEnvironment environment,
         ITenantContext tenantContext,
         ILogger<AuthController> logger)
     {
         _context = context;
         _jwtTokenService = jwtTokenService;
-        _environment = environment;
         _tenantContext = tenantContext;
         _logger = logger;
     }
@@ -109,67 +106,6 @@ public class AuthController : ControllerBase
         if (!PasswordHelper.VerifyPassword(request.Password, user.PasswordHash))
         {
             return Unauthorized(new { message = "Invalid email or password." });
-        }
-
-        var token = _jwtTokenService.GenerateToken(user, out var expiresAtUtc);
-
-        _tenantContext.CollegeId = user.CollegeId;
-        _tenantContext.UserId = user.Id;
-        _tenantContext.Role = user.Role;
-        if (user.Role == UserRole.SuperAdmin)
-        {
-            _tenantContext.IsSuperAdmin = true;
-        }
-
-        user.LastLoginAtUtc = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-
-        return Ok(new AuthResponse
-        {
-            Token = token,
-            ExpiresAtUtc = expiresAtUtc,
-            User = MapUserProfile(user)
-        });
-    }
-
-    /// <summary>
-    /// Rapid developer demo persona login. Gated strictly to Development environments.
-    /// </summary>
-    [HttpPost("demo-login")]
-    [AllowAnonymous]
-    [ProducesResponseType<AuthResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DemoLogin([FromBody] DemoLoginRequest request)
-    {
-        if (!_environment.IsDevelopment())
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Demo login is restricted exclusively to development environments." });
-        }
-
-        UserAccount? user = null;
-
-        if (!string.IsNullOrWhiteSpace(request.Email))
-        {
-            var email = request.Email.Trim().ToLowerInvariant();
-            user = await _context.Users
-                .IgnoreQueryFilters()
-                .Include(u => u.College)
-                .Include(u => u.Department)
-                .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
-        }
-        else if (!string.IsNullOrWhiteSpace(request.Role) && Enum.TryParse<UserRole>(request.Role, true, out var role))
-        {
-            user = await _context.Users
-                .IgnoreQueryFilters()
-                .Include(u => u.College)
-                .Include(u => u.Department)
-                .FirstOrDefaultAsync(u => u.Role == role && !u.IsDeleted);
-        }
-
-        if (user == null)
-        {
-            return NotFound(new { message = "Demo user persona could not be located." });
         }
 
         var token = _jwtTokenService.GenerateToken(user, out var expiresAtUtc);

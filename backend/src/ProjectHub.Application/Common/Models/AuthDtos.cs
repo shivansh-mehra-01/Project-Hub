@@ -19,12 +19,6 @@ public record LoginRequest
     public string Password { get; init; } = string.Empty;
 }
 
-public record DemoLoginRequest
-{
-    public string? Email { get; init; }
-    public string? Role { get; init; }
-}
-
 public record ActivateRequest
 {
     public string Email { get; init; } = string.Empty;

@@ -165,7 +165,7 @@ export default function MarketingHomePage() {
                   className="h-11 px-5 rounded-xl border border-[#CBD5E1] bg-white hover:bg-[#F8FAFC] text-[#0F172A] font-semibold text-sm shadow-2xs transition-all flex items-center justify-center gap-2"
                 >
                   <Sparkles className="h-4 w-4 text-brand-primary" />
-                  <span>Explore Interactive Demo</span>
+                  <span>Explore Role Portals</span>
                 </a>
               </div>
 

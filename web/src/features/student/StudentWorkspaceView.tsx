@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   FolderGit2,
   Kanban,
@@ -39,6 +40,7 @@ export const StudentWorkspaceView: React.FC = () => {
   const {
     teams,
     currentPersona,
+    cycle,
     updateTaskStatus,
     createTask,
     submitWeeklyLog,
@@ -47,12 +49,6 @@ export const StudentWorkspaceView: React.FC = () => {
     updateTeamRepo,
     uploadArtifact,
   } = useProjectHubStore();
-
-  // Demo mode gate: strictly requires NEXT_PUBLIC_DEMO_MODE === "true"
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
-
-  // Lifecycle state simulator: Off-Season, Pre-Approval Setup, Post-Approval Active
-  const [lifecycleState, setLifecycleState] = useState<"offseason" | "preapproval" | "active">("active");
 
   // Post-approval sub-tabs
   const [subTab, setSubTab] = useState<"board" | "logs" | "overview" | "evaluations">("board");
@@ -121,6 +117,13 @@ export const StudentWorkspaceView: React.FC = () => {
       weeklyLogs: [],
       health: "Healthy",
     };
+
+  // Derive live lifecycle state directly from active team state and academic cycle
+  const lifecycleState: "offseason" | "preapproval" | "active" = !cycle.isActive
+    ? "offseason"
+    : myTeam.state === "Active" || myTeam.state === "Completed"
+    ? "active"
+    : "preapproval";
 
   // Proposal Title & Similarity Check
   const [proposalTitle, setProposalTitle] = useState(myTeam.title);
@@ -223,58 +226,6 @@ export const StudentWorkspaceView: React.FC = () => {
       {/* Semester GPS Stepper */}
       <StepperGPS currentStep={lifecycleState === "offseason" ? 1 : lifecycleState === "preapproval" ? 2 : 4} />
 
-      {/* Lifecycle Mode Simulator Pill (Gated behind Demo Mode) */}
-      {isDemoMode && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white rounded-xl border border-[#E2E8F0] shadow-2xs select-none">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-[#0F172A]">Workspace Stage Preview:</span>
-            <div className="flex gap-1 p-0.5 bg-[#F1F5F9] rounded-lg border border-[#E2E8F0]">
-              <button
-                type="button"
-                onClick={() => setLifecycleState("offseason")}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                  lifecycleState === "offseason"
-                    ? "bg-white text-[#0F172A] shadow-xs"
-                    : "text-[#64748B] hover:text-[#0F172A]"
-                }`}
-              >
-                1. Off-Season
-              </button>
-              <button
-                type="button"
-                onClick={() => setLifecycleState("preapproval")}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                  lifecycleState === "preapproval"
-                    ? "bg-white text-[#0F172A] shadow-xs"
-                    : "text-[#64748B] hover:text-[#0F172A]"
-                }`}
-              >
-                2. Pre-Approval Setup
-              </button>
-              <button
-                type="button"
-                onClick={() => setLifecycleState("active")}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                  lifecycleState === "active"
-                    ? "bg-white text-[#0F172A] shadow-xs"
-                    : "text-[#64748B] hover:text-[#0F172A]"
-                }`}
-              >
-                3. Post-Approval Active
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {isTeamLead && (
-              <Badge variant="role" role="TeamLead" size="sm" dot>
-                Lead Authority Unlocked
-              </Badge>
-            )}
-          </div>
-        </div>
-      )}
-
       {repoSuccess && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -297,9 +248,11 @@ export const StudentWorkspaceView: React.FC = () => {
               problem statements in the Explore tab or complete your profile skills.
             </p>
           </div>
-          <Button size="sm" variant="primary" onClick={() => setLifecycleState("preapproval")}>
-            Preview Team Setup &amp; Proposal Stage
-          </Button>
+          <Link href="/student/explore">
+            <Button size="sm" variant="primary">
+              Explore Faculty Problem Bank
+            </Button>
+          </Link>
         </Card>
       )}
 

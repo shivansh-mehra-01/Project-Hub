@@ -174,8 +174,6 @@ interface ProjectHubStoreContextType {
 
 const ProjectHubStoreContext = createContext<ProjectHubStoreContextType | null>(null);
 
-const STORAGE_KEY = "projecthub_campus_store_v3";
-
 export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentPersona, setCurrentPersona] = useState<UserPersona>(initialPersonas.studentLead);
   const [college, setCollege] = useState<College>(initialCollege);
@@ -197,80 +195,50 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   const [isHydrating, setIsHydrating] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load from localStorage on client mount
+  // Clean legacy demo/prototype localStorage keys on startup and sync authenticated persona
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.currentPersona) setCurrentPersona(parsed.currentPersona);
-        if (parsed.college) setCollege(parsed.college);
-        if (parsed.departments) setDepartments(parsed.departments);
-        if (parsed.cycle) setCycle(parsed.cycle);
-        if (parsed.teams) setTeams(parsed.teams);
-        if (parsed.evaluations) setEvaluations(parsed.evaluations);
-        if (parsed.rubrics) setRubrics(parsed.rubrics);
-        if (parsed.problemBank) setProblemBank(parsed.problemBank);
-        if (parsed.facultyRoster) setFacultyRoster(parsed.facultyRoster);
-        if (parsed.tenants) setTenants(parsed.tenants);
-        if (parsed.pilotRequests) setPilotRequests(parsed.pilotRequests);
-        if (parsed.auditLogs) setAuditLogs(parsed.auditLogs);
-        if (parsed.individualEvaluations) setIndividualEvaluations(parsed.individualEvaluations);
-        if (parsed.exceptionAuditLogs) setExceptionAuditLogs(parsed.exceptionAuditLogs);
-        if (parsed.courseExitSurveys) setCourseExitSurveys(parsed.courseExitSurveys);
+      const legacyKeys = [
+        "projecthub_campus_store_v3",
+        "projecthub_campus_store_v2",
+        "projecthub_campus_store_v1",
+        "projecthub_mock_store_v1",
+        "projecthub_mock_store",
+        "projecthub_theme",
+        "projecthub_active_persona",
+      ];
+      legacyKeys.forEach((k) => localStorage.removeItem(k));
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("projecthub_campus_") || key.startsWith("projecthub_mock_"))) {
+          localStorage.removeItem(key);
+        }
+      }
+
+      const userProfile = getUserProfile();
+      if (userProfile) {
+        setCurrentPersona({
+          id: userProfile.id,
+          name: userProfile.fullName,
+          email: userProfile.email,
+          role: userProfile.role as RoleType,
+          collegeId: userProfile.collegeId,
+          departmentId: userProfile.departmentId || undefined,
+          isProjectCoordinator: userProfile.isProjectCoordinator,
+          enrollmentNumber: userProfile.enrollmentOrEmployeeCode,
+          employeeId: userProfile.enrollmentOrEmployeeCode,
+        });
+        setIsAuthenticated(true);
+      } else {
+        const token = getAuthToken();
+        setIsAuthenticated(!!token);
       }
     } catch (e) {
-      console.warn("Could not load from localStorage, using fresh seed data.", e);
+      console.warn("Storage cleanup completed.", e);
     } finally {
       setIsLoaded(true);
     }
   }, []);
-
-  // Save to localStorage when state updates
-  useEffect(() => {
-    if (!isLoaded) return;
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          currentPersona,
-          college,
-          departments,
-          cycle,
-          teams,
-          evaluations,
-          rubrics,
-          problemBank,
-          facultyRoster,
-          tenants,
-          pilotRequests,
-          auditLogs,
-          individualEvaluations,
-          exceptionAuditLogs,
-          courseExitSurveys,
-        })
-      );
-    } catch (e) {
-      console.error("Failed to save state to localStorage", e);
-    }
-  }, [
-    isLoaded,
-    currentPersona,
-    college,
-    departments,
-    cycle,
-    teams,
-    evaluations,
-    rubrics,
-    problemBank,
-    facultyRoster,
-    tenants,
-    pilotRequests,
-    auditLogs,
-    individualEvaluations,
-    exceptionAuditLogs,
-    courseExitSurveys,
-  ]);
 
   // Hydrate from live .NET 10 API when a JWT session exists
   useEffect(() => {
@@ -291,9 +259,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
             platformApi.getAuditLogs(),
           ]);
 
-          if (isMounted && tenantsRes.status === "fulfilled" && tenantsRes.value.length > 0) {
-            setTenants((prev) => {
-              const mapped = tenantsRes.value.map((t) => ({
+          if (isMounted && tenantsRes.status === "fulfilled") {
+            setTenants(
+              tenantsRes.value.map((t) => ({
                 id: t.id,
                 name: t.name,
                 code: t.tenantCode,
@@ -307,12 +275,11 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
                 strictSsoEnforced: t.enforceStrictSso,
                 renewalDate: t.subscriptionExpiresAtUtc?.split("T")[0] || "2027-06-30",
                 allocatedSeats: t.maxStudentSeats,
-              }));
-              return mapped.length > 0 ? mapped : prev;
-            });
+              }))
+            );
           }
 
-          if (isMounted && auditRes.status === "fulfilled" && auditRes.value.length > 0) {
+          if (isMounted && auditRes.status === "fulfilled") {
             setAuditLogs(
               auditRes.value.map((a) => ({
                 id: a.id,
@@ -343,8 +310,8 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
             }));
           }
 
-          if (isMounted && deptsRes.status === "fulfilled" && deptsRes.value.length > 0) {
-            setDepartments((prev) =>
+          if (isMounted && deptsRes.status === "fulfilled") {
+            setDepartments(
               deptsRes.value.map((d) => ({
                 id: d.id,
                 collegeId: d.collegeId,
@@ -391,7 +358,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
             );
           }
 
-          if (isMounted && facultyRes.status === "fulfilled" && facultyRes.value.length > 0) {
+          if (isMounted && facultyRes.status === "fulfilled") {
             setFacultyRoster(
               facultyRes.value.map((f) => ({
                 id: f.facultyId,
@@ -401,6 +368,28 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
                 isProjectCoordinator: f.isProjectCoordinator,
                 maxTeams: f.maxMentorTeams,
                 guidedCount: f.currentMentoredTeams,
+              }))
+            );
+          }
+
+          if (isMounted && proposalsRes.status === "fulfilled") {
+            setTeams(
+              proposalsRes.value.map((p) => ({
+                id: p.teamId,
+                collegeId: currentPersona.collegeId,
+                departmentId: currentPersona.departmentId || "",
+                cycleId: "cycle-2026-min",
+                teamCode: p.teamCode,
+                title: p.title,
+                abstract: p.abstract,
+                domain: "Engineering Projects",
+                sdgNumber: 9,
+                state: (p.status === "ActiveBuild" ? "Active" : p.status === "Completed" ? "Completed" : p.status === "PendingHOD" ? "PendingHOD" : "PendingGuide") as ProjectStateType,
+                health: "Healthy",
+                isRosterLocked: true,
+                members: [],
+                tasks: [],
+                weeklyLogs: [],
               }))
             );
           }
@@ -424,36 +413,86 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
             );
           }
         } else if (role === "Faculty") {
-          const [queueRes, mentoredRes] = await Promise.allSettled([
-            facultyApi.getActionQueue(),
-            facultyApi.getMentoredTeams(),
-          ]);
+          if (currentPersona.isProjectCoordinator) {
+            const [coordTeams, coordExcs, mentoredRes] = await Promise.allSettled([
+              coordinatorApi.getTeams(),
+              coordinatorApi.getExceptions(),
+              facultyApi.getMentoredTeams(),
+            ]);
 
-          if (isMounted && mentoredRes.status === "fulfilled" && mentoredRes.value.length > 0) {
-            setTeams((prev) => {
-              const updated = [...prev];
-              mentoredRes.value.forEach((m) => {
-                const idx = updated.findIndex((t) => t.teamCode === m.teamCode || t.id === m.teamId);
-                if (idx >= 0) {
+            if (isMounted && coordTeams.status === "fulfilled") {
+              setTeams(
+                coordTeams.value.map((ct) => ({
+                  id: ct.teamId,
+                  collegeId: currentPersona.collegeId,
+                  departmentId: currentPersona.departmentId || "",
+                  cycleId: "cycle-2026-min",
+                  teamCode: ct.teamCode,
+                  title: ct.title,
+                  abstract: ct.abstract,
+                  domain: "Engineering Projects",
+                  sdgNumber: parseInt(ct.sdgCode?.replace(/\D/g, "") || "9", 10) || 9,
+                  state: (ct.status === "ActiveBuild" ? "Active" : ct.status === "Completed" ? "Completed" : "PendingGuide") as ProjectStateType,
+                  health: "Healthy",
+                  guideId: ct.guideUserId,
+                  guideName: ct.guideName,
+                  isRosterLocked: true,
+                  members: [],
+                  tasks: [],
+                  weeklyLogs: [],
+                }))
+              );
+            }
+
+            if (isMounted && coordExcs.status === "fulfilled") {
+              setExceptionAuditLogs(
+                coordExcs.value.map((e) => ({
+                  id: e.id,
+                  teamId: e.projectTeamId,
+                  teamCode: e.teamCode,
+                  teamTitle: `Team ${e.teamCode}`,
+                  type: (e.actionType === "ReassignGuide" ? "ReassignGuide" : e.actionType === "RemoveDroppedMember" ? "RemoveMember" : "ReVivaUnlock") as "ReassignGuide" | "RemoveMember" | "ReVivaUnlock" | "DeadlineExtension",
+                  description: e.reason,
+                  requestedBy: e.requestedByName || "Faculty Coordinator",
+                  requestedAt: e.createdAtUtc,
+                  status: (e.isApproved ? "Approved" : "PendingHOD") as "PendingHOD" | "Approved" | "Rejected",
+                  reason: e.reason,
+                  reviewedBy: e.isApproved ? "Dr. Ravindra Kumar Sharma (HOD)" : undefined,
+                  reviewedAt: e.approvedAtUtc,
+                }))
+              );
+            }
+          } else {
+            const mentoredRes = await facultyApi.getMentoredTeams().catch(() => null);
+            if (isMounted && mentoredRes) {
+              setTeams(
+                mentoredRes.map((m) => {
                   const sdgNum = parseInt(m.sdgCode?.replace(/\D/g, "") || "9", 10) || 9;
-                  updated[idx] = {
-                    ...updated[idx],
+                  return {
+                    id: m.teamId,
+                    collegeId: currentPersona.collegeId,
+                    departmentId: currentPersona.departmentId || "",
+                    cycleId: "cycle-2026-min",
+                    teamCode: m.teamCode,
                     title: m.title,
                     abstract: m.abstract,
+                    domain: "Engineering Projects",
                     sdgNumber: sdgNum,
-                    state: m.status === "ActiveBuild" ? "Active" : m.status === "Completed" ? "Completed" : "PendingGuide",
+                    state: (m.status === "ActiveBuild" ? "Active" : m.status === "Completed" ? "Completed" : "PendingGuide") as ProjectStateType,
+                    health: "Healthy",
+                    isRosterLocked: true,
+                    members: [],
+                    tasks: [],
+                    weeklyLogs: [],
                   };
-                }
-              });
-              return updated;
-            });
+                })
+              );
+            }
           }
         } else if (role === "Student" || role === "TeamLead") {
           const wsRes = await studentApi.getWorkspace().catch(() => null);
-          if (isMounted && wsRes) {
-            setTeams((prev) => {
-              const updated = [...prev];
-              const idx = updated.findIndex((t) => t.teamCode === wsRes.teamCode || t.id === wsRes.teamId);
+          if (isMounted) {
+            if (wsRes) {
               const sdgNum = parseInt(wsRes.sdgCode?.replace(/\D/g, "") || "9", 10) || 9;
               const mappedTeam: Team = {
                 id: wsRes.teamId,
@@ -515,14 +554,10 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
                   hoursSpent: Number(log.hoursLogged),
                 })),
               };
-
-              if (idx >= 0) {
-                updated[idx] = mappedTeam;
-              } else {
-                updated.unshift(mappedTeam);
-              }
-              return updated;
-            });
+              setTeams([mappedTeam]);
+            } else {
+              setTeams([]);
+            }
           }
         }
       } catch (err) {
@@ -1307,7 +1342,6 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   };
 
   const resetToDefaults = () => {
-    localStorage.removeItem(STORAGE_KEY);
     setCurrentPersona(initialPersonas.studentLead);
     setCollege(initialCollege);
     setDepartments(initialDepartments);

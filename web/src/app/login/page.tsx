@@ -52,9 +52,6 @@ export default function LoginPage() {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
-  const [showDemoDrawer, setShowDemoDrawer] = useState(false);
-
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
 
   const [resolvedLiveTenant, setResolvedLiveTenant] = useState<{
     name: string;
@@ -180,41 +177,11 @@ export default function LoginPage() {
         router.push("/student");
       }
     } catch (err: any) {
-      console.warn("Backend auth failed, evaluating fallback...", err);
       if (err.status === 401) {
         setEmailError("Invalid email or password. Please verify your credentials.");
-        setIsLoading(false);
-        return;
+      } else {
+        setEmailError(err.message || "Failed to authenticate with campus directory.");
       }
-
-      // Offline / Preview fallback
-      if (err.status === 0 || !err.status) {
-        if (email.includes("admin@projecthub")) {
-          switchPersona("SuperAdmin");
-          router.push("/admin");
-        } else if (email.includes("principal")) {
-          switchPersona("CollegeAdmin");
-          router.push("/college");
-        } else if (email.includes("hod")) {
-          switchPersona("HOD");
-          router.push("/hod");
-        } else if (email.includes("coordinator")) {
-          switchPersona("Faculty");
-          if (!currentPersona.isProjectCoordinator) {
-            toggleFacultyCoordinator("usr-fac-verma");
-          }
-          router.push("/coordinator");
-        } else if (email.includes("verma") || email.includes("faculty")) {
-          switchPersona("Faculty");
-          router.push("/faculty");
-        } else {
-          switchPersona("Student");
-          router.push("/student");
-        }
-        return;
-      }
-
-      setEmailError(err.message || "Failed to authenticate.");
     } finally {
       setIsLoading(false);
     }
@@ -258,49 +225,14 @@ export default function LoginPage() {
         }
       }, 1000);
     } catch (err: any) {
-      console.warn("Backend activation error, checking fallback...", err);
-      if (err.status === 0 || !err.status) {
-        setActivationSuccess(true);
-        setTimeout(() => {
-          switchPersona("TeamLead");
-          router.push("/student");
-        }, 1200);
-        return;
-      }
       setActivationError(err.message || "Failed to activate account. Verify your enrollment code.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleQuickPersona = async (role: RoleType | "Coordinator") => {
-    setIsLoading(true);
-    const apiRole = role === "Coordinator" ? "Faculty" : role;
-
-    try {
-      const auth = await authApi.demoLogin({ role: apiRole });
-      setAuthSession(auth.token, auth.user, true);
-      showToast(`Demo Persona: ${auth.user.fullName} (${auth.user.role})`, "info");
-    } catch (err) {
-      console.warn("Backend demo login offline, continuing with client mock store.", err);
-    } finally {
-      setIsLoading(false);
-    }
-
-    if (role === "Coordinator") {
-      switchPersona("Faculty");
-      if (!currentPersona.isProjectCoordinator) {
-        toggleFacultyCoordinator("usr-fac-verma");
-      }
-      router.push("/coordinator");
-      return;
-    }
-    switchPersona(role);
-    if (role === "SuperAdmin") router.push("/admin");
-    else if (role === "CollegeAdmin") router.push("/college");
-    else if (role === "HOD") router.push("/hod");
-    else if (role === "Faculty") router.push("/faculty");
-    else router.push("/student");
+  const handleInstitutionalSso = (provider: "Google" | "Microsoft") => {
+    showToast(`Redirecting to ${provider} Workspace institutional SSO gateway...`, "info");
   };
 
   return (
@@ -479,7 +411,7 @@ export default function LoginPage() {
                 <div className="space-y-1.5">
                   <button
                     type="button"
-                    onClick={() => handleQuickPersona("Student")}
+                    onClick={() => handleInstitutionalSso("Google")}
                     className="w-full h-9 flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer shadow-2xs"
                   >
                     <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
@@ -505,7 +437,7 @@ export default function LoginPage() {
 
                   <button
                     type="button"
-                    onClick={() => handleQuickPersona("Student")}
+                    onClick={() => handleInstitutionalSso("Microsoft")}
                     className="w-full h-9 flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer shadow-2xs"
                   >
                     <svg className="h-4 w-4 shrink-0" viewBox="0 0 23 23">
@@ -739,125 +671,6 @@ export default function LoginPage() {
               Access restricted to authorized university personnel.
             </p>
           </div>
-
-          {/* Gated Sandbox Persona Switcher (Upward Floating Popover - Never Scrolls Page) */}
-          {isDemoMode && (
-            <div className="relative w-full pt-1">
-              <button
-                type="button"
-                onClick={() => setShowDemoDrawer(!showDemoDrawer)}
-                className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50/90 hover:bg-slate-100 text-left transition-colors cursor-pointer group"
-                title="Toggle Instant Demo Evaluation Roster"
-              >
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.75} />
-                  <span className="text-xs font-semibold text-slate-700 group-hover:text-emerald-800 transition-colors">
-                    1-Click Evaluation Roster (7 Roles)
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                  <span className="bg-white border border-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-mono">
-                    Instant Demo
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "w-3.5 h-3.5 text-slate-400 transition-transform duration-200",
-                      showDemoDrawer ? "rotate-180" : ""
-                    )}
-                    strokeWidth={1.75}
-                  />
-                </div>
-              </button>
-
-              {/* Upward Floating Popover Menu so it NEVER expands the page height */}
-              {showDemoDrawer && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-slate-200 bg-white shadow-2xl p-2.5 z-40 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="flex items-center justify-between px-1 pb-1.5 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    <span>Select Evaluation Persona</span>
-                    <span className="text-emerald-700 font-mono">Bypasses Password</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickPersona("SuperAdmin")}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                    >
-                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                        Super Admin
-                      </div>
-                      <div className="text-[9px] text-slate-500 truncate">Platform Ops</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickPersona("CollegeAdmin")}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                    >
-                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                        College Admin
-                      </div>
-                      <div className="text-[9px] text-slate-500 truncate">Principal / Dean</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickPersona("HOD")}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                    >
-                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                        Department HOD
-                      </div>
-                      <div className="text-[9px] text-slate-500 truncate">Dr. R. K. Sharma</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickPersona("Coordinator")}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                    >
-                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                        Coordinator
-                      </div>
-                      <div className="text-[9px] text-slate-500 truncate">Batch Pairing</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickPersona("Faculty")}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                    >
-                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                        Faculty Guide
-                      </div>
-                      <div className="text-[9px] text-slate-500 truncate">Prof. S. K. Verma</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickPersona("TeamLead")}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group"
-                    >
-                      <div className="text-[11px] font-semibold text-emerald-800 group-hover:text-emerald-900">
-                        Team Lead
-                      </div>
-                      <div className="text-[9px] text-slate-500 truncate">Shivansh Mehra</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickPersona("Student")}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-left hover:bg-emerald-50/40 hover:border-emerald-500/40 transition-colors cursor-pointer group col-span-2 sm:col-span-1"
-                    >
-                      <div className="text-[11px] font-semibold text-slate-900 group-hover:text-emerald-800">
-                        Student Member
-                      </div>
-                      <div className="text-[9px] text-slate-500 truncate">Aarav Sharma</div>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 

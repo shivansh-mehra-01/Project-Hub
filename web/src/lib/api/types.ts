@@ -43,11 +43,6 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface DemoLoginRequest {
-  email?: string;
-  role?: string;
-}
-
 export interface ActivateRequest {
   email: string;
   enrollmentOrEmployeeCode: string;

@@ -21,7 +21,22 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
 
     private async Task<string> GetTokenForPersonaAsync(string role)
     {
-        var response = await _client.PostAsJsonAsync("/api/auth/demo-login", new DemoLoginRequest { Role = role });
+        var email = role switch
+        {
+            "SuperAdmin" => "admin@projecthub.in",
+            "CollegeAdmin" => "principal@sistec.ac.in",
+            "HOD" => "hod.cse@sistec.ac.in",
+            "Faculty" => "sk.verma@sistec.ac.in",
+            "Coordinator" => "priya.nair@sistec.ac.in",
+            "Student" => "0176cs221045@sistec.ac.in",
+            _ => throw new ArgumentException($"Unknown persona role: {role}")
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            Email = email,
+            Password = "ProjectHub@2026"
+        });
         response.EnsureSuccessStatusCode();
         var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
         return auth!.Token;
