@@ -458,7 +458,8 @@ const AppShellInner: React.FC<AppShellProps> = ({
           
           {/* Breadcrumb Hierarchy */}
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-            <CollabexLogo variant="dark" size="sm" iconOnly className="lg:hidden shrink-0" />
+            <CollabexLogo variant="dark" size="sm" className="lg:hidden shrink-0" />
+            <span className="hidden sm:inline-block lg:hidden h-3.5 w-px bg-white/20" />
             <span className="text-sm font-semibold text-white tracking-tight font-heading truncate">
               {displayTitle}
             </span>
