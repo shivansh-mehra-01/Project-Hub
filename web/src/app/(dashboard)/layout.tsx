@@ -6,6 +6,8 @@ export const metadata = {
   description: "Enterprise Academic Project Governance and NBA Accreditation Management",
 };
 
+export const instant = false;
+
 export default function DashboardLayout({
   children,
 }: {
