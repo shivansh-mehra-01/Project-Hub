@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -70,19 +70,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
   // Retrieve strictly role-scoped navigation routes, actions, and entities from centralized navigation engine
-  const baseItems = getCommandPaletteItems(
+  const baseItems = useMemo(() => {
+    if (!isOpen) return [];
+    return getCommandPaletteItems(
+      currentPersona.role,
+      {
+        teams,
+        departments,
+        facultyRoster,
+        tenants,
+      },
+      currentPersona.isProjectCoordinator
+    );
+  }, [
+    isOpen,
     currentPersona.role,
-    {
-      teams,
-      departments,
-      facultyRoster,
-      tenants,
-    },
-    currentPersona.isProjectCoordinator
-  );
+    currentPersona.isProjectCoordinator,
+    teams,
+    departments,
+    facultyRoster,
+    tenants,
+  ]);
 
   // Prefetch reachable routes on command palette open for instantaneous SPA transitions
   useEffect(() => {
@@ -94,6 +103,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       });
     }
   }, [isOpen, baseItems, router]);
+
+  // Clear query on command palette close
+  useEffect(() => {
+    if (!isOpen) {
+      setQuery("");
+    }
+  }, [isOpen]);
+
+  // All React Hooks have executed unconditionally above; now safely exit if palette is closed
+  if (!isOpen) return null;
 
   // Map to executable command items
   const allItems = [
