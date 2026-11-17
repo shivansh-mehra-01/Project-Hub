@@ -1194,9 +1194,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     teamId: string,
     nextTrack: "Major Phase-I" | "Major Phase-II" = "Major Phase-I"
   ) => {
-    const existingTeam = teams.find((t) => t.id === teamId) || teams[0];
-    const lineageId = existingTeam.projectLineageId || `lin-${existingTeam.teamCode.toLowerCase()}`;
-    const newTeamCode = existingTeam.teamCode.replace("MIN", nextTrack === "Major Phase-I" ? "MAJ-1" : "MAJ-2");
+    const existingTeam = teams.find((t) => t.id === teamId) || teams[0] || initialTeams[0];
+    const lineageId = existingTeam?.projectLineageId || (existingTeam?.teamCode ? `lin-${existingTeam.teamCode.toLowerCase()}` : "lin-2026-cs-01");
+    const newTeamCode = existingTeam?.teamCode ? existingTeam.teamCode.replace("MIN", nextTrack === "Major Phase-I" ? "MAJ-1" : "MAJ-2") : "2026-CS-MAJ-1-01";
     const newTeam: Team = {
       ...existingTeam,
       id: `tm-${Date.now()}`,

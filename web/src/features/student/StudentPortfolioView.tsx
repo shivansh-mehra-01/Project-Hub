@@ -25,6 +25,7 @@ import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
 import { Modal } from "@/design-system/components/Modal";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
+import { initialTeams } from "@/mocks/seed-data";
 
 export const StudentPortfolioView: React.FC = () => {
   const {
@@ -59,22 +60,26 @@ export const StudentPortfolioView: React.FC = () => {
   const isTeamLead =
     currentPersona.role === "TeamLead" ||
     currentPersona.name === "Shivansh Mehra" ||
-    teams.some((t) => t.members.some((m) => m.isLead && m.name === currentPersona.name));
+    teams.some((t) => t.members?.some((m) => m.isLead && m.name === currentPersona.name));
 
-  // Find Minor Project team
+  // Find Minor Project team with robust fallback to mock seed data if unallocated
   const minorTeam =
     teams.find(
       (t) =>
         t.teamCode === "2026-CS-MIN-01" ||
         t.trackName === "Minor Project" ||
-        t.id === "tm-01"
-    ) || teams[0];
+        t.id === "tm-01" ||
+        t.id === "team-01" ||
+        t.members?.some((m) => m.name === currentPersona.name || m.enrollmentNumber === studentUsn)
+    ) ||
+    teams[0] ||
+    initialTeams[0];
 
   // Find linked Major Project team if continued
   const majorTeam = teams.find(
     (t) =>
       t.trackName === "Major Phase-I" &&
-      (t.projectLineageId === minorTeam.projectLineageId || t.teamCode.includes("MAJ"))
+      (Boolean(t.projectLineageId && t.projectLineageId === minorTeam?.projectLineageId) || t.teamCode?.includes("MAJ"))
   );
 
   const handleCopyLink = () => {
@@ -97,7 +102,7 @@ export const StudentPortfolioView: React.FC = () => {
       studentId: currentPersona.id,
       studentName: currentPersona.name,
       enrollmentNumber: studentUsn,
-      teamId: minorTeam.id,
+      teamId: minorTeam?.id || "tm-01",
       ratings: surveyRatings,
       feedback: surveyFeedback,
     });
@@ -108,7 +113,9 @@ export const StudentPortfolioView: React.FC = () => {
   };
 
   const handleExecuteContinuity = () => {
-    continueProjectToNextTrack(minorTeam.id, "Major Phase-I");
+    if (minorTeam?.id) {
+      continueProjectToNextTrack(minorTeam.id, "Major Phase-I");
+    }
     setShowContinuityModal(false);
     setToastMessage("Project continuity established! Major Phase-I active in Workspace.");
     setTimeout(() => setToastMessage(null), 5000);
@@ -249,15 +256,15 @@ export const StudentPortfolioView: React.FC = () => {
                     Year 3 • Minor Project (Semester 6)
                   </span>
                   <span className="text-[11px] font-mono text-slate-500">
-                    Lineage: {minorTeam.projectLineageId || "lin-2026-cs-01"}
+                    Lineage: {minorTeam?.projectLineageId || "lin-2026-cs-01"}
                   </span>
                 </div>
                 <Badge variant="success" size="sm" dot>
                   Defense Score: 44.5/50 (89%)
                 </Badge>
               </div>
-              <CardTitle className="pt-2 text-sm">{minorTeam.title}</CardTitle>
-              <CardDescription>{minorTeam.abstract}</CardDescription>
+              <CardTitle className="pt-2 text-sm">{minorTeam?.title || "Degree Capstone Project"}</CardTitle>
+              <CardDescription>{minorTeam?.abstract || "Continuous engineering degree capstone project."}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-xs">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
@@ -271,11 +278,11 @@ export const StudentPortfolioView: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-[#64748B]">Faculty Guide:</span>
-                  <div className="font-bold text-[#0F172A]">{minorTeam.guideName || "Prof. S. K. Verma"}</div>
+                  <div className="font-bold text-[#0F172A]">{minorTeam?.guideName || "Prof. S. K. Verma"}</div>
                 </div>
                 <div>
                   <span className="text-[#64748B]">Target SDG:</span>
-                  <div className="font-bold text-emerald-700">SDG {minorTeam.sdgNumber || 7} (Clean Energy)</div>
+                  <div className="font-bold text-emerald-700">SDG {minorTeam?.sdgNumber || 7} (Clean Energy)</div>
                 </div>
               </div>
 
@@ -305,7 +312,7 @@ export const StudentPortfolioView: React.FC = () => {
                     <span>Project Continuity Pipeline</span>
                   </div>
                   <p className="text-[11px] text-emerald-800">
-                    Carries forward verified team roster (3 members), Faculty Guide ({minorTeam.guideName || "Prof. S. K. Verma"}), and repository endpoints into Major Project Phase-I.
+                    Carries forward verified team roster (3 members), Faculty Guide ({minorTeam?.guideName || "Prof. S. K. Verma"}), and repository endpoints into Major Project Phase-I.
                   </p>
                 </div>
 

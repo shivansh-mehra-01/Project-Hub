@@ -48,7 +48,7 @@ export const StudentExploreView: React.FC = () => {
       (t) =>
         t.teamCode === "2026-CS-MIN-01" ||
         t.id === "team-01" ||
-        t.members.some((m) => m.name === currentPersona.name)
+        t.members?.some((m) => m.name === currentPersona.name)
     ) || teams[0];
   const hasActiveProject = !!myTeam && (myTeam.state === "Active" || myTeam.teamCode === "2026-CS-MIN-01");
 
