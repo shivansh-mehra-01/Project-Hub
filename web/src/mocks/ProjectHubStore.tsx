@@ -185,6 +185,7 @@ interface ProjectHubStoreContextType {
   reviewExceptionOverride: (overrideId: string, decision: "Approved" | "Rejected", remarks?: string) => void;
   submitCourseExitSurvey: (survey: Omit<CourseExitSurvey, "id" | "submittedAt">) => void;
   importRgpvCatalog: (universityCode?: string, programCodes?: string[]) => Promise<{ programsImported: number; departmentsCreated: number; semesterTermsCreated: number; subjectOfferingsCreated: number; message: string }>;
+  configureAcademicSession: (data: { academicYear: string; examCutoffDateUtc?: string; allowInterdisciplinaryTeams?: boolean }) => Promise<void>;
   addCourseProgram: (prog: Omit<CourseProgram, "id" | "collegeId">) => void;
   addSemesterTerm: (term: Omit<SemesterTerm, "id" | "collegeId">) => void;
   addSubjectOffering: (offering: Omit<SubjectOffering, "id" | "collegeId">) => void;
@@ -333,6 +334,23 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
               code: overviewRes.value.tenantCode,
               criterion3Attainment: overviewRes.value.criterion3AttainmentPct,
             }));
+
+            if (overviewRes.value.activeSession) {
+              const act = overviewRes.value.activeSession;
+              setAcademicSessions((prev) => [
+                {
+                  id: act.id,
+                  collegeId: act.collegeId,
+                  label: act.label,
+                  startDate: act.startDate,
+                  endDate: act.endDate,
+                  examCutoffDateUtc: act.examCutoffDateUtc,
+                  allowInterdisciplinaryTeams: act.allowInterdisciplinaryTeams ?? true,
+                  isActive: act.isActive,
+                },
+                ...prev.filter((s) => s.id !== act.id),
+              ]);
+            }
           }
 
           if (isMounted && deptsRes.status === "fulfilled") {
@@ -342,11 +360,13 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
                 collegeId: d.collegeId,
                 name: d.name,
                 code: d.code,
-                studentCount: d.studentCount || d.intakeQuota,
+                studentCount: d.studentCount || d.intakeQuota || 120,
                 facultyCount: d.facultyCount || 12,
                 hodName: d.hodName || "Appointed HOD",
                 criterion3Attainment: 82.5,
                 hodSignOffStatus: d.isSarAttested ? "Attested & Locked" : "Pending Sign-Off",
+                trackStatus: (d.trackStatus as "Active" | "Awaiting HOD Launch") || "Awaiting HOD Launch",
+                activeTrackCount: d.activeTrackCount || 0,
               }))
             );
           }
@@ -1165,6 +1185,55 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     };
   };
 
+  const configureAcademicSession = async (data: {
+    academicYear: string;
+    examCutoffDateUtc?: string;
+    allowInterdisciplinaryTeams?: boolean;
+  }) => {
+    if (getAuthToken()) {
+      try {
+        const res = await collegeApi.configureSession({
+          academicYear: data.academicYear,
+          examCutoffDateUtc: data.examCutoffDateUtc,
+          allowInterdisciplinaryTeams: data.allowInterdisciplinaryTeams ?? true,
+          isActive: true,
+        });
+        setAcademicSessions((prev) => [
+          {
+            id: res.id,
+            collegeId: res.collegeId,
+            label: res.label,
+            startDate: res.startDate,
+            endDate: res.endDate,
+            examCutoffDateUtc: res.examCutoffDateUtc,
+            allowInterdisciplinaryTeams: res.allowInterdisciplinaryTeams ?? true,
+            isActive: res.isActive,
+          },
+          ...prev.filter((s) => s.id !== res.id),
+        ]);
+        showToast(`Institutional Academic Session ${res.label} opened successfully.`, "success");
+        return;
+      } catch (err: unknown) {
+        console.warn("API configure session fallback to local state:", err);
+      }
+    }
+
+    setAcademicSessions((prev) => [
+      {
+        id: prev[0]?.id || "sess-local-01",
+        collegeId: college.id,
+        label: data.academicYear,
+        startDate: prev[0]?.startDate || "2026-07-01T00:00:00Z",
+        endDate: prev[0]?.endDate || "2027-06-30T23:59:59Z",
+        examCutoffDateUtc: data.examCutoffDateUtc || "2027-05-31T23:59:59Z",
+        allowInterdisciplinaryTeams: data.allowInterdisciplinaryTeams ?? true,
+        isActive: true,
+      },
+      ...prev.slice(1),
+    ]);
+    showToast(`Institutional Academic Session ${data.academicYear} configured.`, "success");
+  };
+
   const reassignHOD = (deptId: string, newHodName: string) => {
     setDepartments((prev) =>
       prev.map((d) => (d.id === deptId ? { ...d, hodName: newHodName } : d))
@@ -1807,6 +1876,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         reviewExceptionOverride,
         submitCourseExitSurvey,
         importRgpvCatalog,
+        configureAcademicSession,
         addCourseProgram,
         addSemesterTerm,
         addSubjectOffering,

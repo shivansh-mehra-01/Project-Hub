@@ -56,6 +56,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
     college,
     departments,
     cycle,
+    academicSessions,
     coursePrograms,
     semesterTerms,
     subjectOfferings,
@@ -64,15 +65,18 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
     onboardCollege,
     updateCycle,
     importRgpvCatalog,
+    configureAcademicSession,
   } = useProjectHubStore();
 
   const [activeTab, setActiveTab] = useState<"overview" | "departments" | "settings" | "compliance">(initialTab);
   
   // Modals & Drawers
   const [showAddDeptModal, setShowAddDeptModal] = useState(false);
-  const [showNewCycleModal, setShowNewCycleModal] = useState(false);
+  const [showSessionModal, setShowSessionModal] = useState(false);
   const [showCsvImportModal, setShowCsvImportModal] = useState(false);
   const [inspectingDept, setInspectingDept] = useState<Department | null>(null);
+
+  const activeSession = academicSessions?.find((s) => s.isActive) || academicSessions?.[0];
 
   // RGPV Catalog & Academic Hierarchy View State
   const [deptViewMode, setDeptViewMode] = useState<"cards" | "hierarchy">("cards");
@@ -121,12 +125,33 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
   const [selectedHodName, setSelectedHodName] = useState("");
   const [hodReassignedToast, setHodReassignedToast] = useState(false);
 
-  // New Academic Cycle Form State
-  const [cycleYear, setCycleYear] = useState("2026–2027");
-  const [cycleType, setCycleType] = useState<"Minor" | "Major">("Minor");
-  const [cycleSem, setCycleSem] = useState("6");
-  const [cycleDeadline, setCycleDeadline] = useState("2026-03-31");
-  const [cycleSavedToast, setCycleSavedToast] = useState(false);
+  // Institutional Academic Session Form State
+  const [sessionYear, setSessionYear] = useState("2026–2027");
+  const [sessionExamCutoff, setSessionExamCutoff] = useState("2027-05-31");
+  const [sessionAllowInterdisciplinary, setSessionAllowInterdisciplinary] = useState(true);
+  const [sessionSavedToast, setSessionSavedToast] = useState(false);
+
+  // Human-readable date formatter
+  const formatReadableDate = (dateStr?: string | null): string => {
+    if (!dateStr) return "Not Scheduled";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const month = months[d.getUTCMonth()];
+      const day = String(d.getUTCDate()).padStart(2, "0");
+      const year = d.getUTCFullYear();
+      let hours = d.getUTCHours();
+      const minutes = String(d.getUTCMinutes()).padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const hourStr = String(hours).padStart(2, "0");
+      return `${month} ${day}, ${year} • ${hourStr}:${minutes} ${ampm}`;
+    } catch {
+      return dateStr;
+    }
+  };
 
   // Campus Settings State
   const [collegeDisplayName, setCollegeDisplayName] = useState(college.name);
@@ -181,19 +206,17 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
     setTimeout(() => setHodReassignedToast(false), 2000);
   };
 
-  const handleLaunchCycle = (e: React.FormEvent) => {
+  const handleOpenSession = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateCycle({
-      academicYear: cycleYear,
-      type: cycleType,
-      semester: parseInt(cycleSem) || 6,
-      proposalDeadline: cycleDeadline,
-      isActive: true,
+    await configureAcademicSession({
+      academicYear: sessionYear,
+      examCutoffDateUtc: sessionExamCutoff ? `${sessionExamCutoff}T23:59:59Z` : undefined,
+      allowInterdisciplinaryTeams: sessionAllowInterdisciplinary,
     });
-    setCycleSavedToast(true);
+    setSessionSavedToast(true);
     setTimeout(() => {
-      setCycleSavedToast(false);
-      setShowNewCycleModal(false);
+      setSessionSavedToast(false);
+      setShowSessionModal(false);
     }, 1200);
   };
 
@@ -263,7 +286,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
                 <div className="space-y-0.5">
                   <span className="text-[11px] font-medium text-slate-500">Total Enrolled Intake</span>
                   <div className="text-xl font-bold text-slate-900 tabular-nums font-mono">
-                    {departments.reduce((acc, d) => acc + d.studentCount, 0).toLocaleString()}
+                    {departments.reduce((acc, d) => acc + (d.studentCount || 120), 0).toLocaleString()}
                   </div>
                   <span className="text-[10px] text-slate-500">Across {departments.length} engineering branches</span>
                 </div>
@@ -316,53 +339,73 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
             </Card>
           </div>
 
-          {/* Academic Cycle Governance Card */}
+          {/* Institutional Academic Session Governance Card */}
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
-                <CardTitle>Academic Cycle Governance</CardTitle>
+                <CardTitle>Institutional Academic Session Governance</CardTitle>
                 <CardDescription>
-                  Central campus semester schedule, student team proposal cutoff, and viva defense examination windows.
+                  Central campus academic calendar, institutional exam cutoff deadline, and campus-wide interdisciplinary policy.
                 </CardDescription>
               </div>
               <Button
                 size="sm"
                 variant="primary"
                 leftIcon={<Plus className="h-3.5 w-3.5" />}
-                onClick={() => setShowNewCycleModal(true)}
+                onClick={() => {
+                  if (activeSession) {
+                    setSessionYear(activeSession.label);
+                    setSessionExamCutoff(activeSession.examCutoffDateUtc?.split("T")[0] || "2027-05-31");
+                    setSessionAllowInterdisciplinary(activeSession.allowInterdisciplinaryTeams ?? true);
+                  }
+                  setShowSessionModal(true);
+                }}
               >
-                Launch New Cycle
+                + Open Academic Session
               </Button>
             </CardHeader>
             <CardContent className="p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
-                <span className="text-[11px] font-medium text-slate-500">Active Academic Batch</span>
+                <span className="text-[11px] font-medium text-slate-500">Active Academic Session</span>
                 <div className="text-sm font-bold text-slate-900 font-mono">
-                  {cycle.academicYear} • {cycle.type} Sem {cycle.semester}
+                  AY {activeSession?.label || "2026–2027"}
                 </div>
-                <span className="text-[10px] text-emerald-600 font-semibold">Active &amp; Enrolling</span>
+                <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Active &amp; Enrolling
+                </span>
               </div>
 
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
-                <span className="text-[11px] font-medium text-slate-500">Proposal Submission Deadline</span>
+                <span className="text-[11px] font-medium text-slate-500">Institutional Exam Cutoff Deadline</span>
                 <div className="text-sm font-bold text-slate-900 font-mono">
-                  {cycle.proposalDeadline || "March 15, 2026"}
+                  {formatReadableDate(activeSession?.examCutoffDateUtc || "2027-05-31T23:59:59Z")}
                 </div>
-                <span className="text-[10px] text-slate-500">Coordinator Review Period</span>
+                <span className="text-[10px] text-slate-500">Campus-Wide Viva &amp; Defense Window</span>
               </div>
 
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
-                <span className="text-[11px] font-medium text-slate-500">Team Size Policy</span>
+                <span className="text-[11px] font-medium text-slate-500">Campus Team Formation Policy</span>
                 <div className="text-sm font-bold text-slate-900 font-mono">
-                  Min {cycle.minTeamSize || 3} — Max {cycle.maxTeamSize || 4} Students
+                  {activeSession?.allowInterdisciplinaryTeams ? "Interdisciplinary Permitted" : "Strict Single-Branch"}
                 </div>
-                <span className="text-[10px] text-slate-500">Interdisciplinary Permitted</span>
+                <span className="text-[10px] text-slate-500">
+                  {activeSession?.allowInterdisciplinaryTeams
+                    ? "Cross-Department Collaboration Enabled"
+                    : "Single-Department Teams Only"}
+                </span>
               </div>
 
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1">
-                <span className="text-[11px] font-medium text-slate-500">Final Defense Window</span>
-                <div className="text-sm font-bold text-slate-900 font-mono">May 02 – May 08, 2026</div>
-                <span className="text-[10px] text-emerald-600 font-semibold">Rubric Panel Scheduled</span>
+                <span className="text-[11px] font-medium text-slate-500">Department Track Launch Readiness</span>
+                <div className="text-sm font-bold text-slate-900 font-mono">
+                  {departments.filter((d) => d.trackStatus === "Active").length} / {departments.length} Branches Active
+                </div>
+                <span className="text-[10px] text-emerald-600 font-semibold">
+                  {departments.filter((d) => d.trackStatus !== "Active").length === 0
+                    ? "All Branches Launched by HODs"
+                    : `${departments.filter((d) => d.trackStatus !== "Active").length} Awaiting HOD Launch`}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -373,7 +416,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
               <div>
                 <CardTitle>Departmental Performance Summary</CardTitle>
                 <CardDescription>
-                  Branch partitions, appointed departmental leadership, and live Criterion 3 attainment.
+                  Branch partitions, appointed departmental leadership, live project track launch status, and Criterion 3 attainment.
                 </CardDescription>
               </div>
               <Button size="sm" variant="secondary" onClick={() => switchTab("departments")}>
@@ -381,49 +424,64 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
               </Button>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-xs">
+              <table className="w-full min-w-[720px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-500 font-semibold text-[11px] uppercase tracking-wider">
                   <tr>
                     <th className="py-3 px-4">Branch Code</th>
                     <th className="py-3 px-4">Department Name</th>
                     <th className="py-3 px-4">Appointed HOD</th>
+                    <th className="py-3 px-4">Track Status</th>
                     <th className="py-3 px-4">Enrolled Intake</th>
                     <th className="py-3 px-4">Faculty Mentors</th>
                     <th className="py-3 px-4 text-right">Criterion 3 Attainment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-slate-900">
-                  {departments.map((dept) => (
-                    <tr
-                      key={dept.id}
-                      onClick={() => {
-                        setInspectingDept(dept);
-                        setSelectedHodName(dept.hodName || "");
-                      }}
-                      className="hover:bg-slate-50 transition-colors cursor-pointer group"
-                    >
-                      <td className="py-3 px-4 font-mono font-bold text-brand-primary">
-                        <span className="px-2 py-0.5 rounded bg-brand-primary-tint border border-brand-primary-border">
-                          {dept.code}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-900 group-hover:text-brand-primary transition-colors">
-                        {dept.name}
-                      </td>
-                      <td className="py-3 px-4 text-slate-700 font-medium">
-                        {dept.hodName || "Appointed HOD"}
-                      </td>
-                      <td className="py-3 px-4 font-mono tabular-nums text-slate-800">
-                        {dept.studentCount} students
-                      </td>
-                      <td className="py-3 px-4 font-mono tabular-nums text-slate-800">
-                        {dept.facultyCount} mentors
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700 tabular-nums">
-                        {dept.criterion3Attainment || 80.0}%
-                      </td>
-                    </tr>
-                  ))}
+                  {departments.map((dept) => {
+                    const isTrackActive = dept.trackStatus === "Active";
+                    return (
+                      <tr
+                        key={dept.id}
+                        onClick={() => {
+                          setInspectingDept(dept);
+                          setSelectedHodName(dept.hodName || "");
+                        }}
+                        className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                      >
+                        <td className="py-3 px-4 font-mono font-bold text-brand-primary">
+                          <span className="px-2 py-0.5 rounded bg-brand-primary-tint border border-brand-primary-border">
+                            {dept.code}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-slate-900 group-hover:text-brand-primary transition-colors">
+                          {dept.name}
+                        </td>
+                        <td className="py-3 px-4 text-slate-700 font-medium">
+                          {dept.hodName || "Appointed HOD"}
+                        </td>
+                        <td className="py-3 px-4">
+                          {isTrackActive ? (
+                            <Badge variant="success" size="sm" dot>
+                              Active ({dept.activeTrackCount || 1} {(dept.activeTrackCount || 1) === 1 ? "Track" : "Tracks"})
+                            </Badge>
+                          ) : (
+                            <Badge variant="warning" size="sm" dot>
+                              Awaiting HOD Launch
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-mono tabular-nums text-slate-800">
+                          {dept.studentCount || 120} students
+                        </td>
+                        <td className="py-3 px-4 font-mono tabular-nums text-slate-800">
+                          {dept.facultyCount || 12} mentors
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700 tabular-nums">
+                          {dept.criterion3Attainment || 80.0}%
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </CardContent>
@@ -1247,63 +1305,76 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
         </form>
       </Modal>
 
-      {/* 2. Launch New Academic Cycle Modal */}
+      {/* 2. Open Institutional Academic Session Modal */}
       <Modal
-        isOpen={showNewCycleModal}
-        onClose={() => setShowNewCycleModal(false)}
-        title="Launch Academic Project Cycle"
-        description="Configure calendar year, student team proposal cutoff, and final evaluation windows across all branches."
+        isOpen={showSessionModal}
+        onClose={() => setShowSessionModal(false)}
+        title="Open Institutional Academic Session"
+        description="Configure campus academic year, institutional exam cutoff date, and interdisciplinary team policy for all departments."
         maxWidth="md"
       >
-        <form onSubmit={handleLaunchCycle} className="space-y-3.5 text-xs">
-          {cycleSavedToast && (
+        <form onSubmit={handleOpenSession} className="space-y-4 text-xs">
+          {sessionSavedToast && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 flex items-center gap-2">
               <Check className="h-4 w-4 text-emerald-600" />
-              <span>Academic cycle launched successfully across all branches!</span>
+              <span>Institutional academic session opened successfully!</span>
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-3.5">
             <Input
               label="Academic Year"
-              value={cycleYear}
-              onChange={(e) => setCycleYear(e.target.value)}
-              placeholder="2026–2027"
+              value={sessionYear}
+              onChange={(e) => setSessionYear(e.target.value)}
+              placeholder="e.g. 2026–2027"
               required
+              helperText="The overarching institutional academic year governing all campus programs."
             />
-            <Select
-              label="Project Type & Semester"
-              value={cycleType}
-              onChange={(e) => {
-                const type = e.target.value as "Minor" | "Major";
-                setCycleType(type);
-                setCycleSem(type === "Minor" ? "6" : "8");
-              }}
-              options={[
-                { label: "Minor Project (Semester 6)", value: "Minor" },
-                { label: "Major Project (Semester 8)", value: "Major" },
-              ]}
+
+            <Input
+              label="Institutional Exam Cutoff Date"
+              type="date"
+              value={sessionExamCutoff}
+              onChange={(e) => setSessionExamCutoff(e.target.value)}
+              required
+              helperText="Campus-wide cutoff deadline for final viva/defense evaluations and rubric marks."
             />
+
+            <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70">
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-slate-900">
+                  Allow Interdisciplinary Teams
+                </span>
+                <p className="text-[11px] text-slate-500">
+                  Permit students from different engineering branches to form joint capstone teams.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSessionAllowInterdisciplinary(!sessionAllowInterdisciplinary)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                  sessionAllowInterdisciplinary ? "bg-brand-primary" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    sessionAllowInterdisciplinary ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
           </div>
 
-          <Input
-            label="Proposal Submission Cutoff Date"
-            type="date"
-            value={cycleDeadline}
-            onChange={(e) => setCycleDeadline(e.target.value)}
-            required
-          />
-
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-[11px] leading-relaxed">
-            Launching this cycle will automatically open student proposal submission portals across CSE, ECE, ME, and CE departments.
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[11px] leading-relaxed">
+            Opening this institutional session establishes the campus calendar. Individual semester project tracks (Minor/Major, Rubric Splits, Enrolment Modes) remain owned and launched by respective Department HODs.
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-            <Button size="sm" variant="secondary" onClick={() => setShowNewCycleModal(false)}>
+            <Button size="sm" variant="secondary" onClick={() => setShowSessionModal(false)}>
               Cancel
             </Button>
             <Button size="sm" variant="primary" type="submit">
-              Launch Cycle Across Branches
+              Open Academic Session
             </Button>
           </div>
         </form>

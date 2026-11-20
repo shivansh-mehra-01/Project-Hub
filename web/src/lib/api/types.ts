@@ -172,6 +172,22 @@ export interface CollegeOverviewDto {
   totalProjects: number;
   criterion3AttainmentPct: number;
   strictSsoEnforced: boolean;
+  activeSession?: AcademicSessionDto;
+  departmentSummaries?: DepartmentTrackSummaryDto[];
+}
+
+export interface DepartmentTrackSummaryDto {
+  departmentId: string;
+  departmentCode: string;
+  departmentName: string;
+  hodName?: string;
+  intakeQuota: number;
+  studentCount: number;
+  facultyCount: number;
+  criterion3AttainmentPct: number;
+  trackStatus: string;
+  activeTrackCount: number;
+  activeTrackNames: string[];
 }
 
 export interface DepartmentDto {
@@ -189,6 +205,8 @@ export interface DepartmentDto {
   facultyCount: number;
   isSarAttested: boolean;
   sarAttestedAtUtc?: string;
+  trackStatus?: string;
+  activeTrackCount?: number;
 }
 
 export interface CreateDepartmentRequest {
@@ -647,6 +665,17 @@ export interface AcademicSessionDto {
   startDate: string;
   endDate: string;
   isActive: boolean;
+  examCutoffDateUtc?: string;
+  allowInterdisciplinaryTeams?: boolean;
+}
+
+export interface ConfigureAcademicSessionRequest {
+  academicYear: string;
+  examCutoffDateUtc?: string;
+  allowInterdisciplinaryTeams?: boolean;
+  startDate?: string;
+  endDate?: string;
+  isActive?: boolean;
 }
 
 export interface CreateAcademicSessionRequest {
@@ -654,6 +683,8 @@ export interface CreateAcademicSessionRequest {
   startDate: string;
   endDate: string;
   isActive?: boolean;
+  examCutoffDateUtc?: string;
+  allowInterdisciplinaryTeams?: boolean;
 }
 
 export interface SemesterTermDto {

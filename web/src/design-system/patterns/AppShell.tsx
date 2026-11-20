@@ -134,8 +134,11 @@ const AppShellInner: React.FC<AppShellProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentPersona, college, cycle, switchPersona, tenants, pilotRequests, teams, logout } =
+  const { currentPersona, college, cycle, academicSessions, switchPersona, tenants, pilotRequests, teams, logout } =
     useProjectHubStore();
+
+  const activeSessionLabel =
+    academicSessions?.find((s) => s.isActive)?.label || academicSessions?.[0]?.label || "2026–2027";
 
   const pendingHODCount = teams.filter((t) => t.state === "PendingHOD").length || 1;
 
@@ -639,11 +642,18 @@ const AppShellInner: React.FC<AppShellProps> = ({
                   Production • ap-south-1
                 </span>
               </div>
+            ) : currentPersona.role === "CollegeAdmin" ? (
+              <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-slate-200">
+                <Calendar className="w-3 h-3 text-emerald-400 shrink-0" strokeWidth={1.75} />
+                <span className="font-mono text-[11px] tabular-nums text-slate-200">
+                  AY {activeSessionLabel}
+                </span>
+              </div>
             ) : (
               <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-slate-200">
                 <Calendar className="w-3 h-3 text-emerald-400 shrink-0" strokeWidth={1.75} />
                 <span className="font-mono text-[11px] tabular-nums text-slate-200">
-                  {cycle.academicYear} • Minor Sem {cycle.semester}
+                  {cycle.academicYear || "2025–2026"} • Minor Sem {cycle.semester || "6"}
                 </span>
               </div>
             )}

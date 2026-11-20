@@ -856,19 +856,28 @@ public static class DbInitializer
     /// </summary>
     private static async Task SeedSistecAcademicHierarchyAsync(ProjectHubDbContext context)
     {
-        // 1. Academic Session: 2026-27
-        if (!await context.AcademicSessions.IgnoreQueryFilters().AnyAsync(s => s.CollegeId == SistecTenantId && s.Label == "2026-27"))
+        // 1. Academic Session: 2026-27 (Institutional Academic Session Governance)
+        var existingSession = await context.AcademicSessions.IgnoreQueryFilters().FirstOrDefaultAsync(s => s.CollegeId == SistecTenantId && (s.Label == "2026-27" || s.Label == "2026–2027"));
+        if (existingSession == null)
         {
             var session = new AcademicSession
             {
                 Id = SistecSession2026Id,
                 CollegeId = SistecTenantId,
-                Label = "2026-27",
+                Label = "2026–2027",
                 StartDate = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
                 EndDate = new DateTime(2027, 6, 30, 23, 59, 59, DateTimeKind.Utc),
+                ExamCutoffDateUtc = new DateTime(2027, 5, 31, 23, 59, 59, DateTimeKind.Utc),
+                AllowInterdisciplinaryTeams = true,
                 IsActive = true
             };
             await context.AcademicSessions.AddAsync(session);
+        }
+        else
+        {
+            existingSession.ExamCutoffDateUtc ??= new DateTime(2027, 5, 31, 23, 59, 59, DateTimeKind.Utc);
+            existingSession.AllowInterdisciplinaryTeams = true;
+            existingSession.IsActive = true;
         }
 
         // 2. Course Programs: B.Tech, M.Tech, MBA, MCA

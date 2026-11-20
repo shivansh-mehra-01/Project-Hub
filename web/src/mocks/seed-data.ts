@@ -75,9 +75,11 @@ export const initialAcademicSessions: AcademicSession[] = [
   {
     id: "sess-2026-01",
     collegeId: "col-sistec-01",
-    label: "2026-27",
+    label: "2026–2027",
     startDate: "2026-07-01T00:00:00Z",
     endDate: "2027-06-30T23:59:59Z",
+    examCutoffDateUtc: "2027-05-31T23:59:59Z",
+    allowInterdisciplinaryTeams: true,
     isActive: true,
   },
 ];
@@ -177,6 +179,9 @@ export const initialDepartments: Department[] = [
     facultyCount: 32,
     criterion3Attainment: 82.6,
     hodSignOffStatus: "Attested & Locked",
+    trackStatus: "Active",
+    activeTrackCount: 1,
+    activeTrackNames: ["Minor Project (Sem 6)"],
   },
   {
     id: "dept-ece-01",
@@ -191,6 +196,9 @@ export const initialDepartments: Department[] = [
     facultyCount: 22,
     criterion3Attainment: 79.4,
     hodSignOffStatus: "Attested & Locked",
+    trackStatus: "Awaiting HOD Launch",
+    activeTrackCount: 0,
+    activeTrackNames: [],
   },
   {
     id: "dept-me-01",
@@ -205,6 +213,9 @@ export const initialDepartments: Department[] = [
     facultyCount: 18,
     criterion3Attainment: 76.8,
     hodSignOffStatus: "Pending Sign-Off",
+    trackStatus: "Awaiting HOD Launch",
+    activeTrackCount: 0,
+    activeTrackNames: [],
   },
   {
     id: "dept-ce-01",
@@ -219,6 +230,9 @@ export const initialDepartments: Department[] = [
     facultyCount: 16,
     criterion3Attainment: 78.2,
     hodSignOffStatus: "Attested & Locked",
+    trackStatus: "Awaiting HOD Launch",
+    activeTrackCount: 0,
+    activeTrackNames: [],
   },
 ];
 

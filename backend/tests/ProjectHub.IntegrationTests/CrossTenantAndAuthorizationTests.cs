@@ -223,4 +223,89 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         Assert.NotNull(auth.User);
         Assert.Equal(UserRole.CollegeAdmin, auth.User.Role);
     }
+
+    [Fact]
+    public async Task CollegeOverview_Returns_ActiveInstitutionalSession_AndDepartmentSummariesWithTrackStatus()
+    {
+        // Login as CollegeAdmin (Principal)
+        var loginRes = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            Email = "principal@sistec.ac.in",
+            Password = "Pass@1234"
+        });
+        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
+        var auth = await loginRes.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.NotNull(auth);
+
+        var req = new HttpRequestMessage(HttpMethod.Get, "/api/college/overview");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
+
+        var res = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        var overview = await res.Content.ReadFromJsonAsync<CollegeOverviewDto>();
+        Assert.NotNull(overview);
+        Assert.NotNull(overview.ActiveSession);
+        Assert.Contains("2026", overview.ActiveSession.Label);
+        Assert.NotNull(overview.ActiveSession.ExamCutoffDateUtc);
+        Assert.True(overview.ActiveSession.AllowInterdisciplinaryTeams);
+
+        Assert.NotEmpty(overview.DepartmentSummaries);
+        var cseDept = overview.DepartmentSummaries.FirstOrDefault(d => d.DepartmentCode == "CSE");
+        Assert.NotNull(cseDept);
+        Assert.Equal("Active", cseDept.TrackStatus);
+        Assert.True(cseDept.ActiveTrackCount >= 1);
+
+        var eceDept = overview.DepartmentSummaries.FirstOrDefault(d => d.DepartmentCode == "ECE");
+        if (eceDept != null)
+        {
+            Assert.Equal("Awaiting HOD Launch", eceDept.TrackStatus);
+        }
+    }
+
+    [Fact]
+    public async Task ConfigureAcademicSession_AllowsCollegeAdmin_ToOpenAndConfigureOverarchingSession()
+    {
+        // Login as CollegeAdmin
+        var loginRes = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            Email = "principal@sistec.ac.in",
+            Password = "Pass@1234"
+        });
+        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
+        var auth = await loginRes.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.NotNull(auth);
+
+        var cutoff = new DateTime(2028, 5, 31, 23, 59, 59, DateTimeKind.Utc);
+        var configReq = new HttpRequestMessage(HttpMethod.Post, "/api/college/sessions")
+        {
+            Content = JsonContent.Create(new ConfigureAcademicSessionRequest
+            {
+                AcademicYear = "2027–2028",
+                ExamCutoffDateUtc = cutoff,
+                AllowInterdisciplinaryTeams = true,
+                IsActive = true
+            })
+        };
+        configReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
+
+        var postRes = await _client.SendAsync(configReq);
+        Assert.Equal(HttpStatusCode.OK, postRes.StatusCode);
+
+        var sessionDto = await postRes.Content.ReadFromJsonAsync<AcademicSessionDto>();
+        Assert.NotNull(sessionDto);
+        Assert.Equal("2027–2028", sessionDto.Label);
+        Assert.True(sessionDto.AllowInterdisciplinaryTeams);
+        Assert.True(sessionDto.IsActive);
+
+        // Verify GET /api/college/sessions/active returns this configured session
+        var getReq = new HttpRequestMessage(HttpMethod.Get, "/api/college/sessions/active");
+        getReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
+
+        var getRes = await _client.SendAsync(getReq);
+        Assert.Equal(HttpStatusCode.OK, getRes.StatusCode);
+        var activeSession = await getRes.Content.ReadFromJsonAsync<AcademicSessionDto>();
+        Assert.NotNull(activeSession);
+        Assert.Equal("2027–2028", activeSession.Label);
+    }
 }

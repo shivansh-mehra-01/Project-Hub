@@ -13,6 +13,23 @@ public record CollegeOverviewDto
     public int TotalProjects { get; init; }
     public decimal Criterion3AttainmentPct { get; init; }
     public bool StrictSsoEnforced { get; init; }
+    public AcademicSessionDto? ActiveSession { get; init; }
+    public List<DepartmentTrackSummaryDto> DepartmentSummaries { get; init; } = new();
+}
+
+public record DepartmentTrackSummaryDto
+{
+    public Guid DepartmentId { get; init; }
+    public string DepartmentCode { get; init; } = string.Empty;
+    public string DepartmentName { get; init; } = string.Empty;
+    public string? HodName { get; init; }
+    public int IntakeQuota { get; init; }
+    public int StudentCount { get; init; }
+    public int FacultyCount { get; init; }
+    public decimal Criterion3AttainmentPct { get; init; }
+    public string TrackStatus { get; init; } = "Awaiting HOD Launch"; // "Active" vs "Awaiting HOD Launch"
+    public int ActiveTrackCount { get; init; }
+    public List<string> ActiveTrackNames { get; init; } = new();
 }
 
 public record DepartmentDto
@@ -31,6 +48,8 @@ public record DepartmentDto
     public int FacultyCount { get; init; }
     public bool IsSarAttested { get; init; }
     public DateTime? SarAttestedAtUtc { get; init; }
+    public string TrackStatus { get; init; } = "Awaiting HOD Launch"; // "Active" vs "Awaiting HOD Launch"
+    public int ActiveTrackCount { get; init; }
 }
 
 public record CreateDepartmentRequest
@@ -169,6 +188,18 @@ public record AcademicSessionDto
     public DateTime StartDate { get; init; }
     public DateTime EndDate { get; init; }
     public bool IsActive { get; init; }
+    public DateTime? ExamCutoffDateUtc { get; init; }
+    public bool AllowInterdisciplinaryTeams { get; init; } = true;
+}
+
+public record ConfigureAcademicSessionRequest
+{
+    public string AcademicYear { get; init; } = string.Empty; // e.g. "2026–2027"
+    public DateTime? ExamCutoffDateUtc { get; init; }
+    public bool AllowInterdisciplinaryTeams { get; init; } = true;
+    public DateTime? StartDate { get; init; }
+    public DateTime? EndDate { get; init; }
+    public bool IsActive { get; init; } = true;
 }
 
 public record CreateAcademicSessionRequest
@@ -177,6 +208,8 @@ public record CreateAcademicSessionRequest
     public DateTime StartDate { get; init; }
     public DateTime EndDate { get; init; }
     public bool IsActive { get; init; } = true;
+    public DateTime? ExamCutoffDateUtc { get; init; }
+    public bool AllowInterdisciplinaryTeams { get; init; } = true;
 }
 
 public record SemesterTermDto

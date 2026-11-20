@@ -60,6 +60,9 @@ export interface Department {
   facultyCount: number;
   criterion3Attainment?: number;
   hodSignOffStatus?: "Attested & Locked" | "Pending Sign-Off";
+  trackStatus?: "Active" | "Awaiting HOD Launch";
+  activeTrackCount?: number;
+  activeTrackNames?: string[];
 }
 
 export interface CourseProgram {
@@ -80,6 +83,8 @@ export interface AcademicSession {
   startDate: string;
   endDate: string;
   isActive: boolean;
+  examCutoffDateUtc?: string;
+  allowInterdisciplinaryTeams?: boolean;
 }
 
 export interface SemesterTerm {

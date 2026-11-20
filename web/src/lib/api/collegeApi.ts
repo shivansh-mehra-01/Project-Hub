@@ -6,6 +6,7 @@ import {
   CollegeOverviewDto,
   CollegeSettingsDto,
   CollegeTrackDto,
+  ConfigureAcademicSessionRequest,
   CourseProgramDto,
   CreateAcademicSessionRequest,
   CreateCollegeTrackRequest,
@@ -68,6 +69,11 @@ export const collegeApi = {
     apiClient.post<CourseProgramDto>("/api/college/course-programs", data),
 
   getAcademicSessions: () => apiClient.get<AcademicSessionDto[]>("/api/college/academic-sessions"),
+
+  getActiveSession: () => apiClient.get<AcademicSessionDto>("/api/college/sessions/active"),
+
+  configureSession: (data: ConfigureAcademicSessionRequest) =>
+    apiClient.post<AcademicSessionDto>("/api/college/sessions", data),
 
   createAcademicSession: (data: CreateAcademicSessionRequest) =>
     apiClient.post<AcademicSessionDto>("/api/college/academic-sessions", data),
