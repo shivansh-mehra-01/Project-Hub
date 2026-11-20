@@ -23,6 +23,15 @@ public record CreateDepartmentTrackRequest
 {
     public string Name { get; init; } = "Minor Project";
     public string AcademicYear { get; init; } = "2025-2026";
+    public Guid? AcademicSessionId { get; init; }
+    public Guid? CourseProgramId { get; init; }
+    public Guid? SemesterTermId { get; init; }
+    public Guid? SubjectOfferingId { get; init; }
+    public Guid? CurriculumSchemeId { get; init; }
+    public ParticipationMode ParticipationMode { get; init; } = ParticipationMode.Team;
+    public EnrolmentMode EnrolmentMode { get; init; } = EnrolmentMode.SelfJoin;
+    public bool AllowCrossBranchTeams { get; init; } = false;
+    public bool AllowInterdisciplinaryTeams { get; init; } = false;
     public DateTime? ProposalDeadlineUtc { get; init; }
     public DateTime? FinalSubmissionDeadlineUtc { get; init; }
     public int GuideWeightPct { get; init; } = 30;
@@ -30,6 +39,18 @@ public record CreateDepartmentTrackRequest
     public int FinalVivaWeightPct { get; init; } = 40;
     public int SharedProjectRubricPct { get; init; } = 60;
     public int IndividualStudentRubricPct { get; init; } = 40;
+}
+
+public record HodAcademicContextDto
+{
+    public Guid DepartmentId { get; init; }
+    public string DepartmentName { get; init; } = string.Empty;
+    public string DepartmentCode { get; init; } = string.Empty;
+    public Guid? CourseProgramId { get; init; }
+    public string? CourseProgramName { get; init; }
+    public List<AcademicSessionDto> AvailableSessions { get; init; } = new();
+    public List<SemesterTermDto> AvailableSemesters { get; init; } = new();
+    public List<SubjectOfferingDto> AvailableOfferings { get; init; } = new();
 }
 
 public record ProjectProposalDto

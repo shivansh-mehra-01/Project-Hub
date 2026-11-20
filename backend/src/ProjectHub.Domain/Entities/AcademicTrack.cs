@@ -1,4 +1,5 @@
 using ProjectHub.Domain.Common;
+using ProjectHub.Domain.Enums;
 
 namespace ProjectHub.Domain.Entities;
 
@@ -16,7 +17,18 @@ public class AcademicTrack : BaseEntity, ITenantEntity
     /// </summary>
     public Guid? DepartmentId { get; set; }
 
+    // Dynamic Academic Hierarchy Linkages
+    public Guid? AcademicSessionId { get; set; }
+    public Guid? CourseProgramId { get; set; }
+    public Guid? SemesterTermId { get; set; }
+    public Guid? SubjectOfferingId { get; set; }
+    public Guid? CurriculumSchemeId { get; set; }
+
+    // Runtime Rule Toggles
+    public ParticipationMode ParticipationMode { get; set; } = ParticipationMode.Team;
+    public EnrolmentMode EnrolmentMode { get; set; } = EnrolmentMode.SelfJoin;
     public bool AllowInterdisciplinaryTeams { get; set; } = false;
+    public bool AllowCrossBranchTeams { get; set; } = false;
 
     public string Name { get; set; } = string.Empty; // "Minor Project", "Major Phase-I", "Major Phase-II", "Capstone"
     public string AcademicYear { get; set; } = "2025-2026";
@@ -54,6 +66,12 @@ public class AcademicTrack : BaseEntity, ITenantEntity
     // Navigations
     public CollegeTenant? College { get; set; }
     public Department? Department { get; set; }
+    public AcademicSession? AcademicSession { get; set; }
+    public CourseProgram? CourseProgram { get; set; }
+    public SemesterTerm? SemesterTerm { get; set; }
+    public SubjectOffering? SubjectOffering { get; set; }
+    public CurriculumScheme? CurriculumScheme { get; set; }
+
     public ICollection<ProjectTeam> Teams { get; set; } = new List<ProjectTeam>();
     public ICollection<CourseOutcomeDefinition> CourseOutcomes { get; set; } = new List<CourseOutcomeDefinition>();
     public ICollection<ProblemBankStatement> ProblemStatements { get; set; } = new List<ProblemBankStatement>();

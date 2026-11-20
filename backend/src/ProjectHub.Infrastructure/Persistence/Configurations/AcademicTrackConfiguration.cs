@@ -20,6 +20,14 @@ public class AcademicTrackConfiguration : IEntityTypeConfiguration<AcademicTrack
             .IsRequired()
             .HasMaxLength(20);
 
+        builder.Property(t => t.ParticipationMode)
+            .HasConversion<string>()
+            .HasMaxLength(30);
+
+        builder.Property(t => t.EnrolmentMode)
+            .HasConversion<string>()
+            .HasMaxLength(30);
+
         builder.HasIndex(t => new { t.CollegeId, t.DepartmentId, t.AcademicYear, t.Name })
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");
@@ -32,6 +40,31 @@ public class AcademicTrackConfiguration : IEntityTypeConfiguration<AcademicTrack
         builder.HasOne(t => t.Department)
             .WithMany()
             .HasForeignKey(t => t.DepartmentId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(t => t.AcademicSession)
+            .WithMany(s => s.AcademicTracks)
+            .HasForeignKey(t => t.AcademicSessionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(t => t.CourseProgram)
+            .WithMany(p => p.AcademicTracks)
+            .HasForeignKey(t => t.CourseProgramId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(t => t.SemesterTerm)
+            .WithMany(s => s.AcademicTracks)
+            .HasForeignKey(t => t.SemesterTermId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(t => t.SubjectOffering)
+            .WithMany(o => o.AcademicTracks)
+            .HasForeignKey(t => t.SubjectOfferingId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(t => t.CurriculumScheme)
+            .WithMany()
+            .HasForeignKey(t => t.CurriculumSchemeId)
             .OnDelete(DeleteBehavior.SetNull);
     }
 }

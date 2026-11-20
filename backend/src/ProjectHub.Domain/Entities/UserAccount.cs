@@ -49,4 +49,5 @@ public class UserAccount : BaseEntity, ITenantEntity
     public Department? Department { get; set; }
     public ICollection<TeamMember> TeamMemberships { get; set; } = new List<TeamMember>();
     public ICollection<ProjectTeam> GuidedTeams { get; set; } = new List<ProjectTeam>();
+    public ICollection<StudentAcademicEnrollment> AcademicEnrollments { get; set; } = new List<StudentAcademicEnrollment>();
 }

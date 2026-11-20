@@ -34,4 +34,9 @@ export const coordinatorApi = {
 
   createException: (data: CreateExceptionRequest) =>
     apiClient.post<{ success: boolean; id: string }>("/api/coordinator/exceptions", data),
+
+  exportMarksheetCsvBlob: (trackId?: string) =>
+    apiClient.getBlob("/api/coordinator/export-marksheet", {
+      params: trackId ? { trackId } : undefined,
+    }),
 };

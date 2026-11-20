@@ -2,6 +2,10 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import {
+  AcademicSession,
+  CourseProgram,
+  SemesterTerm,
+  SubjectOffering,
   ArtifactSlot,
   College,
   CourseExitSurvey,
@@ -27,9 +31,11 @@ import {
   WeeklyLog,
 } from "./store-types";
 import {
+  initialAcademicSessions,
   initialAuditLogs,
   initialCollege,
   initialCourseExitSurveys,
+  initialCoursePrograms,
   initialCycle,
   initialDepartments,
   initialEvaluations,
@@ -39,6 +45,8 @@ import {
   initialPilotRequests,
   initialProblemBank,
   initialRubrics,
+  initialSemesterTerms,
+  initialSubjectOfferings,
   initialTeams,
   initialTenants,
 } from "./seed-data";
@@ -122,6 +130,10 @@ interface ProjectHubStoreContextType {
   individualEvaluations: IndividualEvaluation[];
   exceptionAuditLogs: ExceptionAuditLog[];
   courseExitSurveys: CourseExitSurvey[];
+  coursePrograms: CourseProgram[];
+  academicSessions: AcademicSession[];
+  semesterTerms: SemesterTerm[];
+  subjectOfferings: SubjectOffering[];
   isAuthenticated: boolean;
   isLiveSession: boolean;
   isHydrating: boolean;
@@ -149,13 +161,14 @@ interface ProjectHubStoreContextType {
   requestGradeUnlock: (evalId: string, reason: string) => void;
   approveGradeUnlock: (evalId: string) => void;
   rejectGradeUnlock: (evalId: string) => void;
-  addDepartment: (name: string, code: string, hodName?: string, studentCount?: number, facultyCount?: number) => void;
+  addDepartment: (name: string, code: string, hodName?: string, studentCount?: number, facultyCount?: number, courseProgramId?: string) => void;
   reassignHOD: (deptId: string, newHodName: string) => void;
   lockDepartmentSAR: (deptCode: string) => void;
   updateFacultyCapacity: (facultyId: string, delta: number) => void;
   addFaculty: (faculty: Omit<FacultyRosterItem, "id" | "guidedCount">) => void;
   onboardCollege: (collegeData: Partial<College>) => void;
-  onboardTenant: (tenantData: Omit<TenantCollege, "id">) => void;
+  onboardTenant: (tenantData: Omit<TenantCollege, "id">) => Promise<{ tenant: TenantCollege; adminEmail: string }>;
+  provisionTenantAdmin: (tenantId: string, email?: string, fullName?: string) => Promise<string>;
   updateTenant: (id: string, updates: Partial<TenantCollege>) => void;
   approvePilot: (reqId: string) => void;
   addAuditLog: (entry: Omit<PlatformAuditLog, "id" | "timestamp">) => void;
@@ -164,11 +177,17 @@ interface ProjectHubStoreContextType {
   inviteTeamMember: (teamId: string, enrollmentNumber: string, name?: string) => void;
   postProblemIdea: (idea: Omit<ProblemBankIdea, "id" | "taken">) => void;
   uploadArtifact: (teamId: string, slot: ArtifactSlot, fileName: string, fileSize: string, similarityScore?: number) => void;
+  uploadArtifactBinary: (teamId: string, slot: ArtifactSlot, file: File, customName?: string, similarityScore?: number) => Promise<void>;
+  reviewArtifact: (teamId: string, slot: ArtifactSlot, isApproved: boolean, reviewerNote?: string) => Promise<void>;
   continueProjectToNextTrack: (teamId: string, nextTrack?: "Major Phase-I" | "Major Phase-II") => Team;
   saveIndividualEvaluations: (teamId: string, evaluations: IndividualEvaluation[]) => void;
   submitExceptionOverride: (override: Omit<ExceptionAuditLog, "id" | "requestedAt" | "status">) => void;
   reviewExceptionOverride: (overrideId: string, decision: "Approved" | "Rejected", remarks?: string) => void;
   submitCourseExitSurvey: (survey: Omit<CourseExitSurvey, "id" | "submittedAt">) => void;
+  importRgpvCatalog: (universityCode?: string, programCodes?: string[]) => Promise<{ programsImported: number; departmentsCreated: number; semesterTermsCreated: number; subjectOfferingsCreated: number; message: string }>;
+  addCourseProgram: (prog: Omit<CourseProgram, "id" | "collegeId">) => void;
+  addSemesterTerm: (term: Omit<SemesterTerm, "id" | "collegeId">) => void;
+  addSubjectOffering: (offering: Omit<SubjectOffering, "id" | "collegeId">) => void;
   resetToDefaults: () => void;
 }
 
@@ -190,6 +209,10 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   const [individualEvaluations, setIndividualEvaluations] = useState<IndividualEvaluation[]>(initialIndividualEvaluations);
   const [exceptionAuditLogs, setExceptionAuditLogs] = useState<ExceptionAuditLog[]>(initialExceptionAuditLogs);
   const [courseExitSurveys, setCourseExitSurveys] = useState<CourseExitSurvey[]>(initialCourseExitSurveys);
+  const [coursePrograms, setCoursePrograms] = useState<CourseProgram[]>(initialCoursePrograms);
+  const [academicSessions, setAcademicSessions] = useState<AcademicSession[]>(initialAcademicSessions);
+  const [semesterTerms, setSemesterTerms] = useState<SemesterTerm[]>(initialSemesterTerms);
+  const [subjectOfferings, setSubjectOfferings] = useState<SubjectOffering[]>(initialSubjectOfferings);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [isLiveSession, setIsLiveSession] = useState<boolean>(false);
   const [isHydrating, setIsHydrating] = useState<boolean>(false);
@@ -275,6 +298,8 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
                 strictSsoEnforced: t.enforceStrictSso,
                 renewalDate: t.subscriptionExpiresAtUtc?.split("T")[0] || "2027-06-30",
                 allocatedSeats: t.maxStudentSeats,
+                principalEmail: t.principalEmail || (t.adminEmails && t.adminEmails[0]) || `principal@${t.ssoDomain}`,
+                adminEmails: t.adminEmails && t.adminEmails.length > 0 ? t.adminEmails : [`principal@${t.ssoDomain}`],
               }))
             );
           }
@@ -969,11 +994,15 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     code: string,
     hodName?: string,
     studentCount: number = 120,
-    facultyCount: number = 12
+    facultyCount: number = 12,
+    courseProgramId?: string
   ) => {
+    const prog = coursePrograms.find((p) => p.id === courseProgramId);
     const newDept: Department = {
       id: `dept-${Date.now()}`,
       collegeId: college.id,
+      courseProgramId,
+      courseProgramName: prog?.name,
       name,
       code: code.toUpperCase(),
       studentCount,
@@ -990,10 +1019,150 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
           name,
           code: code.toUpperCase(),
           intakeQuota: studentCount,
+          courseProgramId,
         })
         .catch(() => {});
     }
     showToast(`Department ${code.toUpperCase()} added to campus.`, "success");
+  };
+
+  const addCourseProgram = (prog: Omit<CourseProgram, "id" | "collegeId">) => {
+    const newProg: CourseProgram = {
+      id: `prog-${Date.now()}`,
+      collegeId: college.id,
+      ...prog,
+    };
+    setCoursePrograms((prev) => [...prev, newProg]);
+    if (getAuthToken()) {
+      collegeApi
+        .createCourseProgram({
+          code: prog.code,
+          name: prog.name,
+          level: prog.level,
+          totalSemesters: prog.totalSemesters,
+        })
+        .catch(() => {});
+    }
+    showToast(`Program ${prog.code} added.`, "success");
+  };
+
+  const addSemesterTerm = (term: Omit<SemesterTerm, "id" | "collegeId">) => {
+    const newTerm: SemesterTerm = {
+      id: `sem-${Date.now()}`,
+      collegeId: college.id,
+      ...term,
+    };
+    setSemesterTerms((prev) => [...prev, newTerm]);
+    if (getAuthToken()) {
+      collegeApi
+        .createSemesterTerm({
+          departmentId: term.departmentId,
+          academicSessionId: term.academicSessionId,
+          semesterNumber: term.semesterNumber,
+          semesterName: term.semesterName,
+          parity: term.parity,
+        })
+        .catch(() => {});
+    }
+    showToast(`${term.semesterName} configured.`, "success");
+  };
+
+  const addSubjectOffering = (offering: Omit<SubjectOffering, "id" | "collegeId">) => {
+    const newOffering: SubjectOffering = {
+      id: `off-${Date.now()}`,
+      collegeId: college.id,
+      ...offering,
+    };
+    setSubjectOfferings((prev) => [...prev, newOffering]);
+    if (getAuthToken()) {
+      collegeApi
+        .createSubjectOffering({
+          semesterTermId: offering.semesterTermId,
+          subjectCode: offering.subjectCode,
+          subjectName: offering.subjectName,
+          subjectType: offering.subjectType,
+          credits: offering.credits,
+          internalMaxMarks: offering.internalMaxMarks,
+          externalMaxMarks: offering.externalMaxMarks,
+        })
+        .catch(() => {});
+    }
+    showToast(`Subject ${offering.subjectCode} registered.`, "success");
+  };
+
+  const importRgpvCatalog = async (
+    universityCode: string = "RGPV",
+    programCodes?: string[]
+  ) => {
+    if (getAuthToken()) {
+      try {
+        const res = await collegeApi.importUniversityCatalog({
+          universityCode,
+          programCodes,
+        });
+        showToast(res.message, "success");
+        return res;
+      } catch (err: unknown) {
+        console.warn("API import fallback to mock state:", err);
+      }
+    }
+
+    // Client-side fallback import
+    const defaultPrograms: CourseProgram[] = [
+      { id: "prog-btech-01", collegeId: college.id, code: "BTECH", name: "Bachelor of Technology", level: "UG", totalSemesters: 8, isActive: true },
+      { id: "prog-mtech-01", collegeId: college.id, code: "MTECH", name: "Master of Technology", level: "PG", totalSemesters: 4, isActive: true },
+      { id: "prog-mba-01", collegeId: college.id, code: "MBA", name: "Master of Business Administration", level: "PG", totalSemesters: 4, isActive: true },
+      { id: "prog-mca-01", collegeId: college.id, code: "MCA", name: "Master of Computer Applications", level: "PG", totalSemesters: 4, isActive: true },
+    ];
+
+    const rgpvBranches = [
+      { code: "CSE", name: "Computer Science & Engineering" },
+      { code: "IT", name: "Information Technology" },
+      { code: "EC", name: "Electronics & Communication Engineering" },
+      { code: "EE", name: "Electrical Engineering" },
+      { code: "EX", name: "Electrical & Electronics Engineering" },
+      { code: "ME", name: "Mechanical Engineering" },
+      { code: "CE", name: "Civil Engineering" },
+      { code: "AIML", name: "CSE (AI & Machine Learning)" },
+      { code: "CS-DS", name: "CSE (Data Science)" },
+      { code: "CS-CS", name: "CSE (Cyber Security)" },
+      { code: "CS-IoT", name: "CSE (Internet of Things)" },
+      { code: "CSBS", name: "Computer Science & Business Systems" },
+    ];
+
+    setCoursePrograms(defaultPrograms);
+
+    setDepartments((prev) => {
+      const existingCodes = new Set(prev.map((d) => d.code));
+      const newlyAdded: Department[] = rgpvBranches
+        .filter((b) => !existingCodes.has(b.code))
+        .map((b) => ({
+          id: `dept-${b.code.toLowerCase()}-${Date.now()}`,
+          collegeId: college.id,
+          courseProgramId: "prog-btech-01",
+          courseProgramName: "Bachelor of Technology",
+          code: b.code,
+          name: b.name,
+          studentCount: 120,
+          facultyCount: 10,
+          criterion3Attainment: 80.0,
+          hodSignOffStatus: "Pending Sign-Off",
+        }));
+      return [...prev, ...newlyAdded];
+    });
+
+    const msg = `Successfully loaded RGPV Master Catalog (4 Programs, 12 Core/Emerging Branches, CBCS/AICTE-Flex).`;
+    showToast(msg, "success");
+
+    return {
+      universityCode,
+      universityName: "Rajiv Gandhi Proudyogiki Vishwavidyalaya",
+      programsImported: 4,
+      departmentsCreated: 8,
+      semesterTermsCreated: 16,
+      subjectOfferingsCreated: 24,
+      message: msg,
+    };
   };
 
   const reassignHOD = (deptId: string, newHodName: string) => {
@@ -1064,20 +1233,87 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     setAuditLogs((prev) => [newEntry, ...prev]);
   };
 
-  const onboardTenant = (tenantData: Omit<TenantCollege, "id">) => {
+  const onboardTenant = async (tenantData: Omit<TenantCollege, "id">) => {
+    let newTenantId = `col-${tenantData.code.toLowerCase()}-${Date.now()}`;
+    let adminEmail = tenantData.principalEmail || `principal@${tenantData.domain.trim().toLowerCase()}`;
+
+    if (getAuthToken()) {
+      try {
+        const res = await platformApi.createTenant({
+          name: tenantData.name,
+          tenantCode: tenantData.code,
+          ssoDomain: tenantData.domain,
+          licenseTier: tenantData.plan as any,
+          maxStudentSeats: tenantData.students,
+          storageQuotaGb: tenantData.storageQuotaGb || 50,
+          enforceStrictSso: tenantData.strictSsoEnforced ?? true,
+          principalName: tenantData.principalName || "College Principal",
+          principalEmail: adminEmail,
+        });
+        if (res.tenant?.id) newTenantId = res.tenant.id;
+        if (res.adminEmail) adminEmail = res.adminEmail;
+      } catch (err) {
+        console.warn("Tenant creation API call failed, persisting to store cache:", err);
+      }
+    }
+
     const newTenant: TenantCollege = {
       ...tenantData,
-      id: `col-${tenantData.code.toLowerCase()}-${Date.now()}`,
+      id: newTenantId,
+      principalEmail: adminEmail,
+      adminEmails: [adminEmail],
     };
     setTenants((prev) => [newTenant, ...prev]);
     addAuditLog({
-      actor: "admin@projecthub.in (Dev Startup Admin)",
+      actor: "admin@collabex.in (Platform Super Admin)",
       action: "TENANT_PROVISIONED",
       targetTenant: `${newTenant.name} (${newTenant.code})`,
       ipRegion: "103.21.244.10 • ap-south-1",
       status: "SUCCESS",
-      details: `Provisioned isolated partition tenant_${newTenant.code.toLowerCase()}_prod with ${newTenant.storageQuotaGb || 50} GB quota and plan ${newTenant.plan}`,
+      details: `Provisioned isolated partition tenant_${newTenant.code.toLowerCase()}_prod with ${newTenant.storageQuotaGb || 50} GB quota, plan ${newTenant.plan}, and initial Principal login: ${adminEmail}`,
     });
+    return { tenant: newTenant, adminEmail };
+  };
+
+  const provisionTenantAdmin = async (tenantId: string, email?: string, fullName?: string) => {
+    let resolvedEmail = email;
+    const target = tenants.find((t) => t.id === tenantId);
+    if (!resolvedEmail) {
+      resolvedEmail = target ? `principal@${target.domain.trim().toLowerCase()}` : "principal@college.edu";
+    }
+
+    if (getAuthToken()) {
+      try {
+        const res = await platformApi.provisionAdmin(tenantId, { email: resolvedEmail, fullName });
+        if (res.adminEmail) resolvedEmail = res.adminEmail;
+      } catch (err) {
+        console.warn("Provision admin API call failed, updating store cache:", err);
+      }
+    }
+
+    setTenants((prev) =>
+      prev.map((t) => {
+        if (t.id !== tenantId) return t;
+        const currentAdmins = t.adminEmails || [];
+        const nextAdmins = currentAdmins.includes(resolvedEmail!) ? currentAdmins : [resolvedEmail!, ...currentAdmins];
+        return {
+          ...t,
+          principalEmail: resolvedEmail,
+          adminEmails: nextAdmins,
+        };
+      })
+    );
+
+    addAuditLog({
+      actor: "admin@collabex.in (Platform Super Admin)",
+      action: "PRINCIPAL_ADMIN_PROVISIONED",
+      targetTenant: target?.name || tenantId,
+      ipRegion: "103.21.244.10 • ap-south-1",
+      status: "SUCCESS",
+      details: `Provisioned initial CollegeAdmin account '${resolvedEmail}' for tenant partition`,
+    });
+
+    return resolvedEmail;
   };
 
   const updateTenant = (id: string, updates: Partial<TenantCollege>) => {
@@ -1086,7 +1322,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         if (t.id !== id) return t;
         const updated = { ...t, ...updates };
         addAuditLog({
-          actor: "admin@projecthub.in (Dev Startup Admin)",
+          actor: "admin@collabex.in (Platform Super Admin)",
           action: "TENANT_CONFIG_UPDATED",
           targetTenant: `${updated.name} (${updated.code})`,
           ipRegion: "103.21.244.10 • ap-south-1",
@@ -1119,7 +1355,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     setTenants((prev) => [provisionedCollege, ...prev]);
     setPilotRequests((prev) => prev.filter((r) => r.id !== reqId));
     addAuditLog({
-      actor: "admin@projecthub.in (Dev Startup Admin)",
+      actor: "admin@collabex.in (Platform Super Admin)",
       action: "PILOT_APPROVED",
       targetTenant: `${req.collegeName} (${req.code})`,
       ipRegion: "103.21.244.10 • ap-south-1",
@@ -1188,6 +1424,114 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         .catch(() => {});
     }
     showToast(`${slot} document uploaded to secure vault.`, "success");
+  };
+
+  const uploadArtifactBinary = async (
+    teamId: string,
+    slot: ArtifactSlot,
+    file: File,
+    customName?: string,
+    similarityScore?: number
+  ) => {
+    const sizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+    const finalName = customName || file.name;
+    const now = new Date().toISOString().split("T")[0];
+
+    let artifactId = `art-${Date.now()}`;
+    let storageKey = `vault/${slot.toLowerCase()}/${finalName}`;
+    let sha256Checksum = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+
+    if (getAuthToken()) {
+      try {
+        const res = await studentApi.uploadArtifactFile(slot, file);
+        if (res.id) artifactId = res.id;
+        if (res.storageKey) storageKey = res.storageKey;
+        if (res.sha256Checksum) sha256Checksum = res.sha256Checksum;
+      } catch (err) {
+        console.warn("Artifact upload API failed, updating client cache:", err);
+      }
+    }
+
+    setTeams((prev) =>
+      prev.map((t) => {
+        if (t.id !== teamId) return t;
+        const existing = t.artifacts || [];
+        const updated = existing.some((a) => a.slot === slot)
+          ? existing.map((a) =>
+              a.slot === slot
+                ? {
+                    ...a,
+                    id: artifactId,
+                    fileName: finalName,
+                    fileSize: sizeStr,
+                    uploadedAt: now,
+                    storageKey,
+                    sha256Checksum,
+                    status: "Uploaded" as const,
+                    similarityScore: similarityScore ?? a.similarityScore,
+                  }
+                : a
+            )
+          : [
+              ...existing,
+              {
+                id: artifactId,
+                slot,
+                name:
+                  slot === "Synopsis"
+                    ? "Approved Project Synopsis"
+                    : slot === "MidTermPPT"
+                    ? "Mid-Term Review Presentation"
+                    : slot === "PlagiarismReport"
+                    ? "Turnitin Similarity & Originality Report"
+                    : "Final Comprehensive Capstone Thesis",
+                fileName: finalName,
+                fileSize: sizeStr,
+                uploadedAt: now,
+                storageKey,
+                sha256Checksum,
+                status: "Uploaded" as const,
+                similarityScore,
+              },
+            ];
+        return { ...t, artifacts: updated };
+      })
+    );
+    showToast(`${slot} document uploaded to secure vault.`, "success");
+  };
+
+  const reviewArtifact = async (
+    teamId: string,
+    slot: ArtifactSlot,
+    isApproved: boolean,
+    reviewerNote?: string
+  ) => {
+    const status = isApproved ? ("Approved" as const) : ("NeedsRevision" as const);
+    const targetTeam = teams.find((t) => t.id === teamId);
+    const targetArtifact = targetTeam?.artifacts?.find((a) => a.slot === slot);
+
+    if (getAuthToken() && targetArtifact?.id) {
+      try {
+        await facultyApi.reviewArtifact(targetArtifact.id, { isApproved, reviewerNote });
+      } catch (err) {
+        console.warn("Artifact review API failed, updating client cache:", err);
+      }
+    }
+
+    setTeams((prev) =>
+      prev.map((t) => {
+        if (t.id !== teamId) return t;
+        const existing = t.artifacts || [];
+        const updated = existing.map((a) =>
+          a.slot === slot ? { ...a, status, reviewerNote } : a
+        );
+        return { ...t, artifacts: updated };
+      })
+    );
+    showToast(
+      `Deliverable ${slot} marked as ${isApproved ? "Verified" : "Revision Requested"}.`,
+      isApproved ? "success" : "info"
+    );
   };
 
   const continueProjectToNextTrack = (
@@ -1415,6 +1759,10 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         individualEvaluations,
         exceptionAuditLogs,
         courseExitSurveys,
+        coursePrograms,
+        academicSessions,
+        semesterTerms,
+        subjectOfferings,
         isAuthenticated,
         isLiveSession,
         isHydrating,
@@ -1442,6 +1790,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         addFaculty,
         onboardCollege,
         onboardTenant,
+        provisionTenantAdmin,
         updateTenant,
         approvePilot,
         addAuditLog,
@@ -1450,11 +1799,17 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         inviteTeamMember,
         postProblemIdea,
         uploadArtifact,
+        uploadArtifactBinary,
+        reviewArtifact,
         continueProjectToNextTrack,
         saveIndividualEvaluations,
         submitExceptionOverride,
         reviewExceptionOverride,
         submitCourseExitSurvey,
+        importRgpvCatalog,
+        addCourseProgram,
+        addSemesterTerm,
+        addSubjectOffering,
         resetToDefaults,
       }}
     >

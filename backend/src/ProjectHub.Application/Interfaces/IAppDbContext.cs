@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ProjectHub.Domain.Entities;
+using ProjectHub.Domain.Entities.Master;
 
 namespace ProjectHub.Application.Interfaces;
 
@@ -8,11 +9,16 @@ namespace ProjectHub.Application.Interfaces;
 /// </summary>
 public interface IAppDbContext
 {
-    // Platform Entities
+    // Platform Root & Master Catalog Entities
     DbSet<CollegeTenant> CollegeTenants { get; }
     DbSet<MasterNbaOutcome> MasterNbaOutcomes { get; }
     DbSet<MasterSdgCatalog> MasterSdgCatalogs { get; }
     DbSet<PlatformAuditLog> PlatformAuditLogs { get; }
+    DbSet<MasterUniversity> MasterUniversities { get; }
+    DbSet<MasterCurriculumScheme> MasterCurriculumSchemes { get; }
+    DbSet<MasterProgram> MasterPrograms { get; }
+    DbSet<MasterBranch> MasterBranches { get; }
+    DbSet<MasterSubjectTemplate> MasterSubjectTemplates { get; }
 
     // Campus Tenant Entities
     DbSet<Department> Departments { get; }
@@ -31,6 +37,14 @@ public interface IAppDbContext
     DbSet<IndividualStudentScore> IndividualStudentScores { get; }
     DbSet<CourseExitSurvey> CourseExitSurveys { get; }
     DbSet<ExceptionAuditLog> ExceptionAuditLogs { get; }
+
+    // Dynamic Multi-Level Academic Hierarchy Entities
+    DbSet<AcademicSession> AcademicSessions { get; }
+    DbSet<CourseProgram> CoursePrograms { get; }
+    DbSet<CurriculumScheme> CurriculumSchemes { get; }
+    DbSet<SemesterTerm> SemesterTerms { get; }
+    DbSet<SubjectOffering> SubjectOfferings { get; }
+    DbSet<StudentAcademicEnrollment> StudentAcademicEnrollments { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -1,5 +1,11 @@
 export type UserRole = "SuperAdmin" | "CollegeAdmin" | "HOD" | "Faculty" | "Student";
 
+export type AcademicProgramLevel = "UG" | "PG" | "Diploma" | "Research";
+export type ParticipationMode = "Team" | "Individual";
+export type EnrolmentMode = "SelfJoin" | "CoordinatorAllotted" | "Hybrid";
+export type SemesterParity = "Odd" | "Even" | "Combined";
+export type SubjectType = "Project" | "MinorProject" | "MajorProject" | "Dissertation" | "Internship" | "Seminar";
+
 export type LicenseTier = "Pilot" | "Standard" | "Enterprise";
 
 export type ProjectStatus =
@@ -85,6 +91,8 @@ export interface CollegeTenantDto {
   subscriptionExpiresAtUtc?: string;
   departmentCount: number;
   studentCount: number;
+  principalEmail?: string;
+  adminEmails?: string[];
 }
 
 export interface CreateTenantRequest {
@@ -97,6 +105,19 @@ export interface CreateTenantRequest {
   enforceStrictSso?: boolean;
   crestUrl?: string;
   subscriptionExpiresAtUtc?: string;
+  principalName?: string;
+  principalEmail?: string;
+}
+
+export interface CreateTenantResponse {
+  tenant: CollegeTenantDto;
+  adminEmail: string;
+}
+
+export interface ProvisionAdminResponse {
+  success: boolean;
+  adminEmail: string;
+  message: string;
 }
 
 export interface UpdateTenantRequest {
@@ -156,6 +177,9 @@ export interface CollegeOverviewDto {
 export interface DepartmentDto {
   id: string;
   collegeId: string;
+  courseProgramId?: string;
+  courseProgramCode?: string;
+  courseProgramName?: string;
   code: string;
   name: string;
   hodUserId?: string;
@@ -171,6 +195,7 @@ export interface CreateDepartmentRequest {
   code: string;
   name: string;
   intakeQuota?: number;
+  courseProgramId?: string;
 }
 
 export interface AppointHodRequest {
@@ -182,6 +207,14 @@ export interface CollegeTrackDto {
   collegeId: string;
   departmentId?: string;
   departmentCode?: string;
+  academicSessionId?: string;
+  courseProgramId?: string;
+  semesterTermId?: string;
+  subjectOfferingId?: string;
+  curriculumSchemeId?: string;
+  participationMode?: ParticipationMode;
+  enrolmentMode?: EnrolmentMode;
+  allowCrossBranchTeams?: boolean;
   name: string;
   academicYear: string;
   allowInterdisciplinaryTeams: boolean;
@@ -198,6 +231,14 @@ export interface CollegeTrackDto {
 export interface CreateCollegeTrackRequest {
   name: string;
   academicYear?: string;
+  academicSessionId?: string;
+  courseProgramId?: string;
+  semesterTermId?: string;
+  subjectOfferingId?: string;
+  curriculumSchemeId?: string;
+  participationMode?: ParticipationMode;
+  enrolmentMode?: EnrolmentMode;
+  allowCrossBranchTeams?: boolean;
   allowInterdisciplinaryTeams?: boolean;
   proposalDeadlineUtc?: string;
   finalSubmissionDeadlineUtc?: string;
@@ -250,6 +291,15 @@ export interface HodDashboardDto {
 export interface CreateDepartmentTrackRequest {
   name?: string;
   academicYear?: string;
+  academicSessionId?: string;
+  courseProgramId?: string;
+  semesterTermId?: string;
+  subjectOfferingId?: string;
+  curriculumSchemeId?: string;
+  participationMode?: ParticipationMode;
+  enrolmentMode?: EnrolmentMode;
+  allowCrossBranchTeams?: boolean;
+  allowInterdisciplinaryTeams?: boolean;
   proposalDeadlineUtc?: string;
   finalSubmissionDeadlineUtc?: string;
   guideWeightPct?: number;
@@ -485,6 +535,9 @@ export interface StudentWorkspaceDto {
   isRosterLocked: boolean;
   missedLogStreak: number;
   projectLineageId: string;
+  participationMode?: ParticipationMode;
+  enrolmentMode?: EnrolmentMode;
+  allowCrossBranchTeams?: boolean;
   members: TeamMemberDto[];
   tasks: SprintTaskDto[];
   artifacts: ArtifactSlotDto[];
@@ -548,4 +601,178 @@ export interface StudentPortfolioDto {
   totalHoursLogged: number;
   totalCommits: number;
   verifiedArtifacts: ArtifactSlotDto[];
+}
+
+// --- RGPV Master Catalog & Dynamic Multi-Level Academic Hierarchy DTOs ---
+
+export interface ImportUniversityCatalogRequest {
+  universityCode?: string;
+  programCodes?: string[];
+}
+
+export interface ImportCatalogResultDto {
+  universityCode: string;
+  universityName: string;
+  programsImported: number;
+  departmentsCreated: number;
+  semesterTermsCreated: number;
+  subjectOfferingsCreated: number;
+  message: string;
+}
+
+export interface CourseProgramDto {
+  id: string;
+  collegeId: string;
+  masterProgramId?: string;
+  level: AcademicProgramLevel;
+  code: string;
+  name: string;
+  totalSemesters: number;
+  isActive: boolean;
+  departmentCount: number;
+}
+
+export interface CreateCourseProgramRequest {
+  code: string;
+  name: string;
+  level: AcademicProgramLevel;
+  totalSemesters?: number;
+  masterProgramId?: string;
+}
+
+export interface AcademicSessionDto {
+  id: string;
+  collegeId: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+}
+
+export interface CreateAcademicSessionRequest {
+  label: string;
+  startDate: string;
+  endDate: string;
+  isActive?: boolean;
+}
+
+export interface SemesterTermDto {
+  id: string;
+  collegeId: string;
+  departmentId: string;
+  departmentCode?: string;
+  departmentName?: string;
+  academicSessionId?: string;
+  academicSessionLabel?: string;
+  semesterNumber: number;
+  semesterName: string;
+  parity: SemesterParity;
+  isActive: boolean;
+  subjectOfferingCount: number;
+}
+
+export interface CreateSemesterTermRequest {
+  departmentId: string;
+  academicSessionId?: string;
+  semesterNumber: number;
+  semesterName?: string;
+  parity?: SemesterParity;
+}
+
+export interface SubjectOfferingDto {
+  id: string;
+  collegeId: string;
+  semesterTermId: string;
+  semesterTermName?: string;
+  curriculumSchemeId?: string;
+  curriculumSchemeCode?: string;
+  subjectCode: string;
+  subjectName: string;
+  subjectType: SubjectType;
+  credits: number;
+  internalMaxMarks: number;
+  externalMaxMarks: number;
+  isActive: boolean;
+}
+
+export interface CreateSubjectOfferingRequest {
+  semesterTermId: string;
+  curriculumSchemeId?: string;
+  subjectCode: string;
+  subjectName: string;
+  subjectType?: SubjectType;
+  credits?: number;
+  internalMaxMarks?: number;
+  externalMaxMarks?: number;
+}
+
+export interface HierarchyOfferingNodeDto {
+  id: string;
+  subjectCode: string;
+  subjectName: string;
+  subjectType: SubjectType;
+  credits: number;
+  internalMaxMarks: number;
+  externalMaxMarks: number;
+}
+
+export interface HierarchySemesterNodeDto {
+  id: string;
+  semesterNumber: number;
+  semesterName: string;
+  parity: SemesterParity;
+  offerings: HierarchyOfferingNodeDto[];
+}
+
+export interface HierarchyDepartmentNodeDto {
+  id: string;
+  code: string;
+  name: string;
+  hodName?: string;
+  studentCount: number;
+  semesters: HierarchySemesterNodeDto[];
+}
+
+export interface HierarchyProgramNodeDto {
+  id: string;
+  code: string;
+  name: string;
+  level: AcademicProgramLevel;
+  totalSemesters: number;
+  departments: HierarchyDepartmentNodeDto[];
+}
+
+export interface AcademicHierarchyTreeDto {
+  programs: HierarchyProgramNodeDto[];
+}
+
+export interface MasterProgramSummaryDto {
+  id: string;
+  code: string;
+  name: string;
+  level: AcademicProgramLevel;
+  durationYears: number;
+  totalSemesters: number;
+  branchCount: number;
+  branches: string[];
+}
+
+export interface MasterCatalogOverviewDto {
+  universityId: string;
+  universityCode: string;
+  universityName: string;
+  state: string;
+  programs: MasterProgramSummaryDto[];
+  schemes: string[];
+}
+
+export interface HodAcademicContextDto {
+  departmentId: string;
+  departmentName: string;
+  departmentCode: string;
+  courseProgramId?: string;
+  courseProgramName?: string;
+  availableSessions: AcademicSessionDto[];
+  availableSemesters: SemesterTermDto[];
+  availableOfferings: SubjectOfferingDto[];
 }

@@ -19,7 +19,7 @@ import {
   AlertCircle,
   HelpCircle,
 } from "lucide-react";
-import { AppShell } from "@/design-system/patterns/AppShell";
+import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
@@ -28,6 +28,11 @@ import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { initialTeams } from "@/mocks/seed-data";
 
 export const StudentPortfolioView: React.FC = () => {
+  useDashboardHeader({
+    title: "Academic Project Portfolio",
+    breadcrumb: "Verified Institutional Transcript",
+  });
+
   const {
     currentPersona,
     teams,
@@ -83,7 +88,8 @@ export const StudentPortfolioView: React.FC = () => {
   );
 
   const handleCopyLink = () => {
-    navigator.clipboard?.writeText(`https://projecthub.sistec.ac.in/verify/${studentUsn}`);
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://collabex.io";
+    navigator.clipboard?.writeText(`${origin}/verify/${studentUsn}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -122,11 +128,7 @@ export const StudentPortfolioView: React.FC = () => {
   };
 
   return (
-    <AppShell
-      pageTitle="Academic Project Portfolio"
-      breadcrumb="Verified Institutional Transcript"
-      activeTab="Portfolio"
-    >
+    <>
       <div className="space-y-6">
         {/* Toast Feedback */}
         {toastMessage && (
@@ -476,7 +478,7 @@ export const StudentPortfolioView: React.FC = () => {
         isOpen={showSurveyModal}
         onClose={() => setShowSurveyModal(false)}
         title="NBA Course Exit Survey (60 Seconds)"
-        description="Direct student feedback on Program Outcome (PO) direct and indirect learning attainment."
+        description="Completing this 5-question survey computes mandatory NBA Criterion 3.3 indirect attainment metrics and unlocks your tamper-proof verified institutional credential."
         footer={
           <div className="flex items-center justify-between w-full">
             <span className="text-[11px] text-[#64748B]">1 = Low • 2 = Moderate • 3 = High Attainment</span>
@@ -629,6 +631,6 @@ export const StudentPortfolioView: React.FC = () => {
           </div>
         </div>
       </Modal>
-    </AppShell>
+    </>
   );
 };

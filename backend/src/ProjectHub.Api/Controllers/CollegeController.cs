@@ -5,6 +5,7 @@ using ProjectHub.Api.Authorization;
 using ProjectHub.Application.Common.Models;
 using ProjectHub.Application.Interfaces;
 using ProjectHub.Domain.Entities;
+using ProjectHub.Domain.Entities.Master;
 using ProjectHub.Domain.Enums;
 using ProjectHub.Infrastructure.Persistence;
 
@@ -55,17 +56,599 @@ public class CollegeController : ControllerBase
         });
     }
 
+    #region Master Catalog & 1-Click Import
+
+    [HttpGet("master-catalog")]
+    public async Task<ActionResult<List<MasterCatalogOverviewDto>>> GetMasterCatalog()
+    {
+        var universities = await _context.MasterUniversities
+            .IgnoreQueryFilters()
+            .Where(u => !u.IsDeleted && u.IsActive)
+            .Include(u => u.CurriculumSchemes)
+            .Include(u => u.Programs)
+                .ThenInclude(p => p.Branches)
+            .ToListAsync();
+
+        var result = universities.Select(u => new MasterCatalogOverviewDto
+        {
+            UniversityId = u.Id,
+            UniversityCode = u.Code,
+            UniversityName = u.Name,
+            State = u.State,
+            Schemes = u.CurriculumSchemes.Where(s => !s.IsDeleted && s.IsActive).Select(s => s.Code).ToList(),
+            Programs = u.Programs.Where(p => !p.IsDeleted && p.IsActive).Select(p => new MasterProgramSummaryDto
+            {
+                Id = p.Id,
+                Code = p.Code,
+                Name = p.Name,
+                Level = p.Level,
+                DurationYears = p.DurationYears,
+                TotalSemesters = p.TotalSemesters,
+                BranchCount = p.Branches.Count(b => !b.IsDeleted && b.IsActive),
+                Branches = p.Branches.Where(b => !b.IsDeleted && b.IsActive).Select(b => b.Code).ToList()
+            }).ToList()
+        }).ToList();
+
+        return Ok(result);
+    }
+
+    [HttpPost("import-university-catalog")]
+    public async Task<ActionResult<ImportCatalogResultDto>> ImportUniversityCatalog([FromBody] ImportUniversityCatalogRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId;
+        if (!collegeId.HasValue) return BadRequest(new { message = "Active tenant context required." });
+
+        var uniCode = string.IsNullOrWhiteSpace(request.UniversityCode) ? "RGPV" : request.UniversityCode.Trim().ToUpperInvariant();
+
+        var university = await _context.MasterUniversities
+            .IgnoreQueryFilters()
+            .Include(u => u.CurriculumSchemes)
+            .Include(u => u.Programs)
+                .ThenInclude(p => p.Branches)
+                    .ThenInclude(b => b.SubjectTemplates)
+            .FirstOrDefaultAsync(u => u.Code == uniCode && !u.IsDeleted);
+
+        if (university == null)
+        {
+            return NotFound(new { message = $"Master university catalog for '{uniCode}' not found." });
+        }
+
+        // 1. Ensure active AcademicSession exists
+        var session = await _context.AcademicSessions
+            .FirstOrDefaultAsync(s => s.CollegeId == collegeId.Value && s.Label == "2026-27" && !s.IsDeleted);
+
+        if (session == null)
+        {
+            session = new AcademicSession
+            {
+                CollegeId = collegeId.Value,
+                Label = "2026-27",
+                StartDate = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+                EndDate = new DateTime(2027, 6, 30, 23, 59, 59, DateTimeKind.Utc),
+                IsActive = true
+            };
+            await _context.AcademicSessions.AddAsync(session);
+            await _context.SaveChangesAsync();
+        }
+
+        int programsImported = 0;
+        int deptsCreated = 0;
+        int termsCreated = 0;
+        int offeringsCreated = 0;
+
+        // Filter programs if requested
+        var requestedPrograms = request.ProgramCodes != null && request.ProgramCodes.Count > 0
+            ? university.Programs.Where(p => request.ProgramCodes.Contains(p.Code, StringComparer.OrdinalIgnoreCase)).ToList()
+            : university.Programs.ToList();
+
+        foreach (var masterProg in requestedPrograms)
+        {
+            // Find or create CourseProgram
+            var courseProg = await _context.CoursePrograms
+                .FirstOrDefaultAsync(p => p.CollegeId == collegeId.Value && p.Code == masterProg.Code && !p.IsDeleted);
+
+            if (courseProg == null)
+            {
+                courseProg = new CourseProgram
+                {
+                    CollegeId = collegeId.Value,
+                    MasterProgramId = masterProg.Id,
+                    Level = masterProg.Level,
+                    Code = masterProg.Code,
+                    Name = masterProg.Name,
+                    TotalSemesters = masterProg.TotalSemesters,
+                    IsActive = true
+                };
+                await _context.CoursePrograms.AddAsync(courseProg);
+                await _context.SaveChangesAsync();
+                programsImported++;
+            }
+
+            // Adopt default scheme (AICTE Flex or first)
+            var masterScheme = university.CurriculumSchemes.FirstOrDefault(s => s.Code.Contains("FLEX")) 
+                               ?? university.CurriculumSchemes.FirstOrDefault();
+
+            CurriculumScheme? campusScheme = null;
+            if (masterScheme != null)
+            {
+                campusScheme = await _context.CurriculumSchemes
+                    .FirstOrDefaultAsync(s => s.CollegeId == collegeId.Value && s.CourseProgramId == courseProg.Id && s.SchemeCode == masterScheme.Code && !s.IsDeleted);
+
+                if (campusScheme == null)
+                {
+                    campusScheme = new CurriculumScheme
+                    {
+                        CollegeId = collegeId.Value,
+                        CourseProgramId = courseProg.Id,
+                        SchemeCode = masterScheme.Code,
+                        SchemeVersion = masterScheme.EffectiveFromYear.ToString(),
+                        EffectiveAdmissionYear = masterScheme.EffectiveFromYear,
+                        IsActive = true
+                    };
+                    await _context.CurriculumSchemes.AddAsync(campusScheme);
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            // Import branches as departments
+            foreach (var masterBranch in masterProg.Branches.Where(b => !b.IsDeleted))
+            {
+                var dept = await _context.Departments
+                    .FirstOrDefaultAsync(d => d.CollegeId == collegeId.Value && d.CourseProgramId == courseProg.Id && d.Code == masterBranch.Code && !d.IsDeleted);
+
+                if (dept == null)
+                {
+                    // Check if existing unlinked department with same code exists (migration linkage)
+                    dept = await _context.Departments
+                        .FirstOrDefaultAsync(d => d.CollegeId == collegeId.Value && d.CourseProgramId == null && d.Code == masterBranch.Code && !d.IsDeleted);
+
+                    if (dept != null)
+                    {
+                        dept.CourseProgramId = courseProg.Id;
+                    }
+                    else
+                    {
+                        dept = new Department
+                        {
+                            CollegeId = collegeId.Value,
+                            CourseProgramId = courseProg.Id,
+                            Code = masterBranch.Code,
+                            Name = masterBranch.Name,
+                            IntakeQuota = 120,
+                            IsSarAttested = false
+                        };
+                        await _context.Departments.AddAsync(dept);
+                        deptsCreated++;
+                    }
+                    await _context.SaveChangesAsync();
+                }
+
+                // Import templates into SemesterTerms and SubjectOfferings
+                foreach (var tpl in masterBranch.SubjectTemplates.Where(t => !t.IsDeleted))
+                {
+                    var semTerm = await _context.SemesterTerms
+                        .FirstOrDefaultAsync(t => t.CollegeId == collegeId.Value && t.DepartmentId == dept.Id && t.AcademicSessionId == session.Id && t.SemesterNumber == tpl.SemesterNumber && !t.IsDeleted);
+
+                    if (semTerm == null)
+                    {
+                        semTerm = new SemesterTerm
+                        {
+                            CollegeId = collegeId.Value,
+                            DepartmentId = dept.Id,
+                            AcademicSessionId = session.Id,
+                            SemesterNumber = tpl.SemesterNumber,
+                            SemesterName = $"Semester {tpl.SemesterNumber}",
+                            Parity = tpl.SemesterNumber % 2 == 0 ? SemesterParity.Even : SemesterParity.Odd,
+                            IsActive = true
+                        };
+                        await _context.SemesterTerms.AddAsync(semTerm);
+                        await _context.SaveChangesAsync();
+                        termsCreated++;
+                    }
+
+                    var offering = await _context.SubjectOfferings
+                        .FirstOrDefaultAsync(o => o.CollegeId == collegeId.Value && o.SemesterTermId == semTerm.Id && o.SubjectCode == tpl.SubjectCode && !o.IsDeleted);
+
+                    if (offering == null)
+                    {
+                        offering = new SubjectOffering
+                        {
+                            CollegeId = collegeId.Value,
+                            SemesterTermId = semTerm.Id,
+                            CurriculumSchemeId = campusScheme?.Id,
+                            SubjectCode = tpl.SubjectCode,
+                            SubjectName = tpl.SubjectName,
+                            SubjectType = tpl.SubjectType,
+                            Credits = 4,
+                            InternalMaxMarks = tpl.MaxInternalMarks,
+                            ExternalMaxMarks = tpl.MaxExternalMarks,
+                            IsActive = true
+                        };
+                        await _context.SubjectOfferings.AddAsync(offering);
+                        offeringsCreated++;
+                    }
+                }
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new ImportCatalogResultDto
+        {
+            UniversityCode = uniCode,
+            UniversityName = university.Name,
+            ProgramsImported = programsImported,
+            DepartmentsCreated = deptsCreated,
+            SemesterTermsCreated = termsCreated,
+            SubjectOfferingsCreated = offeringsCreated,
+            Message = $"Successfully imported {uniCode} master catalog into campus tenant. ({programsImported} Programs, {deptsCreated} Departments, {termsCreated} Semesters, {offeringsCreated} Project Offerings)"
+        });
+    }
+
+    #endregion
+
+    #region Academic Hierarchy Endpoints
+
+    [HttpGet("academic-hierarchy")]
+    public async Task<ActionResult<AcademicHierarchyTreeDto>> GetAcademicHierarchy()
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var programs = await _context.CoursePrograms
+            .Where(p => p.CollegeId == collegeId && !p.IsDeleted)
+            .Include(p => p.Departments)
+                .ThenInclude(d => d.HodUser)
+            .Include(p => p.Departments)
+                .ThenInclude(d => d.Users)
+            .Include(p => p.Departments)
+                .ThenInclude(d => d.SemesterTerms)
+                    .ThenInclude(s => s.SubjectOfferings)
+            .OrderBy(p => p.Level)
+            .ThenBy(p => p.Code)
+            .ToListAsync();
+
+        var result = new AcademicHierarchyTreeDto
+        {
+            Programs = programs.Select(p => new HierarchyProgramNodeDto
+            {
+                Id = p.Id,
+                Code = p.Code,
+                Name = p.Name,
+                Level = p.Level,
+                TotalSemesters = p.TotalSemesters,
+                Departments = p.Departments.Where(d => !d.IsDeleted).Select(d => new HierarchyDepartmentNodeDto
+                {
+                    Id = d.Id,
+                    Code = d.Code,
+                    Name = d.Name,
+                    HodName = d.HodUser?.FullName,
+                    StudentCount = d.Users.Count(u => u.Role == UserRole.Student && !u.IsDeleted),
+                    Semesters = d.SemesterTerms.Where(s => !s.IsDeleted).OrderBy(s => s.SemesterNumber).Select(s => new HierarchySemesterNodeDto
+                    {
+                        Id = s.Id,
+                        SemesterNumber = s.SemesterNumber,
+                        SemesterName = s.SemesterName,
+                        Parity = s.Parity,
+                        Offerings = s.SubjectOfferings.Where(o => !o.IsDeleted).Select(o => new HierarchyOfferingNodeDto
+                        {
+                            Id = o.Id,
+                            SubjectCode = o.SubjectCode,
+                            SubjectName = o.SubjectName,
+                            SubjectType = o.SubjectType,
+                            Credits = o.Credits,
+                            InternalMaxMarks = o.InternalMaxMarks,
+                            ExternalMaxMarks = o.ExternalMaxMarks
+                        }).ToList()
+                    }).ToList()
+                }).ToList()
+            }).ToList()
+        };
+
+        return Ok(result);
+    }
+
+    [HttpGet("course-programs")]
+    public async Task<ActionResult<List<CourseProgramDto>>> GetCoursePrograms()
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var programs = await _context.CoursePrograms
+            .Where(p => p.CollegeId == collegeId && !p.IsDeleted)
+            .Include(p => p.Departments)
+            .OrderBy(p => p.Level)
+            .ThenBy(p => p.Code)
+            .Select(p => new CourseProgramDto
+            {
+                Id = p.Id,
+                CollegeId = p.CollegeId,
+                MasterProgramId = p.MasterProgramId,
+                Level = p.Level,
+                Code = p.Code,
+                Name = p.Name,
+                TotalSemesters = p.TotalSemesters,
+                IsActive = p.IsActive,
+                DepartmentCount = p.Departments.Count(d => !d.IsDeleted)
+            })
+            .ToListAsync();
+
+        return Ok(programs);
+    }
+
+    [HttpPost("course-programs")]
+    public async Task<ActionResult<CourseProgramDto>> CreateCourseProgram([FromBody] CreateCourseProgramRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var code = request.Code.Trim().ToUpperInvariant();
+
+        var exists = await _context.CoursePrograms.AnyAsync(p => p.CollegeId == collegeId && p.Code == code && !p.IsDeleted);
+        if (exists) return Conflict(new { message = $"Program with code '{code}' already exists." });
+
+        var program = new CourseProgram
+        {
+            CollegeId = collegeId,
+            MasterProgramId = request.MasterProgramId,
+            Level = request.Level,
+            Code = code,
+            Name = request.Name.Trim(),
+            TotalSemesters = request.TotalSemesters,
+            IsActive = true
+        };
+
+        await _context.CoursePrograms.AddAsync(program);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetCoursePrograms), new { id = program.Id }, new CourseProgramDto
+        {
+            Id = program.Id,
+            CollegeId = program.CollegeId,
+            MasterProgramId = program.MasterProgramId,
+            Level = program.Level,
+            Code = program.Code,
+            Name = program.Name,
+            TotalSemesters = program.TotalSemesters,
+            IsActive = program.IsActive,
+            DepartmentCount = 0
+        });
+    }
+
+    [HttpGet("academic-sessions")]
+    public async Task<ActionResult<List<AcademicSessionDto>>> GetAcademicSessions()
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var sessions = await _context.AcademicSessions
+            .Where(s => s.CollegeId == collegeId && !s.IsDeleted)
+            .OrderByDescending(s => s.StartDate)
+            .Select(s => new AcademicSessionDto
+            {
+                Id = s.Id,
+                CollegeId = s.CollegeId,
+                Label = s.Label,
+                StartDate = s.StartDate,
+                EndDate = s.EndDate,
+                IsActive = s.IsActive
+            })
+            .ToListAsync();
+
+        return Ok(sessions);
+    }
+
+    [HttpPost("academic-sessions")]
+    public async Task<ActionResult<AcademicSessionDto>> CreateAcademicSession([FromBody] CreateAcademicSessionRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var label = request.Label.Trim();
+
+        var exists = await _context.AcademicSessions.AnyAsync(s => s.CollegeId == collegeId && s.Label == label && !s.IsDeleted);
+        if (exists) return Conflict(new { message = $"Academic session '{label}' already exists." });
+
+        var session = new AcademicSession
+        {
+            CollegeId = collegeId,
+            Label = label,
+            StartDate = request.StartDate,
+            EndDate = request.EndDate,
+            IsActive = request.IsActive
+        };
+
+        await _context.AcademicSessions.AddAsync(session);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetAcademicSessions), new { id = session.Id }, new AcademicSessionDto
+        {
+            Id = session.Id,
+            CollegeId = session.CollegeId,
+            Label = session.Label,
+            StartDate = session.StartDate,
+            EndDate = session.EndDate,
+            IsActive = session.IsActive
+        });
+    }
+
+    [HttpGet("semester-terms")]
+    public async Task<ActionResult<List<SemesterTermDto>>> GetSemesterTerms([FromQuery] Guid? departmentId)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var query = _context.SemesterTerms
+            .Include(t => t.Department)
+            .Include(t => t.AcademicSession)
+            .Include(t => t.SubjectOfferings)
+            .Where(t => t.CollegeId == collegeId && !t.IsDeleted);
+
+        if (departmentId.HasValue)
+        {
+            query = query.Where(t => t.DepartmentId == departmentId.Value);
+        }
+
+        var terms = await query
+            .OrderBy(t => t.SemesterNumber)
+            .Select(t => new SemesterTermDto
+            {
+                Id = t.Id,
+                CollegeId = t.CollegeId,
+                DepartmentId = t.DepartmentId,
+                DepartmentCode = t.Department != null ? t.Department.Code : null,
+                DepartmentName = t.Department != null ? t.Department.Name : null,
+                AcademicSessionId = t.AcademicSessionId,
+                AcademicSessionLabel = t.AcademicSession != null ? t.AcademicSession.Label : null,
+                SemesterNumber = t.SemesterNumber,
+                SemesterName = t.SemesterName,
+                Parity = t.Parity,
+                IsActive = t.IsActive,
+                SubjectOfferingCount = t.SubjectOfferings.Count(o => !o.IsDeleted)
+            })
+            .ToListAsync();
+
+        return Ok(terms);
+    }
+
+    [HttpPost("semester-terms")]
+    public async Task<ActionResult<SemesterTermDto>> CreateSemesterTerm([FromBody] CreateSemesterTermRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var exists = await _context.SemesterTerms.AnyAsync(t =>
+            t.CollegeId == collegeId &&
+            t.DepartmentId == request.DepartmentId &&
+            t.AcademicSessionId == request.AcademicSessionId &&
+            t.SemesterNumber == request.SemesterNumber &&
+            !t.IsDeleted);
+
+        if (exists) return Conflict(new { message = $"Semester {request.SemesterNumber} already exists for this department and session." });
+
+        var term = new SemesterTerm
+        {
+            CollegeId = collegeId,
+            DepartmentId = request.DepartmentId,
+            AcademicSessionId = request.AcademicSessionId,
+            SemesterNumber = request.SemesterNumber,
+            SemesterName = string.IsNullOrWhiteSpace(request.SemesterName) ? $"Semester {request.SemesterNumber}" : request.SemesterName.Trim(),
+            Parity = request.Parity,
+            IsActive = true
+        };
+
+        await _context.SemesterTerms.AddAsync(term);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetSemesterTerms), new { id = term.Id }, new SemesterTermDto
+        {
+            Id = term.Id,
+            CollegeId = term.CollegeId,
+            DepartmentId = term.DepartmentId,
+            AcademicSessionId = term.AcademicSessionId,
+            SemesterNumber = term.SemesterNumber,
+            SemesterName = term.SemesterName,
+            Parity = term.Parity,
+            IsActive = term.IsActive,
+            SubjectOfferingCount = 0
+        });
+    }
+
+    [HttpGet("subject-offerings")]
+    public async Task<ActionResult<List<SubjectOfferingDto>>> GetSubjectOfferings([FromQuery] Guid? semesterTermId)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var query = _context.SubjectOfferings
+            .Include(o => o.SemesterTerm)
+            .Include(o => o.CurriculumScheme)
+            .Where(o => o.CollegeId == collegeId && !o.IsDeleted);
+
+        if (semesterTermId.HasValue)
+        {
+            query = query.Where(o => o.SemesterTermId == semesterTermId.Value);
+        }
+
+        var offerings = await query
+            .OrderBy(o => o.SubjectCode)
+            .Select(o => new SubjectOfferingDto
+            {
+                Id = o.Id,
+                CollegeId = o.CollegeId,
+                SemesterTermId = o.SemesterTermId,
+                SemesterTermName = o.SemesterTerm != null ? o.SemesterTerm.SemesterName : null,
+                CurriculumSchemeId = o.CurriculumSchemeId,
+                CurriculumSchemeCode = o.CurriculumScheme != null ? o.CurriculumScheme.SchemeCode : null,
+                SubjectCode = o.SubjectCode,
+                SubjectName = o.SubjectName,
+                SubjectType = o.SubjectType,
+                Credits = o.Credits,
+                InternalMaxMarks = o.InternalMaxMarks,
+                ExternalMaxMarks = o.ExternalMaxMarks,
+                IsActive = o.IsActive
+            })
+            .ToListAsync();
+
+        return Ok(offerings);
+    }
+
+    [HttpPost("subject-offerings")]
+    public async Task<ActionResult<SubjectOfferingDto>> CreateSubjectOffering([FromBody] CreateSubjectOfferingRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var code = request.SubjectCode.Trim().ToUpperInvariant();
+
+        var exists = await _context.SubjectOfferings.AnyAsync(o =>
+            o.CollegeId == collegeId &&
+            o.SemesterTermId == request.SemesterTermId &&
+            o.SubjectCode == code &&
+            !o.IsDeleted);
+
+        if (exists) return Conflict(new { message = $"Subject offering with code '{code}' already exists for this semester." });
+
+        var offering = new SubjectOffering
+        {
+            CollegeId = collegeId,
+            SemesterTermId = request.SemesterTermId,
+            CurriculumSchemeId = request.CurriculumSchemeId,
+            SubjectCode = code,
+            SubjectName = request.SubjectName.Trim(),
+            SubjectType = request.SubjectType,
+            Credits = request.Credits,
+            InternalMaxMarks = request.InternalMaxMarks,
+            ExternalMaxMarks = request.ExternalMaxMarks,
+            IsActive = true
+        };
+
+        await _context.SubjectOfferings.AddAsync(offering);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetSubjectOfferings), new { id = offering.Id }, new SubjectOfferingDto
+        {
+            Id = offering.Id,
+            CollegeId = offering.CollegeId,
+            SemesterTermId = offering.SemesterTermId,
+            CurriculumSchemeId = offering.CurriculumSchemeId,
+            SubjectCode = offering.SubjectCode,
+            SubjectName = offering.SubjectName,
+            SubjectType = offering.SubjectType,
+            Credits = offering.Credits,
+            InternalMaxMarks = offering.InternalMaxMarks,
+            ExternalMaxMarks = offering.ExternalMaxMarks,
+            IsActive = offering.IsActive
+        });
+    }
+
+    #endregion
+
+    #region Department Endpoints
+
     [HttpGet("departments")]
     public async Task<ActionResult<List<DepartmentDto>>> GetDepartments()
     {
         var departments = await _context.Departments
             .Include(d => d.HodUser)
+            .Include(d => d.CourseProgram)
             .Where(d => !d.IsDeleted)
             .OrderBy(d => d.Code)
             .Select(d => new DepartmentDto
             {
                 Id = d.Id,
                 CollegeId = d.CollegeId,
+                CourseProgramId = d.CourseProgramId,
+                CourseProgramCode = d.CourseProgram != null ? d.CourseProgram.Code : null,
+                CourseProgramName = d.CourseProgram != null ? d.CourseProgram.Name : null,
                 Code = d.Code,
                 Name = d.Name,
                 HodUserId = d.HodUserId,
@@ -87,12 +670,18 @@ public class CollegeController : ControllerBase
         var collegeId = _tenantContext.CollegeId!.Value;
         var code = request.Code.Trim().ToUpperInvariant();
 
-        var exists = await _context.Departments.AnyAsync(d => d.Code == code && !d.IsDeleted);
-        if (exists) return Conflict(new { message = $"Department with code '{code}' already exists." });
+        var exists = await _context.Departments.AnyAsync(d =>
+            d.CollegeId == collegeId &&
+            d.CourseProgramId == request.CourseProgramId &&
+            d.Code == code &&
+            !d.IsDeleted);
+
+        if (exists) return Conflict(new { message = $"Department with code '{code}' already exists under this program." });
 
         var department = new Department
         {
             CollegeId = collegeId,
+            CourseProgramId = request.CourseProgramId,
             Code = code,
             Name = request.Name.Trim(),
             IntakeQuota = request.IntakeQuota
@@ -105,6 +694,7 @@ public class CollegeController : ControllerBase
         {
             Id = department.Id,
             CollegeId = department.CollegeId,
+            CourseProgramId = department.CourseProgramId,
             Code = department.Code,
             Name = department.Name,
             IntakeQuota = department.IntakeQuota
@@ -130,6 +720,10 @@ public class CollegeController : ControllerBase
         return NoContent();
     }
 
+    #endregion
+
+    #region Tracks & Settings
+
     [HttpGet("tracks")]
     public async Task<ActionResult<List<CollegeTrackDto>>> GetTracks()
     {
@@ -144,6 +738,14 @@ public class CollegeController : ControllerBase
                 CollegeId = t.CollegeId,
                 DepartmentId = t.DepartmentId,
                 DepartmentCode = t.Department != null ? t.Department.Code : null,
+                AcademicSessionId = t.AcademicSessionId,
+                CourseProgramId = t.CourseProgramId,
+                SemesterTermId = t.SemesterTermId,
+                SubjectOfferingId = t.SubjectOfferingId,
+                CurriculumSchemeId = t.CurriculumSchemeId,
+                ParticipationMode = t.ParticipationMode,
+                EnrolmentMode = t.EnrolmentMode,
+                AllowCrossBranchTeams = t.AllowCrossBranchTeams,
                 Name = t.Name,
                 AcademicYear = t.AcademicYear,
                 AllowInterdisciplinaryTeams = t.AllowInterdisciplinaryTeams,
@@ -170,6 +772,14 @@ public class CollegeController : ControllerBase
         {
             CollegeId = collegeId,
             DepartmentId = null, // Overarching college session
+            AcademicSessionId = request.AcademicSessionId,
+            CourseProgramId = request.CourseProgramId,
+            SemesterTermId = request.SemesterTermId,
+            SubjectOfferingId = request.SubjectOfferingId,
+            CurriculumSchemeId = request.CurriculumSchemeId,
+            ParticipationMode = request.ParticipationMode,
+            EnrolmentMode = request.EnrolmentMode,
+            AllowCrossBranchTeams = request.AllowCrossBranchTeams,
             Name = request.Name.Trim(),
             AcademicYear = request.AcademicYear.Trim(),
             AllowInterdisciplinaryTeams = request.AllowInterdisciplinaryTeams,
@@ -191,6 +801,13 @@ public class CollegeController : ControllerBase
             Id = track.Id,
             CollegeId = track.CollegeId,
             DepartmentId = track.DepartmentId,
+            AcademicSessionId = track.AcademicSessionId,
+            CourseProgramId = track.CourseProgramId,
+            SemesterTermId = track.SemesterTermId,
+            SubjectOfferingId = track.SubjectOfferingId,
+            ParticipationMode = track.ParticipationMode,
+            EnrolmentMode = track.EnrolmentMode,
+            AllowCrossBranchTeams = track.AllowCrossBranchTeams,
             Name = track.Name,
             AcademicYear = track.AcademicYear,
             AllowInterdisciplinaryTeams = track.AllowInterdisciplinaryTeams,
@@ -257,4 +874,6 @@ public class CollegeController : ControllerBase
         await _context.SaveChangesAsync();
         return Ok(new { success = true, attestedDepartmentsCount = departments.Count, signedAtUtc = utcNow });
     }
+
+    #endregion
 }

@@ -28,6 +28,15 @@ export const studentApi = {
   uploadArtifact: (data: UploadArtifactRequest) =>
     apiClient.post<ArtifactSlotDto>("/api/student/artifacts", data),
 
+  uploadArtifactFile: (slot: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient.postFormData<ArtifactSlotDto>(`/api/student/artifacts/${slot}/upload`, formData);
+  },
+
+  downloadArtifactBlob: (artifactId: string) =>
+    apiClient.getBlob(`/api/artifacts/${artifactId}/download`),
+
   getProblemBank: () => apiClient.get<any[]>("/api/student/problem-bank"),
 
   continueLineage: (data: ContinueLineageRequest) =>

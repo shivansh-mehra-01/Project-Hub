@@ -216,4 +216,37 @@ export const apiClient = {
 
   delete: <T>(endpoint: string, options?: RequestOptions) =>
     request<T>(endpoint, { ...options, method: "DELETE" }),
+
+  postFormData: <T>(endpoint: string, formData: FormData, options?: RequestOptions) =>
+    request<T>(endpoint, {
+      ...options,
+      method: "POST",
+      body: formData,
+    }),
+
+  getBlob: async (endpoint: string, options?: RequestOptions): Promise<Blob> => {
+    let url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+    if (options?.params) {
+      const searchParams = new URLSearchParams();
+      Object.entries(options.params).forEach(([key, val]) => {
+        if (val !== undefined && val !== null) {
+          searchParams.append(key, String(val));
+        }
+      });
+      const query = searchParams.toString();
+      if (query) {
+        url += (url.includes("?") ? "&" : "?") + query;
+      }
+    }
+    const headers = new Headers(options?.headers || {});
+    const token = getAuthToken();
+    if (token && !options?.skipAuth) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    const response = await fetch(url, { ...options, headers, method: "GET" });
+    if (!response.ok) {
+      throw new ApiError(`Download failed with status ${response.status}`, response.status);
+    }
+    return await response.blob();
+  },
 };

@@ -41,7 +41,9 @@ public class PlatformController : ControllerBase
                 CrestUrl = t.CrestUrl,
                 SubscriptionExpiresAtUtc = t.SubscriptionExpiresAtUtc,
                 DepartmentCount = t.Departments.Count(d => !d.IsDeleted),
-                StudentCount = t.Users.Count(u => u.Role == Domain.Enums.UserRole.Student && !u.IsDeleted)
+                StudentCount = t.Users.Count(u => u.Role == Domain.Enums.UserRole.Student && !u.IsDeleted),
+                PrincipalEmail = t.Users.Where(u => u.Role == Domain.Enums.UserRole.CollegeAdmin && !u.IsDeleted).Select(u => u.Email).FirstOrDefault(),
+                AdminEmails = t.Users.Where(u => u.Role == Domain.Enums.UserRole.CollegeAdmin && !u.IsDeleted).Select(u => u.Email).ToList()
             })
             .ToListAsync();
 
@@ -49,7 +51,7 @@ public class PlatformController : ControllerBase
     }
 
     [HttpPost("tenants")]
-    public async Task<ActionResult<CollegeTenantDto>> CreateTenant([FromBody] CreateTenantRequest request)
+    public async Task<ActionResult<CreateTenantResponse>> CreateTenant([FromBody] CreateTenantRequest request)
     {
         var code = request.TenantCode.Trim().ToUpperInvariant();
         var domain = request.SsoDomain.Trim().ToLowerInvariant();
@@ -63,6 +65,23 @@ public class PlatformController : ControllerBase
             return Conflict(new { message = "A college tenant with the same code or SSO domain already exists." });
         }
 
+        var principalName = !string.IsNullOrWhiteSpace(request.PrincipalName)
+            ? request.PrincipalName.Trim()
+            : "College Principal";
+
+        var principalEmail = !string.IsNullOrWhiteSpace(request.PrincipalEmail)
+            ? request.PrincipalEmail.Trim().ToLowerInvariant()
+            : $"principal@{domain}";
+
+        var emailExists = await _context.Users
+            .IgnoreQueryFilters()
+            .AnyAsync(u => u.Email == principalEmail && !u.IsDeleted);
+
+        if (emailExists)
+        {
+            return Conflict(new { message = $"A user account with email '{principalEmail}' already exists in the system." });
+        }
+
         var tenant = new CollegeTenant
         {
             Name = request.Name.Trim(),
@@ -73,13 +92,30 @@ public class PlatformController : ControllerBase
             StorageQuotaGb = request.StorageQuotaGb,
             EnforceStrictSso = request.EnforceStrictSso,
             CrestUrl = request.CrestUrl,
-            SubscriptionExpiresAtUtc = request.SubscriptionExpiresAtUtc
+            SubscriptionExpiresAtUtc = request.SubscriptionExpiresAtUtc,
+            IsActive = true
         };
 
         await _context.CollegeTenants.AddAsync(tenant);
+
+        var defaultPasswordHash = Infrastructure.Security.PasswordHelper.HashPassword("Pass@1234");
+        var principalUser = new UserAccount
+        {
+            CollegeId = tenant.Id,
+            FullName = principalName,
+            Email = principalEmail,
+            EnrollmentOrEmployeeCode = $"EMP-{code}-001",
+            Role = Domain.Enums.UserRole.CollegeAdmin,
+            PasswordHash = defaultPasswordHash,
+            IsActivated = true,
+            IsActive = true
+        };
+
+        await _context.Users.AddAsync(principalUser);
+
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetTenants), new { id = tenant.Id }, new CollegeTenantDto
+        var tenantDto = new CollegeTenantDto
         {
             Id = tenant.Id,
             Name = tenant.Name,
@@ -91,7 +127,83 @@ public class PlatformController : ControllerBase
             IsActive = tenant.IsActive,
             EnforceStrictSso = tenant.EnforceStrictSso,
             CrestUrl = tenant.CrestUrl,
-            SubscriptionExpiresAtUtc = tenant.SubscriptionExpiresAtUtc
+            SubscriptionExpiresAtUtc = tenant.SubscriptionExpiresAtUtc,
+            DepartmentCount = 0,
+            StudentCount = 0,
+            PrincipalEmail = principalEmail,
+            AdminEmails = new List<string> { principalEmail }
+        };
+
+        return StatusCode(StatusCodes.Status201Created, new CreateTenantResponse
+        {
+            Tenant = tenantDto,
+            AdminEmail = principalEmail
+        });
+    }
+
+    [HttpPost("tenants/{tenantId}/provision-admin")]
+    public async Task<ActionResult<ProvisionAdminResponse>> ProvisionAdmin(Guid tenantId, [FromBody] ProvisionAdminRequest? request)
+    {
+        var tenant = await _context.CollegeTenants
+            .IgnoreQueryFilters()
+            .Include(t => t.Users)
+            .FirstOrDefaultAsync(t => t.Id == tenantId && !t.IsDeleted);
+
+        if (tenant == null)
+        {
+            return NotFound(new { message = "College tenant not found." });
+        }
+
+        var principalEmail = !string.IsNullOrWhiteSpace(request?.Email)
+            ? request.Email.Trim().ToLowerInvariant()
+            : $"principal@{tenant.SsoDomain.Trim().ToLowerInvariant()}";
+
+        var principalName = !string.IsNullOrWhiteSpace(request?.FullName)
+            ? request.FullName.Trim()
+            : "College Principal";
+
+        var defaultPasswordHash = Infrastructure.Security.PasswordHelper.HashPassword("Pass@1234");
+
+        var existingUser = await _context.Users
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Email == principalEmail && !u.IsDeleted);
+
+        if (existingUser != null)
+        {
+            existingUser.Role = Domain.Enums.UserRole.CollegeAdmin;
+            existingUser.PasswordHash = defaultPasswordHash;
+            existingUser.IsActivated = true;
+            existingUser.IsActive = true;
+            await _context.SaveChangesAsync();
+
+            return Ok(new ProvisionAdminResponse
+            {
+                Success = true,
+                AdminEmail = existingUser.Email,
+                Message = $"Principal account '{existingUser.Email}' updated with CollegeAdmin role and active status."
+            });
+        }
+
+        var newAdmin = new UserAccount
+        {
+            CollegeId = tenant.Id,
+            FullName = principalName,
+            Email = principalEmail,
+            EnrollmentOrEmployeeCode = $"EMP-{tenant.TenantCode}-001",
+            Role = Domain.Enums.UserRole.CollegeAdmin,
+            PasswordHash = defaultPasswordHash,
+            IsActivated = true,
+            IsActive = true
+        };
+
+        await _context.Users.AddAsync(newAdmin);
+        await _context.SaveChangesAsync();
+
+        return Ok(new ProvisionAdminResponse
+        {
+            Success = true,
+            AdminEmail = newAdmin.Email,
+            Message = $"Principal account '{newAdmin.Email}' provisioned successfully."
         });
     }
 

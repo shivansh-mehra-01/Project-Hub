@@ -240,7 +240,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
             </span>
           </span>
           <span className="text-[10px] text-slate-500 font-mono">
-            RBAC Scoped • Project Hub Navigation Engine
+            Role-Based Workspace Engine • ↑↓ to navigate, ↵ to select
           </span>
         </div>
       </div>

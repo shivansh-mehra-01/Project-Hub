@@ -20,8 +20,8 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
             .IsRequired()
             .HasMaxLength(150);
 
-        // Composite Unique Filtered Index: (CollegeId, Code)
-        builder.HasIndex(d => new { d.CollegeId, d.Code })
+        // Composite Unique Filtered Index: (CollegeId, CourseProgramId, Code)
+        builder.HasIndex(d => new { d.CollegeId, d.CourseProgramId, d.Code })
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");
 
@@ -29,6 +29,11 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
             .WithMany(c => c.Departments)
             .HasForeignKey(d => d.CollegeId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(d => d.CourseProgram)
+            .WithMany(p => p.Departments)
+            .HasForeignKey(d => d.CourseProgramId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(d => d.HodUser)
             .WithMany()

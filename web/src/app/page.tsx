@@ -236,26 +236,26 @@ export default function MarketingHomePage() {
                     <div className="space-y-2 overflow-hidden text-[10px]">
                       <div>
                         <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                          Student 1
+                          Team 01 • IoT Energy Monitoring
                         </div>
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
-                            <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
-                              DG
+                            <div className="h-5 w-5 rounded-full bg-emerald-100 shrink-0 flex items-center justify-center text-[9px] font-semibold text-emerald-800">
+                              SM
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="font-medium text-slate-800 truncate leading-tight">David Gulosparza</div>
-                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                              <div className="font-medium text-slate-800 truncate leading-tight">Shivansh Mehra (Lead)</div>
+                              <div className="text-[8px] text-slate-400">Week 5 Signed • 14 hrs</div>
                             </div>
                             <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                           </div>
                           <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
                             <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
-                              DG
+                              AS
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="font-medium text-slate-800 truncate leading-tight">Daniel Giocozon</div>
-                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                              <div className="font-medium text-slate-800 truncate leading-tight">Aarav Sharma (ML)</div>
+                              <div className="text-[8px] text-slate-400">Week 5 Signed • 12 hrs</div>
                             </div>
                             <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                           </div>
@@ -264,36 +264,26 @@ export default function MarketingHomePage() {
 
                       <div>
                         <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                          Student 2
+                          Team 04 • Solar Microgrid
                         </div>
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
                             <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
-                              DS
+                              DP
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="font-medium text-slate-800 truncate leading-tight">Daniel Sadcrin</div>
-                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                              <div className="font-medium text-slate-800 truncate leading-tight">Devansh Patel (Lead)</div>
+                              <div className="text-[8px] text-slate-400">Week 5 Signed • 16 hrs</div>
                             </div>
                             <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                           </div>
                           <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
                             <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
-                              DK
+                              MS
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="font-medium text-slate-800 truncate leading-tight">David Keringas</div>
-                              <div className="text-[8px] text-slate-400">31 months ago</div>
-                            </div>
-                            <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
-                          </div>
-                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
-                            <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
-                              DN
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium text-slate-800 truncate leading-tight">David Nailson</div>
-                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                              <div className="font-medium text-slate-800 truncate leading-tight">Meera Sen (Hardware)</div>
+                              <div className="text-[8px] text-slate-400">Week 5 Signed • 14 hrs</div>
                             </div>
                             <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                           </div>
@@ -302,16 +292,16 @@ export default function MarketingHomePage() {
 
                       <div>
                         <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                          Student 3
+                          Team 07 • Decentralized Credential
                         </div>
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
                             <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
-                              DM
+                              NS
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="font-medium text-slate-800 truncate leading-tight">Daniel Mombe</div>
-                              <div className="text-[8px] text-slate-400">31 months ago</div>
+                              <div className="font-medium text-slate-800 truncate leading-tight">Neha Singhal (Lead)</div>
+                              <div className="text-[8px] text-slate-400">Week 5 Signed • 15 hrs</div>
                             </div>
                             <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                           </div>
@@ -335,23 +325,23 @@ export default function MarketingHomePage() {
                       <div className="space-y-1.5 py-1">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-3.5 bg-brand-primary rounded-xs shadow-xs" style={{ width: "100%" }} />
-                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-9 text-right">60 pct</span>
+                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-14 text-right">32 Synopses</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="h-3.5 bg-brand-primary/90 rounded-xs shadow-xs mx-auto" style={{ width: "82%" }} />
-                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-9 text-right">27 pct</span>
+                          <div className="h-3.5 bg-brand-primary/90 rounded-xs shadow-xs mx-auto" style={{ width: "88%" }} />
+                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-14 text-right">28 Guides</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="h-3.5 bg-brand-primary/80 rounded-xs shadow-xs mx-auto" style={{ width: "64%" }} />
-                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-9 text-right">30 pct</span>
+                          <div className="h-3.5 bg-brand-primary/80 rounded-xs shadow-xs mx-auto" style={{ width: "81%" }} />
+                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-14 text-right">26 Batched</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="h-3 bg-brand-primary/70 rounded-xs shadow-xs mx-auto" style={{ width: "46%" }} />
-                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-9 text-right">8 vats</span>
+                          <div className="h-3 bg-brand-primary/70 rounded-xs shadow-xs mx-auto" style={{ width: "75%" }} />
+                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-14 text-right">24 Signed</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="h-2.5 bg-brand-primary/60 rounded-xs shadow-xs mx-auto" style={{ width: "28%" }} />
-                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-9 text-right">3 flow</span>
+                          <div className="h-2.5 bg-brand-primary/60 rounded-xs shadow-xs mx-auto" style={{ width: "75%" }} />
+                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-14 text-right">24 Active</span>
                         </div>
                       </div>
                     </div>
@@ -372,44 +362,44 @@ export default function MarketingHomePage() {
                           <thead className="text-slate-400 border-b border-slate-100">
                             <tr>
                               <th className="pb-1 font-medium">Outcome</th>
-                              <th className="pb-1 font-medium">Progress Source</th>
+                              <th className="pb-1 font-medium">Evaluation Source</th>
                               <th className="pb-1 font-medium text-right">Status</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             <tr>
-                              <td className="py-1 font-medium text-slate-800">NBA Tier of impact</td>
-                              <td className="py-1 text-slate-500">Project Item</td>
+                              <td className="py-1 font-medium text-slate-800">PO2: Problem Analysis</td>
+                              <td className="py-1 text-slate-500">Proposal Literature Survey</td>
                               <td className="py-1 text-right">
-                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded">
-                                  <Check className="h-2 w-2" /> Verified
+                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded font-mono">
+                                  <Check className="h-2 w-2" /> 88.2% (Pass)
                                 </span>
                               </td>
                             </tr>
                             <tr>
-                              <td className="py-1 font-medium text-slate-800">NB1 F-4 impact</td>
-                              <td className="py-1 text-slate-500">Project Source</td>
+                              <td className="py-1 font-medium text-slate-800">PO3: Solution Architecture</td>
+                              <td className="py-1 text-slate-500">Mid-Term System Design</td>
                               <td className="py-1 text-right">
-                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded">
-                                  <Check className="h-2 w-2" /> Verified
+                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded font-mono">
+                                  <Check className="h-2 w-2" /> 84.6% (Pass)
                                 </span>
                               </td>
                             </tr>
                             <tr>
-                              <td className="py-1 font-medium text-slate-800">NB1 Postorders</td>
-                              <td className="py-1 text-slate-500">Project Source</td>
+                              <td className="py-1 font-medium text-slate-800">PO5: Modern Tool Usage</td>
+                              <td className="py-1 text-slate-500">GitHub CI &amp; ESP32 Firmware</td>
                               <td className="py-1 text-right">
-                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded">
-                                  <Check className="h-2 w-2" /> Verified
+                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded font-mono">
+                                  <Check className="h-2 w-2" /> 91.0% (Pass)
                                 </span>
                               </td>
                             </tr>
                             <tr>
-                              <td className="py-1 font-medium text-slate-800">NB4 Frequent designs</td>
-                              <td className="py-1 text-slate-500">Project Item</td>
+                              <td className="py-1 font-medium text-slate-800">PO10: Viva Defense</td>
+                              <td className="py-1 text-slate-500">Examiner Rubric Matrix</td>
                               <td className="py-1 text-right">
-                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded">
-                                  <Check className="h-2 w-2" /> Verified
+                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded font-mono">
+                                  <Check className="h-2 w-2" /> 86.5% (Pass)
                                 </span>
                               </td>
                             </tr>

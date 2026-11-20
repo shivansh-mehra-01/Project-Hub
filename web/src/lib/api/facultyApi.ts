@@ -39,4 +39,15 @@ export const facultyApi = {
       isLocked: boolean;
       individualScoresCount: number;
     }>("/api/faculty/evaluations", data),
+
+  getTeamArtifacts: (teamId: string) =>
+    apiClient.get<any[]>(`/api/faculty/teams/${teamId}/artifacts`),
+
+  reviewArtifact: (artifactId: string, data: { isApproved: boolean; reviewerNote?: string }) =>
+    apiClient.post<{
+      success: boolean;
+      artifactId: string;
+      status: string;
+      reviewerNote?: string;
+    }>(`/api/faculty/artifacts/${artifactId}/review`, data),
 };

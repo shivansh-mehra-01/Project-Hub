@@ -259,4 +259,60 @@ public class FacultyController : ControllerBase
             individualScoresCount = evaluation.IndividualScores.Count
         });
     }
+
+    [HttpGet("teams/{teamId}/artifacts")]
+    public async Task<ActionResult<List<ArtifactSlotDto>>> GetTeamArtifacts(Guid teamId)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var team = await _context.ProjectTeams
+            .Include(t => t.Artifacts)
+            .FirstOrDefaultAsync(t => t.Id == teamId && t.CollegeId == collegeId && !t.IsDeleted);
+
+        if (team == null) return NotFound(new { message = "Team not found." });
+
+        var allSlots = new[] { ArtifactSlotType.Synopsis, ArtifactSlotType.MidTermPPT, ArtifactSlotType.PlagiarismReport, ArtifactSlotType.FinalThesis };
+        var artifacts = allSlots.Select(slot =>
+        {
+            var match = team.Artifacts.FirstOrDefault(a => a.SlotType == slot && !a.IsDeleted);
+            return new ArtifactSlotDto
+            {
+                Id = match?.Id,
+                SlotType = slot,
+                FileName = match?.FileName,
+                StorageKey = match?.StorageKey,
+                Sha256Checksum = match?.Sha256Checksum,
+                FileSizeBytes = match?.FileSizeBytes ?? 0,
+                Status = match?.Status ?? ArtifactStatus.Missing,
+                ReviewerNote = match?.ReviewerNote
+            };
+        }).ToList();
+
+        return Ok(artifacts);
+    }
+
+    [HttpPost("artifacts/{artifactId}/review")]
+    public async Task<IActionResult> ReviewArtifact(Guid artifactId, [FromBody] ReviewArtifactRequest request)
+    {
+        var facultyId = _tenantContext.UserId!.Value;
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var artifact = await _context.TeamArtifacts
+            .FirstOrDefaultAsync(a => a.Id == artifactId && a.CollegeId == collegeId && !a.IsDeleted);
+
+        if (artifact == null) return NotFound(new { message = "Artifact deliverable not found." });
+
+        artifact.Status = request.IsApproved ? ArtifactStatus.Verified : ArtifactStatus.RevisionRequested;
+        artifact.VerifiedByUserId = facultyId;
+        artifact.ReviewerNote = request.ReviewerNote?.Trim();
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            artifactId = artifact.Id,
+            status = artifact.Status.ToString(),
+            reviewerNote = artifact.ReviewerNote
+        });
+    }
 }

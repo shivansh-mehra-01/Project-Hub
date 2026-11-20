@@ -65,6 +65,29 @@ export const getRoleSubtitle = (role: RoleType, isCoordinator?: boolean): string
   }
 };
 
+export interface HeaderConfig {
+  title?: string;
+  breadcrumb?: string;
+}
+
+export const DashboardHeaderContext = React.createContext<{
+  header: HeaderConfig | null;
+  setHeader: (config: HeaderConfig | null) => void;
+}>({
+  header: null,
+  setHeader: () => {},
+});
+
+export const useDashboardHeader = (config?: HeaderConfig) => {
+  const { setHeader } = useContext(DashboardHeaderContext);
+  useEffect(() => {
+    if (config?.title || config?.breadcrumb) {
+      setHeader(config);
+    }
+  }, [config?.title, config?.breadcrumb, setHeader]);
+  return { setHeader };
+};
+
 export interface AppShellProps {
   children: React.ReactNode;
   pageTitle?: string;
@@ -81,6 +104,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   activeTab,
 }) => {
   const isInsideShell = useContext(AppShellContext);
+  const [headerConfig, setHeaderConfig] = useState<HeaderConfig | null>(null);
 
   // If already mounted within an outer AppShell (e.g. from DashboardLayout), pass children through cleanly
   if (isInsideShell) {
@@ -89,9 +113,15 @@ export const AppShell: React.FC<AppShellProps> = ({
 
   return (
     <AppShellContext.Provider value={true}>
-      <AppShellInner pageTitle={pageTitle} breadcrumb={breadcrumb} activeTab={activeTab}>
-        {children}
-      </AppShellInner>
+      <DashboardHeaderContext.Provider value={{ header: headerConfig, setHeader: setHeaderConfig }}>
+        <AppShellInner
+          pageTitle={headerConfig?.title || pageTitle}
+          breadcrumb={headerConfig?.breadcrumb || breadcrumb}
+          activeTab={activeTab}
+        >
+          {children}
+        </AppShellInner>
+      </DashboardHeaderContext.Provider>
     </AppShellContext.Provider>
   );
 };
@@ -177,8 +207,8 @@ const AppShellInner: React.FC<AppShellProps> = ({
     }
   }, [pathname, currentPersona.role, switchPersona]);
 
-  // Role-scoped notifications (strictly isolated by role & team)
-  const notifications = (() => {
+  // Role-scoped notifications (strictly isolated by role & team with deep-linking paths)
+  const allNotifications = (() => {
     if (currentPersona.role === "Student" || currentPersona.role === "TeamLead") {
       return [
         {
@@ -186,18 +216,21 @@ const AppShellInner: React.FC<AppShellProps> = ({
           title: "Weekly Logbook Accepted",
           time: "10 mins ago",
           desc: "Guide Prof. S. K. Verma approved Week 5 Logbook with remarks for Team 2026-CS-MIN-01.",
+          path: "/student?subtab=logs",
         },
         {
           id: "n-s2",
           title: "Sprint Task Due",
           time: "2 hours ago",
           desc: "Task 'ESP32 firmware OTA integration' is due tomorrow for Team 2026-CS-MIN-01.",
+          path: "/student?subtab=tasks",
         },
         {
           id: "n-s3",
           title: "Mid-Term Defense Scheduled",
           time: "Yesterday",
           desc: "Team 2026-CS-MIN-01 evaluation panel confirmed for May 04 at 10:30 AM (Room Lab-3).",
+          path: "/student?subtab=evaluations",
         },
       ];
     }
@@ -208,12 +241,14 @@ const AppShellInner: React.FC<AppShellProps> = ({
           title: "Friday Logbook Pending",
           time: "10 mins ago",
           desc: "Shivansh Mehra submitted Week 5 Logbook for review (Team 2026-CS-MIN-01).",
+          path: "/faculty",
         },
         {
           id: "n-f2",
           title: "Mid-Term Evaluation Panel",
           time: "2 hours ago",
           desc: "You are assigned to evaluate 3 Minor project teams in Lab-3.",
+          path: "/faculty/evaluations",
         },
       ];
     }
@@ -224,12 +259,14 @@ const AppShellInner: React.FC<AppShellProps> = ({
           title: "Proposal Ready for Sign-Off",
           time: "1 hour ago",
           desc: "Team 2026-CS-MIN-03 guide allotment approved by Coordinator.",
+          path: "/hod/approvals?subtab=allotments",
         },
         {
           id: "n-h2",
           title: "NBA Attainment Updated",
           time: "Yesterday",
           desc: "PO3 attainment reached 81.4% (Exceeds Target).",
+          path: "/hod/nba",
         },
       ];
     }
@@ -240,12 +277,14 @@ const AppShellInner: React.FC<AppShellProps> = ({
           title: "Department SAR Sign-Off",
           time: "2 hours ago",
           desc: "CSE & ECE departments completed SAR Criterion 3 attestation.",
+          path: "/college/compliance",
         },
         {
           id: "n-c2",
           title: "Directory Sync Complete",
           time: "1 day ago",
           desc: "1,280 student enrollments validated for AY 2025-26 Even Sem.",
+          path: "/college/settings",
         },
       ];
     }
@@ -256,24 +295,29 @@ const AppShellInner: React.FC<AppShellProps> = ({
         title: "Tenant Partition Provisioned",
         time: "30 mins ago",
         desc: "SISTec Bhopal partition healthy on ap-south-1.",
+        path: "/admin",
       },
       {
         id: "n-a2",
         title: "Pilot Application Received",
         time: "3 hours ago",
         desc: "Medicaps University submitted a 90-day institutional pilot trial request.",
+        path: "/admin/subscriptions",
       },
     ];
   })();
 
-  // Registered campus branches for multi-campus institutional switcher
-  const campuses = [
-    { id: "main", name: "Gandhi Nagar (Main Campus)", code: "INST-MP-0176" },
-    { id: "ratibad", name: "Ratibad Campus", code: "INST-MP-0192" },
-    { id: "pharmacy", name: "SISTec Pharmacy & Tech", code: "INST-MP-0205" },
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const unreadNotifications = allNotifications.filter((n) => !readNotificationIds.includes(n.id));
+  const unreadCount = unreadNotifications.length;
+
+  const campuses: Array<{ id: string; name: string; code: string }> = [
+    { id: "campus-01", name: "Gandhi Nagar (Main)", code: "GN" },
+    { id: "campus-02", name: "Ratibad Campus", code: "RB" },
   ];
-  const isCollegeAdminMultiCampus =
-    currentPersona.role === "CollegeAdmin" && campuses.length > 1;
+
+  // Render static badge (matching HOD/Faculty/Student) for single-tenant CollegeAdmin unless multiple campuses are explicitly configured
+  const isCollegeAdminMultiCampus = false;
 
   // Live badge counts dictionary passed to centralized navigation engine
   const pendingFacultyCount =
@@ -441,7 +485,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 className="flex items-center gap-1 px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-[11px] text-slate-300 hover:text-white transition-colors cursor-pointer"
                 title="Switch campus branch"
               >
-                <span className="font-semibold text-white">{college.code}</span>
+                <span className="font-semibold text-white">{college?.code || "SISTEC"}</span>
                 <span className="text-[10px] text-slate-400 font-mono hidden xl:inline">({selectedBranch.split(" ")[0]})</span>
                 <ChevronsUpDown
                   className="w-3 h-3 text-slate-400 shrink-0 ml-0.5"
@@ -479,7 +523,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
             </div>
           ) : (
             <span className="text-[10px] font-mono font-medium text-slate-400 px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
-              {college.code}
+              {currentPersona.role === "CollegeAdmin"
+                ? college?.code || "SISTEC"
+                : `${college?.code || "SISTEC"} • CSE`}
             </span>
           )}
         </div>
@@ -612,32 +658,73 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 aria-label="Notifications"
               >
                 <Bell className="h-4 w-4" strokeWidth={1.75} />
-                <span className="absolute top-2.5 right-2.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-2.5 right-2.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                )}
               </button>
 
               {/* Notification Popover */}
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-xl border border-white/10 bg-[#1F2937] shadow-2xl p-3 z-50 space-y-2 text-white animate-in fade-in zoom-in-95 duration-100">
                   <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
-                    <span className="text-xs font-bold text-white font-heading">Notifications</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowNotifications(false)}
-                      className="text-slate-400 hover:text-white p-1 cursor-pointer"
-                    >
-                      <X className="h-4 w-4" strokeWidth={1.75} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white font-heading">Notifications</span>
+                      {unreadCount > 0 && (
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setReadNotificationIds(allNotifications.map((n) => n.id))}
+                          className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium cursor-pointer"
+                        >
+                          Mark all as read
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowNotifications(false)}
+                        className="text-slate-400 hover:text-white p-1 cursor-pointer"
+                      >
+                        <X className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                    </div>
                   </div>
                   <div className="divide-y divide-white/[0.04] max-h-64 overflow-y-auto">
-                    {notifications.map((n) => (
-                      <div key={n.id} className="py-2 space-y-0.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-white">{n.title}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">{n.time}</span>
+                    {allNotifications.map((n) => {
+                      const isRead = readNotificationIds.includes(n.id);
+                      return (
+                        <div
+                          key={n.id}
+                          onClick={() => {
+                            if (!isRead) {
+                              setReadNotificationIds((prev) => [...prev, n.id]);
+                            }
+                            setShowNotifications(false);
+                            if (n.path) router.push(n.path);
+                          }}
+                          className={cn(
+                            "py-2 px-1.5 rounded-lg space-y-0.5 cursor-pointer transition-colors hover:bg-white/5",
+                            isRead ? "opacity-60" : "opacity-100"
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              {!isRead && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                              )}
+                              <span className="text-xs font-semibold text-white">{n.title}</span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">{n.time}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-300 leading-tight pl-3">{n.desc}</p>
                         </div>
-                        <p className="text-[11px] text-slate-300 leading-tight">{n.desc}</p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

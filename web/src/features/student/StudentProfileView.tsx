@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { User, Lock, Save, CheckCircle2, ShieldCheck } from "lucide-react";
 import { GithubIcon } from "@/design-system/components/Icons";
-import { AppShell } from "@/design-system/patterns/AppShell";
+import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
@@ -12,6 +12,11 @@ import { TagMultiSelect } from "@/design-system/components/TagMultiSelect";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 
 export const StudentProfileView: React.FC = () => {
+  useDashboardHeader({
+    title: "Learner Academic Profile",
+    breadcrumb: "Learner Academic Profile",
+  });
+
   const { currentPersona, college } = useProjectHubStore();
 
   const [skills, setSkills] = useState(["TypeScript", "Next.js", "Python", "IoT / ESP32", "Docker"]);
@@ -25,8 +30,7 @@ export const StudentProfileView: React.FC = () => {
   };
 
   return (
-    <AppShell pageTitle="Learner Academic Profile" breadcrumb="Learner Academic Profile" activeTab="Profile">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* 1. Locked College Identity Card */}
         <Card>
           <CardHeader>
@@ -52,7 +56,7 @@ export const StudentProfileView: React.FC = () => {
               <Input label="Academic Branch" value="Computer Science & Eng (CSE)" disabled readOnly />
             </div>
             <Input label="College Email" value={currentPersona.email} disabled readOnly />
-            <Input label="Engineering College" value={college.name} disabled readOnly />
+            <Input label="Engineering College" value={college?.name || "Sagar Institute of Science and Technology (SISTec)"} disabled readOnly />
 
             <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] text-xs text-[#64748B] flex items-start gap-2">
               <Lock className="h-4 w-4 text-[#94A3B8] shrink-0 mt-0.5" />
@@ -84,9 +88,9 @@ export const StudentProfileView: React.FC = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Developer &amp; Tracker Integrations</CardTitle>
+              <CardTitle>Personal Developer Handles</CardTitle>
               <CardDescription>
-                Connect team code repositories for automated commit evidence checks.
+                Link your personal GitHub profile and developer handles to showcase individual code commits on your portfolio.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3.5">
@@ -116,6 +120,5 @@ export const StudentProfileView: React.FC = () => {
           </Card>
         </div>
       </div>
-    </AppShell>
   );
 };

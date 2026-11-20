@@ -24,15 +24,25 @@ import {
   Layers,
   ChevronRight,
   BookOpen,
+  Building2,
+  Calendar,
+  FolderGit2,
+  CheckSquare,
+  Square,
+  Loader2,
 } from "lucide-react";
-import { AppShell } from "@/design-system/patterns/AppShell";
+import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
 import { SlideOverDrawer } from "@/design-system/components/SlideOverDrawer";
 import { EmptyState } from "@/design-system/patterns/EmptyState";
+import { Modal } from "@/design-system/components/Modal";
+import { Input } from "@/design-system/components/Input";
+import { Select } from "@/design-system/components/Select";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { Team } from "@/mocks/store-types";
+import { hodApi, getAuthToken } from "@/lib/api";
 
 export interface HODViewProps {
   initialTab?: "overview" | "approvals" | "nba" | "faculty";
@@ -44,6 +54,12 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
     teams,
     facultyRoster,
     departments,
+    coursePrograms,
+    academicSessions,
+    semesterTerms,
+    subjectOfferings,
+    cycle,
+    updateCycle,
     toggleFacultyCoordinator,
     approveProposal,
     rejectProposal,
@@ -73,6 +89,17 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
   const [unlockRejected, setUnlockRejected] = useState(false);
   const [showAddFacultyModal, setShowAddFacultyModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Launch Academic Track Modal State
+  const [showLaunchTrackModal, setShowLaunchTrackModal] = useState(false);
+  const [newTrackName, setNewTrackName] = useState("Minor Project (Semester 6)");
+  const [newTrackSemesterTermId, setNewTrackSemesterTermId] = useState(semesterTerms[0]?.id || "term-sem-6-even");
+  const [newTrackSubjectOfferingId, setNewTrackSubjectOfferingId] = useState(subjectOfferings[0]?.id || "off-cs-606");
+  const [newTrackParticipationMode, setNewTrackParticipationMode] = useState<"Team" | "Individual">("Team");
+  const [newTrackEnrolmentMode, setNewTrackEnrolmentMode] = useState<"SelfJoin" | "CoordinatorAllotted" | "Hybrid">("SelfJoin");
+  const [newTrackAllowCrossBranch, setNewTrackAllowCrossBranch] = useState(false);
+  const [newTrackProposalDeadline, setNewTrackProposalDeadline] = useState("2026-03-31");
+  const [isLaunchingTrack, setIsLaunchingTrack] = useState(false);
 
   // New faculty form state
   const [newFacultyForm, setNewFacultyForm] = useState({
@@ -201,9 +228,34 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
     setReturnRemarks("");
   };
 
-  const handleDownloadZip = () => {
+  const handleDownloadZip = async () => {
     setZipPackaging(true);
-    setTimeout(() => {
+    try {
+      if (getAuthToken()) {
+        const blob = await hodApi.exportNbaDossierZip();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const dateStr = new Date().toISOString().split("T")[0];
+        a.download = `Collabex_NBA_SAR_CSE_${dateStr}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        const mockBlob = new Blob(
+          ["NBA Criterion 2 & 3 Dossier Archive\nGenerated in Mock/Preview Mode\n"],
+          { type: "application/zip" }
+        );
+        const url = window.URL.createObjectURL(mockBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Collabex_NBA_SAR_CSE_${new Date().toISOString().split("T")[0]}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
       setZipPackaging(false);
       setZipSuccess(true);
       showToast("NBA-Audit-Criterion-2-3-Dossier.zip prepared and exported.");
@@ -211,7 +263,11 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
         setZipSuccess(false);
         setShowSampleZipModal(false);
       }, 1500);
-    }, 1000);
+    } catch (err) {
+      console.error("Failed to export NBA dossier zip:", err);
+      setZipPackaging(false);
+      showToast("Failed to download NBA zip dossier. Please try again.");
+    }
   };
 
   const handleLockSAR = () => {
@@ -239,6 +295,52 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
       designation: "Assistant Professor",
       maxTeams: 4,
     });
+  };
+
+  const handleLaunchTrackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLaunchingTrack(true);
+    try {
+      const selectedTerm = semesterTerms.find((t) => t.id === newTrackSemesterTermId);
+      const selectedOffering = subjectOfferings.find((s) => s.id === newTrackSubjectOfferingId);
+
+      // Update store cycle
+      updateCycle({
+        type: selectedOffering?.subjectType === "MajorProject" ? "Major" : "Minor",
+        semester: selectedTerm?.semesterNumber || 6,
+        proposalDeadline: newTrackProposalDeadline,
+        participationMode: newTrackParticipationMode,
+        enrolmentMode: newTrackEnrolmentMode,
+        allowCrossBranchTeams: newTrackAllowCrossBranch,
+        semesterTermId: newTrackSemesterTermId,
+        subjectOfferingId: newTrackSubjectOfferingId,
+        minTeamSize: newTrackParticipationMode === "Individual" ? 1 : 3,
+        maxTeamSize: newTrackParticipationMode === "Individual" ? 1 : 4,
+        isActive: true,
+      });
+
+      // API call if authenticated
+      if (getAuthToken()) {
+        await hodApi.createTrack({
+          name: newTrackName,
+          academicYear: cycle.academicYear || "2025-2026",
+          semesterTermId: newTrackSemesterTermId,
+          subjectOfferingId: newTrackSubjectOfferingId,
+          participationMode: newTrackParticipationMode as any,
+          enrolmentMode: newTrackEnrolmentMode as any,
+          allowCrossBranchTeams: newTrackAllowCrossBranch,
+          proposalDeadlineUtc: new Date(newTrackProposalDeadline).toISOString(),
+        }).catch((err) => console.warn("Backend track create sync optional:", err));
+      }
+
+      showToast(`Track "${newTrackName}" launched (${newTrackParticipationMode} Mode, ${newTrackEnrolmentMode} Enrolment)!`);
+      setShowLaunchTrackModal(false);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to launch academic track.");
+    } finally {
+      setIsLaunchingTrack(false);
+    }
   };
 
   // Tab titles and metadata
@@ -270,12 +372,13 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
 
   const currentTabConfig = tabConfigs[activeTab] || tabConfigs.overview;
 
+  useDashboardHeader({
+    title: currentTabConfig.title,
+    breadcrumb: currentTabConfig.breadcrumb,
+  });
+
   return (
-    <AppShell
-      pageTitle={currentTabConfig.title}
-      breadcrumb={currentTabConfig.breadcrumb}
-      activeTab={currentTabConfig.label}
-    >
+    <div className="space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-lg bg-[#111827] px-4 py-2.5 text-xs font-medium text-white shadow-xl border border-white/10 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -292,7 +395,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           {/* Executive Department Header & Cohort Switcher */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-[#E2E8F0] bg-white shadow-2xs">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
                 <h2 className="text-base font-bold font-heading text-[#0F172A] tracking-tight">
                   Department of Computer Science &amp; Engineering
@@ -300,36 +403,56 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                 <Badge variant="neutral" size="sm">
                   AY 2025–26 Even Sem
                 </Badge>
+                <Badge variant={cycle.participationMode === "Individual" ? "info" : "success"} size="sm" dot>
+                  {cycle.participationMode === "Individual" ? "Solo Track (Individual)" : "Team Track (3–4 Members)"}
+                </Badge>
+                {cycle.allowCrossBranchTeams && (
+                  <Badge variant="neutral" size="sm">
+                    Cross-Branch Permitted
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-[#64748B]">
                 Head of Department: <span className="font-semibold text-[#0F172A]">Dr. Ravindra Kumar Sharma</span> • 420 Undergraduates • 34 Faculty Mentors
               </p>
             </div>
 
-            {/* Cohort Segmented Control */}
-            <div className="flex items-center gap-1.5 p-1 bg-[#F1F5F9] rounded-lg border border-[#E2E8F0] shrink-0">
-              <button
-                type="button"
-                onClick={() => setActiveCohort("minor")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                  activeCohort === "minor"
-                    ? "bg-white text-[#0F172A] shadow-xs"
-                    : "text-[#64748B] hover:text-[#0F172A]"
-                }`}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Cohort Segmented Control */}
+              <div className="flex items-center gap-1.5 p-1 bg-[#F1F5F9] rounded-lg border border-[#E2E8F0] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveCohort("minor")}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                    activeCohort === "minor"
+                      ? "bg-white text-[#0F172A] shadow-xs"
+                      : "text-[#64748B] hover:text-[#0F172A]"
+                  }`}
+                >
+                  Minor Sem 6 (24 Teams)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveCohort("major")}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                    activeCohort === "major"
+                      ? "bg-white text-[#0F172A] shadow-xs"
+                      : "text-[#64748B] hover:text-[#0F172A]"
+                  }`}
+                >
+                  Major Sem 8 (32 Teams)
+                </button>
+              </div>
+
+              {/* Launch Academic Track Button */}
+              <Button
+                size="sm"
+                variant="primary"
+                leftIcon={<Sparkles className="h-3.5 w-3.5" />}
+                onClick={() => setShowLaunchTrackModal(true)}
               >
-                Minor Sem 6 (24 Teams)
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveCohort("major")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                  activeCohort === "major"
-                    ? "bg-white text-[#0F172A] shadow-xs"
-                    : "text-[#64748B] hover:text-[#0F172A]"
-                }`}
-              >
-                Major Sem 8 (32 Teams)
-              </button>
+                Launch Track
+              </Button>
             </div>
           </div>
 
@@ -588,7 +711,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                     : "text-[#64748B] hover:text-[#0F172A]"
                 }`}
               >
-                Guide Allotments ({pendingHODTeams.length})
+                Awaiting HOD Sign-Off ({pendingHODTeams.length})
               </button>
               <button
                 type="button"
@@ -599,7 +722,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                     : "text-[#64748B] hover:text-[#0F172A]"
                 }`}
               >
-                All Pending ({allPendingApprovals.length})
+                Pipeline Overview ({allPendingApprovals.length})
               </button>
               <button
                 type="button"
@@ -632,7 +755,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                     : "text-[#64748B] hover:text-[#0F172A]"
                 }`}
               >
-                Consolidated Results
+                Semester Results
               </button>
             </div>
 
@@ -1699,6 +1822,238 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           </div>
         </div>
       )}
-    </AppShell>
+
+      {/* Launch Academic Track Modal */}
+      <Modal
+        isOpen={showLaunchTrackModal}
+        onClose={() => setShowLaunchTrackModal(false)}
+        title="Launch Academic Project Track"
+        description="Configure semester offering, project course type, student team vs individual solo mode, and enrolment rules for this academic cohort."
+        maxWidth="lg"
+      >
+        <form onSubmit={handleLaunchTrackSubmit} className="space-y-4 text-xs">
+          {/* Track Title */}
+          <Input
+            label="Academic Track Title"
+            value={newTrackName}
+            onChange={(e) => setNewTrackName(e.target.value)}
+            placeholder="e.g. Minor Project (Semester 6)"
+            required
+          />
+
+          {/* Academic Semester Term & Subject Offering Dropdowns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="Academic Semester Term"
+              value={newTrackSemesterTermId}
+              onChange={(e) => setNewTrackSemesterTermId(e.target.value)}
+              options={
+                semesterTerms.length > 0
+                  ? semesterTerms.map((st) => ({
+                      label: `Semester ${st.semesterNumber} (${st.parity} Sem • ${st.academicSessionName || "AY 2025-26"})`,
+                      value: st.id,
+                    }))
+                  : [
+                      { label: "Semester 6 (Even Sem • AY 2025-26)", value: "term-sem-6-even" },
+                      { label: "Semester 7 (Odd Sem • AY 2026-27)", value: "term-sem-7-odd" },
+                      { label: "Semester 8 (Even Sem • AY 2026-27)", value: "term-sem-8-even" },
+                    ]
+              }
+            />
+
+            <Select
+              label="Curriculum Project Offering"
+              value={newTrackSubjectOfferingId}
+              onChange={(e) => setNewTrackSubjectOfferingId(e.target.value)}
+              options={
+                subjectOfferings.length > 0
+                  ? subjectOfferings.map((so) => ({
+                      label: `${so.subjectCode} - ${so.subjectName} (${so.credits} Credits • ${so.subjectType})`,
+                      value: so.id,
+                    }))
+                  : [
+                      { label: "CS-606 - Minor Project (4 Credits • MinorProject)", value: "off-cs-606" },
+                      { label: "CS-705 - Major Project Phase-I (4 Credits • MajorProject)", value: "off-cs-705" },
+                      { label: "CS-805 - Major Project Phase-II (8 Credits • MajorProject)", value: "off-cs-805" },
+                    ]
+              }
+            />
+          </div>
+
+          {/* Participation Mode: Team vs Individual */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-900">
+              Participation Mode
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div
+                onClick={() => setNewTrackParticipationMode("Team")}
+                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${
+                  newTrackParticipationMode === "Team"
+                    ? "border-emerald-600 bg-emerald-50/50 shadow-2xs"
+                    : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <div className="pt-0.5 text-emerald-700">
+                  {newTrackParticipationMode === "Team" ? (
+                    <CheckSquare className="h-4 w-4" />
+                  ) : (
+                    <Square className="h-4 w-4 text-slate-400" />
+                  )}
+                </div>
+                <div>
+                  <div className="font-bold text-slate-900 text-xs">
+                    Team Mode (Default)
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-snug">
+                    Students collaborate in groups of 3–4 members with designated Team Lead and shared repository.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                onClick={() => setNewTrackParticipationMode("Individual")}
+                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${
+                  newTrackParticipationMode === "Individual"
+                    ? "border-emerald-600 bg-emerald-50/50 shadow-2xs"
+                    : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <div className="pt-0.5 text-emerald-700">
+                  {newTrackParticipationMode === "Individual" ? (
+                    <CheckSquare className="h-4 w-4" />
+                  ) : (
+                    <Square className="h-4 w-4 text-slate-400" />
+                  )}
+                </div>
+                <div>
+                  <div className="font-bold text-slate-900 text-xs">
+                    Individual Mode (Solo Project)
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-snug">
+                    1 student per capstone project. Teammate invitations are cleanly hidden in student workspace.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Enrolment Mode */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-900">
+              Student Enrolment Workflow
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {[
+                {
+                  mode: "SelfJoin" as const,
+                  title: "Self-Join",
+                  desc: "Students form groups and invite peers by University Roll / USN.",
+                },
+                {
+                  mode: "CoordinatorAllotted" as const,
+                  title: "Coordinator-Allotted",
+                  desc: "Project Coordinator pre-allots teams and assignments centrally.",
+                },
+                {
+                  mode: "Hybrid" as const,
+                  title: "Hybrid",
+                  desc: "Students propose teams, finalized upon coordinator review.",
+                },
+              ].map((m) => {
+                const isSelected = newTrackEnrolmentMode === m.mode;
+                return (
+                  <div
+                    key={m.mode}
+                    onClick={() => setNewTrackEnrolmentMode(m.mode)}
+                    className={`p-2.5 rounded-lg border transition-all cursor-pointer space-y-1 ${
+                      isSelected
+                        ? "border-emerald-600 bg-emerald-50/60 shadow-2xs"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {isSelected ? (
+                        <CheckSquare className="h-3.5 w-3.5 text-emerald-700" />
+                      ) : (
+                        <Square className="h-3.5 w-3.5 text-slate-400" />
+                      )}
+                      <span className="font-bold text-slate-900 text-xs">{m.title}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-600 leading-tight">{m.desc}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Cross Branch Teaming & Proposal Deadline */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div
+              onClick={() => setNewTrackAllowCrossBranch(!newTrackAllowCrossBranch)}
+              className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${
+                newTrackAllowCrossBranch
+                  ? "border-emerald-600 bg-emerald-50/50"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
+            >
+              <div className="pt-0.5 text-emerald-700">
+                {newTrackAllowCrossBranch ? (
+                  <CheckSquare className="h-4 w-4" />
+                ) : (
+                  <Square className="h-4 w-4 text-slate-400" />
+                )}
+              </div>
+              <div className="space-y-0.5">
+                <span className="font-bold text-slate-900 text-xs">
+                  Allow Cross-Branch Teams
+                </span>
+                <p className="text-[10px] text-slate-600 leading-snug">
+                  Permit students across CSE, IT, AIML, EC, ME to collaborate on interdisciplinary solutions.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <Input
+                type="date"
+                label="Proposal Submission Deadline"
+                value={newTrackProposalDeadline}
+                onChange={(e) => setNewTrackProposalDeadline(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Modal Actions */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowLaunchTrackModal(false)}
+              disabled={isLaunchingTrack}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isLaunchingTrack}
+              leftIcon={
+                isLaunchingTrack ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-300" />
+                )
+              }
+            >
+              {isLaunchingTrack ? "Launching Track..." : "Launch Academic Track"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
   );
 };

@@ -18,11 +18,16 @@ public class StudentController : ControllerBase
 {
     private readonly ProjectHubDbContext _context;
     private readonly ITenantContext _tenantContext;
+    private readonly IFileStorageService _fileStorageService;
 
-    public StudentController(ProjectHubDbContext context, ITenantContext tenantContext)
+    public StudentController(
+        ProjectHubDbContext context,
+        ITenantContext tenantContext,
+        IFileStorageService fileStorageService)
     {
         _context = context;
         _tenantContext = tenantContext;
+        _fileStorageService = fileStorageService;
     }
 
     private async Task<ProjectTeam?> GetCurrentStudentTeamAsync(Guid studentId)
@@ -30,6 +35,8 @@ public class StudentController : ControllerBase
         var membership = await _context.TeamMembers
             .Include(m => m.ProjectTeam)
                 .ThenInclude(t => t!.GuideUser)
+            .Include(m => m.ProjectTeam)
+                .ThenInclude(t => t!.AcademicTrack)
             .Include(m => m.ProjectTeam)
                 .ThenInclude(t => t!.Members)
                     .ThenInclude(mem => mem.User)
@@ -137,6 +144,9 @@ public class StudentController : ControllerBase
             IsRosterLocked = team.IsRosterLocked,
             MissedLogStreak = team.MissedLogStreak,
             ProjectLineageId = team.ProjectLineageId,
+            ParticipationMode = team.AcademicTrack?.ParticipationMode ?? ParticipationMode.Team,
+            EnrolmentMode = team.AcademicTrack?.EnrolmentMode ?? EnrolmentMode.SelfJoin,
+            AllowCrossBranchTeams = team.AcademicTrack?.AllowCrossBranchTeams ?? false,
             Members = members,
             Tasks = tasks,
             Artifacts = artifacts,
@@ -233,6 +243,95 @@ public class StudentController : ControllerBase
 
         await _context.SaveChangesAsync();
         return Ok(new { success = true, weekNumber = request.WeekNumber, status = "SubmittedPendingVerification" });
+    }
+
+    [HttpPost("artifacts/{slot}/upload")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(26_214_400)]
+    public async Task<ActionResult<ArtifactSlotDto>> UploadArtifactBinary(
+        [FromRoute] string slot,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "No deliverable file was uploaded." });
+        }
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (ext != ".pdf" && ext != ".ppt" && ext != ".pptx")
+        {
+            return BadRequest(new { message = "Invalid file type. Only PDF (.pdf) and PowerPoint (.ppt, .pptx) files are permitted in the Capstone Vault." });
+        }
+
+        if (file.Length > 26_214_400)
+        {
+            return BadRequest(new { message = "File size exceeds maximum allowed upload size of 25 MB." });
+        }
+
+        if (!Enum.TryParse<ArtifactSlotType>(slot, true, out var slotType))
+        {
+            return BadRequest(new { message = $"Invalid deliverable slot '{slot}'. Permitted slots: Synopsis, MidTermPPT, PlagiarismReport, FinalThesis." });
+        }
+
+        var studentId = _tenantContext.UserId!.Value;
+        var team = await GetCurrentStudentTeamAsync(studentId);
+        if (team == null) return NotFound(new { message = "Active project team not found." });
+
+        await using var stream = file.OpenReadStream();
+        var (storageKey, checksum, fileSizeBytes) = await _fileStorageService.SaveAsync(
+            team.CollegeId,
+            team.Id,
+            slotType.ToString(),
+            file.FileName,
+            stream,
+            cancellationToken);
+
+        var artifact = await _context.TeamArtifacts
+            .FirstOrDefaultAsync(a => a.ProjectTeamId == team.Id && a.SlotType == slotType && !a.IsDeleted, cancellationToken);
+
+        if (artifact == null)
+        {
+            artifact = new TeamArtifact
+            {
+                CollegeId = team.CollegeId,
+                ProjectTeamId = team.Id,
+                SlotType = slotType,
+                FileName = Path.GetFileName(file.FileName),
+                StorageKey = storageKey,
+                Sha256Checksum = checksum,
+                FileSizeBytes = fileSizeBytes,
+                Status = ArtifactStatus.Uploaded,
+                UploadedByUserId = studentId,
+                UpdatedAtUtc = DateTime.UtcNow
+            };
+            await _context.TeamArtifacts.AddAsync(artifact, cancellationToken);
+        }
+        else
+        {
+            artifact.FileName = Path.GetFileName(file.FileName);
+            artifact.StorageKey = storageKey;
+            artifact.Sha256Checksum = checksum;
+            artifact.FileSizeBytes = fileSizeBytes;
+            artifact.Status = ArtifactStatus.Uploaded;
+            artifact.UploadedByUserId = studentId;
+            artifact.ReviewerNote = null;
+            artifact.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return Ok(new ArtifactSlotDto
+        {
+            Id = artifact.Id,
+            SlotType = artifact.SlotType,
+            FileName = artifact.FileName,
+            StorageKey = artifact.StorageKey,
+            Sha256Checksum = artifact.Sha256Checksum,
+            FileSizeBytes = artifact.FileSizeBytes,
+            Status = artifact.Status,
+            ReviewerNote = artifact.ReviewerNote
+        });
     }
 
     [HttpPost("artifacts")]

@@ -16,7 +16,7 @@ import {
   Upload,
   Check,
 } from "lucide-react";
-import { AppShell } from "@/design-system/patterns/AppShell";
+import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
@@ -34,8 +34,35 @@ export default function AccountPage() {
   const [notificationDefenseReminders, setNotificationDefenseReminders] = useState(true);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Derive department details
-  const dept = departments.find((d) => d.id === currentPersona.departmentId) || departments[0];
+  // Derive department and organizational unit safely across all roles
+  const dept = departments?.find((d) => d.id === currentPersona?.departmentId) || departments?.[0];
+
+  const deptInfo =
+    currentPersona?.role === "SuperAdmin"
+      ? "Central Platform Operations (HQ)"
+      : currentPersona?.role === "CollegeAdmin"
+      ? "Office of the Principal / Dean"
+      : dept
+      ? `${dept.name} (${dept.code})`
+      : "Academic Affairs";
+
+  const institutionInfo =
+    currentPersona?.role === "SuperAdmin"
+      ? "ProjectHub Platform Cloud • Global Multi-Tenant"
+      : college?.name
+      ? `${college.name} • ${college.code || "Campus"}`
+      : "Engineering Campus";
+
+  const initials =
+    (currentPersona?.name || "User")
+      .replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.|Er\.)\s+/i, "")
+      .trim()
+      .split(/\s+/)
+      .map((n) => n[0])
+      .filter(Boolean)
+      .join("")
+      .substring(0, 2)
+      .toUpperCase() || "PH";
 
   const handleSavePreferences = (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,12 +76,13 @@ export default function AccountPage() {
     setTimeout(() => setSealSavedToast(false), 2500);
   };
 
+  useDashboardHeader({
+    title: "Account & Institutional Credentials",
+    breadcrumb: "User Profile & Security Settings",
+  });
+
   return (
-    <AppShell
-      pageTitle="Account &amp; Institutional Credentials"
-      breadcrumb="User Profile &amp; Security Settings"
-      activeTab="Profile"
-    >
+    <>
       {/* Toast Notification */}
       {(saveSuccess || sealSavedToast) && (
         <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-lg bg-[#111827] px-4 py-2.5 text-xs font-medium text-white shadow-xl border border-white/10 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -74,13 +102,7 @@ export default function AccountPage() {
         <div className="p-6 rounded-xl border border-[#E2E8F0] bg-white shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="h-14 w-14 rounded-full bg-brand-primary-tint border border-brand-primary-border text-brand-primary flex items-center justify-center font-bold text-xl font-mono">
-              {currentPersona.name
-                .replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.|Er\.)\s+/i, "")
-                .split(" ")
-                .map((n) => n[0])
-                .join("")
-                .substring(0, 2)
-                .toUpperCase()}
+              {initials}
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -92,10 +114,10 @@ export default function AccountPage() {
                 </Badge>
               </div>
               <div className="text-xs text-[#64748B]">
-                {formatRoleLabel(currentPersona.role)} • {dept.name} ({dept.code})
+                {formatRoleLabel(currentPersona.role)} • {deptInfo}
               </div>
               <div className="font-mono text-xs text-[#475569] tabular-nums">
-                {college.name} • Sagar Campus
+                {institutionInfo}
               </div>
             </div>
           </div>
@@ -173,8 +195,12 @@ export default function AccountPage() {
               />
 
               <Input
-                label="Institutional Campus"
-                value={`${college.name} (${college.code}) — Bhopal, MP`}
+                label={currentPersona.role === "SuperAdmin" ? "Operating Organization" : "Institutional Campus"}
+                value={
+                  currentPersona.role === "SuperAdmin"
+                    ? "ProjectHub Multi-Tenant Engineering Cloud"
+                    : `${college?.name || "SISTec Engineering"} (${college?.code || "SISTEC"}) — Bhopal, MP`
+                }
                 disabled
                 readOnly
               />
@@ -208,7 +234,7 @@ export default function AccountPage() {
                     {currentPersona.name}
                   </div>
                   <div className="text-[10px] text-emerald-800 font-mono">
-                    {formatRoleLabel(currentPersona.role)} • {college.code}
+                    {formatRoleLabel(currentPersona.role)} • {college?.code || "SISTEC"}
                   </div>
                   <div className="text-[9px] text-emerald-700 font-mono pt-1">
                     SHA-256: 7f83b165...4b92c81a • Timestamp Verified
@@ -364,6 +390,6 @@ export default function AccountPage() {
           </CardContent>
         </Card>
       </div>
-    </AppShell>
+    </>
   );
 }

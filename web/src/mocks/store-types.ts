@@ -50,6 +50,8 @@ export interface College {
 export interface Department {
   id: string;
   collegeId: string;
+  courseProgramId?: string;
+  courseProgramName?: string;
   name: string;
   code: string;
   hodUserId?: string;
@@ -58,6 +60,57 @@ export interface Department {
   facultyCount: number;
   criterion3Attainment?: number;
   hodSignOffStatus?: "Attested & Locked" | "Pending Sign-Off";
+}
+
+export interface CourseProgram {
+  id: string;
+  collegeId: string;
+  masterProgramId?: string;
+  level: "UG" | "PG" | "Diploma" | "Research";
+  code: string;
+  name: string;
+  totalSemesters: number;
+  isActive: boolean;
+}
+
+export interface AcademicSession {
+  id: string;
+  collegeId: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+}
+
+export interface SemesterTerm {
+  id: string;
+  collegeId: string;
+  departmentId: string;
+  departmentCode?: string;
+  courseProgramId?: string;
+  academicSessionId?: string;
+  academicSessionName?: string;
+  semesterNumber: number;
+  semesterName: string;
+  parity: "Odd" | "Even" | "Combined";
+  isActive: boolean;
+}
+
+export interface SubjectOffering {
+  id: string;
+  collegeId: string;
+  departmentId?: string;
+  semesterNumber?: number;
+  semesterTermId: string;
+  semesterTermName?: string;
+  curriculumSchemeCode?: string;
+  subjectCode: string;
+  subjectName: string;
+  subjectType: "Project" | "MinorProject" | "MajorProject" | "Dissertation" | "Internship" | "Seminar";
+  credits: number;
+  internalMaxMarks: number;
+  externalMaxMarks: number;
+  isActive: boolean;
 }
 
 export interface ProjectCycle {
@@ -71,6 +124,11 @@ export interface ProjectCycle {
   isActive: boolean;
   minTeamSize: number;
   maxTeamSize: number;
+  participationMode?: "Team" | "Individual";
+  enrolmentMode?: "SelfJoin" | "CoordinatorAllotted" | "Hybrid";
+  allowCrossBranchTeams?: boolean;
+  semesterTermId?: string;
+  subjectOfferingId?: string;
 }
 
 export interface TeamMember {
@@ -112,11 +170,15 @@ export interface WeeklyLog {
 export type ArtifactSlot = "Synopsis" | "MidTermPPT" | "PlagiarismReport" | "FinalThesis";
 
 export interface ProjectArtifact {
+  id?: string;
   slot: ArtifactSlot;
   name: string;
   fileName?: string;
   fileSize?: string;
   uploadedAt?: string;
+  storageKey?: string;
+  sha256Checksum?: string;
+  reviewerNote?: string;
   status: "Pending" | "Uploaded" | "Approved" | "NeedsRevision";
   similarityScore?: number;
 }
@@ -218,6 +280,9 @@ export interface TenantCollege {
   strictSsoEnforced?: boolean;
   renewalDate?: string;
   allocatedSeats?: number;
+  principalEmail?: string;
+  principalName?: string;
+  adminEmails?: string[];
 }
 
 export interface PilotRequest {

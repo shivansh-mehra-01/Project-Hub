@@ -19,7 +19,7 @@ import {
   UserX,
   RotateCcw,
 } from "lucide-react";
-import { AppShell } from "@/design-system/patterns/AppShell";
+import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
@@ -30,6 +30,8 @@ import { SlideOverDrawer } from "@/design-system/components/SlideOverDrawer";
 import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { Team } from "@/mocks/store-types";
+import { coordinatorApi, getAuthToken } from "@/lib/api";
+import { showToast } from "@/lib/toast";
 
 interface VivaPanel {
   panelId: string;
@@ -195,18 +197,35 @@ export const CoordinatorView: React.FC = () => {
     }, 600);
   };
 
-  const handleExportMarksheet = () => {
+  const handleExportMarksheet = async () => {
     setDownloadingMarksheet(true);
-    setTimeout(() => {
-      const header = "Enrollment USN,Student Name,Team Code,Guide Score (/30),Viva Defense Score (/50),Total (/100),Grade,NBA Attainment\n";
-      const rows =
-        "0176CS221045,Shivansh Mehra,2026-CS-MIN-01,28.5,44.5,89.0,A+,Met (High)\n" +
-        "0176CS221002,Aarav Sharma,2026-CS-MIN-01,27.0,43.0,86.0,A+,Met (High)\n" +
-        "0176CS221021,Diya Patel,2026-CS-MIN-01,26.5,42.0,84.5,A,Met (Target)\n" +
-        "0176CS221038,Rohan Gupta,2026-CS-MIN-02,25.0,39.5,79.0,B+,Met (Target)\n";
-      triggerDownload("RGPV_CSE_Semester_6_Evaluation_Marksheet.csv", header + rows, "text/csv;charset=utf-8;");
+    try {
+      if (getAuthToken()) {
+        const blob = await coordinatorApi.exportMarksheetCsvBlob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `RGPV_Project_Marks_CSE_${new Date().toISOString().split("T")[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        const header = "Enrollment_USN,Student_Name,Branch,Semester,Subject_Code,Team_Code,Project_Title,Guide_Name,Shared_Rubric_60,Individual_Score_40,Total_Marks_100,Attainment_Status\n";
+        const rows =
+          "0176CS221045,Shivansh Mehra,CSE,6,CS-606,2026-CS-MIN-01,\"Smart IoT Energy Monitoring & Anomaly Detection\",Prof. S. K. Verma,54,36,90,Target Met\n" +
+          "0176CS221002,Aarav Sharma,CSE,6,CS-606,2026-CS-MIN-01,\"Smart IoT Energy Monitoring & Anomaly Detection\",Prof. S. K. Verma,54,34,88,Target Met\n" +
+          "0176CS221021,Diya Patel,CSE,6,CS-606,2026-CS-MIN-01,\"Smart IoT Energy Monitoring & Anomaly Detection\",Prof. S. K. Verma,54,32,86,Target Met\n" +
+          "0176CS221038,Rohan Gupta,CSE,6,CS-606,2026-CS-MIN-02,\"Predictive Equipment Maintenance via LSTM\",Prof. Priya Nair,48,30,78,Target Met\n";
+        triggerDownload("RGPV_Project_Marks_CSE.csv", header + rows, "text/csv;charset=utf-8;");
+      }
+      showToast("RGPV University Examination Marksheet CSV exported successfully.", "success");
+    } catch (err) {
+      console.error("Export marksheet failed:", err);
+      showToast("Failed to export marksheet CSV.", "error");
+    } finally {
       setDownloadingMarksheet(false);
-    }, 600);
+    }
   };
 
   const handleDownloadDossier = () => {
@@ -255,8 +274,13 @@ export const CoordinatorView: React.FC = () => {
     setTimeout(() => setPanelSuccessMessage(""), 4000);
   };
 
+  useDashboardHeader({
+    title: "Coordinator Console",
+    breadcrumb: "CSE Minor Project — Semester 6 (2026)",
+  });
+
   return (
-    <AppShell pageTitle="Project Coordinator Batch Operations" breadcrumb="CSE Minor Project — Semester 6 (2026)">
+    <div className="space-y-6">
       {overrideToast && (
         <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-medium flex items-center justify-between shadow-xs animate-in fade-in duration-200">
           <div className="flex items-center gap-2">
@@ -1099,6 +1123,6 @@ export const CoordinatorView: React.FC = () => {
           </div>
         )}
       </SlideOverDrawer>
-    </AppShell>
+    </div>
   );
 };

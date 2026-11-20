@@ -247,8 +247,8 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
   // =========================================================================
   {
     path: "/coordinator",
-    label: "Batch Ops",
-    breadcrumbGroup: "Project Coordinator Batch Operations",
+    label: "Coordinator Console",
+    breadcrumbGroup: "Project Coordinator Operations",
     breadcrumbTitle: "CSE Minor Project — Semester 6 (2026)",
     iconName: "Briefcase",
     allowedRoles: ["Faculty"],

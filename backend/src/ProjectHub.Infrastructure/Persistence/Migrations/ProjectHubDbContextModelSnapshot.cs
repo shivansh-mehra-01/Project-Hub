@@ -22,19 +22,11 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("ProjectHub.Domain.Entities.AcademicTrack", b =>
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AcademicSession", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<string>("AcademicYear")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<bool>("AllowInterdisciplinaryTeams")
-                        .HasColumnType("boolean");
 
                     b.Property<Guid>("CollegeId")
                         .HasColumnType("uuid");
@@ -48,8 +40,80 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollegeId", "Label")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("AcademicSessions", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AcademicTrack", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AcademicYear")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("AllowCrossBranchTeams")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowInterdisciplinaryTeams")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CourseProgramId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CurriculumSchemeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("DepartmentId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("EnrolmentMode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<DateTime?>("FinalSubmissionDeadlineUtc")
                         .HasColumnType("timestamp with time zone");
@@ -77,11 +141,22 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("ParticipationMode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<DateTime?>("ProposalDeadlineUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("SemesterTermId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("SharedProjectRubricPct")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("SubjectOfferingId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -94,7 +169,17 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AcademicSessionId");
+
+                    b.HasIndex("CourseProgramId");
+
+                    b.HasIndex("CurriculumSchemeId");
+
                     b.HasIndex("DepartmentId");
+
+                    b.HasIndex("SemesterTermId");
+
+                    b.HasIndex("SubjectOfferingId");
 
                     b.HasIndex("CollegeId", "DepartmentId", "AcademicYear", "Name")
                         .IsUnique()
@@ -290,6 +375,119 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.ToTable("CourseOutcomeDefinitions", (string)null);
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.CourseProgram", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid?>("MasterProgramId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("TotalSemesters")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MasterProgramId");
+
+                    b.HasIndex("CollegeId", "Code")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("CoursePrograms", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.CurriculumScheme", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CourseProgramId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EffectiveAdmissionYear")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SchemeCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("SchemeVersion")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseProgramId");
+
+                    b.HasIndex("CollegeId", "CourseProgramId", "SchemeCode")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("CurriculumSchemes", (string)null);
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.Department", b =>
                 {
                     b.Property<Guid>("Id")
@@ -302,6 +500,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CourseProgramId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -347,9 +548,11 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CourseProgramId");
+
                     b.HasIndex("HodUserId");
 
-                    b.HasIndex("CollegeId", "Code")
+                    b.HasIndex("CollegeId", "CourseProgramId", "Code")
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
@@ -492,6 +695,287 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("IndividualStudentScores", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterBranch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MasterProgramId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MasterProgramId", "Code")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("MasterBranches", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterCurriculumScheme", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EffectiveFromYear")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("UniversityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UniversityId", "Code")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("MasterCurriculumSchemes", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterProgram", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DurationYears")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("TotalSemesters")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UniversityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UniversityId", "Code")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("MasterPrograms", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterSubjectTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DefaultMaxTeamSize")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DefaultMinTeamSize")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DefaultParticipationMode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MasterBranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MaxExternalMarks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaxInternalMarks")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SchemeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SemesterNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SubjectCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("SubjectName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SubjectType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemeId");
+
+                    b.HasIndex("MasterBranchId", "SemesterNumber", "SubjectCode")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("MasterSubjectTemplates", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterUniversity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("MasterUniversities", (string)null);
                 });
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.MasterNbaOutcome", b =>
@@ -851,6 +1335,65 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.ToTable("ProjectTeams", (string)null);
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.SemesterTerm", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Parity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SemesterName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("SemesterNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcademicSessionId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("CollegeId", "DepartmentId", "AcademicSessionId", "SemesterNumber")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("SemesterTerms", (string)null);
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.SprintTask", b =>
                 {
                     b.Property<Guid>("Id")
@@ -908,6 +1451,139 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("CollegeId", "ProjectTeamId", "Status");
 
                     b.ToTable("SprintTasks", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.StudentAcademicEnrollment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AcademicStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("AdmissionBatch")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CourseProgramId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CurrentSemesterTermId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("StudentUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseProgramId");
+
+                    b.HasIndex("CurrentSemesterTermId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("StudentUserId");
+
+                    b.HasIndex("CollegeId", "StudentUserId", "CurrentSemesterTermId")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("StudentAcademicEnrollments", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.SubjectOffering", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Credits")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("CurriculumSchemeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ExternalMaxMarks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InternalMaxMarks")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("SemesterTermId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SubjectCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("SubjectName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SubjectType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurriculumSchemeId");
+
+                    b.HasIndex("SemesterTermId");
+
+                    b.HasIndex("CollegeId", "SemesterTermId", "SubjectCode")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("SubjectOfferings", (string)null);
                 });
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.TeamArtifact", b =>
@@ -1393,22 +2069,68 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.ToTable("WeeklyLogbooks", (string)null);
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AcademicSession", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany("AcademicSessions")
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("College");
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.AcademicTrack", b =>
                 {
+                    b.HasOne("ProjectHub.Domain.Entities.AcademicSession", "AcademicSession")
+                        .WithMany("AcademicTracks")
+                        .HasForeignKey("AcademicSessionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
                         .WithMany("AcademicTracks")
                         .HasForeignKey("CollegeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ProjectHub.Domain.Entities.CourseProgram", "CourseProgram")
+                        .WithMany("AcademicTracks")
+                        .HasForeignKey("CourseProgramId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ProjectHub.Domain.Entities.CurriculumScheme", "CurriculumScheme")
+                        .WithMany()
+                        .HasForeignKey("CurriculumSchemeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("ProjectHub.Domain.Entities.Department", "Department")
                         .WithMany()
                         .HasForeignKey("DepartmentId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("ProjectHub.Domain.Entities.SemesterTerm", "SemesterTerm")
+                        .WithMany("AcademicTracks")
+                        .HasForeignKey("SemesterTermId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ProjectHub.Domain.Entities.SubjectOffering", "SubjectOffering")
+                        .WithMany("AcademicTracks")
+                        .HasForeignKey("SubjectOfferingId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("AcademicSession");
+
                     b.Navigation("College");
 
+                    b.Navigation("CourseProgram");
+
+                    b.Navigation("CurriculumScheme");
+
                     b.Navigation("Department");
+
+                    b.Navigation("SemesterTerm");
+
+                    b.Navigation("SubjectOffering");
                 });
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.CourseExitSurvey", b =>
@@ -1457,6 +2179,43 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Department");
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.CourseProgram", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany("CoursePrograms")
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.Master.MasterProgram", "MasterProgram")
+                        .WithMany()
+                        .HasForeignKey("MasterProgramId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("College");
+
+                    b.Navigation("MasterProgram");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.CurriculumScheme", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany("CurriculumSchemes")
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.CourseProgram", "CourseProgram")
+                        .WithMany("CurriculumSchemes")
+                        .HasForeignKey("CourseProgramId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("College");
+
+                    b.Navigation("CourseProgram");
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.Department", b =>
                 {
                     b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
@@ -1465,12 +2224,19 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ProjectHub.Domain.Entities.CourseProgram", "CourseProgram")
+                        .WithMany("Departments")
+                        .HasForeignKey("CourseProgramId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("ProjectHub.Domain.Entities.UserAccount", "HodUser")
                         .WithMany()
                         .HasForeignKey("HodUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("College");
+
+                    b.Navigation("CourseProgram");
 
                     b.Navigation("HodUser");
                 });
@@ -1525,6 +2291,57 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("StudentUser");
 
                     b.Navigation("VivaEvaluation");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterBranch", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.Master.MasterProgram", "MasterProgram")
+                        .WithMany("Branches")
+                        .HasForeignKey("MasterProgramId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MasterProgram");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterCurriculumScheme", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.Master.MasterUniversity", "University")
+                        .WithMany("CurriculumSchemes")
+                        .HasForeignKey("UniversityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("University");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterProgram", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.Master.MasterUniversity", "University")
+                        .WithMany("Programs")
+                        .HasForeignKey("UniversityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("University");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterSubjectTemplate", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.Master.MasterBranch", "MasterBranch")
+                        .WithMany("SubjectTemplates")
+                        .HasForeignKey("MasterBranchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.Master.MasterCurriculumScheme", "Scheme")
+                        .WithMany("SubjectTemplates")
+                        .HasForeignKey("SchemeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("MasterBranch");
+
+                    b.Navigation("Scheme");
                 });
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.ProblemBankStatement", b =>
@@ -1610,6 +2427,32 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("ParentProjectTeam");
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.SemesterTerm", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.AcademicSession", "AcademicSession")
+                        .WithMany("SemesterTerms")
+                        .HasForeignKey("AcademicSessionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany("SemesterTerms")
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.Department", "Department")
+                        .WithMany("SemesterTerms")
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AcademicSession");
+
+                    b.Navigation("College");
+
+                    b.Navigation("Department");
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.SprintTask", b =>
                 {
                     b.HasOne("ProjectHub.Domain.Entities.UserAccount", "AssignedToUser")
@@ -1626,6 +2469,75 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("AssignedToUser");
 
                     b.Navigation("ProjectTeam");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.StudentAcademicEnrollment", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany("StudentEnrollments")
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.CourseProgram", "CourseProgram")
+                        .WithMany()
+                        .HasForeignKey("CourseProgramId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.SemesterTerm", "CurrentSemesterTerm")
+                        .WithMany()
+                        .HasForeignKey("CurrentSemesterTermId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.Department", "Department")
+                        .WithMany("StudentEnrollments")
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.UserAccount", "StudentUser")
+                        .WithMany("AcademicEnrollments")
+                        .HasForeignKey("StudentUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("College");
+
+                    b.Navigation("CourseProgram");
+
+                    b.Navigation("CurrentSemesterTerm");
+
+                    b.Navigation("Department");
+
+                    b.Navigation("StudentUser");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.SubjectOffering", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany("SubjectOfferings")
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.CurriculumScheme", "CurriculumScheme")
+                        .WithMany("SubjectOfferings")
+                        .HasForeignKey("CurriculumSchemeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ProjectHub.Domain.Entities.SemesterTerm", "SemesterTerm")
+                        .WithMany("SubjectOfferings")
+                        .HasForeignKey("SemesterTermId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("College");
+
+                    b.Navigation("CurriculumScheme");
+
+                    b.Navigation("SemesterTerm");
                 });
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.TeamArtifact", b =>
@@ -1774,6 +2686,13 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("VerifiedByUser");
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AcademicSession", b =>
+                {
+                    b.Navigation("AcademicTracks");
+
+                    b.Navigation("SemesterTerms");
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.AcademicTrack", b =>
                 {
                     b.Navigation("CourseOutcomes");
@@ -1785,22 +2704,74 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.CollegeTenant", b =>
                 {
+                    b.Navigation("AcademicSessions");
+
                     b.Navigation("AcademicTracks");
 
+                    b.Navigation("CoursePrograms");
+
+                    b.Navigation("CurriculumSchemes");
+
                     b.Navigation("Departments");
+
+                    b.Navigation("SemesterTerms");
+
+                    b.Navigation("StudentEnrollments");
+
+                    b.Navigation("SubjectOfferings");
 
                     b.Navigation("Teams");
 
                     b.Navigation("Users");
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.CourseProgram", b =>
+                {
+                    b.Navigation("AcademicTracks");
+
+                    b.Navigation("CurriculumSchemes");
+
+                    b.Navigation("Departments");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.CurriculumScheme", b =>
+                {
+                    b.Navigation("SubjectOfferings");
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.Department", b =>
                 {
                     b.Navigation("CourseOutcomes");
 
+                    b.Navigation("SemesterTerms");
+
+                    b.Navigation("StudentEnrollments");
+
                     b.Navigation("Teams");
 
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterBranch", b =>
+                {
+                    b.Navigation("SubjectTemplates");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterCurriculumScheme", b =>
+                {
+                    b.Navigation("SubjectTemplates");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterProgram", b =>
+                {
+                    b.Navigation("Branches");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.Master.MasterUniversity", b =>
+                {
+                    b.Navigation("CurriculumSchemes");
+
+                    b.Navigation("Programs");
                 });
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.ProjectTeam", b =>
@@ -1822,8 +2793,22 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("WeeklyLogs");
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.SemesterTerm", b =>
+                {
+                    b.Navigation("AcademicTracks");
+
+                    b.Navigation("SubjectOfferings");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.SubjectOffering", b =>
+                {
+                    b.Navigation("AcademicTracks");
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.UserAccount", b =>
                 {
+                    b.Navigation("AcademicEnrollments");
+
                     b.Navigation("GuidedTeams");
 
                     b.Navigation("TeamMemberships");

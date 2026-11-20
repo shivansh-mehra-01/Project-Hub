@@ -135,4 +135,92 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         Assert.Equal(DbInitializer.Team01Id, workspace.TeamId);
         Assert.Equal(4, workspace.Artifacts.Count);
     }
+
+    [Fact]
+    public async Task CreateTenant_AutoCreatesCollegeAdminUser_AndReturnsAdminEmail()
+    {
+        var superAdminToken = await GetTokenForPersonaAsync("SuperAdmin");
+
+        var uniqueCode = "LNCT";
+        var uniqueDomain = "lnct.ac.in";
+
+        var createReq = new HttpRequestMessage(HttpMethod.Post, "/api/platform/tenants")
+        {
+            Content = JsonContent.Create(new CreateTenantRequest
+            {
+                Name = "Lakshmi Narain College of Technology",
+                TenantCode = uniqueCode,
+                SsoDomain = uniqueDomain,
+                LicenseTier = LicenseTier.Standard,
+                MaxStudentSeats = 1500,
+                StorageQuotaGb = 50,
+                EnforceStrictSso = true,
+                PrincipalName = "Dr. Anupam Shukla",
+                PrincipalEmail = "principal@lnct.ac.in"
+            })
+        };
+        createReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", superAdminToken);
+
+        var response = await _client.SendAsync(createReq);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var result = await response.Content.ReadFromJsonAsync<CreateTenantResponse>();
+        Assert.NotNull(result);
+        Assert.Equal("principal@lnct.ac.in", result.AdminEmail);
+        Assert.NotNull(result.Tenant);
+        Assert.Equal(uniqueCode, result.Tenant.TenantCode);
+        Assert.Equal("principal@lnct.ac.in", result.Tenant.PrincipalEmail);
+
+        // Verify the newly created CollegeAdmin can authenticate immediately
+        var loginRes = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            Email = "principal@lnct.ac.in",
+            Password = "Pass@1234"
+        });
+        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
+        var auth = await loginRes.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.NotNull(auth);
+        Assert.NotNull(auth.User);
+        Assert.Equal(UserRole.CollegeAdmin, auth.User.Role);
+        Assert.Equal("principal@lnct.ac.in", auth.User.Email);
+    }
+
+    [Fact]
+    public async Task ProvisionAdmin_ForTenant_CreatesOrUpdatesPrincipalAccount()
+    {
+        var superAdminToken = await GetTokenForPersonaAsync("SuperAdmin");
+
+        // Use BMSCE tenant ID from seed
+        var bmsceId = DbInitializer.BmsceTenantId;
+
+        var provisionReq = new HttpRequestMessage(HttpMethod.Post, $"/api/platform/tenants/{bmsceId}/provision-admin")
+        {
+            Content = JsonContent.Create(new ProvisionAdminRequest
+            {
+                FullName = "Dr. B.M.S. Principal",
+                Email = "principal@bmsce.ac.in"
+            })
+        };
+        provisionReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", superAdminToken);
+
+        var response = await _client.SendAsync(provisionReq);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var result = await response.Content.ReadFromJsonAsync<ProvisionAdminResponse>();
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("principal@bmsce.ac.in", result.AdminEmail);
+
+        // Verify authentication works
+        var loginRes = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            Email = "principal@bmsce.ac.in",
+            Password = "Pass@1234"
+        });
+        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
+        var auth = await loginRes.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.NotNull(auth);
+        Assert.NotNull(auth.User);
+        Assert.Equal(UserRole.CollegeAdmin, auth.User.Role);
+    }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Link from "next/link";
 import {
   FolderGit2,
@@ -22,8 +22,10 @@ import {
   Settings,
   FileUp,
   ShieldCheck,
+  Download,
+  Loader2,
 } from "lucide-react";
-import { AppShell } from "@/design-system/patterns/AppShell";
+import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
@@ -33,7 +35,9 @@ import { Input } from "@/design-system/components/Input";
 import { Textarea } from "@/design-system/components/Textarea";
 import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
-import { ArtifactSlot, TaskStatusType } from "@/mocks/store-types";
+import { ArtifactSlot, ProjectArtifact, TaskStatusType, Team } from "@/mocks/store-types";
+import { studentApi, getAuthToken } from "@/lib/api";
+import { showToast } from "@/lib/toast";
 import { GithubIcon } from "@/design-system/components/Icons";
 
 export const StudentWorkspaceView: React.FC = () => {
@@ -48,23 +52,46 @@ export const StudentWorkspaceView: React.FC = () => {
     inviteTeamMember,
     updateTeamRepo,
     uploadArtifact,
+    uploadArtifactBinary,
   } = useProjectHubStore();
 
-  // Post-approval sub-tabs
-  const [subTab, setSubTab] = useState<"board" | "logs" | "overview" | "evaluations">("board");
+  // Post-approval sub-tabs (5 dedicated tabs)
+  const [subTab, setSubTab] = useState<"tasks" | "logs" | "vault" | "evaluations" | "roster">("tasks");
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("subtab");
-      if (tabParam === "logs" || tabParam === "overview" || tabParam === "evaluations" || tabParam === "board") {
-        setSubTab(tabParam as "board" | "logs" | "overview" | "evaluations");
+      if (tabParam === "tasks" || tabParam === "board") {
+        setSubTab("tasks");
+      } else if (tabParam === "logs") {
+        setSubTab("logs");
+      } else if (tabParam === "vault") {
+        setSubTab("vault");
+      } else if (tabParam === "evaluations") {
+        setSubTab("evaluations");
+      } else if (tabParam === "roster" || tabParam === "overview") {
+        setSubTab("roster");
       }
     }
   }, []);
 
-  // New Task Modal
+  const subTabBreadcrumbs: Record<string, string> = {
+    tasks: "Sprint Tasks",
+    logs: "Weekly Logbook",
+    vault: "Capstone Vault",
+    evaluations: "Evaluations & Defense",
+    roster: "Team Roster & Settings",
+  };
+
+  useDashboardHeader({
+    title: "Project Workspace",
+    breadcrumb: `SISTec CSE • ${subTabBreadcrumbs[subTab] || "Minor Project"}`,
+  });
+
+  // New Task Modal & Selected Task for Details
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [selectedTaskForDetails, setSelectedTaskForDetails] = useState<Team["tasks"][0] | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("Shivansh Mehra");
   const [taskTag, setTaskTag] = useState("Hardware");
@@ -78,8 +105,10 @@ export const StudentWorkspaceView: React.FC = () => {
   const [logHours, setLogHours] = useState(14);
   const [logSuccess, setLogSuccess] = useState(false);
 
-  // Pre-approval proposal form
+  // Pre-approval proposal form & lock confirmation modal
   const [proposalSubmitted, setProposalSubmitted] = useState(false);
+  const [draftSavedToast, setDraftSavedToast] = useState(false);
+  const [showLockConfirmModal, setShowLockConfirmModal] = useState(false);
   const [inviteUsn, setInviteUsn] = useState("");
   const [inviteFeedback, setInviteFeedback] = useState("");
 
@@ -91,6 +120,42 @@ export const StudentWorkspaceView: React.FC = () => {
   const [uploadModalSlot, setUploadModalSlot] = useState<ArtifactSlot | null>(null);
   const [customFileName, setCustomFileName] = useState("");
   const [uploadToast, setUploadToast] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploadingArtifact, setIsUploadingArtifact] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDownloadArtifact = async (art?: ProjectArtifact) => {
+    if (!art?.fileName && !art?.id) return;
+    try {
+      if (art.id && getAuthToken()) {
+        const blob = await studentApi.downloadArtifactBlob(art.id);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = art.fileName || "deliverable.pdf";
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        showToast(`Downloaded ${art.fileName || "deliverable.pdf"}`);
+      } else {
+        const sampleText = `%PDF-1.4\n% Collabex Capstone Vault Deliverable\n% Team: ${myTeam.teamCode} (${myTeam.title})\n% Milestone: ${art.name || art.slot}\n% File: ${art.fileName}\n% Timestamp: ${new Date().toISOString()}\n%%EOF\n`;
+        const blob = new Blob([sampleText], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = art.fileName || `${art.slot}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        showToast(`Downloaded ${art.fileName || `${art.slot}.pdf`}`);
+      }
+    } catch (err) {
+      console.error("Artifact download failed:", err);
+      showToast("Download failed. Please try again.", "error");
+    }
+  };
 
   // Active student team
   const myTeam =
@@ -168,6 +233,7 @@ export const StudentWorkspaceView: React.FC = () => {
   }, [proposalTitle]);
 
   const isTeamLead = currentPersona.role === "TeamLead" || myTeam.members.some((m) => m.isLead && m.name === currentPersona.name);
+  const isSoloTrack = cycle.participationMode === "Individual" || myTeam.members.length === 1;
 
   const [githubUrl, setGithubUrl] = useState(myTeam.githubUrl || "https://github.com/sistec-cse/iot-energy-monitor");
   const [jiraUrl, setJiraUrl] = useState(myTeam.jiraUrl || "https://sistec-cse.atlassian.net/jira/projects/IOT");
@@ -222,7 +288,7 @@ export const StudentWorkspaceView: React.FC = () => {
   };
 
   return (
-    <AppShell pageTitle="Project Workspace" breadcrumb="SISTec CSE • Minor Project" activeTab="Workspace">
+    <div className="space-y-6">
       {/* Semester GPS Stepper */}
       <StepperGPS currentStep={lifecycleState === "offseason" ? 1 : lifecycleState === "preapproval" ? 2 : 4} />
 
@@ -273,15 +339,19 @@ export const StudentWorkspaceView: React.FC = () => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Team Formation Roster (Max 4 Members)</CardTitle>
+                  <CardTitle>
+                    {isSoloTrack ? "Solo Project Workspace" : "Team Formation Roster (Max 4 Members)"}
+                  </CardTitle>
                   <CardDescription>
-                    {isTeamLead
+                    {isSoloTrack
+                      ? "Operating in Individual Participation Mode. Solo workspace pre-allocated."
+                      : isTeamLead
                       ? "As Team Lead, invite peers and lock roster when complete."
                       : "Only the Team Lead can modify roster agreements."}
                   </CardDescription>
                 </div>
-                <Badge variant="warning" size="sm">
-                  Roster Unlocked
+                <Badge variant={isSoloTrack ? "success" : "warning"} size="sm" dot={isSoloTrack}>
+                  {isSoloTrack ? "Solo Mode • Ready" : "Roster Unlocked"}
                 </Badge>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -291,11 +361,9 @@ export const StudentWorkspaceView: React.FC = () => {
                       <div>
                         <div className="font-semibold text-[#0F172A] flex items-center gap-1.5">
                           <span>{m.name}</span>
-                          {m.isLead && (
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                              Lead
-                            </span>
-                          )}
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                            {isSoloTrack ? "Solo Author" : m.isLead ? "Lead" : "Member"}
+                          </span>
                         </div>
                         <span className="text-[11px] text-[#64748B]">{m.roleDescription}</span>
                       </div>
@@ -304,7 +372,12 @@ export const StudentWorkspaceView: React.FC = () => {
                   ))}
                 </div>
 
-                {isTeamLead ? (
+                {isSoloTrack ? (
+                  <div className="p-3 rounded-lg bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>Teammate invitation omitted. You are registered in solo participation mode. Proceed with defining your project proposal.</span>
+                  </div>
+                ) : isTeamLead ? (
                   <form onSubmit={handleSendInvite} className="flex gap-2">
                     <Input
                       placeholder="Enter student USN (e.g. 0176CS221038)"
@@ -364,15 +437,37 @@ export const StudentWorkspaceView: React.FC = () => {
                 </div>
 
                 {isTeamLead && (
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={handleLockAndSubmitProposal}
-                    className="w-full"
-                    leftIcon={<Lock className="h-3.5 w-3.5" />}
-                  >
-                    {proposalSubmitted ? "Submitted to Guide!" : "Lock Roster & Submit to Guide"}
-                  </Button>
+                  <div className="space-y-2 pt-1">
+                    {draftSavedToast && (
+                      <div className="p-2 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-1.5 animate-in fade-in duration-150">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <span>Proposal draft saved locally. Complete when ready.</span>
+                      </div>
+                    )}
+                    <div className="flex gap-2.5">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        type="button"
+                        onClick={() => {
+                          setDraftSavedToast(true);
+                          setTimeout(() => setDraftSavedToast(false), 3000);
+                        }}
+                        className="flex-1"
+                      >
+                        Save Proposal Draft
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => setShowLockConfirmModal(true)}
+                        className="flex-1"
+                        leftIcon={<Lock className="h-3.5 w-3.5" />}
+                      >
+                        {proposalSubmitted ? "Submitted to Guide!" : "Lock Roster & Submit to Guide"}
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -422,19 +517,19 @@ export const StudentWorkspaceView: React.FC = () => {
       {/* ========================================================================= */}
       {lifecycleState === "active" && (
         <div className="space-y-6">
-          {/* Active Workspace Sub-Tabs */}
+          {/* Active Workspace 5 Clean Sub-Tabs */}
           <div className="flex border-b border-[#E2E8F0] gap-4 text-xs font-semibold select-none overflow-x-auto">
             <button
               type="button"
-              onClick={() => setSubTab("board")}
+              onClick={() => setSubTab("tasks")}
               className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                subTab === "board"
+                subTab === "tasks"
                   ? "border-b-2 border-brand-primary text-brand-primary"
                   : "text-[#64748B] hover:text-[#0F172A]"
               }`}
             >
               <Kanban className="h-4 w-4" strokeWidth={1.75} />
-              <span>Sprint Board</span>
+              <span>Sprint Tasks</span>
             </button>
             <button
               type="button"
@@ -446,19 +541,19 @@ export const StudentWorkspaceView: React.FC = () => {
               }`}
             >
               <FileCheck2 className="h-4 w-4" strokeWidth={1.75} />
-              <span>Friday Logs &amp; Docs</span>
+              <span>Weekly Logbook</span>
             </button>
             <button
               type="button"
-              onClick={() => setSubTab("overview")}
+              onClick={() => setSubTab("vault")}
               className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                subTab === "overview"
+                subTab === "vault"
                   ? "border-b-2 border-brand-primary text-brand-primary"
                   : "text-[#64748B] hover:text-[#0F172A]"
               }`}
             >
-              <FolderGit2 className="h-4 w-4" strokeWidth={1.75} />
-              <span>Team Overview &amp; Roster</span>
+              <ShieldCheck className="h-4 w-4" strokeWidth={1.75} />
+              <span>Capstone Vault</span>
             </button>
             <button
               type="button"
@@ -470,12 +565,26 @@ export const StudentWorkspaceView: React.FC = () => {
               }`}
             >
               <CheckCircle2 className="h-4 w-4" strokeWidth={1.75} />
-              <span>Rubric Evaluations</span>
+              <span>Evaluations &amp; Defense</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubTab("roster")}
+              className={`pb-2.5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                subTab === "roster"
+                  ? "border-b-2 border-brand-primary text-brand-primary"
+                  : "text-[#64748B] hover:text-[#0F172A]"
+              }`}
+            >
+              <Users2 className="h-4 w-4" strokeWidth={1.75} />
+              <span>Team Roster &amp; Settings</span>
             </button>
           </div>
 
-          {/* SUB-TAB A: 3-COLUMN KANBAN SPRINT BOARD */}
-          {subTab === "board" && (
+          {/* ========================================================================= */}
+          {/* SUB-TAB 1: SPRINT TASKS (KANBAN)                                          */}
+          {/* ========================================================================= */}
+          {subTab === "tasks" && (
             <div className="space-y-4">
               {taskCreatedToast && (
                 <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2 animate-in fade-in duration-200">
@@ -487,26 +596,16 @@ export const StudentWorkspaceView: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-[#0F172A]">Sprint Tasks &amp; Milestones</h3>
-                  <p className="text-xs text-[#64748B]">Click any task to advance status (Todo &rarr; InProgress &rarr; Done).</p>
+                  <p className="text-xs text-[#64748B]">Click any task to inspect details. Update progress via the status pill.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {isTeamLead && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      leftIcon={<Settings className="h-3.5 w-3.5" />}
-                      onClick={handleOpenRepoModal}
-                    >
-                      Repo &amp; Jira Links
-                    </Button>
-                  )}
                   <Button
                     size="sm"
                     variant="primary"
                     leftIcon={<Plus className="h-3.5 w-3.5" />}
                     onClick={() => setShowTaskModal(true)}
                   >
-                    New Task
+                    + New Task
                   </Button>
                 </div>
               </div>
@@ -522,7 +621,9 @@ export const StudentWorkspaceView: React.FC = () => {
                       className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3 space-y-3"
                     >
                       <div className="flex items-center justify-between px-1">
-                        <span className="text-xs font-bold text-[#0F172A]">{columnStatus}</span>
+                        <span className="text-xs font-bold text-[#0F172A]">
+                          {columnStatus === "InProgress" ? "In Progress" : columnStatus}
+                        </span>
                         <span className="font-mono text-xs bg-white px-2 py-0.5 rounded-full border border-[#CBD5E1] text-[#475569] tabular-nums">
                           {tasksInCol.length}
                         </span>
@@ -532,16 +633,8 @@ export const StudentWorkspaceView: React.FC = () => {
                         {tasksInCol.map((task) => (
                           <div
                             key={task.id}
-                            onClick={() => {
-                              const next =
-                                task.status === "Todo"
-                                  ? "InProgress"
-                                  : task.status === "InProgress"
-                                  ? "Done"
-                                  : "Todo";
-                              updateTaskStatus(task.id, next);
-                            }}
-                            className="p-3 bg-white rounded-lg border border-[#E2E8F0] shadow-2xs hover:border-brand-primary transition-all cursor-pointer space-y-2"
+                            onClick={() => setSelectedTaskForDetails(task)}
+                            className="p-3 bg-white rounded-lg border border-[#E2E8F0] shadow-2xs hover:border-brand-primary transition-all cursor-pointer space-y-2 group"
                           >
                             <div className="flex items-center justify-between">
                               <span className="text-[10px] font-bold text-brand-primary bg-brand-primary-tint px-1.5 py-0.2 rounded border border-brand-primary-border">
@@ -551,19 +644,31 @@ export const StudentWorkspaceView: React.FC = () => {
                                 Due {task.dueDate}
                               </span>
                             </div>
-                            <h4 className="text-xs font-semibold text-[#0F172A] leading-snug">
+                            <h4 className="text-xs font-semibold text-[#0F172A] leading-snug group-hover:text-brand-primary transition-colors">
                               {task.title}
                             </h4>
                             <div className="flex items-center justify-between text-[11px] text-[#64748B] pt-1 border-t border-[#E2E8F0]">
-                              <span>{task.assigneeName}</span>
-                              <span className="text-[10px] text-emerald-600 font-medium">Click to Advance</span>
+                              <span className="truncate max-w-[120px]">{task.assigneeName}</span>
+                              <select
+                                value={task.status}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  updateTaskStatus(task.id, e.target.value as TaskStatusType);
+                                }}
+                                className="text-[10px] font-semibold font-mono rounded px-1.5 py-0.5 border border-slate-200 bg-slate-50 text-slate-700 hover:border-brand-primary cursor-pointer focus:outline-hidden"
+                              >
+                                <option value="Todo">Todo</option>
+                                <option value="InProgress">In Progress</option>
+                                <option value="Done">Done</option>
+                              </select>
                             </div>
                           </div>
                         ))}
 
                         {tasksInCol.length === 0 && (
                           <div className="h-28 flex items-center justify-center text-[11px] text-[#94A3B8] border border-dashed border-[#CBD5E1] rounded-lg">
-                            No {columnStatus} tasks
+                            No {columnStatus === "InProgress" ? "in-progress" : columnStatus.toLowerCase()} tasks
                           </div>
                         )}
                       </div>
@@ -574,8 +679,119 @@ export const StudentWorkspaceView: React.FC = () => {
             </div>
           )}
 
-          {/* SUB-TAB B: FRIDAY LOGS & DELIVERABLE VAULT */}
+          {/* ========================================================================= */}
+          {/* SUB-TAB 2: WEEKLY LOGBOOK                                                 */}
+          {/* ========================================================================= */}
           {subTab === "logs" && (
+            <div className="space-y-6">
+              {/* Two columns: Submission Form & Verified History */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                {/* Friday Submission Form (5 cols) */}
+                <div className="md:col-span-5 space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Submit Friday Weekly Check-In</CardTitle>
+                      <CardDescription>
+                        Mandatory weekly logbook reviewable by designated guide {myTeam.guideName || "Prof. S. K. Verma"}.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleSubmitLog} className="space-y-3.5">
+                        <Textarea
+                          label="1. Accomplishments This Week"
+                          placeholder="Tasks executed, hardware calibrated, models trained..."
+                          value={logAccomplishments}
+                          onChange={(e) => setLogAccomplishments(e.target.value)}
+                          required
+                          rows={3}
+                        />
+                        <Textarea
+                          label="2. Blockers & Technical Roadblocks"
+                          placeholder="Hardware shortages, software integration errors..."
+                          value={logBlockers}
+                          onChange={(e) => setLogBlockers(e.target.value)}
+                          rows={2}
+                        />
+                        <Textarea
+                          label="3. Planned Deliverables Next Week"
+                          placeholder="Upcoming milestones and deliverables..."
+                          value={logNextWeek}
+                          onChange={(e) => setLogNextWeek(e.target.value)}
+                          rows={2}
+                        />
+                        <Input
+                          label="Hours Contributed this Week"
+                          type="number"
+                          value={logHours}
+                          onChange={(e) => setLogHours(parseInt(e.target.value) || 0)}
+                        />
+                        <Button type="submit" variant="primary" size="md" className="w-full">
+                          {logSuccess ? "Log Submitted & Pending Guide Sign-off!" : "Submit Friday Check-In"}
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Verified Diary (7 cols) */}
+                <div className="md:col-span-7 space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Verified Logbook History</CardTitle>
+                      <CardDescription>
+                        Guide-stamped weekly engineering diary feeding NBA Criterion 2 student tracking.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {myTeam.weeklyLogs.length === 0 ? (
+                        <EmptyState
+                          title="No Weekly Logs Recorded"
+                          description="Submit your first Friday check-in to start logging engineering hours."
+                        />
+                      ) : (
+                        myTeam.weeklyLogs.map((log) => (
+                          <div
+                            key={log.id}
+                            className="p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-2 text-xs"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[#0F172A]">
+                                Week {log.weekNumber} Check-In • {log.dateSubmitted}
+                              </span>
+                              <Badge
+                                variant={
+                                  log.guideStatus === "Approved"
+                                    ? "success"
+                                    : log.guideStatus === "NeedsRevision"
+                                    ? "warning"
+                                    : "info"
+                                }
+                                size="sm"
+                                dot
+                              >
+                                {log.guideStatus === "NeedsRevision" ? "Needs Revision" : log.guideStatus}
+                              </Badge>
+                            </div>
+                            <p className="text-[#475569] leading-relaxed">{log.accomplishments}</p>
+                            {log.guideRemarks && (
+                              <div className="p-2 bg-emerald-50 rounded border border-emerald-200 text-emerald-800 text-[11px]">
+                                <strong>Guide Remarks:</strong> {log.guideRemarks}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SUB-TAB 3: CAPSTONE VAULT                                                 */}
+          {/* ========================================================================= */}
+          {subTab === "vault" && (
             <div className="space-y-6">
               {uploadToast && (
                 <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2 animate-in fade-in duration-200">
@@ -595,7 +811,7 @@ export const StudentWorkspaceView: React.FC = () => {
                       </Badge>
                     </div>
                     <CardDescription>
-                      Mandatory institutional milestone artifacts with versioning and plagiarism verification.
+                      Mandatory institutional milestone deliverables with cryptographic timestamps and plagiarism verification.
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
@@ -626,7 +842,7 @@ export const StudentWorkspaceView: React.FC = () => {
                       },
                       {
                         slot: "PlagiarismReport" as ArtifactSlot,
-                        title: "3. Plagiarism Report",
+                        title: "3. Plagiarism Report (<15%)",
                         fallbackFile: "Turnitin-Originality-8pct.pdf",
                         fallbackSize: "620 KB",
                         defaultStatus: "Approved",
@@ -673,19 +889,41 @@ export const StudentWorkspaceView: React.FC = () => {
                             {isUploaded ? (
                               <div className="p-2 rounded bg-white border border-[#CBD5E1] space-y-1">
                                 <div className="flex items-center justify-between text-[11px]">
-                                  <span className="font-mono font-medium text-slate-800 truncate max-w-[130px]">
-                                    {fileName}
-                                  </span>
-                                  <span className="font-mono text-[10px] text-slate-400 shrink-0">
-                                    {fileSize}
-                                  </span>
-                                </div>
-                                {similarity !== undefined && (
-                                  <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-semibold font-mono">
-                                    <ShieldCheck className="h-3 w-3" />
-                                    <span>{similarity}% Similarity (Pass)</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadArtifact(artifact)}
+                                    className="font-mono font-medium text-brand-primary hover:underline truncate max-w-[130px] flex items-center gap-1 cursor-pointer text-left"
+                                    title="Download vault deliverable"
+                                  >
+                                    <span className="truncate">{fileName}</span>
+                                  </button>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className="font-mono text-[10px] text-slate-400">
+                                      {fileSize}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadArtifact(artifact)}
+                                      className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-brand-primary cursor-pointer"
+                                      title="Download artifact"
+                                    >
+                                      <Download className="h-3 w-3" />
+                                    </button>
                                   </div>
-                                )}
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {(artifact?.sha256Checksum || item.defaultStatus === "Approved") && (
+                                    <div className="flex items-center gap-1 text-[9px] text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                      <span>SHA: {(artifact?.sha256Checksum || "9f86d081").slice(0, 8)}...</span>
+                                    </div>
+                                  )}
+                                  {similarity !== undefined && (
+                                    <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-semibold font-mono">
+                                      <ShieldCheck className="h-3 w-3" />
+                                      <span>{similarity}% Similarity (Pass)</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             ) : (
                               <div className="p-2.5 rounded bg-white border border-dashed border-[#CBD5E1] text-center text-[11px] text-[#94A3B8]">
@@ -699,6 +937,7 @@ export const StudentWorkspaceView: React.FC = () => {
                             variant={isUploaded ? "secondary" : "primary"}
                             onClick={() => {
                               setUploadModalSlot(item.slot);
+                              setSelectedFile(null);
                               setCustomFileName(
                                 fileName ||
                                   (item.slot === "FinalThesis"
@@ -717,107 +956,85 @@ export const StudentWorkspaceView: React.FC = () => {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Two columns: Submission Form & Verified History */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-              {/* Friday Submission Form (5 cols) */}
-              <div className="md:col-span-5 space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Submit Friday Weekly Check-In</CardTitle>
-                    <CardDescription>
-                      Mandatory weekly logbook reviewable by designated guide {myTeam.guideName || "Prof. S. K. Verma"}.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <form onSubmit={handleSubmitLog} className="space-y-3.5">
-                      <Textarea
-                        label="1. Accomplishments This Week"
-                        placeholder="Tasks executed, hardware calibrated, models trained..."
-                        value={logAccomplishments}
-                        onChange={(e) => setLogAccomplishments(e.target.value)}
-                        required
-                        rows={3}
-                      />
-                      <Textarea
-                        label="2. Blockers & Technical Roadblocks"
-                        placeholder="Hardware shortages, software integration errors..."
-                        value={logBlockers}
-                        onChange={(e) => setLogBlockers(e.target.value)}
-                        rows={2}
-                      />
-                      <Textarea
-                        label="3. Planned Deliverables Next Week"
-                        placeholder="Upcoming milestones and deliverables..."
-                        value={logNextWeek}
-                        onChange={(e) => setLogNextWeek(e.target.value)}
-                        rows={2}
-                      />
-                      <Input
-                        label="Hours Contributed this Week"
-                        type="number"
-                        value={logHours}
-                        onChange={(e) => setLogHours(parseInt(e.target.value) || 0)}
-                      />
-                      <Button type="submit" variant="primary" size="md" className="w-full">
-                        {logSuccess ? "Log Submitted & Pending Guide Sign-off!" : "Submit Friday Check-In"}
-                      </Button>
-                    </form>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Verified Diary & Deliverable Vault (7 cols) */}
-              <div className="md:col-span-7 space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Verified Logbook History</CardTitle>
-                    <CardDescription>
-                      Guide-stamped weekly engineering diary feeding NBA Criterion 2 student tracking.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {myTeam.weeklyLogs.length === 0 ? (
-                      <EmptyState
-                        title="No Weekly Logs Recorded"
-                        description="Submit your first Friday check-in to start logging engineering hours."
-                      />
-                    ) : (
-                      myTeam.weeklyLogs.map((log) => (
-                        <div
-                          key={log.id}
-                          className="p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-2 text-xs"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-[#0F172A]">
-                              Week {log.weekNumber} Check-In • {log.dateSubmitted}
-                            </span>
-                            <Badge
-                              variant={log.guideStatus === "Approved" ? "success" : "warning"}
-                              size="sm"
-                              dot
-                            >
-                              {log.guideStatus}
-                            </Badge>
-                          </div>
-                          <p className="text-[#475569] leading-relaxed">{log.accomplishments}</p>
-                          {log.guideRemarks && (
-                            <div className="p-2 bg-emerald-50 rounded border border-emerald-200 text-emerald-800 text-[11px]">
-                              <strong>Guide Remarks:</strong> {log.guideRemarks}
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
             </div>
           )}
 
-          {/* SUB-TAB C: OVERVIEW */}
-          {subTab === "overview" && (
+          {/* ========================================================================= */}
+          {/* SUB-TAB 4: EVALUATIONS & DEFENSE                                          */}
+          {/* ========================================================================= */}
+          {subTab === "evaluations" && (
+            myTeam.weeklyLogs.length >= 4 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Mid-Semester Defense Evaluation Scorecard</CardTitle>
+                  <CardDescription>
+                    Official viva panel marks mapped to Course Outcomes (COs) and NBA Program Outcomes (POs).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-[#64748B]">Consolidated Defense Score</span>
+                      <div className="text-2xl font-bold font-mono text-brand-primary tabular-nums">
+                        44.5 / 50.0
+                      </div>
+                    </div>
+                    <Badge variant="success" size="md" dot>
+                      Attainment Exceeds Target (89.0%)
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex justify-between">
+                      <div>
+                        <div className="font-semibold text-[#0F172A]">Problem Formulation &amp; Literature Review</div>
+                        <div className="text-[11px] text-[#64748B]">NBA PO2 • Bloom&apos;s Level 2</div>
+                      </div>
+                      <span className="font-mono font-bold text-[#0F172A]">9.0 / 10.0</span>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex justify-between">
+                      <div>
+                        <div className="font-semibold text-[#0F172A]">System Architecture &amp; High-Level Design</div>
+                        <div className="text-[11px] text-[#64748B]">NBA PO3 • Bloom&apos;s Level 3</div>
+                      </div>
+                      <span className="font-mono font-bold text-[#0F172A]">14.0 / 15.0</span>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex justify-between">
+                      <div>
+                        <div className="font-semibold text-[#0F172A]">Implementation &amp; Hardware Prototype</div>
+                        <div className="text-[11px] text-[#64748B]">NBA PO5 • Bloom&apos;s Level 5</div>
+                      </div>
+                      <span className="font-mono font-bold text-[#0F172A]">13.0 / 15.0</span>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex justify-between">
+                      <div>
+                        <div className="font-semibold text-[#0F172A]">Viva Defense &amp; Technical Questions</div>
+                        <div className="text-[11px] text-[#64748B]">NBA PO10 • Bloom&apos;s Level 4</div>
+                      </div>
+                      <span className="font-mono font-bold text-[#0F172A]">8.5 / 10.0</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="py-12">
+                  <EmptyState
+                    title="Defense Evaluation Pending"
+                    description="Marks and Course Outcome (CO) attainments will appear here once the viva panel locks final scores."
+                  />
+                </CardContent>
+              </Card>
+            )
+          )}
+
+          {/* ========================================================================= */}
+          {/* SUB-TAB 5: TEAM ROSTER & SETTINGS                                         */}
+          {/* ========================================================================= */}
+          {subTab === "roster" && (
             <div className="space-y-4">
               <Card>
                 <CardHeader>
@@ -920,68 +1137,26 @@ export const StudentWorkspaceView: React.FC = () => {
                       ))}
                     </div>
                   </div>
+
+                  {/* Continue into Next Track Banner */}
+                  <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4">
+                    <div className="space-y-0.5">
+                      <span className="font-bold text-xs text-emerald-950 font-heading">
+                        Academic Continuity to Major Project Phase-I
+                      </span>
+                      <p className="text-[11px] text-emerald-800">
+                        Carry forward repository telemetry, team roster, and prototype architecture into Semester 7.
+                      </p>
+                    </div>
+                    <Link href="/student/portfolio">
+                      <Button size="sm" variant="primary" className="whitespace-nowrap">
+                        Continue into Next Track &rarr;
+                      </Button>
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             </div>
-          )}
-
-          {/* SUB-TAB D: EVALUATIONS */}
-          {subTab === "evaluations" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Mid-Semester Defense Evaluation Scorecard</CardTitle>
-                <CardDescription>
-                  Official viva panel marks mapped to Course Outcomes (COs) and NBA Program Outcomes (POs).
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-[#64748B]">Consolidated Defense Score</span>
-                    <div className="text-2xl font-bold font-mono text-brand-primary tabular-nums">
-                      44.5 / 50.0
-                    </div>
-                  </div>
-                  <Badge variant="success" size="md" dot>
-                    Attainment Exceeds Target (89.0%)
-                  </Badge>
-                </div>
-
-                <div className="space-y-2 text-xs">
-                  <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex justify-between">
-                    <div>
-                      <div className="font-semibold text-[#0F172A]">Problem Formulation &amp; Literature Review</div>
-                      <div className="text-[11px] text-[#64748B]">NBA PO2 • Bloom&apos;s Level 2</div>
-                    </div>
-                    <span className="font-mono font-bold text-[#0F172A]">9.0 / 10.0</span>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex justify-between">
-                    <div>
-                      <div className="font-semibold text-[#0F172A]">System Architecture &amp; High-Level Design</div>
-                      <div className="text-[11px] text-[#64748B]">NBA PO3 • Bloom&apos;s Level 3</div>
-                    </div>
-                    <span className="font-mono font-bold text-[#0F172A]">14.0 / 15.0</span>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex justify-between">
-                    <div>
-                      <div className="font-semibold text-[#0F172A]">Implementation &amp; Hardware Prototype</div>
-                      <div className="text-[11px] text-[#64748B]">NBA PO5 • Bloom&apos;s Level 5</div>
-                    </div>
-                    <span className="font-mono font-bold text-[#0F172A]">13.0 / 15.0</span>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white flex justify-between">
-                    <div>
-                      <div className="font-semibold text-[#0F172A]">Viva Defense &amp; Technical Questions</div>
-                      <div className="text-[11px] text-[#64748B]">NBA PO10 • Bloom&apos;s Level 4</div>
-                    </div>
-                    <span className="font-mono font-bold text-[#0F172A]">8.5 / 10.0</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           )}
         </div>
       )}
@@ -1108,41 +1283,103 @@ export const StudentWorkspaceView: React.FC = () => {
         description="Attach official deliverable to lock submission timestamp for accreditation review."
         footer={
           <div className="flex items-center justify-end gap-2 w-full">
-            <Button variant="ghost" size="sm" onClick={() => setUploadModalSlot(null)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setUploadModalSlot(null);
+                setSelectedFile(null);
+              }}
+              disabled={isUploadingArtifact}
+            >
               Cancel
             </Button>
             <Button
               variant="primary"
               size="sm"
-              onClick={() => {
+              disabled={isUploadingArtifact}
+              onClick={async () => {
                 if (!uploadModalSlot) return;
+                setIsUploadingArtifact(true);
                 const slot = uploadModalSlot;
-                const name = customFileName.trim() || `${myTeam.teamCode}-${slot}.pdf`;
-                const size =
-                  slot === "MidTermPPT" ? "14.2 MB" : slot === "FinalThesis" ? "4.8 MB" : "1.8 MB";
+                const name = customFileName.trim() || selectedFile?.name || `${myTeam.teamCode}-${slot}.pdf`;
                 const sim = slot === "PlagiarismReport" ? 8 : undefined;
-                uploadArtifact(myTeam.id, slot, name, size, sim);
-                setUploadModalSlot(null);
-                setUploadToast(`Deliverable "${name}" successfully archived in Document Vault.`);
-                setTimeout(() => setUploadToast(null), 3500);
+
+                try {
+                  if (selectedFile) {
+                    await uploadArtifactBinary(myTeam.id, slot, selectedFile, name, sim);
+                  } else {
+                    const fallbackBlob = new File(
+                      [`%PDF-1.4\n% Collabex Capstone Vault Deliverable\n% Team: ${myTeam.teamCode}\n% Slot: ${slot}\n% File: ${name}\n%%EOF\n`],
+                      name,
+                      { type: slot === "MidTermPPT" ? "application/vnd.ms-powerpoint" : "application/pdf" }
+                    );
+                    await uploadArtifactBinary(myTeam.id, slot, fallbackBlob, name, sim);
+                  }
+                  setUploadModalSlot(null);
+                  setSelectedFile(null);
+                  setUploadToast(`Deliverable "${name}" successfully archived in Document Vault.`);
+                  setTimeout(() => setUploadToast(null), 3500);
+                } catch (err) {
+                  console.error("Upload failed:", err);
+                } finally {
+                  setIsUploadingArtifact(false);
+                }
               }}
+              leftIcon={
+                isUploadingArtifact ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )
+              }
             >
-              Upload &amp; Commit to Vault
+              {isUploadingArtifact ? "Uploading to Vault..." : "Upload & Commit to Vault"}
             </Button>
           </div>
         }
       >
         <div className="space-y-3.5 text-xs">
-          <div className="border-2 border-dashed border-[#CBD5E1] rounded-xl p-6 text-center bg-[#F8FAFC] space-y-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".pdf,.ppt,.pptx"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) {
+                setSelectedFile(f);
+                setCustomFileName(f.name);
+              }
+            }}
+          />
+
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-[#CBD5E1] hover:border-brand-primary transition-colors cursor-pointer rounded-xl p-6 text-center bg-[#F8FAFC] space-y-2"
+          >
             <div className="h-10 w-10 mx-auto rounded-full bg-brand-primary-tint text-brand-primary flex items-center justify-center">
               <Upload className="h-5 w-5" strokeWidth={1.75} />
             </div>
-            <div className="text-xs font-semibold text-slate-800">
-              Drag and drop your deliverable file here, or click to browse
-            </div>
-            <p className="text-[10px] text-slate-500 font-mono">
-              Accepted formats: .pdf, .pptx, .docx (Max file size: 50MB)
-            </p>
+            {selectedFile ? (
+              <div className="space-y-1">
+                <div className="font-bold text-xs text-brand-primary font-mono">
+                  {selectedFile.name}
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono">
+                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for cryptographic commit
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="text-xs font-semibold text-slate-800">
+                  Drag and drop your deliverable file here, or click to browse
+                </div>
+                <p className="text-[10px] text-slate-500 font-mono">
+                  Accepted formats: .pdf, .ppt, .pptx (Max file size: 25MB)
+                </p>
+              </>
+            )}
           </div>
 
           <Input
@@ -1162,6 +1399,113 @@ export const StudentWorkspaceView: React.FC = () => {
           )}
         </div>
       </Modal>
-    </AppShell>
+
+      {/* Task Details Modal */}
+      <Modal
+        isOpen={!!selectedTaskForDetails}
+        onClose={() => setSelectedTaskForDetails(null)}
+        title="Sprint Task Details"
+        description={`Milestone deliverable allocated to ${selectedTaskForDetails?.assigneeName || "team member"}.`}
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Update Status:</span>
+              <select
+                value={selectedTaskForDetails?.status || "Todo"}
+                onChange={(e) => {
+                  if (selectedTaskForDetails) {
+                    const newStatus = e.target.value as TaskStatusType;
+                    updateTaskStatus(selectedTaskForDetails.id, newStatus);
+                    setSelectedTaskForDetails({ ...selectedTaskForDetails, status: newStatus });
+                  }
+                }}
+                className="text-xs font-semibold rounded-lg border border-slate-300 bg-white px-2 py-1 text-slate-800"
+              >
+                <option value="Todo">Todo</option>
+                <option value="InProgress">In Progress</option>
+                <option value="Done">Done</option>
+              </select>
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => setSelectedTaskForDetails(null)}>
+              Close
+            </Button>
+          </div>
+        }
+      >
+        {selectedTaskForDetails && (
+          <div className="space-y-4 text-xs">
+            <div>
+              <span className="font-semibold text-slate-500">Summary:</span>
+              <h4 className="text-sm font-bold text-slate-900 mt-0.5">{selectedTaskForDetails.title}</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div>
+                <span className="text-slate-500">Category Tag:</span>
+                <div className="font-semibold text-brand-primary">{selectedTaskForDetails.tag}</div>
+              </div>
+              <div>
+                <span className="text-slate-500">Due Date:</span>
+                <div className="font-mono font-semibold text-slate-800">{selectedTaskForDetails.dueDate}</div>
+              </div>
+              <div>
+                <span className="text-slate-500">Assignee:</span>
+                <div className="font-semibold text-slate-900">{selectedTaskForDetails.assigneeName}</div>
+              </div>
+              <div>
+                <span className="text-slate-500">Current Status:</span>
+                <div className="font-semibold text-emerald-700">
+                  {selectedTaskForDetails.status === "InProgress" ? "In Progress" : selectedTaskForDetails.status}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Proposal Lock Confirmation Modal */}
+      <Modal
+        isOpen={showLockConfirmModal}
+        onClose={() => setShowLockConfirmModal(false)}
+        title="Lock Roster & Submit to Guide"
+        description="Locking your team roster freezes invitations and dispatches your proposal to your Faculty Guide for formal academic endorsement."
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <Button variant="ghost" size="sm" onClick={() => setShowLockConfirmModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                handleLockAndSubmitProposal();
+                setShowLockConfirmModal(false);
+              }}
+              leftIcon={<Lock className="h-3.5 w-3.5" />}
+            >
+              Confirm &amp; Dispatch Proposal
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3 text-xs text-slate-600">
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 space-y-1">
+            <div className="flex items-center gap-2 font-bold text-amber-950 font-heading">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <span>Roster Freezing Safeguard</span>
+            </div>
+            <p className="text-[11px] leading-relaxed">
+              Once locked, team roster invitations are permanently disabled for this academic cycle. Any subsequent modifications will require formal exception override approval from Department Coordinator Prof. Priya Nair.
+            </p>
+          </div>
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
+            <div className="font-semibold text-slate-800">Proposal Abstract:</div>
+            <p className="text-slate-700 font-medium line-clamp-2">{proposalTitle}</p>
+            <div className="text-[11px] text-slate-500">
+              Mentor Designated: <strong>{myTeam.guideName || "Prof. S. K. Verma"}</strong> • Roster Size: <strong>{myTeam.members.length} members</strong>
+            </div>
+          </div>
+        </div>
+      </Modal>
+    </div>
   );
 };

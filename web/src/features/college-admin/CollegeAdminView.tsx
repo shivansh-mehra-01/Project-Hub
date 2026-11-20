@@ -24,8 +24,18 @@ import {
   ExternalLink,
   Sparkles,
   UserCheck,
+  ChevronDown,
+  ChevronRight,
+  FolderTree,
+  LayoutGrid,
+  Layers,
+  BookOpen,
+  BookMarked,
+  CheckSquare,
+  Square,
+  Loader2,
 } from "lucide-react";
-import { AppShell } from "@/design-system/patterns/AppShell";
+import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
@@ -46,10 +56,14 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
     college,
     departments,
     cycle,
+    coursePrograms,
+    semesterTerms,
+    subjectOfferings,
     addDepartment,
     reassignHOD,
     onboardCollege,
     updateCycle,
+    importRgpvCatalog,
   } = useProjectHubStore();
 
   const [activeTab, setActiveTab] = useState<"overview" | "departments" | "settings" | "compliance">(initialTab);
@@ -59,6 +73,42 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
   const [showNewCycleModal, setShowNewCycleModal] = useState(false);
   const [showCsvImportModal, setShowCsvImportModal] = useState(false);
   const [inspectingDept, setInspectingDept] = useState<Department | null>(null);
+
+  // RGPV Catalog & Academic Hierarchy View State
+  const [deptViewMode, setDeptViewMode] = useState<"cards" | "hierarchy">("cards");
+  const [showRgpvImportModal, setShowRgpvImportModal] = useState(false);
+  const [isImportingRgpv, setIsImportingRgpv] = useState(false);
+  const [selectedPrograms, setSelectedPrograms] = useState<string[]>(["BTECH", "MTECH", "MCA", "MBA"]);
+  const [expandedPrograms, setExpandedPrograms] = useState<string[]>(["prog-btech-01", "BTECH"]);
+  const [expandedBranches, setExpandedBranches] = useState<string[]>(["dept-cse", "CSE"]);
+  const [rgpvSuccessToast, setRgpvSuccessToast] = useState<string | null>(null);
+
+  const toggleProgram = (progKey: string) => {
+    setExpandedPrograms((prev) =>
+      prev.includes(progKey) ? prev.filter((k) => k !== progKey) : [...prev, progKey]
+    );
+  };
+
+  const toggleBranch = (branchKey: string) => {
+    setExpandedBranches((prev) =>
+      prev.includes(branchKey) ? prev.filter((k) => k !== branchKey) : [...prev, branchKey]
+    );
+  };
+
+  const handleImportRgpvSubmit = async () => {
+    setIsImportingRgpv(true);
+    try {
+      const res = await importRgpvCatalog("RGPV", selectedPrograms);
+      setRgpvSuccessToast(res?.message || "Successfully imported RGPV catalog!");
+      setShowRgpvImportModal(false);
+      setDeptViewMode("hierarchy");
+      setTimeout(() => setRgpvSuccessToast(null), 3500);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsImportingRgpv(false);
+    }
+  };
 
   // New Department Form State
   const [newDeptName, setNewDeptName] = useState("");
@@ -194,12 +244,13 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
     compliance: "NBA Criterion 2 & 3 Attainment",
   };
 
+  useDashboardHeader({
+    title: "College Executive Console",
+    breadcrumb: breadcrumbs[activeTab] || "Institutional Governance",
+  });
+
   return (
-    <AppShell
-      pageTitle="College Executive Console"
-      breadcrumb={breadcrumbs[activeTab] || "Institutional Governance"}
-      activeTab={tabLabels[activeTab] || "Overview"}
-    >
+    <div className="space-y-6">
       {/* ========================================================================= */}
       {/* TAB 1: EXECUTIVE OVERVIEW                                                 */}
       {/* ========================================================================= */}
@@ -381,82 +432,430 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: DEPARTMENTS & HODS                                                 */}
+      {/* TAB 2: DEPARTMENTS & ACADEMIC HIERARCHY                                   */}
       {/* ========================================================================= */}
       {activeTab === "departments" && (
         <section className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 font-heading">
-                Academic Branches &amp; Appointed HODs
-              </h2>
+          {rgpvSuccessToast && (
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between animate-in fade-in duration-200">
+              <div className="flex items-center gap-2 font-semibold">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>{rgpvSuccessToast}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRgpvSuccessToast(null)}
+                className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Department Tab Control Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-slate-200 bg-white">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 font-heading">
+                  Academic Branches &amp; Dynamic Hierarchy
+                </h2>
+                <Badge variant="neutral" size="sm">
+                  {departments.length} Branches Active
+                </Badge>
+              </div>
               <p className="text-xs text-slate-500">
-                Configure departmental quotas, review faculty-to-student ratios, and reassign branch leadership.
+                Configure departmental quotas, review faculty-to-student ratios, and manage multi-level university course programs.
               </p>
             </div>
-            <Button
-              size="sm"
-              variant="primary"
-              leftIcon={<Plus className="h-3.5 w-3.5" />}
-              onClick={() => setShowAddDeptModal(true)}
-            >
-              Add Department
-            </Button>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {departments.map((dept) => (
-              <Card
-                key={dept.id}
-                onClick={() => {
-                  setInspectingDept(dept);
-                  setSelectedHodName(dept.hodName || "");
-                }}
-                className="hover:border-brand-primary hover:shadow-xs transition-all cursor-pointer group"
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* View Switcher: Departments & HODs vs University Syllabus & Programs */}
+              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setDeptViewMode("cards")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                    deptViewMode === "cards"
+                      ? "bg-white text-slate-900 shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                  title="Departments & Appointed HODs View"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  <span>Departments &amp; HODs</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeptViewMode("hierarchy")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                    deptViewMode === "hierarchy"
+                      ? "bg-white text-slate-900 shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                  title="University Syllabus & Academic Program Tree"
+                >
+                  <FolderTree className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>University Syllabus &amp; Programs</span>
+                </button>
+              </div>
+
+              {/* 1-Click Load RGPV Catalog Button */}
+              <Button
+                size="sm"
+                variant="secondary"
+                leftIcon={<Sparkles className="h-3.5 w-3.5 text-emerald-600" />}
+                onClick={() => setShowRgpvImportModal(true)}
               >
-                <CardHeader className="pb-3 border-b border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-xs bg-brand-primary-tint text-brand-primary px-2 py-0.5 rounded border border-brand-primary-border">
-                      {dept.code}
-                    </span>
-                    <Badge variant="success" size="sm" dot>
-                      Accredited
-                    </Badge>
-                  </div>
-                  <CardTitle className="pt-2 text-sm truncate group-hover:text-brand-primary transition-colors">
-                    {dept.name}
-                  </CardTitle>
-                  <CardDescription className="font-medium text-slate-700 truncate">
-                    HOD: {dept.hodName || "Appointed HOD"}
-                  </CardDescription>
-                </CardHeader>
+                1-Click Load RGPV Catalog
+              </Button>
 
-                <CardContent className="p-4 space-y-2.5 text-xs text-slate-600">
-                  <div className="flex justify-between border-b border-slate-100 pb-1.5">
-                    <span>Student Intake:</span>
-                    <span className="font-semibold text-slate-900 font-mono tabular-nums">
-                      {dept.studentCount} students
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 pb-1.5">
-                    <span>Faculty Mentors:</span>
-                    <span className="font-semibold text-slate-900 font-mono tabular-nums">
-                      {dept.facultyCount} mentors
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center pt-0.5">
-                    <span>Criterion 3 Attainment:</span>
-                    <span className="font-semibold text-emerald-700 font-mono tabular-nums">
-                      {dept.criterion3Attainment || 80.0}% (Met)
-                    </span>
-                  </div>
-                  <div className="pt-1 text-[11px] text-brand-primary font-semibold flex items-center justify-end group-hover:translate-x-0.5 transition-transform">
-                    Inspect Branch &rarr;
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+              {/* Add Department Button */}
+              <Button
+                size="sm"
+                variant="primary"
+                leftIcon={<Plus className="h-3.5 w-3.5" />}
+                onClick={() => setShowAddDeptModal(true)}
+              >
+                Add Department
+              </Button>
+            </div>
           </div>
+
+          {/* VIEW MODE A: CARDS GRID */}
+          {deptViewMode === "cards" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {departments.map((dept) => (
+                <Card
+                  key={dept.id}
+                  onClick={() => {
+                    setInspectingDept(dept);
+                    setSelectedHodName(dept.hodName || "");
+                  }}
+                  className="hover:border-brand-primary hover:shadow-xs transition-all cursor-pointer group"
+                >
+                  <CardHeader className="pb-3 border-b border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-xs bg-brand-primary-tint text-brand-primary px-2 py-0.5 rounded border border-brand-primary-border">
+                        {dept.code}
+                      </span>
+                      <Badge variant="success" size="sm" dot>
+                        Accredited
+                      </Badge>
+                    </div>
+                    <CardTitle className="pt-2 text-sm truncate group-hover:text-brand-primary transition-colors">
+                      {dept.name}
+                    </CardTitle>
+                    <CardDescription className="font-medium text-slate-700 truncate">
+                      HOD: {dept.hodName || "Appointed HOD"}
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="p-4 space-y-2.5 text-xs text-slate-600">
+                    <div className="flex justify-between border-b border-slate-100 pb-1.5">
+                      <span>Student Intake:</span>
+                      <span className="font-semibold text-slate-900 font-mono tabular-nums">
+                        {dept.studentCount} students
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-100 pb-1.5">
+                      <span>Faculty Mentors:</span>
+                      <span className="font-semibold text-slate-900 font-mono tabular-nums">
+                        {dept.facultyCount} mentors
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-0.5">
+                      <span>Criterion 3 Attainment:</span>
+                      <span className="font-semibold text-emerald-700 font-mono tabular-nums">
+                        {dept.criterion3Attainment || 80.0}% (Met)
+                      </span>
+                    </div>
+                    <div className="pt-1 text-[11px] text-brand-primary font-semibold flex items-center justify-end group-hover:translate-x-0.5 transition-transform">
+                      Inspect Branch &rarr;
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* VIEW MODE B: DYNAMIC MULTI-LEVEL ACADEMIC HIERARCHY TREE */}
+          {deptViewMode === "hierarchy" && (
+            <div className="space-y-4">
+              {/* Master University Affiliation Card */}
+              <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-xs font-bold font-mono text-xs">
+                    RGPV
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-emerald-950 font-heading">
+                        Rajiv Gandhi Proudyogiki Vishwavidyalaya (State Technological University of M.P.)
+                      </h3>
+                      <Badge variant="success" size="sm">
+                        CBCS / AICTE Flexible Scheme
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-emerald-800">
+                      Standardized Curriculum Schemes, 4 Degree Programs, 19 Core &amp; 6 Emerging Engineering Branches with 60/40 Capstone Rubric Structure.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-right">
+                    <div className="text-xs font-mono font-bold text-emerald-950">
+                      {coursePrograms.length} Programs • {departments.length} Branches
+                    </div>
+                    <div className="text-[11px] text-emerald-700 font-medium">
+                      {subjectOfferings.length} Project Subject Offerings Active
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowRgpvImportModal(true)}
+                    leftIcon={<Sparkles className="h-3 w-3 text-emerald-600" />}
+                  >
+                    Sync Catalog
+                  </Button>
+                </div>
+              </div>
+
+              {/* Course Programs & Department Branch Tree */}
+              <div className="space-y-3">
+                {coursePrograms.map((prog) => {
+                  const isProgExpanded =
+                    expandedPrograms.includes(prog.id) ||
+                    expandedPrograms.includes(prog.code);
+                  
+                  // Filter departments belonging to this program, or all if BTECH fallback
+                  const progDepts = departments.filter(
+                    (d) =>
+                      d.courseProgramId === prog.id ||
+                      (!d.courseProgramId && prog.code === "BTECH")
+                  );
+
+                  return (
+                    <div
+                      key={prog.id}
+                      className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs transition-all"
+                    >
+                      {/* Program Header Accordion */}
+                      <div
+                        onClick={() => toggleProgram(prog.code || prog.id)}
+                        className="p-3.5 flex items-center justify-between bg-slate-50/80 hover:bg-slate-100/80 transition-colors cursor-pointer border-b border-slate-100"
+                      >
+                        <div className="flex items-center gap-3">
+                          <ChevronRight
+                            className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${
+                              isProgExpanded ? "rotate-90" : ""
+                            }`}
+                          />
+                          <Badge
+                            variant={
+                              prog.level === "UG"
+                                ? "success"
+                                : prog.level === "PG"
+                                ? "info"
+                                : "neutral"
+                            }
+                            size="sm"
+                          >
+                            {prog.level}
+                          </Badge>
+                          <div>
+                            <span className="font-mono font-bold text-xs text-slate-900 mr-2">
+                              {prog.code}
+                            </span>
+                            <span className="font-semibold text-xs text-slate-900">
+                              {prog.name}
+                            </span>
+                            <span className="text-[11px] text-slate-500 ml-2">
+                              • {prog.totalSemesters} Semesters
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono text-slate-600 font-medium">
+                            {progDepts.length} Branches Assigned
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {isProgExpanded ? "Collapse" : "Expand"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Program Content: Branches and Semesters */}
+                      {isProgExpanded && (
+                        <div className="p-3 bg-white space-y-3">
+                          {progDepts.length === 0 ? (
+                            <div className="text-center py-4 text-xs text-slate-400">
+                              No departments currently configured for {prog.name}. Click &quot;1-Click Load RGPV Catalog&quot; to import standard university branches.
+                            </div>
+                          ) : (
+                            progDepts.map((dept) => {
+                              const isBranchExpanded =
+                                expandedBranches.includes(dept.id) ||
+                                expandedBranches.includes(dept.code);
+                              
+                              // Semesters for this branch with deduplication by semesterNumber
+                              const branchSemesters = semesterTerms.filter(
+                                (st) =>
+                                  (st.departmentId === dept.id || st.departmentCode === dept.code || !st.departmentId) &&
+                                  (!st.courseProgramId || st.courseProgramId === prog.id)
+                              );
+
+                              const uniqueSemesters = Array.from(
+                                new Map(branchSemesters.map((s) => [s.semesterNumber, s])).values()
+                              ).sort((a, b) => a.semesterNumber - b.semesterNumber);
+
+                              return (
+                                <div
+                                  key={dept.id}
+                                  className="rounded-lg border border-slate-200 bg-slate-50/40 p-3 space-y-2.5"
+                                >
+                                  {/* Branch Row */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleBranch(dept.code || dept.id)}
+                                        className="p-1 rounded hover:bg-slate-200 text-slate-600 cursor-pointer"
+                                        title="Toggle Semesters & Subjects"
+                                      >
+                                        <ChevronRight
+                                          className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                                            isBranchExpanded ? "rotate-90" : ""
+                                          }`}
+                                        />
+                                      </button>
+                                      <span className="font-mono font-bold text-xs bg-brand-primary-tint text-brand-primary px-2 py-0.5 rounded border border-brand-primary-border">
+                                        {dept.code}
+                                      </span>
+                                      <span className="font-bold text-xs text-slate-900">
+                                        {dept.name}
+                                      </span>
+                                      <span className="text-[11px] text-slate-600 hidden md:inline">
+                                        • HOD: {dept.hodName || "Appointed HOD"}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className="text-[11px] font-mono text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                        {dept.studentCount} Intake
+                                      </span>
+                                      <span className="text-[11px] font-mono text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                        {dept.facultyCount} Mentors
+                                      </span>
+                                      <Badge variant="success" size="sm">
+                                        {dept.criterion3Attainment || 80.0}% Attainment
+                                      </Badge>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setInspectingDept(dept);
+                                          setSelectedHodName(dept.hodName || "");
+                                        }}
+                                      >
+                                        Inspect
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  {/* Branch Child: Semesters & Subject Offerings */}
+                                  {isBranchExpanded && (
+                                    <div className="pl-6 border-l-2 border-emerald-500/30 space-y-2 pt-1">
+                                      {uniqueSemesters.length === 0 ? (
+                                        <div className="text-[11px] text-slate-400 italic">
+                                          No active semester terms linked.
+                                        </div>
+                                      ) : (
+                                        uniqueSemesters.map((sem) => {
+                                          const semOfferings = subjectOfferings.filter(
+                                            (so) =>
+                                              (so.departmentId === dept.id || !so.departmentId) &&
+                                              so.semesterNumber === sem.semesterNumber
+                                          );
+
+                                          return (
+                                            <div
+                                              key={sem.id}
+                                              className="p-2.5 rounded-md bg-white border border-slate-200 space-y-1.5"
+                                            >
+                                              <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-xs font-bold text-slate-900 font-mono">
+                                                    Semester {sem.semesterNumber}
+                                                  </span>
+                                                  <Badge variant="neutral" size="sm">
+                                                    {sem.parity} Sem • {sem.academicSessionName || "AY 2025-26"}
+                                                  </Badge>
+                                                </div>
+                                                <span className="text-[10px] text-emerald-700 font-semibold uppercase tracking-wider">
+                                                  {sem.isActive ? "Active Cohort" : "Archived"}
+                                                </span>
+                                              </div>
+
+                                              {/* Subject Offerings inside Semester */}
+                                              <div className="space-y-1 pt-1">
+                                                {semOfferings.length === 0 ? (
+                                                  <div className="text-[10px] text-slate-400">
+                                                    Theory &amp; Laboratory Courses (No project capstone track in this semester)
+                                                  </div>
+                                                ) : (
+                                                  semOfferings.map((so) => (
+                                                    <div
+                                                      key={so.id}
+                                                      className="flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-200/80 text-xs"
+                                                    >
+                                                      <div className="flex items-center gap-2">
+                                                        <span className="font-mono font-bold text-brand-primary text-[11px]">
+                                                          {so.subjectCode}
+                                                        </span>
+                                                        <span className="font-semibold text-slate-800">
+                                                          {so.subjectName}
+                                                        </span>
+                                                        <Badge variant="info" size="sm">
+                                                          {so.subjectType}
+                                                        </Badge>
+                                                        <span className="text-[11px] text-slate-500 font-mono">
+                                                          {so.credits} Credits
+                                                        </span>
+                                                      </div>
+
+                                                      <div className="flex items-center gap-3">
+                                                        <span className="text-[10px] font-mono text-emerald-700 font-medium">
+                                                          60% Internal Continuous / 40% External Viva
+                                                        </span>
+                                                        <Badge variant="success" size="sm" dot>
+                                                          Track Active
+                                                        </Badge>
+                                                      </div>
+                                                    </div>
+                                                  ))
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -964,6 +1363,166 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
         </div>
       </Modal>
 
+      {/* 3.5. 1-Click Load RGPV Master Catalog Modal */}
+      <Modal
+        isOpen={showRgpvImportModal}
+        onClose={() => setShowRgpvImportModal(false)}
+        title="1-Click Load RGPV University Catalog"
+        description="Instantly import official Rajiv Gandhi Proudyogiki Vishwavidyalaya standards into your college tenant partition."
+        maxWidth="lg"
+      >
+        <div className="space-y-4 text-xs">
+          {/* RGPV Affiliation Header Box */}
+          <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/80 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-emerald-700" />
+              <span className="font-bold text-emerald-950 text-sm">
+                Official RGPV Curriculum &amp; Academic Hierarchy Standards
+              </span>
+            </div>
+            <p className="text-emerald-900 leading-relaxed text-[11px]">
+              Loading university standards automatically maps standardized <strong>Curriculum Schemes (CBCS / AICTE Flexible)</strong>, degree programs, all core &amp; emerging engineering branches, odd/even semester terms, and Capstone Project course offerings with standard <strong>60% Continuous Assessment / 40% Final External Viva</strong> rubric splits.
+            </p>
+          </div>
+
+          {/* Select Programs to Import */}
+          <div className="space-y-2">
+            <span className="font-bold text-slate-900 block text-xs">
+              Select Degree Programs to Provision into College Partition:
+            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {[
+                {
+                  code: "BTECH",
+                  title: "B.Tech (Undergraduate)",
+                  desc: "19 Core + 6 Emerging Branches (CBCS / AICTE Flexible • 8 Semesters)",
+                  level: "UG",
+                  recommended: true,
+                },
+                {
+                  code: "MTECH",
+                  title: "M.Tech (Postgraduate)",
+                  desc: "11 Advanced Specializations (AICTE CBCS • 4 Semesters)",
+                  level: "PG",
+                  recommended: true,
+                },
+                {
+                  code: "MCA",
+                  title: "MCA (Postgraduate)",
+                  desc: "Master of Computer Applications (2-Year CBCS • 4 Semesters)",
+                  level: "PG",
+                  recommended: true,
+                },
+                {
+                  code: "MBA",
+                  title: "MBA (Postgraduate)",
+                  desc: "Management Studies Dual Specialization (4 Semesters)",
+                  level: "PG",
+                  recommended: true,
+                },
+                {
+                  code: "BPHARM",
+                  title: "B.Pharm (Undergraduate)",
+                  desc: "Pharmacy Council of India (PCI Scheme • 8 Semesters)",
+                  level: "UG",
+                  recommended: false,
+                },
+                {
+                  code: "DIPLOMA",
+                  title: "Diploma in Engineering",
+                  desc: "State Polytechnic Board 3-Year Curriculum (6 Semesters)",
+                  level: "Diploma",
+                  recommended: false,
+                },
+              ].map((prog) => {
+                const isSelected = selectedPrograms.includes(prog.code);
+                return (
+                  <div
+                    key={prog.code}
+                    onClick={() => {
+                      setSelectedPrograms((prev) =>
+                        isSelected
+                          ? prev.filter((c) => c !== prog.code)
+                          : [...prev, prog.code]
+                      );
+                    }}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${
+                      isSelected
+                        ? "border-emerald-600 bg-emerald-50/50 shadow-2xs"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="pt-0.5 text-emerald-700">
+                      {isSelected ? (
+                        <CheckSquare className="h-4 w-4" />
+                      ) : (
+                        <Square className="h-4 w-4 text-slate-400" />
+                      )}
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-slate-900 text-xs">
+                          {prog.title}
+                        </span>
+                        {prog.recommended && (
+                          <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                            Recommended
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-snug">
+                        {prog.desc}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Hierarchy Auto-Provisioning Notice */}
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 space-y-1 text-[11px]">
+            <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+              <Building2 className="h-3.5 w-3.5 text-slate-600" />
+              <span>Multi-Tenant Row-Level Security (RLS) Isolation</span>
+            </div>
+            <p>
+              Imported branches and course programs are safely tagged with SISTec&apos;s unique College ID (<code className="font-mono text-emerald-700">{college.id}</code>). All existing academic data, student enrollments, and guide assignments are fully preserved.
+            </p>
+          </div>
+
+          {/* Modal Footer Actions */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setShowRgpvImportModal(false)}
+              disabled={isImportingRgpv}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={handleImportRgpvSubmit}
+              disabled={selectedPrograms.length === 0 || isImportingRgpv}
+              leftIcon={
+                isImportingRgpv ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-300" />
+                )
+              }
+            >
+              {isImportingRgpv
+                ? "Importing RGPV Catalog..."
+                : `Import ${selectedPrograms.length} Programs & Standard Branches`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* 4. Inspect Department Slide-Over Drawer */}
       <SlideOverDrawer
         isOpen={!!inspectingDept}
@@ -1058,6 +1617,6 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
           </div>
         )}
       </SlideOverDrawer>
-    </AppShell>
+    </div>
   );
 };

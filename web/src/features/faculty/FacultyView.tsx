@@ -25,8 +25,10 @@ import {
   AlertCircle,
   HelpCircle,
   ChevronDown,
+  Download,
+  FileText,
 } from "lucide-react";
-import { AppShell } from "@/design-system/patterns/AppShell";
+import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
@@ -37,8 +39,9 @@ import { Textarea } from "@/design-system/components/Textarea";
 import { Select } from "@/design-system/components/Select";
 import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
-import { WeeklyLog, Team } from "@/mocks/store-types";
+import { WeeklyLog, Team, ProjectArtifact, ArtifactSlot } from "@/mocks/store-types";
 import { GithubIcon } from "@/design-system/components/Icons";
+import { studentApi, getAuthToken } from "@/lib/api";
 
 export interface FacultyViewProps {
   initialTab?: "queue" | "teams" | "grading";
@@ -59,11 +62,13 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
     postProblemIdea,
     saveIndividualEvaluations,
     individualEvaluations,
+    reviewArtifact,
   } = useProjectHubStore();
 
   const [activeTab, setActiveTab] = useState<"queue" | "teams" | "grading">(initialTab);
   const [inspectingLog, setInspectingLog] = useState<WeeklyLog | null>(null);
   const [inspectingTeam, setInspectingTeam] = useState<Team | null>(null);
+  const [inspectingProposalTeam, setInspectingProposalTeam] = useState<Team | null>(null);
   const [proposalRevisionTeam, setProposalRevisionTeam] = useState<Team | null>(null);
   const [revisionRemarks, setRevisionRemarks] = useState("");
   const [guideRemarks, setGuideRemarks] = useState("");
@@ -148,10 +153,15 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
     },
   ];
 
-  const [selectedDefenseTeamId, setSelectedDefenseTeamId] = useState(assignedDefenseTeams[0].id);
+  // By default, select the first team where this faculty is NOT the guide to avoid immediate conflict of interest
+  const defaultNonConflictTeam =
+    assignedDefenseTeams.find((t) => t.guideName !== currentPersona.name) || assignedDefenseTeams[0];
+  const [selectedDefenseTeamId, setSelectedDefenseTeamId] = useState(defaultNonConflictTeam.id);
   const [lockedDefenseTeamIds, setLockedDefenseTeamIds] = useState<string[]>([]);
   const currentDefenseTeam =
     assignedDefenseTeams.find((t) => t.id === selectedDefenseTeamId) || assignedDefenseTeams[0];
+
+  const isGuideConflict = currentDefenseTeam.guideName === currentPersona.name;
 
   const activeRubric = rubrics[0];
   const [scores, setScores] = useState<Record<string, number>>(currentDefenseTeam.defaultScores);
@@ -207,13 +217,13 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
 
   const handleScoreChange = (critId: string, val: number, max: number) => {
-    if (isCurrentDefenseLocked) return;
+    if (isCurrentDefenseLocked || isGuideConflict) return;
     const clamped = Math.min(Math.max(0, val), max);
     setScores((prev) => ({ ...prev, [critId]: clamped }));
   };
 
   const handleSubmitMarks = () => {
-    if (isCurrentDefenseLocked) return;
+    if (isCurrentDefenseLocked || isGuideConflict) return;
     setLockedDefenseTeamIds((prev) => [...prev, currentDefenseTeam.id]);
     submitEvaluationScores(evaluations[0]?.id || "eval-01", scores, vivaFeedback);
     lockEvaluation(evaluations[0]?.id || "eval-01");
@@ -272,6 +282,37 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
     setRevisionRemarks("");
   };
 
+  const handleDownloadArtifact = async (art: ProjectArtifact, team: Team) => {
+    try {
+      if (art.id && getAuthToken()) {
+        const blob = await studentApi.downloadArtifactBlob(art.id);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = art.fileName || `${art.slot}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        const sampleText = `%PDF-1.4\n% Collabex Capstone Vault Deliverable\n% Team: ${team.teamCode} (${team.title})\n% Milestone: ${art.name || art.slot}\n% File: ${art.fileName || `${art.slot}.pdf`}\n% Timestamp: ${new Date().toISOString()}\n%%EOF\n`;
+        const blob = new Blob([sampleText], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = art.fileName || `${art.slot}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+      showToast(`Downloaded ${art.fileName || `${art.slot}.pdf`}`);
+    } catch (err) {
+      console.error("Deliverable download failed:", err);
+      showToast("Download failed. Please try again.");
+    }
+  };
+
   const tabConfigs: Record<
     string,
     { title: string; breadcrumb: string; label: string }
@@ -295,12 +336,13 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
 
   const currentTabConfig = tabConfigs[activeTab] || tabConfigs.queue;
 
+  useDashboardHeader({
+    title: currentTabConfig.title,
+    breadcrumb: currentTabConfig.breadcrumb,
+  });
+
   return (
-    <AppShell
-      pageTitle={currentTabConfig.title}
-      breadcrumb={currentTabConfig.breadcrumb}
-      activeTab={currentTabConfig.label}
-    >
+    <div className="space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-lg bg-[#111827] px-4 py-2.5 text-xs font-medium text-white shadow-xl border border-white/10 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -417,6 +459,14 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setInspectingProposalTeam(t)}
+                        leftIcon={<FileText className="h-3.5 w-3.5 stroke-[1.75]" />}
+                      >
+                        Inspect Full Proposal
+                      </Button>
                       <Button
                         size="sm"
                         variant="primary"
@@ -615,12 +665,32 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 border border-emerald-200 text-emerald-800">
-                <ShieldCheck className="h-4 w-4 text-emerald-600 stroke-[2] shrink-0" />
-                <span>Conflict-of-Interest Verified (Non-Guide Evaluator)</span>
-              </div>
+              {isGuideConflict ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-900">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 stroke-[2] shrink-0" />
+                  <span>Conflict of Interest: Mentored Team (Grading Disabled for Guide)</span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 border border-emerald-200 text-emerald-800">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600 stroke-[2] shrink-0" />
+                  <span>Conflict-of-Interest Verified (Independent Evaluator)</span>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Conflict of Interest Safeguard Banner */}
+          {isGuideConflict && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 flex items-start gap-3 shadow-xs animate-in fade-in duration-150">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" strokeWidth={2} />
+              <div className="space-y-0.5 text-xs">
+                <span className="font-bold text-amber-950 block">Conflict of Interest Safeguard Active</span>
+                <p className="text-amber-800 leading-relaxed">
+                  Conflict of Interest Safeguard: You are the designated Faculty Guide for this team. In compliance with NBA Criterion 2 examination governance, evaluation scoring is restricted to independent panel evaluators.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Panel: Project Details & Metrics (5 cols) */}
@@ -733,7 +803,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                             step="0.5"
                             min="0"
                             max={crit.maxScore}
-                            disabled={isCurrentDefenseLocked}
+                            disabled={isCurrentDefenseLocked || isGuideConflict}
                             value={scores[crit.id] ?? 0}
                             onChange={(e) =>
                               handleScoreChange(crit.id, parseFloat(e.target.value) || 0, crit.maxScore)
@@ -811,7 +881,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                                 step="0.5"
                                 min="0"
                                 max="15"
-                                disabled={isCurrentDefenseLocked}
+                                disabled={isCurrentDefenseLocked || isGuideConflict}
                                 value={ind.moduleOwnership}
                                 onChange={(e) =>
                                   setIndividualScores({
@@ -834,7 +904,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                                 step="0.5"
                                 min="0"
                                 max="15"
-                                disabled={isCurrentDefenseLocked}
+                                disabled={isCurrentDefenseLocked || isGuideConflict}
                                 value={ind.vivaScore}
                                 onChange={(e) =>
                                   setIndividualScores({
@@ -857,7 +927,7 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                                 step="0.5"
                                 min="0"
                                 max="10"
-                                disabled={isCurrentDefenseLocked}
+                                disabled={isCurrentDefenseLocked || isGuideConflict}
                                 value={ind.logDiscipline}
                                 onChange={(e) =>
                                   setIndividualScores({
@@ -901,12 +971,16 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
                     </span>
                     <Button
                       size="md"
-                      variant="primary"
-                      disabled={isCurrentDefenseLocked}
+                      variant={isGuideConflict ? "secondary" : "primary"}
+                      disabled={isCurrentDefenseLocked || isGuideConflict}
                       onClick={handleSubmitMarks}
                       leftIcon={<Lock className="h-4 w-4 stroke-[1.75]" />}
                     >
-                      {isCurrentDefenseLocked ? "Marks Locked & Attested" : "Submit & Lock Panel Marks"}
+                      {isCurrentDefenseLocked
+                        ? "Marks Locked & Attested"
+                        : isGuideConflict
+                        ? "Grading Disabled (Conflict of Interest)"
+                        : "Submit & Lock Panel Marks"}
                     </Button>
                   </div>
                 </CardContent>
@@ -1050,6 +1124,125 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
               </p>
               <div className="text-[10px] text-emerald-700 font-mono pt-1">
                 48 commits on master • Last pushed 3 hours ago (Verified)
+              </div>
+            </div>
+
+            {/* Official Capstone Deliverables (4-Slot Vault) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#0F172A] flex items-center gap-1.5">
+                  <FileText className="h-4 w-4 text-brand-primary" strokeWidth={1.75} />
+                  Official Capstone Deliverables (4-Slot Vault)
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">NBA Criterion 2 &amp; 3</span>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { slot: "Synopsis" as ArtifactSlot, label: "Project Synopsis", defaultName: `${inspectingTeam.teamCode}-Synopsis.pdf` },
+                  { slot: "MidTermPPT" as ArtifactSlot, label: "Mid-Term Review Deck", defaultName: `${inspectingTeam.teamCode}-MidTerm-Deck.pptx` },
+                  { slot: "PlagiarismReport" as ArtifactSlot, label: "Plagiarism & Similarity Report", defaultName: `${inspectingTeam.teamCode}-Similarity-Report.pdf` },
+                  { slot: "FinalThesis" as ArtifactSlot, label: "Final Capstone Thesis", defaultName: `${inspectingTeam.teamCode}-Final-Thesis.pdf` },
+                ].map(({ slot, label, defaultName }) => {
+                  const art = inspectingTeam.artifacts?.find((a) => a.slot === slot);
+                  const isUploaded = art && art.status !== "Pending";
+                  const fileName = art?.fileName || (isUploaded ? defaultName : null);
+                  const status = art?.status || "Pending";
+
+                  return (
+                    <div
+                      key={slot}
+                      className="p-2.5 rounded-lg border border-[#E2E8F0] bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-900">{label}</span>
+                          <Badge
+                            variant={
+                              status === "Approved"
+                                ? "success"
+                                : status === "Uploaded"
+                                ? "info"
+                                : status === "NeedsRevision"
+                                ? "warning"
+                                : "neutral"
+                            }
+                            size="sm"
+                            dot
+                          >
+                            {status === "Pending" ? "Missing" : status}
+                          </Badge>
+                          {art?.similarityScore !== undefined && (
+                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              {art.similarityScore}% Similarity
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-mono flex items-center gap-2 flex-wrap">
+                          {fileName ? (
+                            <>
+                              <span>{fileName}</span>
+                              {art?.fileSize && <span>({art.fileSize})</span>}
+                              {(art?.sha256Checksum || isUploaded) && (
+                                <span className="text-[9px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded border border-slate-200">
+                                  SHA: {(art?.sha256Checksum || "9f86d081").slice(0, 8)}...
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="italic text-slate-400">Awaiting student upload</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {fileName && isUploaded ? (
+                        <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto flex-wrap">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-7 text-xs flex items-center gap-1.5"
+                            onClick={() =>
+                              handleDownloadArtifact(
+                                art || { slot, name: label, fileName: defaultName, status: "Uploaded" },
+                                inspectingTeam
+                              )
+                            }
+                          >
+                            <Download className="h-3 w-3 text-slate-600" />
+                            <span>Download</span>
+                          </Button>
+                          {status !== "Approved" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                className="h-7 text-xs flex items-center gap-1"
+                                onClick={async () => {
+                                  await reviewArtifact(inspectingTeam.id, slot, true);
+                                }}
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                <span>Verify</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs flex items-center gap-1 text-amber-700 hover:bg-amber-50"
+                                onClick={async () => {
+                                  await reviewArtifact(inspectingTeam.id, slot, false, "Revision requested on section alignment.");
+                                }}
+                              >
+                                <AlertTriangle className="h-3 w-3" />
+                                <span>Request Revision</span>
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic self-start sm:self-auto">Not available</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -1238,6 +1431,110 @@ export const FacultyView: React.FC<FacultyViewProps> = ({ initialTab = "queue" }
           </div>
         </div>
       </Modal>
-    </AppShell>
+
+      {/* Inspect Full Proposal Slide-Over Drawer */}
+      <SlideOverDrawer
+        isOpen={!!inspectingProposalTeam}
+        onClose={() => setInspectingProposalTeam(null)}
+        title={inspectingProposalTeam ? `${inspectingProposalTeam.teamCode} — Proposal Dossier` : "Project Proposal"}
+        subtitle={`Designated Mentor: ${inspectingProposalTeam?.guideName || "Prof. S. K. Verma"} • Status: ${inspectingProposalTeam?.state}`}
+        footer={
+          inspectingProposalTeam && (
+            <div className="flex items-center justify-between w-full">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setProposalRevisionTeam(inspectingProposalTeam);
+                  setInspectingProposalTeam(null);
+                  setRevisionRemarks("");
+                }}
+                className="text-amber-700 hover:bg-amber-50"
+              >
+                Request Revisions
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  approveProposal(inspectingProposalTeam.id, "Faculty");
+                  showToast(`Proposal endorsed for team ${inspectingProposalTeam.teamCode}. Forwarded to Coordinator.`);
+                  setInspectingProposalTeam(null);
+                }}
+                leftIcon={<Check className="h-3.5 w-3.5 stroke-[2]" />}
+              >
+                Endorse Proposal
+              </Button>
+            </div>
+          )
+        }
+      >
+        {inspectingProposalTeam && (
+          <div className="space-y-5 text-xs">
+            <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5">
+              <span className="text-[10px] font-mono font-bold text-brand-primary uppercase">
+                {inspectingProposalTeam.teamCode} • {inspectingProposalTeam.domain}
+              </span>
+              <h4 className="text-sm font-bold text-slate-900">{inspectingProposalTeam.title}</h4>
+            </div>
+
+            <div className="space-y-1">
+              <span className="font-bold text-slate-800">Problem Abstract &amp; Technical Formulation:</span>
+              <p className="text-slate-600 leading-relaxed p-3 bg-white rounded-lg border border-slate-200">
+                {inspectingProposalTeam.abstract}
+              </p>
+            </div>
+
+            <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50 flex items-center justify-between">
+              <div>
+                <span className="text-slate-500 text-[11px]">Target Sustainable Development Goal:</span>
+                <div className="font-bold text-emerald-900">UN SDG {inspectingProposalTeam.sdgNumber || 7} (Clean Energy &amp; Smart Infrastructure)</div>
+              </div>
+              <Badge variant="success" size="sm" dot>
+                Aligned
+              </Badge>
+            </div>
+
+            <div className="p-3 rounded-lg border border-blue-200 bg-blue-50/50 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-blue-900">Archival Similarity Advisory Check:</span>
+                <span className="font-mono text-xs font-bold text-blue-700">12% Overlap (Pass)</span>
+              </div>
+              <p className="text-[11px] text-blue-800 leading-tight">
+                Automated similarity check against department past capstone repository passed with &lt; 20% title keyword overlap.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                <Users2 className="h-4 w-4 text-brand-primary" strokeWidth={1.75} />
+                Student Team Members ({inspectingProposalTeam.members.length})
+              </span>
+              <div className="space-y-1.5">
+                {inspectingProposalTeam.members.map((m) => (
+                  <div
+                    key={m.id}
+                    className="p-2.5 rounded-lg border border-slate-200 bg-white flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                        <span>{m.name}</span>
+                        {m.isLead && (
+                          <span className="text-[10px] bg-brand-primary-tint text-brand-primary font-bold px-1.5 py-0.2 rounded border border-brand-primary-border">
+                            Team Lead
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-mono">{m.enrollmentNumber}</div>
+                    </div>
+                    <span className="text-[11px] text-slate-600 font-medium">{m.roleDescription}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </SlideOverDrawer>
+    </div>
   );
 };

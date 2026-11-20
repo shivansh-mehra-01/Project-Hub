@@ -17,6 +17,8 @@ public record CollegeTenantDto
     public DateTime? SubscriptionExpiresAtUtc { get; init; }
     public int DepartmentCount { get; init; }
     public int StudentCount { get; init; }
+    public string? PrincipalEmail { get; init; }
+    public List<string> AdminEmails { get; init; } = new();
 }
 
 public record CreateTenantRequest
@@ -30,6 +32,27 @@ public record CreateTenantRequest
     public bool EnforceStrictSso { get; init; } = true;
     public string? CrestUrl { get; init; }
     public DateTime? SubscriptionExpiresAtUtc { get; init; }
+    public string? PrincipalName { get; init; }
+    public string? PrincipalEmail { get; init; }
+}
+
+public record CreateTenantResponse
+{
+    public CollegeTenantDto Tenant { get; init; } = null!;
+    public string AdminEmail { get; init; } = string.Empty;
+}
+
+public record ProvisionAdminRequest
+{
+    public string? FullName { get; init; }
+    public string? Email { get; init; }
+}
+
+public record ProvisionAdminResponse
+{
+    public bool Success { get; init; }
+    public string AdminEmail { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
 }
 
 public record UpdateTenantRequest

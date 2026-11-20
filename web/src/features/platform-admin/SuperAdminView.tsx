@@ -33,7 +33,7 @@ import {
   BarChart3,
   Globe,
 } from "lucide-react";
-import { AppShell } from "@/design-system/patterns/AppShell";
+import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
@@ -45,6 +45,7 @@ import { Textarea } from "@/design-system/components/Textarea";
 import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { TenantCollege, PilotRequest, PlatformAuditLog } from "@/mocks/store-types";
+import { showToast } from "@/lib/toast";
 
 export interface SuperAdminViewProps {
   initialTab?: "tenants" | "templates" | "subscriptions" | "health" | "audit";
@@ -239,6 +240,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
     pilotRequests,
     auditLogs,
     onboardTenant,
+    provisionTenantAdmin,
     updateTenant,
     approvePilot,
     addAuditLog,
@@ -257,9 +259,13 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
   const [newCollegeName, setNewCollegeName] = useState("");
   const [newCollegeCode, setNewCollegeCode] = useState("");
   const [newCollegeDomain, setNewCollegeDomain] = useState("");
+  const [newCollegePrincipalEmail, setNewCollegePrincipalEmail] = useState("");
+  const [isPrincipalEmailCustomized, setIsPrincipalEmailCustomized] = useState(false);
   const [newCollegePlan, setNewCollegePlan] = useState<"Pilot" | "Standard" | "Enterprise">("Standard");
   const [newCollegeQuota, setNewCollegeQuota] = useState("50");
   const [newCollegeStudents, setNewCollegeStudents] = useState("1500");
+  const [onboardSuccessBanner, setOnboardSuccessBanner] = useState<{ name: string; email: string } | null>(null);
+  const [isProvisioningAdmin, setIsProvisioningAdmin] = useState(false);
 
   // Tab 2: Master Templates States
   const [expandedPo, setExpandedPo] = useState<string | null>("PO1");
@@ -302,11 +308,13 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
   };
 
   // Handlers
-  const handleOnboardSubmit = (e: React.FormEvent) => {
+  const handleOnboardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCollegeName || !newCollegeCode || !newCollegeDomain) return;
 
-    onboardTenant({
+    const principalEmail = newCollegePrincipalEmail.trim() || `principal@${newCollegeDomain.trim().toLowerCase()}`;
+
+    const res = await onboardTenant({
       name: newCollegeName,
       code: newCollegeCode.toUpperCase(),
       domain: newCollegeDomain,
@@ -319,12 +327,29 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
       strictSsoEnforced: true,
       renewalDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
       allocatedSeats: parseInt(newCollegeStudents) || 2000,
+      principalEmail,
+      principalName: "College Principal",
+      adminEmails: [principalEmail],
+    });
+
+    const finalAdminEmail = res?.adminEmail || principalEmail;
+
+    showToast(
+      `Tenant provisioned! Initial Principal login: ${finalAdminEmail} (use Forgot Password OTP on /login to set password).`,
+      "success"
+    );
+
+    setOnboardSuccessBanner({
+      name: newCollegeName,
+      email: finalAdminEmail,
     });
 
     setShowAddModal(false);
     setNewCollegeName("");
     setNewCollegeCode("");
     setNewCollegeDomain("");
+    setNewCollegePrincipalEmail("");
+    setIsPrincipalEmailCustomized(false);
   };
 
   const handleSaveTenantConfig = () => {
@@ -380,7 +405,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
 
     setPoList([...poList, newItem]);
     addAuditLog({
-      actor: "admin@projecthub.in (Dev Startup Admin)",
+      actor: "admin@collabex.in (Platform Super Admin)",
       action: "RUBRIC_PRESET_PUBLISHED",
       targetTenant: "Global Catalog Presets",
       ipRegion: "103.21.244.10 • ap-south-1",
@@ -410,7 +435,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `projecthub_platform_audit_${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", `collabex_platform_audit_${new Date().toISOString().split("T")[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -467,17 +492,44 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
     audit: "Platform Governance & Audit Log",
   };
 
+  useDashboardHeader({
+    title: "Super Admin Console",
+    breadcrumb: breadcrumbs[activeTab] || "Platform & Tenant Governance",
+  });
+
   return (
-    <AppShell
-      pageTitle="Super Admin Console"
-      breadcrumb={breadcrumbs[activeTab] || "Platform & Tenant Governance"}
-      activeTab={tabLabels[activeTab] || "Tenants"}
-    >
+    <div className="space-y-6">
       {/* ========================================================================= */}
       {/* TAB 1: TENANTS & PARTITIONS                                               */}
       {/* ========================================================================= */}
       {activeTab === "tenants" && (
         <div className="space-y-6">
+          {/* Prominent Onboarded Tenant Confirmation Banner */}
+          {onboardSuccessBanner && (
+            <div className="p-4 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-950 flex items-start justify-between gap-3 shadow-xs">
+              <div className="flex items-start gap-3">
+                <div className="h-8 w-8 rounded-full bg-emerald-100 border border-emerald-300 flex items-center justify-center shrink-0 text-emerald-700">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div className="space-y-1 text-xs">
+                  <div className="font-bold text-emerald-950 text-sm">
+                    Tenant partition provisioned for {onboardSuccessBanner.name}!
+                  </div>
+                  <p className="text-emerald-800 leading-relaxed">
+                    Initial Principal login: <strong className="font-mono text-emerald-950 px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300">{onboardSuccessBanner.email}</strong> (use <strong>Forgot Password OTP</strong> on <code className="font-mono text-[11px] bg-emerald-100 px-1 py-0.5 rounded text-emerald-900">/login</code> to set password).
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOnboardSuccessBanner(null)}
+                className="text-xs text-emerald-700 hover:text-emerald-950 font-semibold px-2 py-1 rounded hover:bg-emerald-100 transition-colors cursor-pointer shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {/* Top Telemetry KPI Bar with Unified Crisp Icon Badges */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
@@ -1523,10 +1575,26 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               label="SSO Email Domain"
               placeholder="e.g. nitk.edu.in"
               value={newCollegeDomain}
-              onChange={(e) => setNewCollegeDomain(e.target.value)}
+              onChange={(e) => {
+                const domain = e.target.value;
+                setNewCollegeDomain(domain);
+                if (!isPrincipalEmailCustomized) {
+                  setNewCollegePrincipalEmail(domain.trim() ? `principal@${domain.trim().toLowerCase()}` : "");
+                }
+              }}
               required
             />
           </div>
+          <Input
+            label="Principal / Admin Login Email"
+            placeholder="e.g. principal@nitk.edu.in"
+            value={newCollegePrincipalEmail}
+            onChange={(e) => {
+              setNewCollegePrincipalEmail(e.target.value);
+              setIsPrincipalEmailCustomized(true);
+            }}
+            helperText="Auto-fills from SSO domain. Provisions initial CollegeAdmin user with temporary initial password Pass@1234."
+          />
           <div className="grid grid-cols-2 gap-3">
             <Select
               label="Subscription License Plan"
@@ -1604,6 +1672,68 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                 <span>Tenant partition configuration updated &amp; audit log recorded.</span>
               </div>
             )}
+
+            {/* College Administrator (Principal) Credentials */}
+            <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="font-bold text-slate-900 block text-xs">College Administrator (Principal)</span>
+                  <span className="text-[11px] text-slate-500">Governance credentials for institutional onboarding</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={isProvisioningAdmin}
+                  onClick={async () => {
+                    setIsProvisioningAdmin(true);
+                    try {
+                      const email = await provisionTenantAdmin(managingCollege.id);
+                      setManagingCollege({
+                        ...managingCollege,
+                        principalEmail: email,
+                        adminEmails: managingCollege.adminEmails?.includes(email)
+                          ? managingCollege.adminEmails
+                          : [email, ...(managingCollege.adminEmails || [])],
+                      });
+                      showToast(
+                        `Principal account provisioned! Login: ${email} (use Forgot Password OTP on /login to set password).`,
+                        "success"
+                      );
+                    } catch (err) {
+                      console.error("Failed to provision admin:", err);
+                      showToast("Failed to provision principal account.", "error");
+                    } finally {
+                      setIsProvisioningAdmin(false);
+                    }
+                  }}
+                  className="text-xs shrink-0"
+                >
+                  {isProvisioningAdmin ? "Provisioning..." : "Create / Reset Principal Account"}
+                </Button>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 font-mono text-xs flex items-center justify-between">
+                <span className="text-slate-800 font-medium truncate max-w-[220px]">
+                  {managingCollege.principalEmail || managingCollege.adminEmails?.[0] || `principal@${managingCollege.domain}`}
+                </span>
+                <Badge variant="success" size="sm" dot>
+                  Active CollegeAdmin
+                </Badge>
+              </div>
+
+              {managingCollege.adminEmails && managingCollege.adminEmails.length > 1 && (
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Additional Campus Admins:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {managingCollege.adminEmails.slice(1).map((em) => (
+                      <span key={em} className="text-[10px] font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                        {em}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* DB Partition Health */}
             <div className="space-y-2">
@@ -1894,6 +2024,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
           </div>
         </form>
       </Modal>
-    </AppShell>
+    </div>
   );
 };

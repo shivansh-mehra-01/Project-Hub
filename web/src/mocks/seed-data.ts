@@ -1,6 +1,8 @@
 import {
+  AcademicSession,
   College,
   CourseExitSurvey,
+  CourseProgram,
   Department,
   Evaluation,
   ExceptionAuditLog,
@@ -11,6 +13,8 @@ import {
   ProjectArtifact,
   ProjectCycle,
   Rubric,
+  SemesterTerm,
+  SubjectOffering,
   Team,
   TenantCollege,
   UserPersona,
@@ -28,10 +32,143 @@ export const initialCollege: College = {
   studentCount: 1420,
 };
 
+export const initialCoursePrograms: CourseProgram[] = [
+  {
+    id: "prog-btech-01",
+    collegeId: "col-sistec-01",
+    code: "BTECH",
+    name: "Bachelor of Technology",
+    level: "UG",
+    totalSemesters: 8,
+    isActive: true,
+  },
+  {
+    id: "prog-mtech-01",
+    collegeId: "col-sistec-01",
+    code: "MTECH",
+    name: "Master of Technology",
+    level: "PG",
+    totalSemesters: 4,
+    isActive: true,
+  },
+  {
+    id: "prog-mba-01",
+    collegeId: "col-sistec-01",
+    code: "MBA",
+    name: "Master of Business Administration",
+    level: "PG",
+    totalSemesters: 4,
+    isActive: true,
+  },
+  {
+    id: "prog-mca-01",
+    collegeId: "col-sistec-01",
+    code: "MCA",
+    name: "Master of Computer Applications",
+    level: "PG",
+    totalSemesters: 4,
+    isActive: true,
+  },
+];
+
+export const initialAcademicSessions: AcademicSession[] = [
+  {
+    id: "sess-2026-01",
+    collegeId: "col-sistec-01",
+    label: "2026-27",
+    startDate: "2026-07-01T00:00:00Z",
+    endDate: "2027-06-30T23:59:59Z",
+    isActive: true,
+  },
+];
+
+export const initialSemesterTerms: SemesterTerm[] = [
+  {
+    id: "sem-cse-6",
+    collegeId: "col-sistec-01",
+    departmentId: "dept-cse-01",
+    departmentCode: "CSE",
+    academicSessionId: "sess-2026-01",
+    semesterNumber: 6,
+    semesterName: "Semester 6",
+    parity: "Even",
+    isActive: true,
+  },
+  {
+    id: "sem-cse-7",
+    collegeId: "col-sistec-01",
+    departmentId: "dept-cse-01",
+    departmentCode: "CSE",
+    academicSessionId: "sess-2026-01",
+    semesterNumber: 7,
+    semesterName: "Semester 7",
+    parity: "Odd",
+    isActive: true,
+  },
+  {
+    id: "sem-ece-6",
+    collegeId: "col-sistec-01",
+    departmentId: "dept-ece-01",
+    departmentCode: "ECE",
+    academicSessionId: "sess-2026-01",
+    semesterNumber: 6,
+    semesterName: "Semester 6",
+    parity: "Even",
+    isActive: true,
+  },
+];
+
+export const initialSubjectOfferings: SubjectOffering[] = [
+  {
+    id: "off-cse-606",
+    collegeId: "col-sistec-01",
+    semesterTermId: "sem-cse-6",
+    semesterTermName: "Semester 6",
+    curriculumSchemeCode: "RGPV-AICTE-FLEX",
+    subjectCode: "CS-606",
+    subjectName: "Minor Project",
+    subjectType: "MinorProject",
+    credits: 4,
+    internalMaxMarks: 60,
+    externalMaxMarks: 40,
+    isActive: true,
+  },
+  {
+    id: "off-cse-705",
+    collegeId: "col-sistec-01",
+    semesterTermId: "sem-cse-7",
+    semesterTermName: "Semester 7",
+    curriculumSchemeCode: "RGPV-AICTE-FLEX",
+    subjectCode: "CS-705",
+    subjectName: "Major Project Phase-I",
+    subjectType: "MajorProject",
+    credits: 4,
+    internalMaxMarks: 60,
+    externalMaxMarks: 40,
+    isActive: true,
+  },
+  {
+    id: "off-cse-706",
+    collegeId: "col-sistec-01",
+    semesterTermId: "sem-cse-7",
+    semesterTermName: "Semester 7",
+    curriculumSchemeCode: "RGPV-AICTE-FLEX",
+    subjectCode: "CS-706",
+    subjectName: "Industrial Internship",
+    subjectType: "Internship",
+    credits: 2,
+    internalMaxMarks: 50,
+    externalMaxMarks: 50,
+    isActive: true,
+  },
+];
+
 export const initialDepartments: Department[] = [
   {
     id: "dept-cse-01",
     collegeId: "col-sistec-01",
+    courseProgramId: "prog-btech-01",
+    courseProgramName: "Bachelor of Technology",
     name: "Computer Science & Engineering",
     code: "CSE",
     hodUserId: "usr-hod-01",
@@ -44,6 +181,8 @@ export const initialDepartments: Department[] = [
   {
     id: "dept-ece-01",
     collegeId: "col-sistec-01",
+    courseProgramId: "prog-btech-01",
+    courseProgramName: "Bachelor of Technology",
     name: "Electronics & Communication Engineering",
     code: "ECE",
     hodUserId: "usr-hod-ece",
@@ -56,6 +195,8 @@ export const initialDepartments: Department[] = [
   {
     id: "dept-me-01",
     collegeId: "col-sistec-01",
+    courseProgramId: "prog-btech-01",
+    courseProgramName: "Bachelor of Technology",
     name: "Mechanical Engineering",
     code: "ME",
     hodUserId: "usr-hod-me",
@@ -68,6 +209,8 @@ export const initialDepartments: Department[] = [
   {
     id: "dept-ce-01",
     collegeId: "col-sistec-01",
+    courseProgramId: "prog-btech-01",
+    courseProgramName: "Bachelor of Technology",
     name: "Civil Engineering",
     code: "CE",
     hodUserId: "usr-hod-ce",
@@ -90,13 +233,18 @@ export const initialCycle: ProjectCycle = {
   isActive: true,
   minTeamSize: 2,
   maxTeamSize: 4,
+  participationMode: "Team",
+  enrolmentMode: "SelfJoin",
+  allowCrossBranchTeams: false,
+  semesterTermId: "sem-cse-6",
+  subjectOfferingId: "off-cse-606",
 };
 
 export const initialPersonas: Record<string, UserPersona> = {
   superAdmin: {
     id: "usr-super-01",
     name: "Dev Startup Admin",
-    email: "admin@projecthub.in",
+    email: "admin@collabex.in",
     role: "SuperAdmin",
     collegeId: "col-sistec-01",
   },
@@ -181,31 +329,38 @@ export const initialTeams: Team[] = [
     missedLogsCount: 0,
     artifacts: [
       {
+        id: "art-synopsis-01",
         slot: "Synopsis",
         name: "Approved Project Synopsis",
         fileName: "2026-CS-MIN-01-Synopsis-Approved.pdf",
         fileSize: "1.8 MB",
         uploadedAt: "2026-02-05",
+        sha256Checksum: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
         status: "Approved",
       },
       {
+        id: "art-midterm-01",
         slot: "MidTermPPT",
         name: "Mid-Term Review Presentation",
         fileName: "2026-CS-MIN-01-MidTerm-Deck.pptx",
         fileSize: "14.2 MB",
         uploadedAt: "2026-03-01",
+        sha256Checksum: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
         status: "Approved",
       },
       {
+        id: "art-plag-01",
         slot: "PlagiarismReport",
         name: "Turnitin Similarity & Originality Report",
         fileName: "Turnitin-Originality-8pct.pdf",
         fileSize: "620 KB",
         uploadedAt: "2026-03-03",
+        sha256Checksum: "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
         status: "Approved",
         similarityScore: 8,
       },
       {
+        id: "art-thesis-01",
         slot: "FinalThesis",
         name: "Final Comprehensive Capstone Thesis",
         status: "Pending",
@@ -542,6 +697,8 @@ export const initialTenants: TenantCollege[] = [
     strictSsoEnforced: true,
     renewalDate: "2027-06-30",
     allocatedSeats: 2500,
+    principalEmail: "principal@sistec.ac.in",
+    adminEmails: ["principal@sistec.ac.in"],
   },
   {
     id: "col-bmsce-02",
@@ -557,6 +714,8 @@ export const initialTenants: TenantCollege[] = [
     strictSsoEnforced: false,
     renewalDate: "2026-12-15",
     allocatedSeats: 2500,
+    principalEmail: "principal@bmsce.ac.in",
+    adminEmails: ["principal@bmsce.ac.in"],
   },
   {
     id: "col-rvce-03",
@@ -572,6 +731,8 @@ export const initialTenants: TenantCollege[] = [
     strictSsoEnforced: true,
     renewalDate: "2027-08-31",
     allocatedSeats: 3500,
+    principalEmail: "principal@rvce.edu.in",
+    adminEmails: ["principal@rvce.edu.in"],
   },
 ];
 
@@ -604,7 +765,7 @@ export const initialAuditLogs: PlatformAuditLog[] = [
   {
     id: "audit-01",
     timestamp: "2026-11-15 18:42:10 UTC",
-    actor: "admin@projecthub.in (Dev Startup Admin)",
+    actor: "admin@collabex.in (Platform Super Admin)",
     action: "TENANT_PROVISIONED",
     targetTenant: "Sagar Institute of Science & Technology (SISTEC)",
     ipRegion: "103.21.244.10 • ap-south-1",
@@ -614,7 +775,7 @@ export const initialAuditLogs: PlatformAuditLog[] = [
   {
     id: "audit-02",
     timestamp: "2026-11-15 16:30:05 UTC",
-    actor: "admin@projecthub.in (Dev Startup Admin)",
+    actor: "admin@collabex.in (Platform Super Admin)",
     action: "PILOT_APPROVED",
     targetTenant: "B.M.S. College of Engineering (BMSCE)",
     ipRegion: "103.21.244.10 • ap-south-1",
@@ -624,7 +785,7 @@ export const initialAuditLogs: PlatformAuditLog[] = [
   {
     id: "audit-03",
     timestamp: "2026-11-15 12:15:22 UTC",
-    actor: "system-worker@projecthub.in",
+    actor: "system-worker@collabex.in",
     action: "DB_SNAPSHOT_CREATED",
     targetTenant: "Global Multi-Tenant Cluster",
     ipRegion: "AWS ap-south-1a",
@@ -634,7 +795,7 @@ export const initialAuditLogs: PlatformAuditLog[] = [
   {
     id: "audit-04",
     timestamp: "2026-11-15 09:05:44 UTC",
-    actor: "admin@projecthub.in (Dev Startup Admin)",
+    actor: "admin@collabex.in (Platform Super Admin)",
     action: "SSO_VERIFIED",
     targetTenant: "R.V. College of Engineering (RVCE)",
     ipRegion: "103.21.244.10 • ap-south-1",
@@ -644,7 +805,7 @@ export const initialAuditLogs: PlatformAuditLog[] = [
   {
     id: "audit-05",
     timestamp: "2026-11-14 22:00:00 UTC",
-    actor: "admin@projecthub.in (Dev Startup Admin)",
+    actor: "admin@collabex.in (Platform Super Admin)",
     action: "LICENSE_UPGRADE",
     targetTenant: "Sagar Institute of Science & Technology (SISTEC)",
     ipRegion: "103.21.244.10 • ap-south-1",
@@ -654,7 +815,7 @@ export const initialAuditLogs: PlatformAuditLog[] = [
   {
     id: "audit-06",
     timestamp: "2026-11-14 14:12:30 UTC",
-    actor: "system-worker@projecthub.in",
+    actor: "system-worker@collabex.in",
     action: "TENANT_HEALTH_CHECK",
     targetTenant: "All Active Schema Partitions",
     ipRegion: "AWS ap-south-1b",

@@ -65,6 +65,9 @@ public record StudentWorkspaceDto
     public bool IsRosterLocked { get; init; }
     public int MissedLogStreak { get; init; }
     public Guid ProjectLineageId { get; init; }
+    public ParticipationMode ParticipationMode { get; init; } = ParticipationMode.Team;
+    public EnrolmentMode EnrolmentMode { get; init; } = EnrolmentMode.SelfJoin;
+    public bool AllowCrossBranchTeams { get; init; } = false;
     public List<TeamMemberDto> Members { get; init; } = new();
     public List<SprintTaskDto> Tasks { get; init; } = new();
     public List<ArtifactSlotDto> Artifacts { get; init; } = new();

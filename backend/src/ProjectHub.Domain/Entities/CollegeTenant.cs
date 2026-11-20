@@ -46,4 +46,10 @@ public class CollegeTenant : BaseEntity
     public ICollection<UserAccount> Users { get; set; } = new List<UserAccount>();
     public ICollection<AcademicTrack> AcademicTracks { get; set; } = new List<AcademicTrack>();
     public ICollection<ProjectTeam> Teams { get; set; } = new List<ProjectTeam>();
+    public ICollection<CourseProgram> CoursePrograms { get; set; } = new List<CourseProgram>();
+    public ICollection<AcademicSession> AcademicSessions { get; set; } = new List<AcademicSession>();
+    public ICollection<CurriculumScheme> CurriculumSchemes { get; set; } = new List<CurriculumScheme>();
+    public ICollection<SemesterTerm> SemesterTerms { get; set; } = new List<SemesterTerm>();
+    public ICollection<SubjectOffering> SubjectOfferings { get; set; } = new List<SubjectOffering>();
+    public ICollection<StudentAcademicEnrollment> StudentEnrollments { get; set; } = new List<StudentAcademicEnrollment>();
 }

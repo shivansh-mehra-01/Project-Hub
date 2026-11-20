@@ -14,7 +14,7 @@ import {
   Send,
   FileText,
 } from "lucide-react";
-import { AppShell } from "@/design-system/patterns/AppShell";
+import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
@@ -38,6 +38,11 @@ interface PastProject {
 }
 
 export const StudentExploreView: React.FC = () => {
+  useDashboardHeader({
+    title: "Explore Campus Repository",
+    breadcrumb: "Problem Bank & Team Matching",
+  });
+
   const { problemBank, teams, currentPersona } = useProjectHubStore();
   const [filter, setFilter] = useState<"problems" | "peers" | "past">("problems");
   const [requestedId, setRequestedId] = useState<string | null>(null);
@@ -132,7 +137,7 @@ export const StudentExploreView: React.FC = () => {
   };
 
   return (
-    <AppShell pageTitle="Explore Campus Repository" breadcrumb="Problem Bank &amp; Team Matching" activeTab="Explore">
+    <div className="space-y-6">
       <div className="space-y-6">
         {/* Active Project Allocated Status Banner */}
         {hasActiveProject && myTeam && (
@@ -253,9 +258,10 @@ export const StudentExploreView: React.FC = () => {
                       className="w-full"
                       disabled={hasActiveProject || pb.taken || requestedId === pb.id}
                       onClick={() => !hasActiveProject && setRequestedId(pb.id)}
+                      title={hasActiveProject ? "You are already registered in an active project for this cycle." : undefined}
                     >
                       {hasActiveProject
-                        ? "Topic Requests Locked"
+                        ? "Allocation Finalized"
                         : pb.taken
                         ? "Topic Allocated"
                         : requestedId === pb.id
@@ -316,13 +322,18 @@ export const StudentExploreView: React.FC = () => {
 
                     <Button
                       size="sm"
-                      variant={isInvited ? "secondary" : "primary"}
+                      variant={hasActiveProject || isInvited ? "secondary" : "primary"}
                       className="w-full"
-                      disabled={isInvited}
-                      onClick={() => handleSendPeerInvite(peer)}
+                      disabled={hasActiveProject || isInvited}
+                      onClick={() => !hasActiveProject && handleSendPeerInvite(peer)}
+                      title={hasActiveProject ? "You are already registered in an active project for this cycle." : undefined}
                       leftIcon={isInvited ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <Send className="h-3.5 w-3.5" />}
                     >
-                      {isInvited ? "Invite Sent ✓" : "Send Team Invite"}
+                      {hasActiveProject
+                        ? "Allocation Finalized"
+                        : isInvited
+                        ? "Invite Sent ✓"
+                        : "Send Team Invite"}
                     </Button>
                   </Card>
                 );
@@ -486,6 +497,6 @@ export const StudentExploreView: React.FC = () => {
           </div>
         )}
       </SlideOverDrawer>
-    </AppShell>
+    </div>
   );
 };

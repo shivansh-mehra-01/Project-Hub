@@ -4,6 +4,7 @@ import {
   CreateDepartmentTrackRequest,
   ExceptionAuditLogDto,
   FacultyWorkloadDto,
+  HodAcademicContextDto,
   HodDashboardDto,
   NbaAttainmentReportDto,
   ProjectProposalDto,
@@ -13,6 +14,8 @@ import {
 
 export const hodApi = {
   getDashboard: () => apiClient.get<HodDashboardDto>("/api/hod/dashboard"),
+
+  getAcademicContext: () => apiClient.get<HodAcademicContextDto>("/api/hod/academic-context"),
 
   getTracks: () => apiClient.get<CollegeTrackDto[]>("/api/hod/tracks"),
 
@@ -47,6 +50,8 @@ export const hodApi = {
     ),
 
   getNbaAttainment: () => apiClient.get<NbaAttainmentReportDto>("/api/hod/nba-attainment"),
+
+  exportNbaDossierZip: () => apiClient.getBlob("/api/hod/nba/export-zip"),
 
   getExceptions: () => apiClient.get<ExceptionAuditLogDto[]>("/api/hod/exceptions"),
 

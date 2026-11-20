@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectHub.Application.Interfaces;
 using ProjectHub.Domain.Common;
 using ProjectHub.Domain.Entities;
+using ProjectHub.Domain.Entities.Master;
 using ProjectHub.Infrastructure.Persistence.Extensions;
 
 namespace ProjectHub.Infrastructure.Persistence;
@@ -35,6 +36,11 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
     public DbSet<MasterNbaOutcome> MasterNbaOutcomes => Set<MasterNbaOutcome>();
     public DbSet<MasterSdgCatalog> MasterSdgCatalogs => Set<MasterSdgCatalog>();
     public DbSet<PlatformAuditLog> PlatformAuditLogs => Set<PlatformAuditLog>();
+    public DbSet<MasterUniversity> MasterUniversities => Set<MasterUniversity>();
+    public DbSet<MasterCurriculumScheme> MasterCurriculumSchemes => Set<MasterCurriculumScheme>();
+    public DbSet<MasterProgram> MasterPrograms => Set<MasterProgram>();
+    public DbSet<MasterBranch> MasterBranches => Set<MasterBranch>();
+    public DbSet<MasterSubjectTemplate> MasterSubjectTemplates => Set<MasterSubjectTemplate>();
 
     // Tenant-Isolated Campus Entities
     public DbSet<Department> Departments => Set<Department>();
@@ -53,6 +59,14 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
     public DbSet<IndividualStudentScore> IndividualStudentScores => Set<IndividualStudentScore>();
     public DbSet<CourseExitSurvey> CourseExitSurveys => Set<CourseExitSurvey>();
     public DbSet<ExceptionAuditLog> ExceptionAuditLogs => Set<ExceptionAuditLog>();
+
+    // Dynamic Multi-Level Academic Hierarchy Entities
+    public DbSet<AcademicSession> AcademicSessions => Set<AcademicSession>();
+    public DbSet<CourseProgram> CoursePrograms => Set<CourseProgram>();
+    public DbSet<CurriculumScheme> CurriculumSchemes => Set<CurriculumScheme>();
+    public DbSet<SemesterTerm> SemesterTerms => Set<SemesterTerm>();
+    public DbSet<SubjectOffering> SubjectOfferings => Set<SubjectOffering>();
+    public DbSet<StudentAcademicEnrollment> StudentAcademicEnrollments => Set<StudentAcademicEnrollment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
