@@ -24,7 +24,28 @@ Ensure the following tools are installed on your machine:
 
 ---
 
-## 🚀 5-Minute Quickstart Guide
+## ⚡ 1-Command Instant Full-Stack Launcher (Recommended)
+
+Boot the entire stack (**PostgreSQL 17** + **.NET 10 Backend API** + **Next.js 16 Frontend**) with zero friction, automated port cleanup, database health polling, and dependency checks:
+
+```powershell
+# From the repository root (PowerShell):
+.\start.ps1
+
+# Or using npm:
+npm run dev
+```
+
+What `start.ps1` handles automatically:
+1. **Prerequisites & Port Cleanup:** Verifies Docker, .NET SDK, and npm; cleanly frees ports `5000` and `3000` from any stale background processes.
+2. **PostgreSQL 17 Auto-Provisioning:** Detects Docker Desktop, spins up or attaches to the PostgreSQL 17 container (`projecthub_postgres` / `projecthub-db`), and polls until port `5432` accepts connections.
+3. **Frontend Dependencies & Env Setup:** Automatically checks `web/node_modules` (installs if missing) and creates `web/.env.local` from `web/.env.example`.
+4. **Backend Boot & Health Check:** Launches .NET 10 API on `http://localhost:5000` in a dedicated labeled console and polls `/api/health` before booting the frontend.
+5. **Frontend Launch & Summary Banner:** Launches Next.js on `http://localhost:3000` in a dedicated labeled console and prints a consolidated terminal dashboard with demo credentials.
+
+---
+
+## 🚀 Manual Step-by-Step Setup Guide
 
 ### 1. Clone & Configure Environment
 
@@ -122,6 +143,8 @@ collabex/
 ├── docker-compose.yml                     # PostgreSQL 17 + Redis 7 local stack
 ├── .env.example                           # Root environment template
 ├── .gitignore                             # Clean monorepo exclusion rules
+├── package.json                           # Root scripts (npm run dev launcher)
+├── start.ps1                              # Zero-friction full-stack local launcher
 ├── backend/
 │   ├── ProjectHub.slnx                    # .NET 10 solution file
 │   ├── src/

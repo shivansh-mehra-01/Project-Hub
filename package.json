@@ -1,0 +1,15 @@
+{
+  "name": "collabex",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Collabex - Enterprise Multi-Tenant Academic Project Management Platform",
+  "scripts": {
+    "dev": "powershell -ExecutionPolicy Bypass -File ./start.ps1",
+    "start": "powershell -ExecutionPolicy Bypass -File ./start.ps1",
+    "build": "npm run build:backend && npm run build:web",
+    "build:backend": "dotnet build backend/ProjectHub.slnx",
+    "build:web": "npm --prefix web run build",
+    "test": "npm run test:backend",
+    "test:backend": "dotnet test backend/ProjectHub.slnx"
+  }
+}
