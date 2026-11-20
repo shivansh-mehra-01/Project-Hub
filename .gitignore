@@ -42,13 +42,13 @@ pnpm-debug.log*
 .vercel
 
 # ------------------------------------------------------------------------------
-# Environment & Secrets
+# Environment & Secrets (Local development defaults tracked for 1-click startup)
 # ------------------------------------------------------------------------------
-.env
-.env.local
 .env.*.local
-web/.env.local
 web/.env.*.local
+!.env
+!web/.env
+!web/.env.local
 !web/.env.example
 !.env.example
 
