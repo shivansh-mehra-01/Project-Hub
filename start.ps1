@@ -1,5 +1,5 @@
-# ==============================================================================
-# Collabex — Zero-Friction Full-Stack Local Launcher
+﻿# ==============================================================================
+# Collabex -- Zero-Friction Full-Stack Local Launcher
 # Boots PostgreSQL 17, .NET 10 Backend API, and Next.js Frontend
 # ==============================================================================
 
@@ -11,7 +11,7 @@ $RepoRoot = $PSScriptRoot
 
 Write-Host ""
 Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host "   COLLABEX — Full-Stack Local Application Launcher" -ForegroundColor Green
+Write-Host "   COLLABEX -- Full-Stack Local Application Launcher" -ForegroundColor Green
 Write-Host "   PostgreSQL 17 | .NET 10 Web API | Next.js 16 Web Dashboard" -ForegroundColor DarkGray
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
