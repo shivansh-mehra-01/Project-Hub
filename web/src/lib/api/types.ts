@@ -312,7 +312,11 @@ export interface CreateDepartmentTrackRequest {
   academicSessionId?: string;
   courseProgramId?: string;
   semesterTermId?: string;
+  semesterNumber?: number;
   subjectOfferingId?: string;
+  customSubjectCode?: string;
+  customSubjectName?: string;
+  credits?: number;
   curriculumSchemeId?: string;
   participationMode?: ParticipationMode;
   enrolmentMode?: EnrolmentMode;
@@ -714,6 +718,7 @@ export interface SubjectOfferingDto {
   id: string;
   collegeId: string;
   semesterTermId: string;
+  semesterNumber?: number;
   semesterTermName?: string;
   curriculumSchemeId?: string;
   curriculumSchemeCode?: string;

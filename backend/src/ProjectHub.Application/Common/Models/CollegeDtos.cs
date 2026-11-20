@@ -242,6 +242,7 @@ public record SubjectOfferingDto
     public Guid Id { get; init; }
     public Guid CollegeId { get; init; }
     public Guid SemesterTermId { get; init; }
+    public int SemesterNumber { get; init; }
     public string? SemesterTermName { get; init; }
     public Guid? CurriculumSchemeId { get; init; }
     public string? CurriculumSchemeCode { get; init; }

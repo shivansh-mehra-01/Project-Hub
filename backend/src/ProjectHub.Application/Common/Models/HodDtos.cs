@@ -26,7 +26,11 @@ public record CreateDepartmentTrackRequest
     public Guid? AcademicSessionId { get; init; }
     public Guid? CourseProgramId { get; init; }
     public Guid? SemesterTermId { get; init; }
+    public int? SemesterNumber { get; init; }
     public Guid? SubjectOfferingId { get; init; }
+    public string? CustomSubjectCode { get; init; }
+    public string? CustomSubjectName { get; init; }
+    public int? Credits { get; init; }
     public Guid? CurriculumSchemeId { get; init; }
     public ParticipationMode ParticipationMode { get; init; } = ParticipationMode.Team;
     public EnrolmentMode EnrolmentMode { get; init; } = EnrolmentMode.SelfJoin;

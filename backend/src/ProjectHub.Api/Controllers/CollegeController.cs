@@ -754,6 +754,7 @@ public class CollegeController : ControllerBase
                 Id = o.Id,
                 CollegeId = o.CollegeId,
                 SemesterTermId = o.SemesterTermId,
+                SemesterNumber = o.SemesterTerm != null ? o.SemesterTerm.SemesterNumber : 0,
                 SemesterTermName = o.SemesterTerm != null ? o.SemesterTerm.SemesterName : null,
                 CurriculumSchemeId = o.CurriculumSchemeId,
                 CurriculumSchemeCode = o.CurriculumScheme != null ? o.CurriculumScheme.SchemeCode : null,
@@ -801,11 +802,15 @@ public class CollegeController : ControllerBase
         await _context.SubjectOfferings.AddAsync(offering);
         await _context.SaveChangesAsync();
 
+        var term = await _context.SemesterTerms.FindAsync(request.SemesterTermId);
+
         return CreatedAtAction(nameof(GetSubjectOfferings), new { id = offering.Id }, new SubjectOfferingDto
         {
             Id = offering.Id,
             CollegeId = offering.CollegeId,
             SemesterTermId = offering.SemesterTermId,
+            SemesterNumber = term?.SemesterNumber ?? 0,
+            SemesterTermName = term?.SemesterName,
             CurriculumSchemeId = offering.CurriculumSchemeId,
             SubjectCode = offering.SubjectCode,
             SubjectName = offering.SubjectName,

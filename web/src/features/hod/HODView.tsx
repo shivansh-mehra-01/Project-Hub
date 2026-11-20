@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -42,7 +42,7 @@ import { Input } from "@/design-system/components/Input";
 import { Select } from "@/design-system/components/Select";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { Team } from "@/mocks/store-types";
-import { hodApi, getAuthToken } from "@/lib/api";
+import { hodApi, getAuthToken, HodAcademicContextDto } from "@/lib/api";
 
 export interface HODViewProps {
   initialTab?: "overview" | "approvals" | "nba" | "faculty";
@@ -60,6 +60,8 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
     subjectOfferings,
     cycle,
     updateCycle,
+    addSemesterTerm,
+    addSubjectOffering,
     toggleFacultyCoordinator,
     approveProposal,
     rejectProposal,
@@ -90,11 +92,22 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
   const [showAddFacultyModal, setShowAddFacultyModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const CUSTOM_OFFERING_VALUE = "__CUSTOM_OFFERING__";
+
+  // Academic Context State
+  const [academicContext, setAcademicContext] = useState<HodAcademicContextDto | null>(null);
+
   // Launch Academic Track Modal State
   const [showLaunchTrackModal, setShowLaunchTrackModal] = useState(false);
+  const [trackTitleManuallyEdited, setTrackTitleManuallyEdited] = useState(false);
   const [newTrackName, setNewTrackName] = useState("Minor Project (Semester 6)");
-  const [newTrackSemesterTermId, setNewTrackSemesterTermId] = useState(semesterTerms[0]?.id || "term-sem-6-even");
-  const [newTrackSubjectOfferingId, setNewTrackSubjectOfferingId] = useState(subjectOfferings[0]?.id || "off-cs-606");
+  const [newTrackSemesterNum, setNewTrackSemesterNum] = useState<number>(6);
+  const [newTrackSemesterTermId, setNewTrackSemesterTermId] = useState<string>("sem-cse-6");
+  const [newTrackSubjectOfferingId, setNewTrackSubjectOfferingId] = useState<string>("off-cse-606");
+  const [isCustomOffering, setIsCustomOffering] = useState(false);
+  const [customSubjectCode, setCustomSubjectCode] = useState("CS-606");
+  const [customSubjectName, setCustomSubjectName] = useState("Minor Project (4 Credits)");
+  const [customCredits, setCustomCredits] = useState<number>(4);
   const [newTrackParticipationMode, setNewTrackParticipationMode] = useState<"Team" | "Individual">("Team");
   const [newTrackEnrolmentMode, setNewTrackEnrolmentMode] = useState<"SelfJoin" | "CoordinatorAllotted" | "Hybrid">("SelfJoin");
   const [newTrackAllowCrossBranch, setNewTrackAllowCrossBranch] = useState(false);
@@ -138,9 +151,170 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Load live academic context from backend
+  useEffect(() => {
+    if (getAuthToken()) {
+      hodApi
+        .getAcademicContext()
+        .then((ctx) => {
+          if (ctx) setAcademicContext(ctx);
+        })
+        .catch((err) => console.warn("Failed to load academic context:", err));
+    }
+  }, []);
+
   // Department SAR status
   const cseDept = departments.find((d) => d.code === "CSE");
   const isSARLocked = cseDept?.hodSignOffStatus === "Attested & Locked";
+
+  const deptCode = academicContext?.departmentCode || cseDept?.code || "CS";
+
+  const defaultTrackTitleForSemester = (semNum: number): string => {
+    switch (semNum) {
+      case 1:
+        return "First-Year Mini Project (Semester 1)";
+      case 2:
+        return "First-Year Mini Project (Semester 2)";
+      case 3:
+        return "Second-Year Mini Project (Semester 3)";
+      case 4:
+        return "Second-Year Mini Project (Semester 4)";
+      case 5:
+        return "Minor Project (Semester 5)";
+      case 6:
+        return "Minor Project (Semester 6)";
+      case 7:
+        return "Major Project Phase-I (Semester 7)";
+      case 8:
+        return "Major Project Phase-II (Semester 8)";
+      default:
+        return `Academic Project Track (Semester ${semNum})`;
+    }
+  };
+
+  const defaultSubjectCodeForSemester = (dCode: string, semNum: number): string => {
+    const prefix = dCode ? dCode.toUpperCase() : "CS";
+    switch (semNum) {
+      case 1:
+        return `${prefix}-108`;
+      case 2:
+        return `${prefix}-208`;
+      case 3:
+        return `${prefix}-308`;
+      case 4:
+        return `${prefix}-408`;
+      case 5:
+        return `${prefix}-506`;
+      case 6:
+        return `${prefix}-606`;
+      case 7:
+        return `${prefix}-705`;
+      case 8:
+        return `${prefix}-805`;
+      default:
+        return `${prefix}-${semNum}01`;
+    }
+  };
+
+  const defaultSubjectNameForSemester = (semNum: number): string => {
+    switch (semNum) {
+      case 1:
+      case 2:
+        return "First-Year Mini Project (2 Credits)";
+      case 3:
+      case 4:
+        return "Second-Year Mini Project (2 Credits)";
+      case 5:
+        return "Minor Project Phase-I (3 Credits)";
+      case 6:
+        return "Minor Project (4 Credits)";
+      case 7:
+        return "Major Project Phase-I (4 Credits)";
+      case 8:
+        return "Major Project Phase-II (8 Credits)";
+      default:
+        return `Project Course (Semester ${semNum})`;
+    }
+  };
+
+  const allSemesters = useMemo(() => {
+    if (academicContext?.availableSemesters && academicContext.availableSemesters.length > 0) {
+      return academicContext.availableSemesters.map((st) => ({
+        id: st.id,
+        semesterNumber: st.semesterNumber,
+        semesterName: st.semesterName || `Semester ${st.semesterNumber}`,
+        parity: st.parity,
+        academicSessionLabel: st.academicSessionLabel || "AY 2025-26",
+      }));
+    }
+    const totalSems = 8;
+    const list: Array<{
+      id: string;
+      semesterNumber: number;
+      semesterName: string;
+      parity: "Odd" | "Even" | "Combined";
+      academicSessionLabel?: string;
+    }> = [];
+
+    for (let s = 1; s <= totalSems; s++) {
+      const existing = semesterTerms.find((st) => st.semesterNumber === s);
+      if (existing) {
+        list.push({
+          id: existing.id,
+          semesterNumber: existing.semesterNumber,
+          semesterName: existing.semesterName || `Semester ${s}`,
+          parity: existing.parity as any,
+          academicSessionLabel: existing.academicSessionName || "AY 2025-26",
+        });
+      } else {
+        list.push({
+          id: `virtual-sem-${s}`,
+          semesterNumber: s,
+          semesterName: `Semester ${s}`,
+          parity: s % 2 === 1 ? "Odd" : "Even",
+          academicSessionLabel: "AY 2025-26",
+        });
+      }
+    }
+    return list.sort((a, b) => a.semesterNumber - b.semesterNumber);
+  }, [academicContext, semesterTerms]);
+
+  const allOfferings = useMemo(() => {
+    if (academicContext?.availableOfferings && academicContext.availableOfferings.length > 0) {
+      return academicContext.availableOfferings.map((so) => ({
+        id: so.id,
+        semesterTermId: so.semesterTermId,
+        semesterNumber: so.semesterNumber || 6,
+        subjectCode: so.subjectCode,
+        subjectName: so.subjectName,
+        subjectType: so.subjectType,
+        credits: so.credits,
+      }));
+    }
+    return subjectOfferings.map((so) => {
+      const matchedTerm = semesterTerms.find((t) => t.id === so.semesterTermId);
+      return {
+        id: so.id,
+        semesterTermId: so.semesterTermId,
+        semesterNumber: so.semesterNumber || matchedTerm?.semesterNumber || 6,
+        subjectCode: so.subjectCode,
+        subjectName: so.subjectName,
+        subjectType: so.subjectType,
+        credits: so.credits,
+      };
+    });
+  }, [academicContext, subjectOfferings, semesterTerms]);
+
+  const currentSemesterOfferings = useMemo(() => {
+    return allOfferings.filter(
+      (so) =>
+        so.semesterNumber === newTrackSemesterNum ||
+        (newTrackSemesterTermId &&
+          !newTrackSemesterTermId.startsWith("virtual-") &&
+          newTrackSemesterTermId !== "00000000-0000-0000-0000-000000000000" &&
+          so.semesterTermId === newTrackSemesterTermId)
+    );
+  }, [allOfferings, newTrackSemesterNum, newTrackSemesterTermId]);
 
   // Teams waiting for HOD sign-off
   const pendingHODTeams = teams.filter((t) => t.state === "PendingHOD");
@@ -297,23 +471,119 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
     });
   };
 
+  const handleSemesterChange = (selectedTermId: string) => {
+    const chosen = allSemesters.find(
+      (st) => st.id === selectedTermId || `sem-${st.semesterNumber}` === selectedTermId
+    );
+    const semNum = chosen ? chosen.semesterNumber : Number(selectedTermId.replace(/\D/g, "")) || 6;
+    const termId =
+      chosen?.id && !chosen.id.startsWith("virtual-") && chosen.id !== "00000000-0000-0000-0000-000000000000"
+        ? chosen.id
+        : "";
+
+    setNewTrackSemesterNum(semNum);
+    setNewTrackSemesterTermId(termId || selectedTermId);
+
+    // Auto-update track title if untouched by user
+    if (!trackTitleManuallyEdited) {
+      setNewTrackName(defaultTrackTitleForSemester(semNum));
+    }
+
+    // Filter offerings for this newly selected semester
+    const matchingOfferings = allOfferings.filter(
+      (so) => so.semesterNumber === semNum || (termId && so.semesterTermId === termId)
+    );
+
+    if (matchingOfferings.length > 0) {
+      setNewTrackSubjectOfferingId(matchingOfferings[0].id);
+      setIsCustomOffering(false);
+    } else {
+      // 0 pre-seeded offerings (e.g. Semesters 1 or 2) -> auto-select custom
+      setNewTrackSubjectOfferingId(CUSTOM_OFFERING_VALUE);
+      setIsCustomOffering(true);
+      setCustomSubjectCode(defaultSubjectCodeForSemester(deptCode, semNum));
+      setCustomSubjectName(defaultSubjectNameForSemester(semNum));
+      setCustomCredits(semNum >= 7 ? 4 : (semNum >= 5 ? 3 : 2));
+    }
+  };
+
+  const handleOfferingChange = (offeringVal: string) => {
+    setNewTrackSubjectOfferingId(offeringVal);
+    if (offeringVal === CUSTOM_OFFERING_VALUE) {
+      setIsCustomOffering(true);
+      if (!customSubjectCode) {
+        setCustomSubjectCode(defaultSubjectCodeForSemester(deptCode, newTrackSemesterNum));
+      }
+      if (!customSubjectName) {
+        setCustomSubjectName(defaultSubjectNameForSemester(newTrackSemesterNum));
+      }
+    } else {
+      setIsCustomOffering(false);
+      const selected = allOfferings.find((o) => o.id === offeringVal);
+      if (selected && !trackTitleManuallyEdited) {
+        setNewTrackName(`${selected.subjectName} (Semester ${newTrackSemesterNum})`);
+      }
+    }
+  };
+
   const handleLaunchTrackSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLaunchingTrack(true);
     try {
-      const selectedTerm = semesterTerms.find((t) => t.id === newTrackSemesterTermId);
-      const selectedOffering = subjectOfferings.find((s) => s.id === newTrackSubjectOfferingId);
+      const isCustom = isCustomOffering || newTrackSubjectOfferingId === CUSTOM_OFFERING_VALUE;
+      const finalCode = isCustom ? customSubjectCode.trim().toUpperCase() : undefined;
+      const finalName = isCustom ? customSubjectName.trim() : undefined;
+      const finalCredits = isCustom ? Number(customCredits) || 2 : undefined;
+
+      const resolvedTermId =
+        newTrackSemesterTermId &&
+        !newTrackSemesterTermId.startsWith("virtual-") &&
+        newTrackSemesterTermId !== "00000000-0000-0000-0000-000000000000"
+          ? newTrackSemesterTermId
+          : undefined;
+
+      const resolvedOfferingId = isCustom ? undefined : newTrackSubjectOfferingId;
+
+      // Synchronize in local store for mock preview
+      let termIdForStore = resolvedTermId;
+      if (!termIdForStore) {
+        termIdForStore = `sem-cse-${newTrackSemesterNum}`;
+        addSemesterTerm({
+          departmentId: cseDept?.id || "dept-cse-01",
+          departmentCode: cseDept?.code || "CSE",
+          semesterNumber: newTrackSemesterNum,
+          semesterName: `Semester ${newTrackSemesterNum}`,
+          parity: newTrackSemesterNum % 2 === 1 ? "Odd" : "Even",
+          isActive: true,
+        });
+      }
+
+      let offeringIdForStore = resolvedOfferingId;
+      if (isCustom && finalCode && finalName) {
+        offeringIdForStore = `off-${finalCode.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+        addSubjectOffering({
+          semesterTermId: termIdForStore,
+          semesterNumber: newTrackSemesterNum,
+          subjectCode: finalCode,
+          subjectName: finalName,
+          subjectType: newTrackSemesterNum >= 7 ? "MajorProject" : (newTrackSemesterNum >= 5 ? "MinorProject" : "Project"),
+          credits: finalCredits || 2,
+          internalMaxMarks: 60,
+          externalMaxMarks: 40,
+          isActive: true,
+        });
+      }
 
       // Update store cycle
       updateCycle({
-        type: selectedOffering?.subjectType === "MajorProject" ? "Major" : "Minor",
-        semester: selectedTerm?.semesterNumber || 6,
+        type: newTrackSemesterNum >= 7 ? "Major" : "Minor",
+        semester: newTrackSemesterNum,
         proposalDeadline: newTrackProposalDeadline,
         participationMode: newTrackParticipationMode,
         enrolmentMode: newTrackEnrolmentMode,
         allowCrossBranchTeams: newTrackAllowCrossBranch,
-        semesterTermId: newTrackSemesterTermId,
-        subjectOfferingId: newTrackSubjectOfferingId,
+        semesterTermId: termIdForStore,
+        subjectOfferingId: offeringIdForStore,
         minTeamSize: newTrackParticipationMode === "Individual" ? 1 : 3,
         maxTeamSize: newTrackParticipationMode === "Individual" ? 1 : 4,
         isActive: true,
@@ -322,10 +592,14 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
       // API call if authenticated
       if (getAuthToken()) {
         await hodApi.createTrack({
-          name: newTrackName,
+          name: newTrackName.trim(),
           academicYear: cycle.academicYear || "2025-2026",
-          semesterTermId: newTrackSemesterTermId,
-          subjectOfferingId: newTrackSubjectOfferingId,
+          semesterTermId: resolvedTermId,
+          semesterNumber: newTrackSemesterNum,
+          subjectOfferingId: resolvedOfferingId,
+          customSubjectCode: finalCode,
+          customSubjectName: finalName,
+          credits: finalCredits,
           participationMode: newTrackParticipationMode as any,
           enrolmentMode: newTrackEnrolmentMode as any,
           allowCrossBranchTeams: newTrackAllowCrossBranch,
@@ -341,6 +615,18 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
     } finally {
       setIsLaunchingTrack(false);
     }
+  };
+
+  const openLaunchTrackModal = () => {
+    setTrackTitleManuallyEdited(false);
+    const defaultSem = activeCohort === "major" ? 7 : 6;
+    const termForSem = allSemesters.find((st) => st.semesterNumber === defaultSem);
+    if (termForSem) {
+      handleSemesterChange(termForSem.id);
+    } else {
+      handleSemesterChange(`sem-cse-${defaultSem}`);
+    }
+    setShowLaunchTrackModal(true);
   };
 
   // Tab titles and metadata
@@ -449,7 +735,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                 size="sm"
                 variant="primary"
                 leftIcon={<Sparkles className="h-3.5 w-3.5" />}
-                onClick={() => setShowLaunchTrackModal(true)}
+                onClick={openLaunchTrackModal}
               >
                 Launch Track
               </Button>
@@ -1836,7 +2122,10 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           <Input
             label="Academic Track Title"
             value={newTrackName}
-            onChange={(e) => setNewTrackName(e.target.value)}
+            onChange={(e) => {
+              setNewTrackName(e.target.value);
+              setTrackTitleManuallyEdited(true);
+            }}
             placeholder="e.g. Minor Project (Semester 6)"
             required
           />
@@ -1845,40 +2134,70 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
               label="Academic Semester Term"
-              value={newTrackSemesterTermId}
-              onChange={(e) => setNewTrackSemesterTermId(e.target.value)}
-              options={
-                semesterTerms.length > 0
-                  ? semesterTerms.map((st) => ({
-                      label: `Semester ${st.semesterNumber} (${st.parity} Sem • ${st.academicSessionName || "AY 2025-26"})`,
-                      value: st.id,
-                    }))
-                  : [
-                      { label: "Semester 6 (Even Sem • AY 2025-26)", value: "term-sem-6-even" },
-                      { label: "Semester 7 (Odd Sem • AY 2026-27)", value: "term-sem-7-odd" },
-                      { label: "Semester 8 (Even Sem • AY 2026-27)", value: "term-sem-8-even" },
-                    ]
+              value={
+                allSemesters.find(
+                  (st) => st.id === newTrackSemesterTermId || st.semesterNumber === newTrackSemesterNum
+                )?.id || newTrackSemesterTermId
               }
+              onChange={(e) => handleSemesterChange(e.target.value)}
+              options={allSemesters.map((st) => ({
+                label: `Semester ${st.semesterNumber} (${st.parity} Sem • ${st.academicSessionLabel || "AY 2025-26"})`,
+                value: st.id,
+              }))}
             />
 
             <Select
               label="Curriculum Project Offering"
-              value={newTrackSubjectOfferingId}
-              onChange={(e) => setNewTrackSubjectOfferingId(e.target.value)}
-              options={
-                subjectOfferings.length > 0
-                  ? subjectOfferings.map((so) => ({
-                      label: `${so.subjectCode} - ${so.subjectName} (${so.credits} Credits • ${so.subjectType})`,
-                      value: so.id,
-                    }))
-                  : [
-                      { label: "CS-606 - Minor Project (4 Credits • MinorProject)", value: "off-cs-606" },
-                      { label: "CS-705 - Major Project Phase-I (4 Credits • MajorProject)", value: "off-cs-705" },
-                      { label: "CS-805 - Major Project Phase-II (8 Credits • MajorProject)", value: "off-cs-805" },
-                    ]
-              }
+              value={isCustomOffering ? CUSTOM_OFFERING_VALUE : newTrackSubjectOfferingId}
+              onChange={(e) => handleOfferingChange(e.target.value)}
+              options={[
+                ...currentSemesterOfferings.map((so) => ({
+                  label: `${so.subjectCode} - ${so.subjectName} (${so.credits} Credits • ${so.subjectType || "Project"})`,
+                  value: so.id,
+                })),
+                {
+                  label: "+ Add Custom Subject / Project Offering",
+                  value: CUSTOM_OFFERING_VALUE,
+                },
+              ]}
             />
           </div>
+
+          {/* Inline Custom Subject Fields when + Add Custom Subject is active */}
+          {isCustomOffering && (
+            <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200/90 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900">
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Custom Curriculum Offering (Semester {newTrackSemesterNum})</span>
+                </div>
+                <span className="text-[10px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full font-medium">
+                  Auto-Creates Offering & Term
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Input
+                    label="Subject Code"
+                    value={customSubjectCode}
+                    onChange={(e) => setCustomSubjectCode(e.target.value)}
+                    placeholder={`e.g. ${deptCode}-${newTrackSemesterNum}08`}
+                    required
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Input
+                    label="Subject / Offering Name"
+                    value={customSubjectName}
+                    onChange={(e) => setCustomSubjectName(e.target.value)}
+                    placeholder="e.g. First-Year Mini Project (2 Credits)"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Participation Mode: Team vs Individual */}
           <div className="space-y-1.5">

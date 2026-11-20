@@ -92,36 +92,99 @@ public class HodController : ControllerBase
             })
             .ToListAsync();
 
-        var semesters = await _context.SemesterTerms
+        var activeSession = sessions.FirstOrDefault(s => s.IsActive) ?? sessions.FirstOrDefault();
+
+        // 1. Fetch existing persisted semester terms
+        var existingSemesters = await _context.SemesterTerms
             .Include(t => t.AcademicSession)
+            .Include(t => t.SubjectOfferings)
             .Where(t => t.CollegeId == collegeId && t.DepartmentId == deptId && !t.IsDeleted && t.IsActive)
             .OrderBy(t => t.SemesterNumber)
-            .Select(t => new SemesterTermDto
-            {
-                Id = t.Id,
-                CollegeId = t.CollegeId,
-                DepartmentId = t.DepartmentId,
-                AcademicSessionId = t.AcademicSessionId,
-                AcademicSessionLabel = t.AcademicSession != null ? t.AcademicSession.Label : null,
-                SemesterNumber = t.SemesterNumber,
-                SemesterName = t.SemesterName,
-                Parity = t.Parity,
-                IsActive = t.IsActive
-            })
             .ToListAsync();
 
-        var semesterIds = semesters.Select(s => s.Id).ToList();
+        var totalSemesters = dept.CourseProgram?.TotalSemesters ?? 8;
+        if (totalSemesters <= 0) totalSemesters = 8;
+
+        var availableSemesters = new List<SemesterTermDto>();
+
+        for (int semNum = 1; semNum <= totalSemesters; semNum++)
+        {
+            var existing = existingSemesters.FirstOrDefault(t => t.SemesterNumber == semNum);
+            if (existing != null)
+            {
+                availableSemesters.Add(new SemesterTermDto
+                {
+                    Id = existing.Id,
+                    CollegeId = existing.CollegeId,
+                    DepartmentId = existing.DepartmentId,
+                    DepartmentCode = dept.Code,
+                    DepartmentName = dept.Name,
+                    AcademicSessionId = existing.AcademicSessionId ?? activeSession?.Id,
+                    AcademicSessionLabel = existing.AcademicSession?.Label ?? activeSession?.Label,
+                    SemesterNumber = existing.SemesterNumber,
+                    SemesterName = string.IsNullOrWhiteSpace(existing.SemesterName) ? $"Semester {existing.SemesterNumber}" : existing.SemesterName,
+                    Parity = existing.Parity,
+                    IsActive = existing.IsActive,
+                    SubjectOfferingCount = existing.SubjectOfferings.Count(o => !o.IsDeleted && o.IsActive)
+                });
+            }
+            else
+            {
+                // Virtual/Available semester option across all semesters (1 through TotalSemesters)
+                availableSemesters.Add(new SemesterTermDto
+                {
+                    Id = Guid.Empty,
+                    CollegeId = collegeId,
+                    DepartmentId = dept.Id,
+                    DepartmentCode = dept.Code,
+                    DepartmentName = dept.Name,
+                    AcademicSessionId = activeSession?.Id,
+                    AcademicSessionLabel = activeSession?.Label,
+                    SemesterNumber = semNum,
+                    SemesterName = $"Semester {semNum}",
+                    Parity = (semNum % 2 == 1) ? SemesterParity.Odd : SemesterParity.Even,
+                    IsActive = true,
+                    SubjectOfferingCount = 0
+                });
+            }
+        }
+
+        // Include any additional persisted terms with SemesterNumber > totalSemesters
+        foreach (var extra in existingSemesters.Where(t => t.SemesterNumber > totalSemesters))
+        {
+            availableSemesters.Add(new SemesterTermDto
+            {
+                Id = extra.Id,
+                CollegeId = extra.CollegeId,
+                DepartmentId = extra.DepartmentId,
+                DepartmentCode = dept.Code,
+                DepartmentName = dept.Name,
+                AcademicSessionId = extra.AcademicSessionId ?? activeSession?.Id,
+                AcademicSessionLabel = extra.AcademicSession?.Label ?? activeSession?.Label,
+                SemesterNumber = extra.SemesterNumber,
+                SemesterName = extra.SemesterName,
+                Parity = extra.Parity,
+                IsActive = extra.IsActive,
+                SubjectOfferingCount = extra.SubjectOfferings.Count(o => !o.IsDeleted && o.IsActive)
+            });
+        }
+
+        availableSemesters = availableSemesters.OrderBy(s => s.SemesterNumber).ToList();
+
+        var existingSemesterIds = existingSemesters.Select(s => s.Id).ToList();
 
         var offerings = await _context.SubjectOfferings
             .Include(o => o.SemesterTerm)
             .Include(o => o.CurriculumScheme)
-            .Where(o => o.CollegeId == collegeId && semesterIds.Contains(o.SemesterTermId) && !o.IsDeleted && o.IsActive)
-            .OrderBy(o => o.SubjectCode)
+            .Where(o => o.CollegeId == collegeId && existingSemesterIds.Contains(o.SemesterTermId) && !o.IsDeleted && o.IsActive)
+            .OrderBy(o => o.SemesterTerm != null ? o.SemesterTerm.SemesterNumber : 0)
+            .ThenBy(o => o.SubjectCode)
             .Select(o => new SubjectOfferingDto
             {
                 Id = o.Id,
                 CollegeId = o.CollegeId,
                 SemesterTermId = o.SemesterTermId,
+                SemesterNumber = o.SemesterTerm != null ? o.SemesterTerm.SemesterNumber : 0,
                 SemesterTermName = o.SemesterTerm != null ? o.SemesterTerm.SemesterName : null,
                 CurriculumSchemeId = o.CurriculumSchemeId,
                 CurriculumSchemeCode = o.CurriculumScheme != null ? o.CurriculumScheme.SchemeCode : null,
@@ -143,7 +206,7 @@ public class HodController : ControllerBase
             CourseProgramId = dept.CourseProgramId,
             CourseProgramName = dept.CourseProgram?.Name,
             AvailableSessions = sessions,
-            AvailableSemesters = semesters,
+            AvailableSemesters = availableSemesters,
             AvailableOfferings = offerings
         });
     }
@@ -193,14 +256,121 @@ public class HodController : ControllerBase
         var collegeId = _tenantContext.CollegeId!.Value;
         var deptId = GetDepartmentId();
 
+        var dept = await _context.Departments
+            .Include(d => d.CourseProgram)
+            .FirstOrDefaultAsync(d => d.Id == deptId && !d.IsDeleted);
+
+        var activeSession = await _context.AcademicSessions
+            .Where(s => s.CollegeId == collegeId && !s.IsDeleted && s.IsActive)
+            .OrderByDescending(s => s.StartDate)
+            .FirstOrDefaultAsync();
+
+        var sessionId = request.AcademicSessionId ?? activeSession?.Id;
+        int semNumber = request.SemesterNumber ?? 6;
+        Guid? semesterTermId = null;
+
+        // 1. Resolve or Atomically Auto-Create SemesterTerm
+        if (request.SemesterTermId.HasValue && request.SemesterTermId.Value != Guid.Empty)
+        {
+            var existingTerm = await _context.SemesterTerms
+                .FirstOrDefaultAsync(t => t.Id == request.SemesterTermId.Value && t.CollegeId == collegeId && !t.IsDeleted);
+            if (existingTerm != null)
+            {
+                semesterTermId = existingTerm.Id;
+                semNumber = existingTerm.SemesterNumber;
+            }
+        }
+
+        if (!semesterTermId.HasValue)
+        {
+            // Find existing semester term by department and semester number
+            var existingTerm = await _context.SemesterTerms.FirstOrDefaultAsync(t =>
+                t.CollegeId == collegeId &&
+                t.DepartmentId == deptId &&
+                (!sessionId.HasValue || t.AcademicSessionId == sessionId.Value) &&
+                t.SemesterNumber == semNumber &&
+                !t.IsDeleted);
+
+            if (existingTerm != null)
+            {
+                semesterTermId = existingTerm.Id;
+            }
+            else
+            {
+                // Auto-create SemesterTerm atomically in transaction
+                var newTerm = new SemesterTerm
+                {
+                    CollegeId = collegeId,
+                    DepartmentId = deptId,
+                    AcademicSessionId = sessionId,
+                    SemesterNumber = semNumber,
+                    SemesterName = $"Semester {semNumber}",
+                    Parity = (semNumber % 2 == 1) ? SemesterParity.Odd : SemesterParity.Even,
+                    IsActive = true
+                };
+                await _context.SemesterTerms.AddAsync(newTerm);
+                await _context.SaveChangesAsync();
+                semesterTermId = newTerm.Id;
+            }
+        }
+
+        // 2. Resolve or Atomically Auto-Create SubjectOffering
+        Guid? subjectOfferingId = null;
+
+        if (!string.IsNullOrWhiteSpace(request.CustomSubjectCode) || !string.IsNullOrWhiteSpace(request.CustomSubjectName))
+        {
+            var subjectCode = (request.CustomSubjectCode ?? $"{dept?.Code ?? "CS"}-{semNumber}01").Trim().ToUpperInvariant();
+            var existingOffering = await _context.SubjectOfferings.FirstOrDefaultAsync(o =>
+                o.CollegeId == collegeId &&
+                o.SemesterTermId == semesterTermId.Value &&
+                o.SubjectCode == subjectCode &&
+                !o.IsDeleted);
+
+            if (existingOffering != null)
+            {
+                subjectOfferingId = existingOffering.Id;
+            }
+            else
+            {
+                var customName = !string.IsNullOrWhiteSpace(request.CustomSubjectName)
+                    ? request.CustomSubjectName.Trim()
+                    : request.Name.Trim();
+
+                var subjectType = semNumber >= 7 ? SubjectType.MajorProject : (semNumber >= 5 ? SubjectType.MinorProject : SubjectType.Project);
+                var credits = request.Credits.GetValueOrDefault(semNumber >= 7 ? 4 : (semNumber >= 5 ? 3 : 2));
+
+                var newOffering = new SubjectOffering
+                {
+                    CollegeId = collegeId,
+                    SemesterTermId = semesterTermId.Value,
+                    CurriculumSchemeId = request.CurriculumSchemeId,
+                    SubjectCode = subjectCode,
+                    SubjectName = customName,
+                    SubjectType = subjectType,
+                    Credits = credits,
+                    InternalMaxMarks = 60,
+                    ExternalMaxMarks = 40,
+                    IsActive = true
+                };
+                await _context.SubjectOfferings.AddAsync(newOffering);
+                await _context.SaveChangesAsync();
+                subjectOfferingId = newOffering.Id;
+            }
+        }
+        else if (request.SubjectOfferingId.HasValue && request.SubjectOfferingId.Value != Guid.Empty)
+        {
+            subjectOfferingId = request.SubjectOfferingId.Value;
+        }
+
+        // 3. Atomically Create AcademicTrack
         var track = new AcademicTrack
         {
             CollegeId = collegeId,
             DepartmentId = deptId,
-            AcademicSessionId = request.AcademicSessionId,
-            CourseProgramId = request.CourseProgramId,
-            SemesterTermId = request.SemesterTermId,
-            SubjectOfferingId = request.SubjectOfferingId,
+            AcademicSessionId = sessionId,
+            CourseProgramId = request.CourseProgramId ?? dept?.CourseProgramId,
+            SemesterTermId = semesterTermId,
+            SubjectOfferingId = subjectOfferingId,
             CurriculumSchemeId = request.CurriculumSchemeId,
             ParticipationMode = request.ParticipationMode,
             EnrolmentMode = request.EnrolmentMode,
@@ -226,6 +396,7 @@ public class HodController : ControllerBase
             Id = track.Id,
             CollegeId = track.CollegeId,
             DepartmentId = track.DepartmentId,
+            DepartmentCode = dept?.Code,
             AcademicSessionId = track.AcademicSessionId,
             CourseProgramId = track.CourseProgramId,
             SemesterTermId = track.SemesterTermId,
