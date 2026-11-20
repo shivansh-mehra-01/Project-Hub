@@ -26,11 +26,15 @@ public class ExceptionAuditLogConfiguration : IEntityTypeConfiguration<Exception
             .IsRequired()
             .HasMaxLength(1000);
 
+        builder.Property(e => e.ProjectTeamId)
+            .IsRequired(false);
+
         builder.HasIndex(e => new { e.CollegeId, e.DepartmentId, e.ProjectTeamId, e.ActionType });
 
         builder.HasOne(e => e.ProjectTeam)
             .WithMany(t => t.ExceptionLogs)
             .HasForeignKey(e => e.ProjectTeamId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(e => e.RequestedByUser)

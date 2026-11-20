@@ -752,7 +752,7 @@ public class HodController : ControllerBase
             .Select(e => new ExceptionAuditLogDto
             {
                 Id = e.Id,
-                ProjectTeamId = e.ProjectTeamId,
+                ProjectTeamId = e.ProjectTeamId ?? Guid.Empty,
                 TeamCode = e.ProjectTeam != null ? e.ProjectTeam.TeamCode : string.Empty,
                 ActionType = e.ActionType,
                 Reason = e.Reason,

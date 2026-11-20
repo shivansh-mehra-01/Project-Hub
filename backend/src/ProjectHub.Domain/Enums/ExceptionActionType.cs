@@ -8,5 +8,6 @@ public enum ExceptionActionType
     ReassignGuide = 1,
     RemoveDroppedMember = 2,
     AmendLockedRoster = 3,
-    IndividualReVivaUnlock = 4
+    IndividualReVivaUnlock = 4,
+    SingleStudentProvisioned = 5
 }

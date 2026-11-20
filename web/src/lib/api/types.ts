@@ -29,7 +29,8 @@ export type ExceptionActionType =
   | "ReassignGuide"
   | "RemoveDroppedMember"
   | "AmendLockedRoster"
-  | "IndividualReVivaUnlock";
+  | "IndividualReVivaUnlock"
+  | "SingleStudentProvisioned";
 
 export type SprintTaskStatus = "Todo" | "InProgress" | "Done";
 
@@ -418,6 +419,24 @@ export interface RosterImportResultDto {
   insertedCount: number;
   updatedCount: number;
   warnings: string[];
+}
+
+export interface AddSingleStudentRequest {
+  fullName: string;
+  enrollmentNumber: string;
+  email: string;
+  departmentId: string;
+  semesterNumber: number;
+  admissionBatch: string;
+}
+
+export interface SingleStudentProvisionedResponse {
+  studentUserId: string;
+  fullName: string;
+  enrollmentNumber: string;
+  email: string;
+  message: string;
+  devOtp?: string;
 }
 
 export interface AssignGuideRequest {

@@ -1,5 +1,6 @@
 import { apiClient } from "./apiClient";
 import {
+  AddSingleStudentRequest,
   AssignGuideRequest,
   CreateExceptionRequest,
   ExceptionAuditLogDto,
@@ -7,12 +8,16 @@ import {
   RosterImportRequest,
   RosterImportResultDto,
   ScheduleVivaPanelRequest,
+  SingleStudentProvisionedResponse,
   VivaPanelDto,
 } from "./types";
 
 export const coordinatorApi = {
   importRoster: (data: RosterImportRequest) =>
     apiClient.post<RosterImportResultDto>("/api/coordinator/roster/import", data),
+
+  addSingleStudent: (data: AddSingleStudentRequest) =>
+    apiClient.post<SingleStudentProvisionedResponse>("/api/coordinator/roster/student", data),
 
   getTeams: (departmentId?: string, trackId?: string) =>
     apiClient.get<ProjectProposalDto[]>("/api/coordinator/teams", {

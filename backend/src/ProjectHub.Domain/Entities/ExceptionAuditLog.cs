@@ -10,7 +10,7 @@ public class ExceptionAuditLog : BaseEntity, ITenantEntity
 {
     public Guid CollegeId { get; set; }
     public Guid DepartmentId { get; set; }
-    public Guid ProjectTeamId { get; set; }
+    public Guid? ProjectTeamId { get; set; }
     public ExceptionActionType ActionType { get; set; }
     public Guid? TargetUserId { get; set; }
     public string PreviousValueJson { get; set; } = "{}";

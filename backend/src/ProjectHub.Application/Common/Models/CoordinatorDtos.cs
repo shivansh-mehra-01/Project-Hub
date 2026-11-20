@@ -60,3 +60,23 @@ public record CreateExceptionRequest
     public string PreviousValueJson { get; init; } = "{}";
     public string NewValueJson { get; init; } = "{}";
 }
+
+public record AddSingleStudentRequest
+{
+    public string FullName { get; init; } = string.Empty;
+    public string EnrollmentNumber { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public Guid DepartmentId { get; init; }
+    public int SemesterNumber { get; init; } = 6;
+    public string AdmissionBatch { get; init; } = "2023-2027";
+}
+
+public record SingleStudentProvisionedResponse
+{
+    public Guid StudentUserId { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string EnrollmentNumber { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+    public string? DevOtp { get; init; }
+}

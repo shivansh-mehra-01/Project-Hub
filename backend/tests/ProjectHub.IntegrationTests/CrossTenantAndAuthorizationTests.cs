@@ -308,4 +308,108 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         Assert.NotNull(activeSession);
         Assert.Equal("2027–2028", activeSession.Label);
     }
+
+    [Fact]
+    public async Task Coordinator_AddSingleStudent_EnforcesValidation_DispatchesOtp_AndRejectsDuplicates()
+    {
+        // 1. Get Coordinator token
+        var coordinatorToken = await GetTokenForPersonaAsync("Coordinator");
+
+        // 2. Reject non-institutional email domain
+        var badDomainReq = new HttpRequestMessage(HttpMethod.Post, "/api/coordinator/roster/student")
+        {
+            Content = JsonContent.Create(new AddSingleStudentRequest
+            {
+                FullName = "Rohan Sharma",
+                EnrollmentNumber = "0176CS221098",
+                Email = "rohan.sharma@gmail.com",
+                DepartmentId = DbInitializer.CseDepartmentId,
+                SemesterNumber = 6,
+                AdmissionBatch = "2023-2027"
+            })
+        };
+        badDomainReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", coordinatorToken);
+
+        var badDomainRes = await _client.SendAsync(badDomainReq);
+        Assert.Equal(HttpStatusCode.BadRequest, badDomainRes.StatusCode);
+
+        // 3. Provision new student with valid institutional domain
+        var validReq = new HttpRequestMessage(HttpMethod.Post, "/api/coordinator/roster/student")
+        {
+            Content = JsonContent.Create(new AddSingleStudentRequest
+            {
+                FullName = "Aditya Verma",
+                EnrollmentNumber = "0176CS221099",
+                Email = "0176cs221099@sistec.ac.in",
+                DepartmentId = DbInitializer.CseDepartmentId,
+                SemesterNumber = 6,
+                AdmissionBatch = "2023-2027"
+            })
+        };
+        validReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", coordinatorToken);
+
+        var validRes = await _client.SendAsync(validReq);
+        Assert.Equal(HttpStatusCode.Created, validRes.StatusCode);
+
+        var provisioned = await validRes.Content.ReadFromJsonAsync<SingleStudentProvisionedResponse>();
+        Assert.NotNull(provisioned);
+        Assert.Equal("Aditya Verma", provisioned.FullName);
+        Assert.Equal("0176CS221099", provisioned.EnrollmentNumber);
+        Assert.Equal("0176cs221099@sistec.ac.in", provisioned.Email);
+        Assert.NotNull(provisioned.DevOtp);
+        Assert.Equal(6, provisioned.DevOtp.Length);
+
+        // 4. Duplicate request must return 409 Conflict
+        var dupReq = new HttpRequestMessage(HttpMethod.Post, "/api/coordinator/roster/student")
+        {
+            Content = JsonContent.Create(new AddSingleStudentRequest
+            {
+                FullName = "Aditya Verma",
+                EnrollmentNumber = "0176CS221099",
+                Email = "0176cs221099@sistec.ac.in",
+                DepartmentId = DbInitializer.CseDepartmentId,
+                SemesterNumber = 6,
+                AdmissionBatch = "2023-2027"
+            })
+        };
+        dupReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", coordinatorToken);
+
+        var dupRes = await _client.SendAsync(dupReq);
+        Assert.Equal(HttpStatusCode.Conflict, dupRes.StatusCode);
+
+        // 5. Newly provisioned student can activate password via OTP on /api/auth/reset-password
+        var resetRes = await _client.PostAsJsonAsync("/api/auth/reset-password", new ResetPasswordRequest
+        {
+            Email = "0176cs221099@sistec.ac.in",
+            Otp = provisioned.DevOtp,
+            NewPassword = "NewStudentPass@123"
+        });
+        Assert.Equal(HttpStatusCode.OK, resetRes.StatusCode);
+
+        // 6. Verify student can login with newly activated password
+        var loginRes = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            Email = "0176cs221099@sistec.ac.in",
+            Password = "NewStudentPass@123"
+        });
+        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
+
+        // 7. Student persona attempting to call coordinator roster provisioning must be Forbidden (403)
+        var studentAuth = await loginRes.Content.ReadFromJsonAsync<AuthResponse>();
+        var forbiddenReq = new HttpRequestMessage(HttpMethod.Post, "/api/coordinator/roster/student")
+        {
+            Content = JsonContent.Create(new AddSingleStudentRequest
+            {
+                FullName = "Hacker Student",
+                EnrollmentNumber = "0176CS221111",
+                Email = "0176cs221111@sistec.ac.in",
+                DepartmentId = DbInitializer.CseDepartmentId,
+                SemesterNumber = 6
+            })
+        };
+        forbiddenReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", studentAuth!.Token);
+
+        var forbiddenRes = await _client.SendAsync(forbiddenReq);
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenRes.StatusCode);
+    }
 }

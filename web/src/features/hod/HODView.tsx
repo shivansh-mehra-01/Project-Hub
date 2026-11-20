@@ -42,7 +42,7 @@ import { Input } from "@/design-system/components/Input";
 import { Select } from "@/design-system/components/Select";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { Team } from "@/mocks/store-types";
-import { hodApi, getAuthToken, HodAcademicContextDto } from "@/lib/api";
+import { hodApi, getAuthToken, HodAcademicContextDto, CollegeTrackDto } from "@/lib/api";
 
 export interface HODViewProps {
   initialTab?: "overview" | "approvals" | "nba" | "faculty";
@@ -77,7 +77,8 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
   } = useProjectHubStore();
 
   const [activeTab, setActiveTab] = useState<"overview" | "approvals" | "nba" | "faculty">(initialTab);
-  const [activeCohort, setActiveCohort] = useState<"minor" | "major">("minor");
+  const [departmentTracks, setDepartmentTracks] = useState<CollegeTrackDto[]>([]);
+  const [selectedTrackId, setSelectedTrackId] = useState<string>("track-minor-6");
   const [approvalSubTab, setApprovalSubTab] = useState<
     "allotments" | "proposals" | "unlocks" | "overrides" | "results"
   >("allotments");
@@ -151,7 +152,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Load live academic context from backend
+  // Load live academic context & active tracks from backend
   useEffect(() => {
     if (getAuthToken()) {
       hodApi
@@ -160,6 +161,19 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           if (ctx) setAcademicContext(ctx);
         })
         .catch((err) => console.warn("Failed to load academic context:", err));
+
+      hodApi
+        .getTracks()
+        .then((tracks) => {
+          if (tracks && tracks.length > 0) {
+            const active = tracks.filter((t) => t.isActive);
+            if (active.length > 0) {
+              setDepartmentTracks(active);
+              setSelectedTrackId(active[0].id);
+            }
+          }
+        })
+        .catch((err) => console.warn("Failed to load tracks:", err));
     }
   }, []);
 
@@ -315,6 +329,53 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           so.semesterTermId === newTrackSemesterTermId)
     );
   }, [allOfferings, newTrackSemesterNum, newTrackSemesterTermId]);
+
+  // Dynamic Department Track List for Pills
+  const activeTrackList = useMemo(() => {
+    if (departmentTracks.length > 0) {
+      return departmentTracks.map((t, idx) => {
+        const isMajor = t.name.toLowerCase().includes("major") || (t.semesterTermId && t.semesterTermId.includes("8"));
+        const defaultTeams = isMajor ? 32 : (idx === 0 ? 24 : 16);
+        const count = defaultTeams;
+        return {
+          id: t.id,
+          name: t.name,
+          academicYear: t.academicYear ? t.academicYear.replace("-", "–") : "2025–2026",
+          participationMode: (t.participationMode as "Team" | "Individual") || "Team",
+          teamCount: count,
+          studentCount: t.participationMode === "Individual" ? count : count * 4,
+          allowCrossBranchTeams: t.allowCrossBranchTeams,
+        };
+      });
+    }
+
+    return [
+      {
+        id: "track-minor-6",
+        name: "Minor Project (Sem 6)",
+        academicYear: "2025–2026",
+        participationMode: "Team" as const,
+        teamCount: 24,
+        studentCount: 96,
+        allowCrossBranchTeams: false,
+      },
+      {
+        id: "track-major-8",
+        name: "Major Project (Sem 8)",
+        academicYear: "2025–2026",
+        participationMode: "Team" as const,
+        teamCount: 32,
+        studentCount: 128,
+        allowCrossBranchTeams: true,
+      },
+    ];
+  }, [departmentTracks]);
+
+  const selectedTrack = useMemo(() => {
+    return activeTrackList.find((t) => t.id === selectedTrackId) || activeTrackList[0];
+  }, [activeTrackList, selectedTrackId]);
+
+  const activeCohort = selectedTrack.name.toLowerCase().includes("major") ? "major" : "minor";
 
   // Teams waiting for HOD sign-off
   const pendingHODTeams = teams.filter((t) => t.state === "PendingHOD");
@@ -591,7 +652,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
 
       // API call if authenticated
       if (getAuthToken()) {
-        await hodApi.createTrack({
+        const createdTrack = await hodApi.createTrack({
           name: newTrackName.trim(),
           academicYear: cycle.academicYear || "2025-2026",
           semesterTermId: resolvedTermId,
@@ -604,7 +665,36 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
           enrolmentMode: newTrackEnrolmentMode as any,
           allowCrossBranchTeams: newTrackAllowCrossBranch,
           proposalDeadlineUtc: new Date(newTrackProposalDeadline).toISOString(),
-        }).catch((err) => console.warn("Backend track create sync optional:", err));
+        }).catch((err) => {
+          console.warn("Backend track create sync optional:", err);
+          return null;
+        });
+
+        if (createdTrack) {
+          setDepartmentTracks((prev) => [createdTrack, ...prev.filter((p) => p.id !== createdTrack.id)]);
+          setSelectedTrackId(createdTrack.id);
+        }
+      } else {
+        const mockTrackId = `track-mock-${Date.now()}`;
+        const newMockTrack: CollegeTrackDto = {
+          id: mockTrackId,
+          collegeId: "col-sistec-01",
+          departmentId: cseDept?.id || "dept-cse-01",
+          name: newTrackName.trim(),
+          academicYear: "AY 2025–2026",
+          participationMode: newTrackParticipationMode,
+          enrolmentMode: newTrackEnrolmentMode,
+          allowCrossBranchTeams: newTrackAllowCrossBranch,
+          allowInterdisciplinaryTeams: true,
+          isActive: true,
+          guideWeightPct: 30,
+          midTermWeightPct: 30,
+          finalVivaWeightPct: 40,
+          sharedProjectRubricPct: 60,
+          individualStudentRubricPct: 40,
+        };
+        setDepartmentTracks((prev) => [newMockTrack, ...prev]);
+        setSelectedTrackId(mockTrackId);
       }
 
       showToast(`Track "${newTrackName}" launched (${newTrackParticipationMode} Mode, ${newTrackEnrolmentMode} Enrolment)!`);
@@ -678,7 +768,7 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
       {/* ========================================================================= */}
       {activeTab === "overview" && (
         <div className="space-y-6">
-          {/* Executive Department Header & Cohort Switcher */}
+          {/* Executive Department Header & Dynamic Track Switcher */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-[#E2E8F0] bg-white shadow-2xs">
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -687,12 +777,18 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
                   Department of Computer Science &amp; Engineering
                 </h2>
                 <Badge variant="neutral" size="sm">
-                  AY 2025–26 Even Sem
+                  AY 2025–2026
                 </Badge>
-                <Badge variant={cycle.participationMode === "Individual" ? "info" : "success"} size="sm" dot>
-                  {cycle.participationMode === "Individual" ? "Solo Track (Individual)" : "Team Track (3–4 Members)"}
+                <Badge
+                  variant={selectedTrack.participationMode === "Individual" ? "info" : "success"}
+                  size="sm"
+                  dot
+                >
+                  {selectedTrack.participationMode === "Individual"
+                    ? "Individual Solo Track (1 Member)"
+                    : "Team Track (3–4 Members)"}
                 </Badge>
-                {cycle.allowCrossBranchTeams && (
+                {selectedTrack.allowCrossBranchTeams && (
                   <Badge variant="neutral" size="sm">
                     Cross-Branch Permitted
                   </Badge>
@@ -704,30 +800,30 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Cohort Segmented Control */}
-              <div className="flex items-center gap-1.5 p-1 bg-[#F1F5F9] rounded-lg border border-[#E2E8F0] shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setActiveCohort("minor")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                    activeCohort === "minor"
-                      ? "bg-white text-[#0F172A] shadow-xs"
-                      : "text-[#64748B] hover:text-[#0F172A]"
-                  }`}
-                >
-                  Minor Sem 6 (24 Teams)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveCohort("major")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                    activeCohort === "major"
-                      ? "bg-white text-[#0F172A] shadow-xs"
-                      : "text-[#64748B] hover:text-[#0F172A]"
-                  }`}
-                >
-                  Major Sem 8 (32 Teams)
-                </button>
+              {/* Dynamic Track Switcher Pills */}
+              <div className="flex items-center gap-1.5 p-1 bg-[#F1F5F9] rounded-lg border border-[#E2E8F0] shrink-0 overflow-x-auto max-w-full">
+                {activeTrackList.map((track) => {
+                  const isSelected = track.id === selectedTrack.id;
+                  const countLabel =
+                    track.participationMode === "Individual"
+                      ? `${track.teamCount} Students`
+                      : `${track.teamCount} Teams`;
+
+                  return (
+                    <button
+                      key={track.id}
+                      type="button"
+                      onClick={() => setSelectedTrackId(track.id)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                        isSelected
+                          ? "bg-white text-[#0F172A] shadow-xs"
+                          : "text-[#64748B] hover:text-[#0F172A]"
+                      }`}
+                    >
+                      {track.name} ({countLabel})
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Launch Academic Track Button */}
@@ -748,13 +844,17 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="space-y-0.5">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
-                    {activeCohort === "minor" ? "Registered Minor Teams" : "Registered Major Teams"}
+                    {selectedTrack.name} Scope
                   </span>
                   <div className="text-xl font-bold font-heading text-[#0F172A] tabular-nums">
-                    {activeCohort === "minor" ? "24 Teams" : "32 Teams"}
+                    {selectedTrack.participationMode === "Individual"
+                      ? `${selectedTrack.teamCount} Students`
+                      : `${selectedTrack.teamCount} Teams`}
                   </div>
                   <span className="text-[11px] text-emerald-700 font-medium">
-                    {activeCohort === "minor" ? "96 Students Enrolled" : "128 Students Enrolled"}
+                    {selectedTrack.participationMode === "Individual"
+                      ? `${selectedTrack.studentCount} Solo Registrations`
+                      : `${selectedTrack.studentCount} Students Enrolled`}
                   </span>
                 </div>
                 <div className="h-9 w-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
@@ -767,13 +867,13 @@ export const HODView: React.FC<HODViewProps> = ({ initialTab = "overview" }) => 
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="space-y-0.5">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
-                    Academic Cycle
+                    Academic Track
                   </span>
-                  <div className="text-xl font-bold font-heading text-[#0F172A] tabular-nums">
-                    {activeCohort === "minor" ? "Sem 6 Minor" : "Sem 8 Major"}
+                  <div className="text-xl font-bold font-heading text-[#0F172A] tabular-nums truncate max-w-[170px]" title={selectedTrack.name}>
+                    {selectedTrack.name}
                   </div>
                   <span className="text-[11px] text-slate-600 font-medium">
-                    {activeCohort === "minor" ? "Continuous Evaluation" : "Phase-2 Final Defense"}
+                    {selectedTrack.participationMode === "Individual" ? "Solo Project Track" : "Continuous Evaluation"}
                   </span>
                 </div>
                 <div className="h-9 w-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">

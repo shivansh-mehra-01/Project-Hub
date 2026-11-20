@@ -1,12 +1,16 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using ProjectHub.Api.Authorization;
 using ProjectHub.Application.Common.Models;
 using ProjectHub.Application.Interfaces;
 using ProjectHub.Domain.Entities;
 using ProjectHub.Domain.Enums;
 using ProjectHub.Infrastructure.Persistence;
+using ProjectHub.Infrastructure.Security;
 
 namespace ProjectHub.Api.Controllers;
 
@@ -17,11 +21,215 @@ public class CoordinatorController : ControllerBase
 {
     private readonly ProjectHubDbContext _context;
     private readonly ITenantContext _tenantContext;
+    private readonly IEmailSender _emailSender;
+    private readonly IWebHostEnvironment _environment;
+    private readonly ILogger<CoordinatorController> _logger;
 
-    public CoordinatorController(ProjectHubDbContext context, ITenantContext tenantContext)
+    public CoordinatorController(
+        ProjectHubDbContext context,
+        ITenantContext tenantContext,
+        IEmailSender emailSender,
+        IWebHostEnvironment environment,
+        ILogger<CoordinatorController> logger)
     {
         _context = context;
         _tenantContext = tenantContext;
+        _emailSender = emailSender;
+        _environment = environment;
+        _logger = logger;
+    }
+
+    [HttpPost("roster/student")]
+    public async Task<ActionResult<SingleStudentProvisionedResponse>> AddSingleStudent([FromBody] AddSingleStudentRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        if (string.IsNullOrWhiteSpace(request.FullName) ||
+            string.IsNullOrWhiteSpace(request.EnrollmentNumber) ||
+            string.IsNullOrWhiteSpace(request.Email))
+        {
+            return BadRequest(new { message = "Full name, enrollment number (USN), and institutional email are required." });
+        }
+
+        if (request.DepartmentId == Guid.Empty)
+        {
+            return BadRequest(new { message = "Valid Department ID is required." });
+        }
+
+        var email = request.Email.Trim().ToLowerInvariant();
+        var enrollmentNumber = request.EnrollmentNumber.Trim().ToUpperInvariant();
+
+        // 1. Validate that Email matches the tenant's configured EmailDomain/SsoDomain
+        var tenant = await _context.CollegeTenants.FirstOrDefaultAsync(c => c.Id == collegeId);
+        if (tenant != null && !string.IsNullOrWhiteSpace(tenant.SsoDomain))
+        {
+            var expectedDomain = $"@{tenant.SsoDomain.Trim().ToLowerInvariant()}";
+            if (!email.EndsWith(expectedDomain, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = $"Student email must belong to the college institutional domain '{expectedDomain}'." });
+            }
+        }
+
+        // 2. Reject duplicate EnrollmentNumber or Email within the same CollegeId with 409 Conflict
+        var isDuplicate = await _context.Users
+            .IgnoreQueryFilters()
+            .AnyAsync(u => u.CollegeId == collegeId &&
+                           (u.Email == email || u.EnrollmentOrEmployeeCode == enrollmentNumber) &&
+                           !u.IsDeleted);
+
+        if (isDuplicate)
+        {
+            return Conflict(new { message = "A student with this Email address or University Enrollment Number (USN) is already registered in this institution." });
+        }
+
+        // 3. Resolve Department & CourseProgram
+        var department = await _context.Departments
+            .Include(d => d.CourseProgram)
+            .FirstOrDefaultAsync(d => d.Id == request.DepartmentId && d.CollegeId == collegeId && !d.IsDeleted);
+
+        if (department == null)
+        {
+            return BadRequest(new { message = "Department not found in this institution." });
+        }
+
+        var courseProgramId = department.CourseProgramId ??
+            await _context.CoursePrograms
+                .Where(cp => cp.CollegeId == collegeId && !cp.IsDeleted)
+                .Select(cp => cp.Id)
+                .FirstOrDefaultAsync();
+
+        if (courseProgramId == Guid.Empty)
+        {
+            var defaultProgram = new CourseProgram
+            {
+                CollegeId = collegeId,
+                Name = "Bachelor of Technology",
+                Code = "BTECH",
+                TotalSemesters = 8,
+                Level = AcademicProgramLevel.UG,
+                IsActive = true
+            };
+            await _context.CoursePrograms.AddAsync(defaultProgram);
+            await _context.SaveChangesAsync();
+            courseProgramId = defaultProgram.Id;
+        }
+
+        // 4. Resolve Active Academic Session and SemesterTerm
+        var activeSession = await _context.AcademicSessions
+            .FirstOrDefaultAsync(s => s.CollegeId == collegeId && s.IsActive && !s.IsDeleted);
+        var sessionId = activeSession?.Id;
+
+        var semNumber = request.SemesterNumber is >= 1 and <= 12 ? request.SemesterNumber : 6;
+
+        var semesterTerm = await _context.SemesterTerms.FirstOrDefaultAsync(t =>
+            t.CollegeId == collegeId &&
+            t.DepartmentId == request.DepartmentId &&
+            (!sessionId.HasValue || t.AcademicSessionId == sessionId.Value) &&
+            t.SemesterNumber == semNumber &&
+            !t.IsDeleted);
+
+        if (semesterTerm == null)
+        {
+            semesterTerm = new SemesterTerm
+            {
+                CollegeId = collegeId,
+                DepartmentId = request.DepartmentId,
+                AcademicSessionId = sessionId,
+                SemesterNumber = semNumber,
+                SemesterName = $"Semester {semNumber}",
+                Parity = (semNumber % 2 == 1) ? SemesterParity.Odd : SemesterParity.Even,
+                IsActive = true
+            };
+            await _context.SemesterTerms.AddAsync(semesterTerm);
+            await _context.SaveChangesAsync();
+        }
+
+        // 5. Create Pre-activated Student UserAccount
+        var defaultHash = PasswordHelper.HashPassword("Pass@1234");
+        var otpNumber = RandomNumberGenerator.GetInt32(100000, 1000000);
+        var otp = otpNumber.ToString("D6");
+
+        var newUser = new UserAccount
+        {
+            CollegeId = collegeId,
+            DepartmentId = request.DepartmentId,
+            FullName = request.FullName.Trim(),
+            Email = email,
+            EnrollmentOrEmployeeCode = enrollmentNumber,
+            Role = UserRole.Student,
+            PasswordHash = defaultHash,
+            IsActivated = false,
+            IsActive = true,
+            PasswordResetOtpHashed = PasswordHelper.HashPassword(otp),
+            PasswordResetOtpExpiresAtUtc = DateTime.UtcNow.AddHours(24)
+        };
+
+        await _context.Users.AddAsync(newUser);
+        await _context.SaveChangesAsync();
+
+        // 6. Create StudentAcademicEnrollment Record
+        var admissionBatch = string.IsNullOrWhiteSpace(request.AdmissionBatch) ? "2023-2027" : request.AdmissionBatch.Trim();
+
+        var enrollment = new StudentAcademicEnrollment
+        {
+            CollegeId = collegeId,
+            StudentUserId = newUser.Id,
+            CourseProgramId = courseProgramId,
+            DepartmentId = request.DepartmentId,
+            CurrentSemesterTermId = semesterTerm.Id,
+            AdmissionBatch = admissionBatch,
+            AcademicStatus = AcademicStatus.Active
+        };
+
+        await _context.StudentAcademicEnrollments.AddAsync(enrollment);
+
+        // 7. Dispatch 6-digit Activation OTP via IEmailSender
+        await _emailSender.SendPasswordResetOtpAsync(newUser.Email, newUser.FullName, otp);
+
+        _logger.LogInformation("[STUDENT ONBOARDING] Dispatched 6-digit Activation OTP for newly provisioned student {Email} ({Usn}): {Otp}",
+            newUser.Email, newUser.EnrollmentOrEmployeeCode, otp);
+
+        // 8. Record ExceptionAuditLog
+        var defaultTeam = await _context.ProjectTeams.FirstOrDefaultAsync(t => t.CollegeId == collegeId && t.DepartmentId == request.DepartmentId && !t.IsDeleted);
+        var requesterId = _tenantContext.UserId ?? newUser.Id;
+
+        var auditLog = new ExceptionAuditLog
+        {
+            CollegeId = collegeId,
+            DepartmentId = request.DepartmentId,
+            ProjectTeamId = defaultTeam?.Id,
+            ActionType = ExceptionActionType.SingleStudentProvisioned,
+            TargetUserId = newUser.Id,
+            Reason = $"Single student onboarded and provisioned by Coordinator ({requesterId}) with 24-hr OTP dispatch.",
+            PreviousValueJson = "{}",
+            NewValueJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                studentUserId = newUser.Id,
+                fullName = newUser.FullName,
+                enrollmentNumber = newUser.EnrollmentOrEmployeeCode,
+                email = newUser.Email,
+                semesterNumber = semNumber,
+                admissionBatch = admissionBatch
+            }),
+            RequestedByUserId = requesterId,
+            ApprovedByUserId = requesterId,
+            ApprovedAtUtc = DateTime.UtcNow
+        };
+
+        await _context.ExceptionAuditLogs.AddAsync(auditLog);
+        await _context.SaveChangesAsync();
+
+        string? devOtp = _environment.IsDevelopment() ? otp : null;
+
+        return StatusCode(StatusCodes.Status201Created, new SingleStudentProvisionedResponse
+        {
+            StudentUserId = newUser.Id,
+            FullName = newUser.FullName,
+            EnrollmentNumber = newUser.EnrollmentOrEmployeeCode,
+            Email = newUser.Email,
+            Message = "Student account provisioned successfully. A 6-digit activation OTP has been dispatched to their institutional email.",
+            DevOtp = devOtp
+        });
     }
 
     [HttpPost("roster/import")]
