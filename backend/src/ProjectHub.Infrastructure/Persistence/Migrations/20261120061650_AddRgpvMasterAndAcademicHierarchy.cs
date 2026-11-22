@@ -84,6 +84,8 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     StartDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     EndDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    ExamCutoffDateUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    AllowInterdisciplinaryTeams = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreatedByUserId = table.Column<Guid>(type: "uuid", nullable: true),

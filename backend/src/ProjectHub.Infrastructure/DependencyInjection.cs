@@ -44,8 +44,8 @@ public static class DependencyInjection
                     npgsqlOptions.MigrationsAssembly(typeof(ProjectHubDbContext).Assembly.FullName);
                     npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 3);
                 })
-                .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
-                .AddInterceptors(auditInterceptor, rlsInterceptor);
+                .AddInterceptors(auditInterceptor, rlsInterceptor)
+                .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
             });
 
             // Alias registration for AppDbContext
@@ -59,8 +59,8 @@ public static class DependencyInjection
                     npgsqlOptions.MigrationsAssembly(typeof(ProjectHubDbContext).Assembly.FullName);
                     npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 3);
                 })
-                .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
-                .AddInterceptors(auditInterceptor, rlsInterceptor);
+                .AddInterceptors(auditInterceptor, rlsInterceptor)
+                .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
             });
         }
 

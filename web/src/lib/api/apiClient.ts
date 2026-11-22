@@ -136,20 +136,34 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
 
   let data: any = null;
   const contentType = response.headers.get("content-type");
-  if (contentType && contentType.includes("application/json")) {
+  if (contentType && (contentType.includes("json") || contentType.includes("problem+json"))) {
     try {
       data = await response.json();
     } catch {
       data = null;
     }
   } else {
-    data = await response.text();
+    const text = await response.text();
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
   }
 
   if (!response.ok) {
     let errorMessage = `Request failed with status ${response.status}`;
     if (data && typeof data === "object") {
-      errorMessage = data.message || data.title || data.error || errorMessage;
+      if (data.errors && typeof data.errors === "object") {
+        const errorEntries = Object.values(data.errors).flat();
+        if (errorEntries.length > 0 && typeof errorEntries[0] === "string") {
+          errorMessage = errorEntries[0];
+        } else {
+          errorMessage = data.title || data.message || errorMessage;
+        }
+      } else {
+        errorMessage = data.message || data.title || data.error || errorMessage;
+      }
     } else if (typeof data === "string" && data.trim()) {
       if (
         data.includes("<html") ||

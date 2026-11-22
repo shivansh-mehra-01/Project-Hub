@@ -30,7 +30,7 @@ export const Badge: React.FC<BadgeProps> = ({
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 font-medium rounded-full border",
+          "inline-flex flex-row items-center gap-1.5 font-medium rounded-full border whitespace-nowrap shrink-0",
           r.bg,
           r.text,
           r.border,
@@ -49,7 +49,7 @@ export const Badge: React.FC<BadgeProps> = ({
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 font-mono font-medium rounded-md border px-2 py-0.5 text-[11px] tabular-nums bg-emerald-50 text-emerald-800 border-emerald-200",
+          "inline-flex flex-row items-center gap-1 font-mono font-medium rounded-md border px-2 py-0.5 text-[11px] tabular-nums bg-emerald-50 text-emerald-800 border-emerald-200 whitespace-nowrap shrink-0",
           className
         )}
         {...props}
@@ -75,7 +75,7 @@ export const Badge: React.FC<BadgeProps> = ({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 font-medium rounded-full border transition-colors [&>svg]:h-3 [&>svg]:w-3 [&>svg]:stroke-2",
+        "inline-flex flex-row items-center gap-1.5 font-medium rounded-full border transition-colors whitespace-nowrap shrink-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:stroke-2",
         sizeClasses[size],
         variantClasses[variant],
         className

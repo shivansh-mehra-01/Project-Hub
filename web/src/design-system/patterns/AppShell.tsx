@@ -397,21 +397,24 @@ const AppShellInner: React.FC<AppShellProps> = ({
         href={item.href}
         prefetch={true}
         className={cn(
-          "flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors",
+          "group flex items-center gap-3 px-3 py-2 text-[13px] font-medium rounded-xl transition-all duration-150 relative select-none",
           isActive
-            ? "bg-brand-primary text-white font-semibold shadow-xs"
-            : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
+            ? "bg-emerald-600 text-white font-semibold shadow-xs shadow-emerald-950/30 border border-emerald-500/30"
+            : "text-slate-300/90 hover:bg-white/[0.07] hover:text-white"
         )}
       >
         <Icon
-          className={cn("h-4 w-4 shrink-0", isActive ? "text-white" : "text-slate-400")}
-          strokeWidth={1.75}
+          className={cn(
+            "h-4 w-4 shrink-0 transition-transform duration-150 group-hover:scale-105",
+            isActive ? "text-white" : "text-slate-400 group-hover:text-slate-200"
+          )}
+          strokeWidth={isActive ? 2.2 : 1.75}
         />
-        <span className="truncate">{item.label}</span>
+        <span className="truncate tracking-[-0.01em]">{item.label}</span>
         {item.count !== undefined && (
           <span
             className={cn(
-              "ml-auto text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full",
+              "ml-auto text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full",
               isActive
                 ? "bg-white/20 text-white"
                 : "bg-white/10 text-slate-300 border border-white/10"
@@ -461,17 +464,17 @@ const AppShellInner: React.FC<AppShellProps> = ({
         prefetch={true}
         onClick={() => setIsMobileDrawerOpen(false)}
         className={cn(
-          "flex items-center gap-3 px-3 py-2.5 min-h-[44px] text-xs font-medium rounded-lg transition-colors",
+          "group flex items-center gap-3 px-3 py-2.5 min-h-[44px] text-[13px] font-medium rounded-xl transition-all duration-150",
           isActive
-            ? "bg-brand-primary text-white font-semibold shadow-xs"
-            : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
+            ? "bg-emerald-600 text-white font-semibold shadow-xs shadow-emerald-950/30 border border-emerald-500/30"
+            : "text-slate-300 hover:bg-white/[0.07] hover:text-white"
         )}
       >
         <Icon
           className={cn("h-4 w-4 shrink-0", isActive ? "text-white" : "text-slate-400")}
-          strokeWidth={1.75}
+          strokeWidth={isActive ? 2.2 : 1.75}
         />
-        <span className="truncate">{item.label}</span>
+        <span className="truncate tracking-[-0.01em]">{item.label}</span>
         {item.count !== undefined && (
           <span
             className={cn(
@@ -580,17 +583,23 @@ const AppShellInner: React.FC<AppShellProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <nav className="flex-1 px-3 py-2 space-y-2 overflow-y-auto">
+        {/* Navigation Tabs */}
+        <nav className="flex-1 px-3 py-2.5 space-y-1.5 overflow-y-auto">
           {currentPersona.role === "SuperAdmin" ? (
             <div className="space-y-0.5">
               <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
                 Platform Console
               </div>
               {primaryItems.map(renderNavItem)}
+              {profileItem && (
+                <div className="pt-2 mt-2 border-t border-white/[0.08]">
+                  {renderNavItem(profileItem)}
+                </div>
+              )}
             </div>
           ) : (
             <>
-              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
+              <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 select-none">
                 Menu
               </div>
               {primaryItems.map(renderNavItem)}

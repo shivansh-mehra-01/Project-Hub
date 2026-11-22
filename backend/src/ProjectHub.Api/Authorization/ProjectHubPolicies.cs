@@ -28,11 +28,14 @@ public static class ProjectHubPolicies
                     ctx.User.HasClaim("is_super_admin", "true") ||
                     ctx.User.HasClaim("role", UserRole.SuperAdmin.ToString())));
 
-            // CollegeAdmin Institutional Authority
+            // CollegeAdmin Institutional Authority (and SuperAdmin override)
             options.AddPolicy(CollegeAdminOnly, policy =>
                 policy.RequireAssertion(ctx =>
                     ctx.User.IsInRole(UserRole.CollegeAdmin.ToString()) ||
-                    ctx.User.HasClaim("role", UserRole.CollegeAdmin.ToString())));
+                    ctx.User.HasClaim("role", UserRole.CollegeAdmin.ToString()) ||
+                    ctx.User.IsInRole(UserRole.SuperAdmin.ToString()) ||
+                    ctx.User.HasClaim("is_super_admin", "true") ||
+                    ctx.User.HasClaim("role", UserRole.SuperAdmin.ToString())));
 
             // HOD Department Authority
             options.AddPolicy(HodOnly, policy =>

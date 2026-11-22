@@ -1,3 +1,4 @@
+
 using Microsoft.EntityFrameworkCore;
 using ProjectHub.Application.Interfaces;
 using ProjectHub.Domain.Entities;
@@ -711,9 +712,23 @@ public static class DbInitializer
                 Id = SuperAdminUserId,
                 CollegeId = SistecTenantId, // partition default
                 DepartmentId = null,
+                FullName = "Collabex Super Admin",
+                Email = "admin@collabex.in",
+                EnrollmentOrEmployeeCode = "EMP-SUPER-001",
+                Role = UserRole.SuperAdmin,
+                PasswordHash = defaultHash,
+                IsActivated = true,
+                IsProjectCoordinator = false,
+                IsActive = true
+            },
+            new()
+            {
+                Id = Guid.Parse("20000000-0000-0000-0000-000000000099"),
+                CollegeId = SistecTenantId, // partition default
+                DepartmentId = null,
                 FullName = "Dev Startup Admin",
                 Email = "admin@projecthub.in",
-                EnrollmentOrEmployeeCode = "EMP-SUPER-001",
+                EnrollmentOrEmployeeCode = "EMP-SUPER-002",
                 Role = UserRole.SuperAdmin,
                 PasswordHash = defaultHash,
                 IsActivated = true,
@@ -921,6 +936,21 @@ public static class DbInitializer
             }
         }
         await context.SaveChangesAsync();
+
+        // 3b. Add Branches for MBA and MCA if not present
+        if (!await context.Departments.IgnoreQueryFilters().AnyAsync(d => d.CollegeId == SistecTenantId && d.Code == "MBA-FIN"))
+        {
+            var mbaMcaDepts = new List<Department>
+            {
+                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000011"), CollegeId = SistecTenantId, CourseProgramId = SistecMbaCourseProgramId, Code = "MBA-FIN", Name = "MBA Finance", IntakeQuota = 60, IsSarAttested = true, SarAttestedAtUtc = DateTime.UtcNow.AddDays(-10) },
+                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000012"), CollegeId = SistecTenantId, CourseProgramId = SistecMbaCourseProgramId, Code = "MBA-MKT", Name = "MBA Marketing", IntakeQuota = 60, IsSarAttested = true, SarAttestedAtUtc = DateTime.UtcNow.AddDays(-10) },
+                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000013"), CollegeId = SistecTenantId, CourseProgramId = SistecMbaCourseProgramId, Code = "MBA-HR", Name = "MBA Human Resources", IntakeQuota = 60, IsSarAttested = false },
+                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000021"), CollegeId = SistecTenantId, CourseProgramId = SistecMcaCourseProgramId, Code = "MCA-GEN", Name = "MCA General Software Development", IntakeQuota = 60, IsSarAttested = true, SarAttestedAtUtc = DateTime.UtcNow.AddDays(-5) },
+                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000022"), CollegeId = SistecTenantId, CourseProgramId = SistecMcaCourseProgramId, Code = "MCA-SPEC", Name = "MCA Specialization (AI & Data Science)", IntakeQuota = 60, IsSarAttested = false },
+            };
+            await context.Departments.AddRangeAsync(mbaMcaDepts);
+            await context.SaveChangesAsync();
+        }
 
         // 4. Curriculum Scheme: RGPV-AICTE-FLEX 2022
         if (!await context.CurriculumSchemes.IgnoreQueryFilters().AnyAsync(s => s.CollegeId == SistecTenantId && s.SchemeCode == "RGPV-AICTE-FLEX"))
@@ -1175,6 +1205,8 @@ public static class DbInitializer
                 Sha256Checksum = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
                 FileSizeBytes = 1845120,
                 Status = ArtifactStatus.Verified,
+                UploadedByUserId = StudentShivanshUserId,
+                VerifiedByUserId = FacultyVermaUserId,
                 ReviewerNote = "Comprehensive problem statement and well-defined PO3/PO7 NBA mapping."
             },
             new()
@@ -1187,6 +1219,8 @@ public static class DbInitializer
                 Sha256Checksum = "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4",
                 FileSizeBytes = 8420100,
                 Status = ArtifactStatus.Verified,
+                UploadedByUserId = StudentShivanshUserId,
+                VerifiedByUserId = FacultyVermaUserId,
                 ReviewerNote = "Live sensor demo successfully conducted before panel. Calibration validated."
             },
             new()
@@ -1199,6 +1233,8 @@ public static class DbInitializer
                 Sha256Checksum = "cca93b7405218d867c484f29a8f4c2c7ba6475753046f53a4ae944321481d3ef",
                 FileSizeBytes = 942500,
                 Status = ArtifactStatus.Verified,
+                UploadedByUserId = StudentShivanshUserId,
+                VerifiedByUserId = FacultyVermaUserId,
                 ReviewerNote = "Similarity score 8.4% is comfortably within the institutional <= 15% threshold."
             },
             new()
@@ -1211,6 +1247,7 @@ public static class DbInitializer
                 Sha256Checksum = string.Empty,
                 FileSizeBytes = 0,
                 Status = ArtifactStatus.Missing,
+                UploadedByUserId = StudentShivanshUserId,
                 ReviewerNote = null
             }
         };
@@ -1266,7 +1303,8 @@ public static class DbInitializer
         Console.ResetColor();
         Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "ROLE", "NAME", "EMAIL", "DESIGNATION"));
         Console.WriteLine(new string('-', 100));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "SuperAdmin", "Dev Startup Admin", "admin@projecthub.in", "Platform Administrator"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "SuperAdmin", "Collabex Super Admin", "admin@collabex.in", "Platform Administrator"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "SuperAdmin (Alt)", "Dev Startup Admin", "admin@projecthub.in", "Platform Administrator"));
         Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "CollegeAdmin", "Dr. Keshvendra Choudhary", "principal@sistec.ac.in", "Campus Principal / Dean"));
         Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "HOD", "Dr. Ravindra Kumar Sharma", "hod.cse@sistec.ac.in", "Head of Dept (CSE)"));
         Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "ProjectCoordinator", "Prof. Priya Nair", "priya.nair@sistec.ac.in", "Project Coordinator"));

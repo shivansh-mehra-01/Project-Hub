@@ -1,6 +1,5 @@
-import { CollegeAdminView } from "@/features/college-admin/CollegeAdminView";
+import { CollegeSettingsView } from "@/features/college-admin/views/CollegeSettingsView";
 
 export default function CollegeSettingsPage() {
-  return <CollegeAdminView initialTab="settings" />;
+  return <CollegeSettingsView />;
 }
-

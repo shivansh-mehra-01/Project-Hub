@@ -1,6 +1,5 @@
-import { CollegeAdminView } from "@/features/college-admin/CollegeAdminView";
+import { CollegeOverviewView } from "@/features/college-admin/views/CollegeOverviewView";
 
 export default function CollegePage() {
-  return <CollegeAdminView />;
+  return <CollegeOverviewView />;
 }
-

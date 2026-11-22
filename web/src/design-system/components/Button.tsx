@@ -47,7 +47,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || isLoading}
         className={cn(
-          "inline-flex items-center justify-center font-medium transition-colors select-none focus:outline-none disabled:opacity-50 disabled:pointer-events-none cursor-pointer",
+          "inline-flex flex-row items-center justify-center font-medium transition-colors select-none focus:outline-none disabled:opacity-50 disabled:pointer-events-none cursor-pointer whitespace-nowrap shrink-0",
           sizeClasses[size],
           variantClasses[variant],
           className
@@ -55,12 +55,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {isLoading ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.75} />
+          <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" strokeWidth={1.75} />
         ) : (
-          leftIcon && <span className="shrink-0 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:stroke-[1.75]">{leftIcon}</span>
+          leftIcon && <span className="shrink-0 inline-flex items-center justify-center [&>svg]:h-4 [&>svg]:w-4 [&>svg]:stroke-[1.75]">{leftIcon}</span>
         )}
-        <span>{children}</span>
-        {!isLoading && rightIcon && <span className="shrink-0 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:stroke-[1.75]">{rightIcon}</span>}
+        {typeof children === "string" ? <span>{children}</span> : children}
+        {!isLoading && rightIcon && <span className="shrink-0 inline-flex items-center justify-center [&>svg]:h-4 [&>svg]:w-4 [&>svg]:stroke-[1.75]">{rightIcon}</span>}
       </button>
     );
   }

@@ -39,7 +39,29 @@ public class CollegeTenant : BaseEntity
     public bool EnforceStrictSso { get; set; } = true;
     public string? CrestUrl { get; set; }
     public string? PrincipalSealUrl { get; set; }
-    public string? AffiliatingUniversity { get; set; } = "RGPV";
+    public string? AffiliatingUniversity { get; set; } = "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV)";
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? AffiliatedUniversity
+    {
+        get => AffiliatingUniversity;
+        set => AffiliatingUniversity = value;
+    }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? CampusAddress { get; set; } = "Airport Road, Gandhi Nagar, Bhopal, MP 462036";
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? CampusesCsv { get; set; } = "Main Campus (Bhopal), Extension Center";
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool NbaModuleEnabled { get; set; } = true;
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool GithubIntegrationEnabled { get; set; } = true;
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool JiraIntegrationEnabled { get; set; } = true;
     public DateTime? SubscriptionExpiresAtUtc { get; set; }
 
     // Navigations
