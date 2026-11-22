@@ -4,6 +4,7 @@ import {
   findRouteByPath,
   getRouteIcon,
   IconName,
+  PlatformNavSection,
 } from "./routeRegistry";
 import { RoleType } from "@/mocks/store-types";
 
@@ -13,7 +14,7 @@ export interface SidebarNavItem {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   iconName: IconName;
   count?: number;
-  section?: "MENU" | "COORDINATOR";
+  section?: PlatformNavSection | string;
 }
 
 export interface BreadcrumbInfo {
@@ -59,13 +60,20 @@ export const getSidebarNav = (
       count = liveBadgeCounts[route.badgeKey];
     }
 
+    let itemSection: string = "MENU";
+    if (role === "SuperAdmin") {
+      itemSection = route.section || "MENU";
+    } else {
+      itemSection = route.coordinatorOnly ? "COORDINATOR" : "MENU";
+    }
+
     return {
       label: route.label,
       href: route.path,
       icon: getRouteIcon(route.iconName),
       iconName: route.iconName,
       count,
-      section: route.coordinatorOnly ? "COORDINATOR" : "MENU",
+      section: itemSection,
     };
   });
 };
@@ -73,7 +81,18 @@ export const getSidebarNav = (
 /**
  * Pure selector returning exact parent/child breadcrumb labels for the top header
  */
-export const getBreadcrumbs = (pathname: string, _role?: RoleType): BreadcrumbInfo => {
+export const getBreadcrumbs = (pathname: string, role?: RoleType): BreadcrumbInfo => {
+  if (role === "SuperAdmin" && pathname.startsWith("/platform")) {
+    const route = findRouteByPath(pathname);
+    if (route) {
+      return {
+        pageTitle: route.breadcrumbGroup || "Platform Console",
+        breadcrumb: route.breadcrumbTitle || route.description,
+        group: route.breadcrumbGroup || "Platform Console",
+      };
+    }
+  }
+
   const route = findRouteByPath(pathname);
   if (!route) {
     return {
@@ -99,7 +118,7 @@ export const getCommandPaletteItems = (
     teams?: Array<{ id: string; teamCode: string; title: string; guideName?: string }>;
     facultyRoster?: Array<{ id: string; name: string; designation: string }>;
     departments?: Array<{ id: string; name: string; code: string; hodName?: string }>;
-    tenants?: Array<{ id: string; name: string; domain: string; plan: string }>;
+    tenants?: Array<{ id: string; name: string; domain: string; plan: string; code?: string }>;
   } = {},
   isProjectCoordinator = false
 ): CommandPaletteEntity[] => {
@@ -125,7 +144,50 @@ export const getCommandPaletteItems = (
   }
 
   // 2. Role-Scoped Quick Actions
-  if (role === "Student" || role === "TeamLead") {
+  if (role === "SuperAdmin") {
+    items.push(
+      {
+        id: "act-admin-onboard",
+        title: "Add New Engineering College",
+        subtitle: "Register institution and provision dedicated multi-tenant partition",
+        category: "Actions",
+        iconName: "Building2",
+        path: "/platform/colleges/new",
+      },
+      {
+        id: "act-admin-academic",
+        title: "Manage Academic Reference Catalog",
+        subtitle: "Standard RGPV B.Tech programs and verified engineering branch catalog",
+        category: "Actions",
+        iconName: "BookOpen",
+        path: "/platform/academic-reference",
+      },
+      {
+        id: "act-admin-announcement",
+        title: "Broadcast Platform Announcement",
+        subtitle: "Notify colleges of scheduled maintenance or platform updates",
+        category: "Actions",
+        iconName: "Megaphone",
+        path: "/platform/announcements",
+      },
+      {
+        id: "act-admin-support",
+        title: "Support Desk & Core Service Health",
+        subtitle: "Review unresolved college tickets and monitor service availability",
+        category: "Actions",
+        iconName: "LifeBuoy",
+        path: "/platform/support-health",
+      },
+      {
+        id: "act-admin-audit-export",
+        title: "Security Surveillance & Audit Trail",
+        subtitle: "Review active administrator sessions and privileged audit records",
+        category: "Actions",
+        iconName: "ShieldCheck",
+        path: "/platform/security-audit",
+      }
+    );
+  } else if (role === "Student" || role === "TeamLead") {
     items.push(
       {
         id: "act-submit-log",
@@ -171,176 +233,19 @@ export const getCommandPaletteItems = (
         path: "/faculty",
       }
     );
-    if (isProjectCoordinator) {
-      items.push(
-        {
-          id: "act-coord-matcher",
-          title: "Heuristic Guide-Student Auto-Matcher",
-          subtitle: "Balance faculty mentorship quotas and match research domains",
-          category: "Actions",
-          iconName: "Briefcase",
-          path: "/coordinator?tab=allocator",
-        },
-        {
-          id: "act-coord-override",
-          title: "Request Mid-Term Administrative Override",
-          subtitle: "Submit guide reassignment or re-viva unlock for HOD endorsement",
-          category: "Actions",
-          iconName: "Sliders",
-          path: "/coordinator?tab=allocator",
-        }
-      );
-    }
-  } else if (role === "HOD") {
-    items.push(
-      {
-        id: "act-hod-bulk-signoff",
-        title: "Bulk Sign-off Guide Allotments",
-        subtitle: "Endorse coordinator master allotment roster in one click",
-        category: "Actions",
-        iconName: "FileCheck2",
-        path: "/hod/approvals?subtab=allotments",
-      },
-      {
-        id: "act-hod-overrides",
-        title: "Review Exception Overrides Queue",
-        subtitle: "Endorse or reject coordinator administrative exception requests",
-        category: "Actions",
-        iconName: "Sliders",
-        path: "/hod/approvals?subtab=overrides",
-      },
-      {
-        id: "act-hod-nba-export",
-        title: "Export 9-Sample NBA Portfolio ZIP",
-        subtitle: "Package 3 Best, 3 Average, and 3 Weak capstone dossiers for SAR audit",
-        category: "Actions",
-        iconName: "Layers",
-        path: "/hod/nba",
-      }
-    );
-  } else if (role === "CollegeAdmin") {
-    items.push(
-      {
-        id: "act-college-sar",
-        title: "Attest Institutional NBA SAR Criterion 2 & 3",
-        subtitle: "Synthesize all department sign-offs for university audit submission",
-        category: "Actions",
-        iconName: "ShieldAlert",
-        path: "/college/compliance",
-      },
-      {
-        id: "act-college-seal",
-        title: "Update Principal Digital Cryptographic Seal",
-        subtitle: "Verify institutional credential signing keys and SVG emblem",
-        category: "Actions",
-        iconName: "Sliders",
-        path: "/college/settings",
-      }
-    );
-  } else if (role === "SuperAdmin") {
-    items.push(
-      {
-        id: "act-admin-provision",
-        title: "Onboard New College Tenant",
-        subtitle: "Provision isolated Postgres schema partition and S3 storage bucket",
-        category: "Actions",
-        iconName: "Building2",
-        path: "/admin",
-      },
-      {
-        id: "act-admin-audit-export",
-        title: "Export Platform Governance Audit Trail",
-        subtitle: "Download immutable security audit logs in CSV format",
-        category: "Actions",
-        iconName: "ShieldAlert",
-        path: "/admin/audit",
-      }
-    );
   }
 
-  // 3. Searchable Entities (Filtered strictly by permission scope)
-  if (role === "Student" || role === "TeamLead") {
-    // Teammates and exploration items
-    const myTeam = storeData.teams?.[0];
-    if (myTeam) {
+  // 3. Searchable Entities
+  if (role === "SuperAdmin" && storeData.tenants) {
+    for (const tn of storeData.tenants) {
       items.push({
-        id: `entity-team-${myTeam.teamCode}`,
-        title: `${myTeam.teamCode}: ${myTeam.title}`,
-        subtitle: `Assigned Guide: ${myTeam.guideName || "Prof. S. K. Verma"} • Active Team`,
+        id: `entity-tenant-${tn.id}`,
+        title: tn.name,
+        subtitle: `${tn.domain} • ${tn.plan} License Plan`,
         category: "Entities",
-        iconName: "FolderGit2",
-        path: "/student",
+        iconName: "Building2",
+        path: `/platform/institutions?search=${encodeURIComponent(tn.code || tn.name)}`,
       });
-    }
-  } else if (role === "Faculty") {
-    // Mentored teams
-    if (storeData.teams) {
-      for (const t of storeData.teams) {
-        items.push({
-          id: `entity-team-${t.id}`,
-          title: `${t.teamCode}: ${t.title}`,
-          subtitle: `Guided by ${t.guideName || "Faculty"} • Project Workspace`,
-          category: "Entities",
-          iconName: "Users2",
-          path: "/faculty/teams",
-        });
-      }
-    }
-  } else if (role === "HOD") {
-    // Department teams and faculty roster
-    if (storeData.teams) {
-      for (const t of storeData.teams) {
-        items.push({
-          id: `entity-hod-team-${t.id}`,
-          title: `${t.teamCode}: ${t.title}`,
-          subtitle: `Guide: ${t.guideName || "Pending"} • Department Allotment`,
-          category: "Entities",
-          iconName: "FolderGit2",
-          path: "/hod/approvals",
-        });
-      }
-    }
-    if (storeData.facultyRoster) {
-      for (const f of storeData.facultyRoster) {
-        items.push({
-          id: `entity-fac-${f.id}`,
-          title: f.name,
-          subtitle: `${f.designation} • Department Faculty Roster`,
-          category: "Entities",
-          iconName: "Users2",
-          path: "/hod/faculty",
-        });
-      }
-    }
-  } else if (role === "CollegeAdmin") {
-    // Departments
-    if (storeData.departments) {
-      for (const d of storeData.departments) {
-        items.push({
-          id: `entity-dept-${d.id}`,
-          title: `Dept. of ${d.name} (${d.code})`,
-          subtitle: d.hodName
-            ? `Appointed HOD: ${d.hodName} • Academic Department`
-            : `Academic Department • ${d.code}`,
-          category: "Entities",
-          iconName: "Building2",
-          path: "/college/departments",
-        });
-      }
-    }
-  } else if (role === "SuperAdmin") {
-    // College Tenants
-    if (storeData.tenants) {
-      for (const tn of storeData.tenants) {
-        items.push({
-          id: `entity-tenant-${tn.id}`,
-          title: tn.name,
-          subtitle: `${tn.domain} • ${tn.plan} License Plan`,
-          category: "Entities",
-          iconName: "Building2",
-          path: "/admin",
-        });
-      }
     }
   }
 

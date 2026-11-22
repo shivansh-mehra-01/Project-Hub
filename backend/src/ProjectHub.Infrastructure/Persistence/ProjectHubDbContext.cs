@@ -59,6 +59,7 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
     public DbSet<IndividualStudentScore> IndividualStudentScores => Set<IndividualStudentScore>();
     public DbSet<CourseExitSurvey> CourseExitSurveys => Set<CourseExitSurvey>();
     public DbSet<ExceptionAuditLog> ExceptionAuditLogs => Set<ExceptionAuditLog>();
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
 
     // Dynamic Multi-Level Academic Hierarchy Entities
     public DbSet<AcademicSession> AcademicSessions => Set<AcademicSession>();
@@ -156,6 +157,17 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
 
         foreach (var entry in ChangeTracker.Entries().ToList())
         {
+            // 0. Audit Log Immutability Protection: Direct modification or deletion is strictly forbidden
+            if (entry.Entity is PlatformAuditLog or ExceptionAuditLog)
+            {
+                if (entry.State is EntityState.Modified or EntityState.Deleted)
+                {
+                    throw new InvalidOperationException(
+                        $"Audit Log Immutability Violation: Audit log entities of type '{entry.Entity.GetType().Name}' are append-only and cannot be modified or deleted.");
+                }
+                continue;
+            }
+
             // 1. Audit Stamping on BaseEntity
             if (entry.Entity is BaseEntity baseEntity)
             {

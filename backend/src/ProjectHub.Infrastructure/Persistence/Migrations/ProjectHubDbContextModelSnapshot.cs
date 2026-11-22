@@ -28,6 +28,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AllowInterdisciplinaryTeams")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("CollegeId")
                         .HasColumnType("uuid");
 
@@ -41,6 +44,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExamCutoffDateUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsActive")
@@ -193,6 +199,12 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("AffiliatingUniversity")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasDefaultValue("RGPV");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -602,7 +614,7 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
-                    b.Property<Guid>("ProjectTeamId")
+                    b.Property<Guid?>("ProjectTeamId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Reason")
@@ -2251,8 +2263,7 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.HasOne("ProjectHub.Domain.Entities.ProjectTeam", "ProjectTeam")
                         .WithMany("ExceptionLogs")
                         .HasForeignKey("ProjectTeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("ProjectHub.Domain.Entities.UserAccount", "RequestedByUser")
                         .WithMany()

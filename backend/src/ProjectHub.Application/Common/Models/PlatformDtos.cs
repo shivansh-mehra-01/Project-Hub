@@ -19,6 +19,7 @@ public record CollegeTenantDto
     public int StudentCount { get; init; }
     public string? PrincipalEmail { get; init; }
     public List<string> AdminEmails { get; init; } = new();
+    public string? AffiliatingUniversity { get; init; } = "RGPV";
 }
 
 public record CreateTenantRequest
@@ -34,12 +35,15 @@ public record CreateTenantRequest
     public DateTime? SubscriptionExpiresAtUtc { get; init; }
     public string? PrincipalName { get; init; }
     public string? PrincipalEmail { get; init; }
+    public string? AffiliatingUniversity { get; init; } = "RGPV";
 }
 
 public record CreateTenantResponse
 {
     public CollegeTenantDto Tenant { get; init; } = null!;
     public string AdminEmail { get; init; } = string.Empty;
+    public string? DevOtp { get; init; }
+    public string? Message { get; init; }
 }
 
 public record ProvisionAdminRequest
@@ -98,4 +102,27 @@ public record PlatformAuditLogDto
     public string MetadataJson { get; init; } = "{}";
     public string? IpAddress { get; init; }
     public DateTime OccurredAtUtc { get; init; }
+}
+
+public record CreatePlatformAuditLogRequest
+{
+    public string Action { get; init; } = string.Empty;
+    public string TargetEntity { get; init; } = string.Empty;
+    public Guid? TargetTenantId { get; init; }
+    public string MetadataJson { get; init; } = "{}";
+    public string? IpAddress { get; init; }
+}
+
+public record PlatformSessionDto
+{
+    public string Id { get; init; } = string.Empty;
+    public string AccountEmail { get; init; } = string.Empty;
+    public string AccountName { get; init; } = string.Empty;
+    public string Role { get; init; } = string.Empty;
+    public string Device { get; init; } = string.Empty;
+    public string Browser { get; init; } = string.Empty;
+    public string IpAddress { get; init; } = string.Empty;
+    public DateTime LoginTimeUtc { get; init; }
+    public DateTime LastActiveTimeUtc { get; init; }
+    public bool IsCurrentSession { get; init; }
 }

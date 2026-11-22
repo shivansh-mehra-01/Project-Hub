@@ -39,6 +39,7 @@ public class CollegeTenant : BaseEntity
     public bool EnforceStrictSso { get; set; } = true;
     public string? CrestUrl { get; set; }
     public string? PrincipalSealUrl { get; set; }
+    public string? AffiliatingUniversity { get; set; } = "RGPV";
     public DateTime? SubscriptionExpiresAtUtc { get; set; }
 
     // Navigations

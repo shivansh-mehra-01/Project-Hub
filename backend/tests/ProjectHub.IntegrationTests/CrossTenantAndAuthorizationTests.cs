@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using ProjectHub.Application.Common.Models;
 using ProjectHub.Domain.Enums;
 using ProjectHub.Infrastructure.Persistence;
@@ -411,5 +413,59 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
 
         var forbiddenRes = await _client.SendAsync(forbiddenReq);
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task InspectDatabaseContents_OutputsAllTablesAndRecords()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+
+        var tenants = await db.CollegeTenants.IgnoreQueryFilters().ToListAsync();
+        var depts = await db.Departments.IgnoreQueryFilters().ToListAsync();
+        var users = await db.Users.IgnoreQueryFilters().ToListAsync();
+        var tracks = await db.AcademicTracks.IgnoreQueryFilters().ToListAsync();
+        var teams = await db.ProjectTeams.IgnoreQueryFilters().Include(t => t.Members).ToListAsync();
+        var sessions = await db.AcademicSessions.IgnoreQueryFilters().ToListAsync();
+        var terms = await db.SemesterTerms.IgnoreQueryFilters().ToListAsync();
+        var offerings = await db.SubjectOfferings.IgnoreQueryFilters().ToListAsync();
+        var enrollments = await db.StudentAcademicEnrollments.IgnoreQueryFilters().ToListAsync();
+        var artifacts = await db.TeamArtifacts.IgnoreQueryFilters().ToListAsync();
+        var weeklyLogs = await db.WeeklyLogbooks.IgnoreQueryFilters().ToListAsync();
+
+        Console.WriteLine("\n========================================================");
+        Console.WriteLine("           PROJECT HUB DATABASE DUMP                   ");
+        Console.WriteLine("========================================================");
+        Console.WriteLine($"[1] CollegeTenants: {tenants.Count} records");
+        foreach (var t in tenants) Console.WriteLine($"   - [{t.TenantCode}] {t.Name} (Domain: {t.SsoDomain}, Seats: {t.MaxStudentSeats}, Tier: {t.LicenseTier})");
+
+        Console.WriteLine($"\n[2] Departments: {depts.Count} records");
+        foreach (var d in depts) Console.WriteLine($"   - [{d.Code}] {d.Name} (Intake: {d.IntakeQuota})");
+
+        Console.WriteLine($"\n[3] UserAccounts: {users.Count} records");
+        foreach (var u in users) Console.WriteLine($"   - {u.FullName,-22} | {u.Role,-12} | {u.Email,-26} | USN/Code: {u.EnrollmentOrEmployeeCode,-14} | Active: {u.IsActive}");
+
+        Console.WriteLine($"\n[4] AcademicSessions & Terms: {sessions.Count} sessions, {terms.Count} terms");
+        foreach (var s in sessions) Console.WriteLine($"   - Session: {s.Label} (Cutoff: {s.ExamCutoffDateUtc:yyyy-MM-dd}, Interdisciplinary: {s.AllowInterdisciplinaryTeams})");
+        foreach (var tm in terms) Console.WriteLine($"   - Term: {tm.SemesterName} (Sem {tm.SemesterNumber}, Parity: {tm.Parity})");
+
+        Console.WriteLine($"\n[5] SubjectOfferings & AcademicTracks: {offerings.Count} offerings, {tracks.Count} tracks");
+        foreach (var o in offerings) Console.WriteLine($"   - Subject: [{o.SubjectCode}] {o.SubjectName} (Credits: {o.Credits}, Type: {o.SubjectType})");
+        foreach (var tr in tracks) Console.WriteLine($"   - Track: {tr.Name} (Year: {tr.AcademicYear}, Mode: {tr.ParticipationMode})");
+
+        Console.WriteLine($"\n[6] ProjectTeams: {teams.Count} teams");
+        foreach (var tm in teams) Console.WriteLine($"   - [{tm.TeamCode}] \"{tm.Title}\" | Status: {tm.Status} | Members: {tm.Members.Count}");
+
+        Console.WriteLine($"\n[7] StudentAcademicEnrollments: {enrollments.Count} enrollments");
+        foreach (var en in enrollments) Console.WriteLine($"   - Student ID: {en.StudentUserId} | Batch: {en.AdmissionBatch} | Status: {en.AcademicStatus}");
+
+        Console.WriteLine($"\n[8] TeamArtifacts & WeeklyLogbooks: {artifacts.Count} artifacts, {weeklyLogs.Count} logs");
+        foreach (var a in artifacts) Console.WriteLine($"   - Artifact: {a.FileName} ({a.SlotType}, Status: {a.Status}, Size: {a.FileSizeBytes} bytes)");
+        foreach (var w in weeklyLogs) Console.WriteLine($"   - Week {w.WeekNumber}: \"{w.AccomplishmentsSummary}\" ({w.HoursLogged} hrs, Verified: {w.IsVerified})");
+        Console.WriteLine("========================================================\n");
+
+        Assert.NotEmpty(tenants);
+        Assert.NotEmpty(users);
+        Assert.NotEmpty(teams);
     }
 }

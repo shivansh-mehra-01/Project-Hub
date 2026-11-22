@@ -38,21 +38,21 @@ function Stop-PortListener {
     try {
         $conns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
         foreach ($c in $conns) {
-            $pId = $c.OwningProcess
-            if ($pId -and $pId -ne 0 -and $pId -ne $PID) {
-                $proc = Get-Process -Id $pId -ErrorAction SilentlyContinue
-                Write-Host "  [!] Terminating stale process '$($proc.ProcessName)' (PID: $pId) listening on port $Port..." -ForegroundColor Yellow
-                Stop-Process -Id $pId -Force -ErrorAction SilentlyContinue
+            $targetPid = $c.OwningProcess
+            if ($targetPid -and $targetPid -ne 0 -and $targetPid -ne $PID) {
+                $proc = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
+                Write-Host "  [!] Terminating stale process '$($proc.ProcessName)' (PID: $targetPid) listening on port $Port..." -ForegroundColor Yellow
+                Stop-Process -Id $targetPid -Force -ErrorAction SilentlyContinue
             }
         }
     } catch {
         $lines = netstat -ano 2>$null | Select-String ":$Port\s+.*LISTENING"
         foreach ($line in $lines) {
             $parts = ($line -split '\s+') | Where-Object { $_ -ne "" }
-            $pId = $parts[-1]
-            if ($pId -match '^\d+$' -and [int]$pId -ne 0 -and [int]$pId -ne $PID) {
-                Write-Host "  [!] Terminating stale PID $pId listening on port $Port..." -ForegroundColor Yellow
-                Stop-Process -Id [int]$pId -Force -ErrorAction SilentlyContinue
+            $targetPid = $parts[-1]
+            if ($targetPid -match '^\d+$' -and [int]$targetPid -ne 0 -and [int]$targetPid -ne $PID) {
+                Write-Host "  [!] Terminating stale PID $targetPid listening on port $Port..." -ForegroundColor Yellow
+                Stop-Process -Id [int]$targetPid -Force -ErrorAction SilentlyContinue
             }
         }
     }

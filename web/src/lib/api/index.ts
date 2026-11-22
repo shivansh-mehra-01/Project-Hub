@@ -1,6 +1,7 @@
 export * from "./types";
 export * from "./apiClient";
 export * from "./authApi";
+export * from "./accountApi";
 export * from "./platformApi";
 export * from "./collegeApi";
 export * from "./hodApi";

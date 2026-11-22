@@ -28,6 +28,10 @@ public class CollegeTenantConfiguration : IEntityTypeConfiguration<CollegeTenant
             .HasConversion<string>()
             .HasMaxLength(50);
 
+        builder.Property(c => c.AffiliatingUniversity)
+            .HasMaxLength(150)
+            .HasDefaultValue("RGPV");
+
         builder.HasIndex(c => c.TenantCode)
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");

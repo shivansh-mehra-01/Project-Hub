@@ -48,7 +48,7 @@ import { TenantCollege, PilotRequest, PlatformAuditLog } from "@/mocks/store-typ
 import { showToast } from "@/lib/toast";
 
 export interface SuperAdminViewProps {
-  initialTab?: "tenants" | "templates" | "subscriptions" | "health" | "audit";
+  initialTab?: "tenants" | "subscriptions" | "health" | "audit";
 }
 
 // All 12 Standard NBA Program Outcomes (POs) with 0-3 Attainment Criteria
@@ -246,7 +246,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
     addAuditLog,
   } = useProjectHubStore();
 
-  const [activeTab, setActiveTab] = useState<"tenants" | "templates" | "subscriptions" | "health" | "audit">(initialTab);
+  const [activeTab, setActiveTab] = useState<"tenants" | "subscriptions" | "health" | "audit">(initialTab || "tenants");
 
   // Tab 1: Tenants Filter & Search States
   const [tenantSearch, setTenantSearch] = useState("");
@@ -259,6 +259,8 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
   const [newCollegeName, setNewCollegeName] = useState("");
   const [newCollegeCode, setNewCollegeCode] = useState("");
   const [newCollegeDomain, setNewCollegeDomain] = useState("");
+  const [newCollegePrincipalName, setNewCollegePrincipalName] = useState("");
+  const [newCollegeUniversity, setNewCollegeUniversity] = useState<"RGPV" | "Autonomous / Custom">("RGPV");
   const [newCollegePrincipalEmail, setNewCollegePrincipalEmail] = useState("");
   const [isPrincipalEmailCustomized, setIsPrincipalEmailCustomized] = useState(false);
   const [newCollegePlan, setNewCollegePlan] = useState<"Pilot" | "Standard" | "Enterprise">("Standard");
@@ -267,21 +269,15 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
   const [onboardSuccessBanner, setOnboardSuccessBanner] = useState<{ name: string; email: string } | null>(null);
   const [isProvisioningAdmin, setIsProvisioningAdmin] = useState(false);
 
-  // Tab 2: Master Templates States
-  const [expandedPo, setExpandedPo] = useState<string | null>("PO1");
-  const [poList, setPoList] = useState<ProgramOutcomeItem[]>(defaultProgramOutcomes);
-  const [poSearch, setPoSearch] = useState("");
-  const [sdgSearch, setSdgSearch] = useState("");
-  const [activeSdgs, setActiveSdgs] = useState<Record<number, boolean>>({
-    1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true,
-    8: true, 9: true, 10: true, 11: true, 12: true, 13: true, 14: true,
-    15: true, 16: true, 17: true,
-  });
-  const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
-  const [newPoCode, setNewPoCode] = useState("PSO1");
-  const [newPoTitle, setNewPoTitle] = useState("");
-  const [newPoDesc, setNewPoDesc] = useState("");
-  const [newPoBlooms, setNewPoBlooms] = useState("L4_Analyze");
+  const sanitizeDomain = (raw: string) => {
+    return raw
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .replace(/@/g, "")
+      .replace(/\/.*$/, "");
+  };
 
   // Tab 3: Subscriptions States
   const [reviewingPilot, setReviewingPilot] = useState<PilotRequest | null>(null);
@@ -295,13 +291,14 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
   const [auditStatusFilter, setAuditStatusFilter] = useState("All");
 
   useEffect(() => {
-    setActiveTab(initialTab);
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
   }, [initialTab]);
 
-  const switchTab = (tab: "tenants" | "templates" | "subscriptions" | "health" | "audit") => {
+  const switchTab = (tab: "tenants" | "subscriptions" | "health" | "audit") => {
     setActiveTab(tab);
     if (tab === "tenants") router.push("/admin");
-    else if (tab === "templates") router.push("/admin/templates");
     else if (tab === "subscriptions") router.push("/admin/subscriptions");
     else if (tab === "health") router.push("/admin/health");
     else if (tab === "audit") router.push("/admin/audit");
@@ -312,12 +309,15 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
     e.preventDefault();
     if (!newCollegeName || !newCollegeCode || !newCollegeDomain) return;
 
-    const principalEmail = newCollegePrincipalEmail.trim() || `principal@${newCollegeDomain.trim().toLowerCase()}`;
+    const cleanCode = newCollegeCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+    const cleanDomain = sanitizeDomain(newCollegeDomain);
+    const principalEmail = newCollegePrincipalEmail.trim() || `principal@${cleanDomain}`;
+    const principalName = newCollegePrincipalName.trim() || "College Principal";
 
     const res = await onboardTenant({
-      name: newCollegeName,
-      code: newCollegeCode.toUpperCase(),
-      domain: newCollegeDomain,
+      name: newCollegeName.trim(),
+      code: cleanCode,
+      domain: cleanDomain,
       plan: newCollegePlan,
       status: "Active",
       students: parseInt(newCollegeStudents) || 1500,
@@ -328,14 +328,15 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
       renewalDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
       allocatedSeats: parseInt(newCollegeStudents) || 2000,
       principalEmail,
-      principalName: "College Principal",
+      principalName,
+      affiliatingUniversity: newCollegeUniversity,
       adminEmails: [principalEmail],
     });
 
     const finalAdminEmail = res?.adminEmail || principalEmail;
 
     showToast(
-      `Tenant provisioned! Initial Principal login: ${finalAdminEmail} (use Forgot Password OTP on /login to set password).`,
+      `Tenant provisioned! Initial Principal login: ${finalAdminEmail} (activation OTP sent to institutional inbox; use Forgot Password OTP on /login to set password).`,
       "success"
     );
 
@@ -348,6 +349,8 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
     setNewCollegeName("");
     setNewCollegeCode("");
     setNewCollegeDomain("");
+    setNewCollegePrincipalName("");
+    setNewCollegeUniversity("RGPV");
     setNewCollegePrincipalEmail("");
     setIsPrincipalEmailCustomized(false);
   };
@@ -386,39 +389,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
     setExtendingCollege(null);
   };
 
-  const handleAddPoSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPoCode || !newPoTitle) return;
-
-    const newItem: ProgramOutcomeItem = {
-      code: newPoCode.toUpperCase(),
-      title: newPoTitle,
-      blooms: newPoBlooms,
-      desc: newPoDesc || "Standard department programmatic criteria.",
-      levels: {
-        l0: "Unsatisfactory demonstration of program criteria.",
-        l1: "Developing comprehension with continuous mentor guidance.",
-        l2: "Proficient execution meeting standard institutional criteria.",
-        l3: "Exemplary mastery exceeding standard benchmarks.",
-      },
-    };
-
-    setPoList([...poList, newItem]);
-    addAuditLog({
-      actor: "admin@collabex.in (Platform Super Admin)",
-      action: "RUBRIC_PRESET_PUBLISHED",
-      targetTenant: "Global Catalog Presets",
-      ipRegion: "103.21.244.10 • ap-south-1",
-      status: "SUCCESS",
-      details: `Published global evaluation preset: ${newItem.code} (${newItem.title})`,
-    });
-
-    setShowAddTemplateModal(false);
-    setNewPoCode("PSO1");
-    setNewPoTitle("");
-    setNewPoDesc("");
-  };
-
   const handleExportAuditCsv = () => {
     const headers = ["Timestamp", "Actor", "Action", "Target Tenant", "IP / Region", "Status", "Details"];
     const rows = auditLogs.map((l) => [
@@ -451,19 +421,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
     return matchesSearch && matchesPlan;
   });
 
-  const filteredPos = poList.filter(
-    (po) =>
-      po.code.toLowerCase().includes(poSearch.toLowerCase()) ||
-      po.title.toLowerCase().includes(poSearch.toLowerCase()) ||
-      po.desc.toLowerCase().includes(poSearch.toLowerCase())
-  );
-
-  const filteredSdgs = allUnSdgs.filter(
-    (sdg) =>
-      sdg.name.toLowerCase().includes(sdgSearch.toLowerCase()) ||
-      sdg.num.toString().includes(sdgSearch.toLowerCase())
-  );
-
   const filteredAuditLogs = auditLogs.filter((l) => {
     const matchesSearch =
       l.actor.toLowerCase().includes(auditSearch.toLowerCase()) ||
@@ -478,7 +435,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
 
   const tabLabels: Record<string, string> = {
     tenants: "Tenants",
-    templates: "Master Templates",
     subscriptions: "Subscriptions",
     health: "Health & Telemetry",
     audit: "Audit Logs",
@@ -486,7 +442,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
 
   const breadcrumbs: Record<string, string> = {
     tenants: "Tenants & Partitions",
-    templates: "Master NBA & SDG Presets",
     subscriptions: "Active Billing & Pilot Requests",
     health: "PostgreSQL & Worker Telemetry",
     audit: "Platform Governance & Audit Log",
@@ -669,7 +624,14 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                           <div className="h-7 w-7 rounded-lg bg-brand-primary-tint text-brand-primary border border-brand-primary-border flex items-center justify-center font-bold text-xs font-mono">
                             {col.code.charAt(0)}
                           </div>
-                          <span className="truncate max-w-[220px]">{col.name}</span>
+                          <div className="truncate max-w-[220px]">
+                            <div className="truncate">{col.name}</div>
+                            {col.affiliatingUniversity && (
+                              <div className="text-[10px] text-slate-400 font-normal font-sans">
+                                {col.affiliatingUniversity}
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 font-mono font-medium text-slate-600">{col.code}</td>
                         <td className="py-3 px-4 font-mono text-slate-500">@{col.domain}</td>
@@ -722,266 +684,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 2: MASTER TEMPLATES (ALL 12 POS & 17 SDGS)                            */}
-      {/* ========================================================================= */}
-      {activeTab === "templates" && (
-        <div className="space-y-6">
-          
-          {/* Default Rubric Weightage Matrix Card */}
-          <Card>
-            <CardHeader className="pb-3 border-b border-slate-100">
-              <CardTitle>Default Academic Rubric Weightage Matrix</CardTitle>
-              <CardDescription>
-                AICTE / NBA standardized continuous guide evaluation vs external defense weight distribution.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Minor Project (Sem 6) */}
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-900">
-                  <span>Minor Project (Semester 6)</span>
-                  <span className="font-mono text-emerald-700">100 Marks Total</span>
-                </div>
-                <div className="h-3 w-full bg-slate-100 rounded-full flex overflow-hidden">
-                  <div className="bg-brand-primary h-full" style={{ width: "40%" }} title="Guide Review: 40%" />
-                  <div className="bg-slate-700 h-full" style={{ width: "60%" }} title="Viva Defense: 60%" />
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-brand-primary" />
-                    <strong>Guide Continuous:</strong> 40% (40 Marks)
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-slate-700" />
-                    <strong>Viva Panel Defense:</strong> 60% (60 Marks)
-                  </span>
-                </div>
-              </div>
-
-              {/* Major Project (Sem 8) */}
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-900">
-                  <span>Major Project (Semester 8)</span>
-                  <span className="font-mono text-emerald-700">200 Marks Total</span>
-                </div>
-                <div className="h-3 w-full bg-slate-100 rounded-full flex overflow-hidden">
-                  <div className="bg-brand-primary h-full" style={{ width: "30%" }} title="Guide Review: 30%" />
-                  <div className="bg-slate-700 h-full" style={{ width: "70%" }} title="Final Viva Panel: 70%" />
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-brand-primary" />
-                    <strong>Guide Continuous:</strong> 30% (60 Marks)
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-slate-700" />
-                    <strong>External Viva Panel:</strong> 70% (140 Marks)
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 2-Column Grid: 12 NBA POs on Left, 17 SDGs on Right */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            
-            {/* Left: 12 NBA Program Outcomes (7 cols) */}
-            <div className="lg:col-span-7 space-y-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100">
-                  <div>
-                    <CardTitle>NBA Criterion 2 &amp; 3 Master Rubric Presets</CardTitle>
-                    <CardDescription>
-                      Complete 12 Program Outcomes (PO1–PO12) with 0–3 attainment benchmarks.
-                    </CardDescription>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    leftIcon={<Plus className="h-3.5 w-3.5" />}
-                    onClick={() => setShowAddTemplateModal(true)}
-                  >
-                    Add Preset
-                  </Button>
-                </CardHeader>
-
-                {/* PO Search */}
-                <div className="p-3 bg-slate-50 border-b border-slate-200">
-                  <div className="relative">
-                    <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={poSearch}
-                      onChange={(e) => setPoSearch(e.target.value)}
-                      placeholder="Filter NBA outcomes by code or title..."
-                      className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-800 focus:outline-hidden focus:border-brand-primary"
-                    />
-                  </div>
-                </div>
-
-                <CardContent className="p-3 space-y-2 max-h-[640px] overflow-y-auto">
-                  {filteredPos.length === 0 ? (
-                    <EmptyState
-                      title="No matching POs"
-                      description="No NBA program outcomes match your search filter."
-                    />
-                  ) : (
-                    filteredPos.map((po) => {
-                    const isExpanded = expandedPo === po.code;
-                    return (
-                      <div
-                        key={po.code}
-                        className="rounded-xl border border-slate-200 bg-white overflow-hidden transition-all shadow-2xs"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setExpandedPo(isExpanded ? null : po.code)}
-                          className="w-full p-3 flex items-center justify-between text-left hover:bg-slate-50 cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-brand-primary-tint text-brand-primary border border-brand-primary-border shrink-0">
-                              {po.code}
-                            </span>
-                            <div className="min-w-0">
-                              <span className="font-semibold text-xs text-slate-900 block truncate">
-                                {po.title}
-                              </span>
-                              <span className="text-[10px] text-slate-500 font-mono">
-                                Taxonomy: {po.blooms}
-                              </span>
-                            </div>
-                          </div>
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4 text-slate-400 shrink-0" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
-                          )}
-                        </button>
-
-                        {/* Expandable 0-3 Attainment Breakdown */}
-                        {isExpanded && (
-                          <div className="p-3 pt-0 border-t border-slate-100 bg-slate-50/50 space-y-2.5 text-xs">
-                            <p className="text-[11px] text-slate-600 leading-relaxed italic pt-2">
-                              {po.desc}
-                            </p>
-                            <div className="grid grid-cols-2 gap-2 text-[10px]">
-                              <div className="p-2 rounded-lg bg-red-50/80 border border-red-200 text-red-900 space-y-0.5">
-                                <span className="font-bold block uppercase tracking-wider text-[9px] text-red-700">
-                                  Level 0 (&lt;40% / Unsatisfactory)
-                                </span>
-                                <p className="leading-tight text-red-800">{po.levels.l0}</p>
-                              </div>
-                              <div className="p-2 rounded-lg bg-amber-50/80 border border-amber-200 text-amber-900 space-y-0.5">
-                                <span className="font-bold block uppercase tracking-wider text-[9px] text-amber-700">
-                                  Level 1 (40–59% / Developing)
-                                </span>
-                                <p className="leading-tight text-amber-800">{po.levels.l1}</p>
-                              </div>
-                              <div className="p-2 rounded-lg bg-blue-50/80 border border-blue-200 text-blue-900 space-y-0.5">
-                                <span className="font-bold block uppercase tracking-wider text-[9px] text-blue-700">
-                                  Level 2 (60–79% / Proficient)
-                                </span>
-                                <p className="leading-tight text-blue-800">{po.levels.l2}</p>
-                              </div>
-                              <div className="p-2 rounded-lg bg-emerald-50/80 border border-emerald-200 text-emerald-900 space-y-0.5">
-                                <span className="font-bold block uppercase tracking-wider text-[9px] text-emerald-700">
-                                  Level 3 (≥80% / Exemplary)
-                                </span>
-                                <p className="leading-tight text-emerald-800">{po.levels.l3}</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </CardContent>
-              </Card>
-            </div>
-
-            {/* Right: 17 UN SDGs Catalog (5 cols) */}
-            <div className="lg:col-span-5 space-y-4">
-              <Card>
-                <CardHeader className="pb-3 border-b border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>UN SDG Framework Catalog</CardTitle>
-                      <CardDescription>
-                        All 17 Sustainable Development Goals available for project proposals.
-                      </CardDescription>
-                    </div>
-                    <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      {Object.values(activeSdgs).filter(Boolean).length} / 17 Active
-                    </span>
-                  </div>
-                </CardHeader>
-
-                {/* SDG Search */}
-                <div className="p-3 bg-slate-50 border-b border-slate-200">
-                  <div className="relative">
-                    <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={sdgSearch}
-                      onChange={(e) => setSdgSearch(e.target.value)}
-                      placeholder="Search 17 SDGs by name or number..."
-                      className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-800 focus:outline-hidden focus:border-brand-primary"
-                    />
-                  </div>
-                </div>
-
-                <CardContent className="p-3 space-y-1.5 max-h-[640px] overflow-y-auto">
-                  {filteredSdgs.length === 0 ? (
-                    <EmptyState
-                      title="No matching UN SDGs"
-                      description="No sustainable development goals match your search filter."
-                    />
-                  ) : (
-                    filteredSdgs.map((sdg) => {
-                    const isActive = !!activeSdgs[sdg.num];
-                    return (
-                      <div
-                        key={sdg.num}
-                        className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200/90 hover:border-slate-300 transition-colors"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div
-                            className={`h-6 w-6 rounded-md ${sdg.color} text-white font-mono font-bold text-[10px] flex items-center justify-center shrink-0`}
-                          >
-                            {sdg.num}
-                          </div>
-                          <span className="text-xs font-medium text-slate-800 truncate">
-                            {sdg.name}
-                          </span>
-                        </div>
-                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={isActive}
-                            onChange={() =>
-                              setActiveSdgs((prev) => ({
-                                ...prev,
-                                [sdg.num]: !prev[sdg.num],
-                              }))
-                            }
-                            className="rounded text-brand-primary focus:ring-0 accent-brand-primary h-3.5 w-3.5"
-                          />
-                          <span className="text-[10px] font-mono text-slate-500">
-                            {isActive ? "ON" : "OFF"}
-                          </span>
-                        </label>
-                      </div>
-                    );
-                  })
-                )}
-              </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* TAB 3: SUBSCRIPTIONS & PILOT PROVISIONING                                  */}
@@ -1568,7 +1270,8 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               label="Institutional Code"
               placeholder="e.g. NITK"
               value={newCollegeCode}
-              onChange={(e) => setNewCollegeCode(e.target.value)}
+              onChange={(e) => setNewCollegeCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))}
+              helperText="Auto-uppercased unique identifier for database RLS partitioning."
               required
             />
             <Input
@@ -1576,13 +1279,36 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               placeholder="e.g. nitk.edu.in"
               value={newCollegeDomain}
               onChange={(e) => {
-                const domain = e.target.value;
+                const domain = sanitizeDomain(e.target.value);
                 setNewCollegeDomain(domain);
                 if (!isPrincipalEmailCustomized) {
-                  setNewCollegePrincipalEmail(domain.trim() ? `principal@${domain.trim().toLowerCase()}` : "");
+                  setNewCollegePrincipalEmail(domain ? `principal@${domain}` : "");
                 }
               }}
+              helperText="Institutional email domain. Automatically strips http://, www., and @."
               required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Principal / Dean Full Name"
+              placeholder="e.g. Dr. Keshvendra Choudhary"
+              value={newCollegePrincipalName}
+              onChange={(e) => setNewCollegePrincipalName(e.target.value)}
+              helperText="Academic head provisioned with initial CollegeAdmin governance role."
+              required
+            />
+            <Select
+              label="Affiliating University Catalog"
+              value={newCollegeUniversity}
+              onChange={(e) =>
+                setNewCollegeUniversity(e.target.value as "RGPV" | "Autonomous / Custom")
+              }
+              options={[
+                { label: "RGPV (Rajiv Gandhi Proudyogiki Vishwavidyalaya) — State Technical Syllabus", value: "RGPV" },
+                { label: "Autonomous / Custom University Catalog — Flexible AICTE CBCS Scheme", value: "Autonomous / Custom" },
+              ]}
+              helperText="Links institutional project tracks, CBCS evaluation rubrics, and syllabus offerings."
             />
           </div>
           <Input
@@ -1593,7 +1319,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               setNewCollegePrincipalEmail(e.target.value);
               setIsPrincipalEmailCustomized(true);
             }}
-            helperText="Auto-fills from SSO domain. Provisions initial CollegeAdmin user with temporary initial password Pass@1234."
+            helperText="Auto-fills from SSO domain. An activation OTP and temporary credentials (Pass@1234) are automatically dispatched to this institutional inbox upon provisioning."
           />
           <div className="grid grid-cols-2 gap-3">
             <Select
@@ -1742,6 +1468,10 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
                 <div className="flex justify-between">
                   <span className="text-slate-500">Schema:</span>
                   <span className="font-bold text-slate-900">tenant_{managingCollege.code.toLowerCase()}_prod</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Affiliating Catalog:</span>
+                  <span className="font-bold text-slate-900">{managingCollege.affiliatingUniversity || "RGPV"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Storage Quota:</span>
@@ -1964,65 +1694,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
             />
           </div>
         )}
-      </Modal>
-
-      {/* 5. Add Custom PO/PSO Template Modal */}
-      <Modal
-        isOpen={showAddTemplateModal}
-        onClose={() => setShowAddTemplateModal(false)}
-        title="Add Master NBA Rubric Preset"
-        description="Creates a standardized evaluation criterion distributed to all college tenant catalogs."
-        maxWidth="md"
-      >
-        <form onSubmit={handleAddPoSubmit} className="space-y-3.5">
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Outcome Identifier"
-              placeholder="e.g. PSO1 or PO13"
-              value={newPoCode}
-              onChange={(e) => setNewPoCode(e.target.value)}
-              required
-            />
-            <Select
-              label="Blooms Taxonomy Level"
-              value={newPoBlooms}
-              onChange={(e) => setNewPoBlooms(e.target.value)}
-              options={[
-                { label: "L1: Remember", value: "L1_Remember" },
-                { label: "L2: Understand", value: "L2_Understand" },
-                { label: "L3: Apply", value: "L3_Apply" },
-                { label: "L4: Analyze", value: "L4_Analyze" },
-                { label: "L5: Evaluate", value: "L5_Evaluate" },
-                { label: "L6: Create", value: "L6_Create" },
-              ]}
-            />
-          </div>
-
-          <Input
-            label="Outcome Title"
-            placeholder="e.g. Domain Specific Software Architecture"
-            value={newPoTitle}
-            onChange={(e) => setNewPoTitle(e.target.value)}
-            required
-          />
-
-          <Textarea
-            label="Scoring Guideline & Description"
-            placeholder="Describe what evaluators should measure to award maximum marks..."
-            value={newPoDesc}
-            onChange={(e) => setNewPoDesc(e.target.value)}
-            rows={3}
-          />
-
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-            <Button size="sm" variant="secondary" onClick={() => setShowAddTemplateModal(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" variant="primary" type="submit">
-              Publish Global Preset
-            </Button>
-          </div>
-        </form>
       </Modal>
     </div>
   );

@@ -34,6 +34,7 @@ import {
   CheckSquare,
   Square,
   Loader2,
+  Info,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
@@ -43,8 +44,25 @@ import { Modal } from "@/design-system/components/Modal";
 import { SlideOverDrawer } from "@/design-system/components/SlideOverDrawer";
 import { Input } from "@/design-system/components/Input";
 import { Select } from "@/design-system/components/Select";
+import { showToast } from "@/lib/toast";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { Department, ProjectCycle } from "@/mocks/store-types";
+
+// Central RGPV B.Tech Engineering Branches Catalog
+const RGPV_BTECH_CENTRAL_BRANCHES = [
+  { code: "CSE", name: "Computer Science & Engineering" },
+  { code: "IT", name: "Information Technology" },
+  { code: "EC", name: "Electronics & Communication Engineering" },
+  { code: "ME", name: "Mechanical Engineering" },
+  { code: "CE", name: "Civil Engineering" },
+  { code: "EE", name: "Electrical Engineering" },
+  { code: "EX", name: "Electrical & Electronics Engineering" },
+  { code: "AIML", name: "CSE (AI & Machine Learning)" },
+  { code: "CS-DS", name: "CSE (Data Science)" },
+  { code: "CS-CS", name: "CSE (Cyber Security)" },
+  { code: "CS-IoT", name: "CSE (Internet of Things)" },
+  { code: "CSBS", name: "Computer Science & Business Systems" },
+];
 
 export interface CollegeAdminViewProps {
   initialTab?: "overview" | "departments" | "settings" | "compliance";
@@ -82,7 +100,23 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
   const [deptViewMode, setDeptViewMode] = useState<"cards" | "hierarchy">("cards");
   const [showRgpvImportModal, setShowRgpvImportModal] = useState(false);
   const [isImportingRgpv, setIsImportingRgpv] = useState(false);
-  const [selectedPrograms, setSelectedPrograms] = useState<string[]>(["BTECH", "MTECH", "MCA", "MBA"]);
+  const [selectedPrograms, setSelectedPrograms] = useState<string[]>(["BTECH"]);
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([
+    "CSE",
+    "IT",
+    "EC",
+    "ME",
+    "CE",
+    "AIML",
+  ]);
+  const [showRequestBranchModal, setShowRequestBranchModal] = useState(false);
+  const [requestBranchData, setRequestBranchData] = useState({
+    name: "",
+    code: "",
+    program: "BTECH",
+    approvalRef: "",
+    remarks: "",
+  });
   const [expandedPrograms, setExpandedPrograms] = useState<string[]>(["prog-btech-01", "BTECH"]);
   const [expandedBranches, setExpandedBranches] = useState<string[]>(["dept-cse", "CSE"]);
   const [rgpvSuccessToast, setRgpvSuccessToast] = useState<string | null>(null);
@@ -102,8 +136,8 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
   const handleImportRgpvSubmit = async () => {
     setIsImportingRgpv(true);
     try {
-      const res = await importRgpvCatalog("RGPV", selectedPrograms);
-      setRgpvSuccessToast(res?.message || "Successfully imported RGPV catalog!");
+      const res = await importRgpvCatalog("RGPV", selectedPrograms, selectedBranches);
+      setRgpvSuccessToast(res?.message || "Successfully configured academic structure from RGPV catalog!");
       setShowRgpvImportModal(false);
       setDeptViewMode("hierarchy");
       setTimeout(() => setRgpvSuccessToast(null), 3500);
@@ -112,6 +146,26 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
     } finally {
       setIsImportingRgpv(false);
     }
+  };
+
+  const handleRequestBranchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!requestBranchData.name.trim() || !requestBranchData.code.trim()) {
+      showToast("Please provide branch name and code.", "error");
+      return;
+    }
+    showToast(
+      `Branch request for "${requestBranchData.name} (${requestBranchData.code.toUpperCase()})" submitted to Super Admin for central RGPV catalog review.`,
+      "success"
+    );
+    setShowRequestBranchModal(false);
+    setRequestBranchData({
+      name: "",
+      code: "",
+      program: "BTECH",
+      approvalRef: "",
+      remarks: "",
+    });
   };
 
   // New Department Form State
@@ -1552,6 +1606,94 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
             </div>
           </div>
 
+          {/* Select B.Tech Engineering Branches (from Central RGPV Master Catalog) */}
+          {selectedPrograms.includes("BTECH") && (
+            <div className="space-y-2.5 pt-3 border-t border-slate-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <div>
+                  <span className="font-bold text-slate-900 block text-xs">
+                    Select B.Tech Branches Offered by Your Institution:
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    Only selected branches from the central catalog will be provisioned in your college partition.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 self-start sm:self-auto text-xs">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedBranches(RGPV_BTECH_CENTRAL_BRANCHES.map((b) => b.code))
+                    }
+                    className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+                  >
+                    Select All ({RGPV_BTECH_CENTRAL_BRANCHES.length})
+                  </button>
+                  <span className="text-slate-300">&bull;</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBranches([])}
+                    className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 hover:underline"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+
+              {/* Branch Checkboxes Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
+                {RGPV_BTECH_CENTRAL_BRANCHES.map((br) => {
+                  const isChecked = selectedBranches.includes(br.code);
+                  return (
+                    <div
+                      key={br.code}
+                      onClick={() => {
+                        setSelectedBranches((prev) =>
+                          isChecked
+                            ? prev.filter((c) => c !== br.code)
+                            : [...prev, br.code]
+                        );
+                      }}
+                      className={`p-2 rounded-lg border text-xs cursor-pointer flex items-center justify-between gap-2 transition-all ${
+                        isChecked
+                          ? "bg-emerald-50/70 border-emerald-500 shadow-2xs font-semibold text-slate-900"
+                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="text-emerald-700 shrink-0">
+                          {isChecked ? (
+                            <CheckSquare className="h-3.5 w-3.5" />
+                          ) : (
+                            <Square className="h-3.5 w-3.5 text-slate-400" />
+                          )}
+                        </div>
+                        <span className="truncate text-[11px]">{br.name}</span>
+                      </div>
+                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 shrink-0">
+                        {br.code}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Request Missing Branch Callout */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-amber-50/70 border border-amber-200 text-amber-900 text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <Info className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  <span>Missing a branch offered by your institution?</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowRequestBranchModal(true)}
+                  className="font-bold text-emerald-800 hover:text-emerald-900 underline text-xs shrink-0 self-start sm:self-auto"
+                >
+                  Request Central Branch Addition &rarr;
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Hierarchy Auto-Provisioning Notice */}
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 space-y-1 text-[11px]">
             <div className="font-semibold text-slate-800 flex items-center gap-1.5">
@@ -1577,7 +1719,7 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
               size="sm"
               variant="primary"
               onClick={handleImportRgpvSubmit}
-              disabled={selectedPrograms.length === 0 || isImportingRgpv}
+              disabled={selectedPrograms.length === 0 || selectedBranches.length === 0 || isImportingRgpv}
               leftIcon={
                 isImportingRgpv ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1588,10 +1730,79 @@ export const CollegeAdminView: React.FC<CollegeAdminViewProps> = ({ initialTab =
             >
               {isImportingRgpv
                 ? "Importing RGPV Catalog..."
-                : `Import ${selectedPrograms.length} Programs & Standard Branches`}
+                : `Import ${selectedPrograms.length} Programs & ${selectedBranches.length} Branches`}
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* 3.6. Request Central Branch Addition Modal */}
+      <Modal
+        isOpen={showRequestBranchModal}
+        onClose={() => setShowRequestBranchModal(false)}
+        title="Request Central Branch Addition"
+        description="Submit a request to Super Admin to add a missing RGPV-approved engineering branch to the central catalog."
+        maxWidth="md"
+      >
+        <form onSubmit={handleRequestBranchSubmit} className="space-y-3.5 text-xs">
+          <Input
+            label="Branch Name"
+            placeholder="e.g. Robotics and Automation"
+            value={requestBranchData.name}
+            onChange={(e) => setRequestBranchData({ ...requestBranchData, name: e.target.value })}
+            required
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Branch Code"
+              placeholder="e.g. RA"
+              value={requestBranchData.code}
+              onChange={(e) =>
+                setRequestBranchData({ ...requestBranchData, code: e.target.value.toUpperCase() })
+              }
+              required
+            />
+            <Select
+              label="Degree Program"
+              value={requestBranchData.program}
+              onChange={(e) => setRequestBranchData({ ...requestBranchData, program: e.target.value })}
+              options={[
+                { value: "BTECH", label: "B.Tech (Undergraduate)" },
+                { value: "MTECH", label: "M.Tech (Postgraduate)" },
+                { value: "MCA", label: "MCA" },
+              ]}
+            />
+          </div>
+          <Input
+            label="RGPV Affiliation / AICTE Notification Order Ref"
+            placeholder="e.g. RGPV/Acad/Affil/2026/892"
+            value={requestBranchData.approvalRef}
+            onChange={(e) => setRequestBranchData({ ...requestBranchData, approvalRef: e.target.value })}
+          />
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">
+              Statutory Justification / Remarks
+            </label>
+            <textarea
+              rows={2}
+              value={requestBranchData.remarks}
+              onChange={(e) => setRequestBranchData({ ...requestBranchData, remarks: e.target.value })}
+              placeholder="Specify the ordinance or statutory approval details..."
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs"
+            />
+          </div>
+          <p className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+            Once verified by the Super Admin, this branch will become centrally available across all eligible RGPV colleges.
+          </p>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+            <Button size="sm" variant="secondary" onClick={() => setShowRequestBranchModal(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" variant="primary" type="submit">
+              Submit Request
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       {/* 4. Inspect Department Slide-Over Drawer */}

@@ -1,9 +1,10 @@
 import React from "react";
 import { AppShell } from "@/design-system/patterns/AppShell";
+import { PlatformDataProvider } from "@/features/platform/data/platformDataStore";
 
 export const metadata = {
-  title: "Collabex — Institutional Governance",
-  description: "Enterprise Academic Project Governance and NBA Accreditation Management",
+  title: "Colabex — Enterprise Platform & Institutional Governance",
+  description: "Enterprise Academic Project Governance, Multi-Tenant SaaS and NBA Accreditation Management",
 };
 
 export const instant = false;
@@ -13,5 +14,9 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <PlatformDataProvider>
+      <AppShell>{children}</AppShell>
+    </PlatformDataProvider>
+  );
 }
