@@ -723,25 +723,11 @@ public static class DbInitializer
             },
             new()
             {
-                Id = Guid.Parse("20000000-0000-0000-0000-000000000099"),
+                Id = SuperAdminCollabexUserId,
                 CollegeId = SistecTenantId, // partition default
                 DepartmentId = null,
                 FullName = "Dev Startup Admin",
                 Email = "admin@projecthub.in",
-                EnrollmentOrEmployeeCode = "EMP-SUPER-002",
-                Role = UserRole.SuperAdmin,
-                PasswordHash = defaultHash,
-                IsActivated = true,
-                IsProjectCoordinator = false,
-                IsActive = true
-            },
-            new()
-            {
-                Id = SuperAdminCollabexUserId,
-                CollegeId = SistecTenantId,
-                DepartmentId = null,
-                FullName = "Dev Startup Admin",
-                Email = "admin@collabex.in",
                 EnrollmentOrEmployeeCode = "EMP-SUPER-002",
                 Role = UserRole.SuperAdmin,
                 PasswordHash = defaultHash,

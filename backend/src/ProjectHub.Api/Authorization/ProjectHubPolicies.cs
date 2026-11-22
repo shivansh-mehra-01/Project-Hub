@@ -47,23 +47,21 @@ public static class ProjectHubPolicies
             options.AddPolicy(CoordinatorOrHod, policy =>
                 policy.RequireAssertion(ctx =>
                     ctx.User.IsInRole(UserRole.SuperAdmin.ToString()) ||
-                    ctx.User.IsInRole(UserRole.CollegeAdmin.ToString()) ||
                     ctx.User.IsInRole(UserRole.HOD.ToString()) ||
                     ctx.User.HasClaim("role", UserRole.SuperAdmin.ToString()) ||
-                    ctx.User.HasClaim("role", UserRole.CollegeAdmin.ToString()) ||
                     ctx.User.HasClaim("role", UserRole.HOD.ToString()) ||
                     ((ctx.User.IsInRole(UserRole.Faculty.ToString()) || ctx.User.HasClaim("role", UserRole.Faculty.ToString())) &&
                      ctx.User.HasClaim("is_coordinator", "true"))));
 
-            // Faculty or Above (Faculty, HOD, CollegeAdmin)
+            // Faculty or Above (Faculty, HOD)
             options.AddPolicy(FacultyOrAbove, policy =>
                 policy.RequireAssertion(ctx =>
+                    ctx.User.IsInRole(UserRole.SuperAdmin.ToString()) ||
                     ctx.User.IsInRole(UserRole.Faculty.ToString()) ||
                     ctx.User.IsInRole(UserRole.HOD.ToString()) ||
-                    ctx.User.IsInRole(UserRole.CollegeAdmin.ToString()) ||
+                    ctx.User.HasClaim("role", UserRole.SuperAdmin.ToString()) ||
                     ctx.User.HasClaim("role", UserRole.Faculty.ToString()) ||
-                    ctx.User.HasClaim("role", UserRole.HOD.ToString()) ||
-                    ctx.User.HasClaim("role", UserRole.CollegeAdmin.ToString())));
+                    ctx.User.HasClaim("role", UserRole.HOD.ToString())));
 
             // Student or TeamLead
             options.AddPolicy(StudentOrLead, policy =>

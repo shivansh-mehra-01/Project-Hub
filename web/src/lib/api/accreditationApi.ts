@@ -96,6 +96,12 @@ export const accreditationApi = {
   exportReport: (cycleId: string, format: "pdf" | "excel" | "json") =>
     apiClient.get<Blob>(`/api/college/accreditation/cycles/${cycleId}/export?format=${format}`),
 
+  attestCycle: (cycleId: string, remarks: string) =>
+    apiClient.post<{ success: boolean; attestedAtUtc: string; attestedByName: string }>(
+      `/api/college/accreditation/cycles/${cycleId}/attest`,
+      { remarks }
+    ),
+
   // I. Activity Log
   getActivityLog: (cycleId?: string, params?: { page?: number; pageSize?: number }) => {
     const query = new URLSearchParams();

@@ -41,6 +41,7 @@ public record UserProfileDto
     public string EnrollmentOrEmployeeCode { get; init; } = string.Empty;
     public string? GitHubHandle { get; init; }
     public string? JiraKey { get; init; }
+    public bool MustChangePassword { get; init; }
 }
 
 public record AuthResponse

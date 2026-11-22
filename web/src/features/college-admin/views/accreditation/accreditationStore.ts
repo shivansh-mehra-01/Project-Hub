@@ -135,6 +135,43 @@ export function useAccreditation() {
     return cycles.find((c) => c.id === activeCycleId) || cycles[0] || null;
   }, [cycles, activeCycleId]);
 
+  // Load live accreditation cycles and activity logs from backend API
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAccreditationData = async () => {
+      try {
+        setLoading(true);
+        const [cyclesRes, logsRes] = await Promise.allSettled([
+          accreditationApi.getCycles(),
+          accreditationApi.getActivityLog(),
+        ]);
+
+        if (!isMounted) return;
+
+        if (cyclesRes.status === "fulfilled" && cyclesRes.value?.length) {
+          setCycles(cyclesRes.value);
+          if (!activeCycleId || !cyclesRes.value.some((c) => c.id === activeCycleId)) {
+            setActiveCycleId(cyclesRes.value[0].id);
+          }
+        }
+
+        if (logsRes.status === "fulfilled" && logsRes.value?.length) {
+          setActivityLogs(logsRes.value);
+        }
+      } catch (err) {
+        console.warn("Using local accreditation store data:", err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchAccreditationData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Program Mappings for active cycle or all programs
   const [programMappings, setProgramMappings] = useState<ProgramMappingDto[]>([
     {
@@ -610,7 +647,19 @@ export function useAccreditation() {
   ]);
 
   // Actions
-  const createCycle = useCallback((req: CreateCycleRequest) => {
+  const createCycle = useCallback(async (req: CreateCycleRequest) => {
+    // Attempt backend persistence first
+    try {
+      const remoteCycle = await accreditationApi.createCycle(req);
+      if (remoteCycle) {
+        setCycles((prev) => [remoteCycle, ...prev]);
+        setActiveCycleId(remoteCycle.id);
+        return remoteCycle;
+      }
+    } catch (e) {
+      console.warn("Falling back to local cycle state:", e);
+    }
+
     const fw = frameworks.find((f) => f.id === req.frameworkId) || frameworks[0];
     const ver = frameworkVersions.find((v) => v.id === req.versionId) || frameworkVersions[0];
     const newCycle: AccreditationCycleDto = {
@@ -659,7 +708,17 @@ export function useAccreditation() {
     return newCycle;
   }, [frameworks, frameworkVersions, college?.id]);
 
-  const uploadEvidence = useCallback((req: UploadEvidenceRequest) => {
+  const uploadEvidence = useCallback(async (req: UploadEvidenceRequest) => {
+    try {
+      const remoteDoc = await accreditationApi.uploadEvidence(req);
+      if (remoteDoc) {
+        setEvidenceList((prev) => [remoteDoc, ...prev]);
+        return remoteDoc;
+      }
+    } catch (e) {
+      console.warn("Falling back to local evidence state:", e);
+    }
+
     const metric = metrics.find((m) => m.id === req.metricId);
     const newDoc: EvidenceDocumentDto = {
       id: `ev-${Date.now()}`,
@@ -721,7 +780,13 @@ export function useAccreditation() {
     return newDoc;
   }, [metrics]);
 
-  const updateReview = useCallback((reviewId: string, req: SubmitReviewRequest) => {
+  const updateReview = useCallback(async (reviewId: string, req: SubmitReviewRequest) => {
+    try {
+      await accreditationApi.submitReview(reviewId, req);
+    } catch (e) {
+      console.warn("Falling back to local review state:", e);
+    }
+
     setReviews((prev) =>
       prev.map((r) =>
         r.id === reviewId

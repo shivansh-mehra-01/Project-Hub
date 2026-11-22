@@ -163,6 +163,7 @@ public record CollegeStaffDto
     public string? EmployeeCode { get; init; }
     public bool IsActive { get; init; }
     public bool IsActivated { get; init; }
+    public string? TemporaryPassword { get; init; }
     public DateTime CreatedAtUtc { get; init; }
     public DateTime? LastLoginAtUtc { get; init; }
 }

@@ -69,6 +69,15 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
     public DbSet<SubjectOffering> SubjectOfferings => Set<SubjectOffering>();
     public DbSet<StudentAcademicEnrollment> StudentAcademicEnrollments => Set<StudentAcademicEnrollment>();
 
+    // College Admin Phase 2 Persistence Entities
+    public DbSet<CollegeCampus> CollegeCampuses => Set<CollegeCampus>();
+    public DbSet<HodAppointmentHistory> HodAppointmentHistories => Set<HodAppointmentHistory>();
+    public DbSet<AccreditationCycle> AccreditationCycles => Set<AccreditationCycle>();
+    public DbSet<AccreditationCriterion> AccreditationCriteria => Set<AccreditationCriterion>();
+    public DbSet<AccreditationMetric> AccreditationMetrics => Set<AccreditationMetric>();
+    public DbSet<AccreditationEvidence> AccreditationEvidences => Set<AccreditationEvidence>();
+    public DbSet<AccreditationActivityLog> AccreditationActivityLogs => Set<AccreditationActivityLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

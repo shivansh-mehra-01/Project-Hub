@@ -48,19 +48,10 @@ public class CollegeTenant : BaseEntity
         set => AffiliatingUniversity = value;
     }
 
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? CampusAddress { get; set; } = "Airport Road, Gandhi Nagar, Bhopal, MP 462036";
-
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? CampusesCsv { get; set; } = "Main Campus (Bhopal), Extension Center";
-
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public bool NbaModuleEnabled { get; set; } = true;
-
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public bool GithubIntegrationEnabled { get; set; } = true;
-
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public bool JiraIntegrationEnabled { get; set; } = true;
     public DateTime? SubscriptionExpiresAtUtc { get; set; }
 
@@ -75,4 +66,7 @@ public class CollegeTenant : BaseEntity
     public ICollection<SemesterTerm> SemesterTerms { get; set; } = new List<SemesterTerm>();
     public ICollection<SubjectOffering> SubjectOfferings { get; set; } = new List<SubjectOffering>();
     public ICollection<StudentAcademicEnrollment> StudentEnrollments { get; set; } = new List<StudentAcademicEnrollment>();
+    public ICollection<CollegeCampus> Campuses { get; set; } = new List<CollegeCampus>();
+    public ICollection<HodAppointmentHistory> HodHistories { get; set; } = new List<HodAppointmentHistory>();
+    public ICollection<AccreditationCycle> AccreditationCycles { get; set; } = new List<AccreditationCycle>();
 }
