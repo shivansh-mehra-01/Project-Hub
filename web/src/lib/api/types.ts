@@ -208,7 +208,6 @@ export interface CollegeNotificationItemDto {
   timeAgo: string;
   createdAtUtc: string;
 }
-}
 
 // --- College DTOs ---
 export interface CollegeOverviewDto {
