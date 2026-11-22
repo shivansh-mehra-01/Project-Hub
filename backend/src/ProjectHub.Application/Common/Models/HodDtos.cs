@@ -11,12 +11,19 @@ public record HodDashboardDto
     public int ActiveBuildTeams { get; init; }
     public int AtRiskTeams { get; init; }
     public int ReadyForVivaTeams { get; init; }
+    public int CompletedTeams { get; init; }
+    public int DraftTeams { get; init; }
+    public int ProjectsWithoutGuide { get; init; }
+    public int PendingProposals { get; init; }
+    public int PendingGradeUnlocks { get; init; }
+    public int PendingExceptions { get; init; }
     public int TotalStudentsEnrolled { get; init; }
     public int AvailableMentors { get; init; }
-    public decimal NbaDirectAttainmentPct { get; init; }
-    public decimal NbaIndirectAttainmentPct { get; init; }
-    public decimal NbaBlendedCriterion3Pct { get; init; }
+    public decimal? NbaDirectAttainmentPct { get; init; }
+    public decimal? NbaIndirectAttainmentPct { get; init; }
+    public decimal? NbaBlendedCriterion3Pct { get; init; }
     public bool IsSarAttested { get; init; }
+    public DateTime? SarAttestedAtUtc { get; init; }
 }
 
 public record CreateDepartmentTrackRequest
@@ -73,6 +80,45 @@ public record ProjectProposalDto
     public string? SimilarProjectCode { get; init; }
 }
 
+public record HodProjectMemberDto
+{
+    public Guid UserId { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string EnrollmentNumber { get; init; } = string.Empty;
+    public bool IsTeamLead { get; init; }
+    public string? ModuleResponsibility { get; init; }
+}
+
+public record HodProjectDto
+{
+    public Guid Id { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string Title { get; init; } = string.Empty;
+    public string Abstract { get; init; } = string.Empty;
+    public string DomainTag { get; init; } = string.Empty;
+    public string SdgCode { get; init; } = string.Empty;
+    public ProjectStatus Status { get; init; }
+    public Guid AcademicTrackId { get; init; }
+    public string? AcademicTrackName { get; init; }
+    public Guid? GuideUserId { get; init; }
+    public string? GuideName { get; init; }
+    public int MemberCount { get; init; }
+    public bool IsRosterLocked { get; init; }
+    public int MissedLogStreak { get; init; }
+    public decimal? SimilarityScorePct { get; init; }
+    public string? RepoUrl { get; init; }
+    public List<HodProjectMemberDto> Members { get; init; } = new();
+    public decimal? LatestEvaluationScore { get; init; }
+    public string? LatestEvaluationCheckpoint { get; init; }
+    public DateTime CreatedAtUtc { get; init; }
+}
+
+public record HodAssignGuideRequest
+{
+    public Guid GuideUserId { get; init; }
+    public string? Reason { get; init; }
+}
+
 public record FacultyWorkloadDto
 {
     public Guid FacultyId { get; init; }
@@ -99,9 +145,9 @@ public record PoAttainmentScoreDto
 {
     public string PoCode { get; init; } = string.Empty;
     public string Title { get; init; } = string.Empty;
-    public decimal DirectAttainmentPct { get; init; }
-    public decimal IndirectAttainmentPct { get; init; }
-    public decimal BlendedAttainmentPct { get; init; } // 80% Direct + 20% Indirect
+    public decimal? DirectAttainmentPct { get; init; }
+    public decimal? IndirectAttainmentPct { get; init; }
+    public decimal? BlendedAttainmentPct { get; init; } // 80% Direct + 20% Indirect
     public bool TargetMet { get; init; }
 }
 
@@ -109,9 +155,9 @@ public record NbaAttainmentReportDto
 {
     public Guid DepartmentId { get; init; }
     public string AcademicYear { get; init; } = string.Empty;
-    public decimal OverallDirectPct { get; init; }
-    public decimal OverallIndirectPct { get; init; }
-    public decimal OverallBlendedPct { get; init; } // 80% direct + 20% indirect
+    public decimal? OverallDirectPct { get; init; }
+    public decimal? OverallIndirectPct { get; init; }
+    public decimal? OverallBlendedPct { get; init; } // 80% direct + 20% indirect
     public List<PoAttainmentScoreDto> PoBreakdown { get; init; } = new();
 }
 
@@ -129,4 +175,116 @@ public record ExceptionAuditLogDto
     public DateTime CreatedAtUtc { get; init; }
     public bool IsApproved { get; init; }
     public DateTime? ApprovedAtUtc { get; init; }
+}
+
+public record ReturnProposalRequest
+{
+    public string? Remarks { get; init; }
+    public string? Reason { get; init; }
+}
+
+public record RejectExceptionRequest
+{
+    public string? Remarks { get; init; }
+    public string? Reason { get; init; }
+}
+
+public record BulkApproveProposalsRequest
+{
+    public List<Guid> TeamIds { get; init; } = new();
+}
+
+public record BulkApproveProposalsResponse
+{
+    public bool Success { get; init; }
+    public int ApprovedCount { get; init; }
+    public List<Guid> TeamIds { get; init; } = new();
+    public string Message { get; init; } = string.Empty;
+}
+
+public record GradeUnlockRequestDto
+{
+    public Guid Id { get; init; }
+    public Guid EvaluationId { get; init; }
+    public Guid TeamId { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string TeamTitle { get; init; } = string.Empty;
+    public string RequestedByFacultyName { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+    public string CheckpointType { get; init; } = string.Empty;
+    public DateTime RequestedAtUtc { get; init; }
+}
+
+public record ApproveGradeUnlockRequest
+{
+    public string? Remarks { get; init; }
+}
+
+public record RejectGradeUnlockRequest
+{
+    public string? Remarks { get; init; }
+    public string? Reason { get; init; }
+}
+
+public record CreateDepartmentFacultyRequest
+{
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string Designation { get; init; } = "Assistant Professor";
+    public int MaxTeams { get; init; } = 4;
+}
+
+public record DepartmentStudentResultDto
+{
+    public string Usn { get; init; } = string.Empty;
+    public string StudentName { get; init; } = string.Empty;
+    public string TeamCode { get; init; } = string.Empty;
+    public string ProjectTitle { get; init; } = string.Empty;
+    public decimal GuideScore { get; init; }
+    public decimal MidTermScore { get; init; }
+    public decimal ExternalVivaScore { get; init; }
+    public decimal TotalMarks { get; init; }
+    public string LetterGrade { get; init; } = string.Empty;
+    public string NbaAttainmentStatus { get; init; } = string.Empty;
+}
+
+public record AttestSarResponse
+{
+    public bool Success { get; init; }
+    public DateTime AttestedAtUtc { get; init; }
+    public string AttestedByName { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+}
+
+public record HodReportsSummaryDto
+{
+    public Guid DepartmentId { get; init; }
+    public string DepartmentName { get; init; } = string.Empty;
+    public string DepartmentCode { get; init; } = string.Empty;
+    public int TotalProjects { get; init; }
+    public int CompletedProjects { get; init; }
+    public int ActiveProjects { get; init; }
+    public int AtRiskProjects { get; init; }
+    public int ProjectsWithoutGuide { get; init; }
+    public int TotalStudents { get; init; }
+    public int TotalFaculty { get; init; }
+    public decimal AverageFacultyLoad { get; init; }
+    public List<TrackReportStatDto> TrackStats { get; init; } = new();
+    public List<DomainDistributionDto> DomainDistribution { get; init; } = new();
+}
+
+public record TrackReportStatDto
+{
+    public Guid TrackId { get; init; }
+    public string TrackName { get; init; } = string.Empty;
+    public int ProjectCount { get; init; }
+    public int StudentCount { get; init; }
+    public int CompletedCount { get; init; }
+}
+
+public record DomainDistributionDto
+{
+    public string Domain { get; init; } = string.Empty;
+    public int Count { get; init; }
 }

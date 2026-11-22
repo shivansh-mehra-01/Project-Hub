@@ -57,7 +57,8 @@ export const getSidebarNav = (
   return sorted.map((route) => {
     let count: number | undefined;
     if (route.badgeKey && liveBadgeCounts[route.badgeKey] !== undefined) {
-      count = liveBadgeCounts[route.badgeKey];
+      const rawCount = liveBadgeCounts[route.badgeKey];
+      count = rawCount > 0 ? rawCount : undefined;
     }
 
     let itemSection: string = "MENU";

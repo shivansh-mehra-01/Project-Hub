@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CollabexLogo } from "@/components/brand/CollabexLogo";
-import { getAuthToken } from "@/lib/api";
+import { getAuthToken, hodApi } from "@/lib/api";
 import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
@@ -141,7 +141,29 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const activeSessionLabel =
     academicSessions?.find((s) => s.isActive)?.label || academicSessions?.[0]?.label || "2026–2027";
 
-  const pendingHODCount = teams.filter((t) => t.state === "PendingHOD").length || 1;
+  const [realHodPendingCount, setRealHodPendingCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (currentPersona.role === "HOD" && getAuthToken()) {
+      hodApi
+        .getDashboard()
+        .then((dash) => {
+          if (dash) {
+            const total =
+              (dash.pendingProposals || 0) +
+              (dash.pendingGradeUnlocks || 0) +
+              (dash.pendingExceptions || 0);
+            setRealHodPendingCount(total);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentPersona.role, pathname]);
+
+  const pendingHODCount =
+    realHodPendingCount !== null
+      ? realHodPendingCount
+      : teams.filter((t) => t.state === "PendingHOD").length;
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCampusMenu, setShowCampusMenu] = useState(false);
@@ -411,7 +433,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
           strokeWidth={isActive ? 2.2 : 1.75}
         />
         <span className="truncate tracking-[-0.01em]">{item.label}</span>
-        {item.count !== undefined && (
+        {item.count !== undefined && item.count > 0 && (
           <span
             className={cn(
               "ml-auto text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full",
@@ -475,7 +497,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
           strokeWidth={isActive ? 2.2 : 1.75}
         />
         <span className="truncate tracking-[-0.01em]">{item.label}</span>
-        {item.count !== undefined && (
+        {item.count !== undefined && item.count > 0 && (
           <span
             className={cn(
               "ml-auto text-[10px] font-mono font-bold px-2 py-0.5 rounded-full",
