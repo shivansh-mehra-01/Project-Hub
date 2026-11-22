@@ -7,14 +7,51 @@ public record CollegeOverviewDto
     public Guid CollegeId { get; init; }
     public string CollegeName { get; init; } = string.Empty;
     public string TenantCode { get; init; } = string.Empty;
+    public string AdminName { get; init; } = string.Empty;
+    public int TotalCourses { get; init; }
+    public int TotalBranches { get; init; }
     public int TotalDepartments { get; init; }
     public int TotalStudents { get; init; }
     public int TotalFaculty { get; init; }
     public int TotalProjects { get; init; }
     public decimal Criterion3AttainmentPct { get; init; }
     public bool StrictSsoEnforced { get; init; }
+    public string AffiliatedUniversity { get; init; } = string.Empty;
+    public string CollegeType { get; init; } = "Engineering";
+    public string EstablishedYear { get; init; } = "1952";
+    public string CampusesSummary { get; init; } = "1 Campus";
+    public string? CrestUrl { get; init; }
+    public string CurrentSemesterLabel { get; init; } = "Odd Semester";
+    public DateTime LastUpdatedUtc { get; init; } = DateTime.UtcNow;
     public AcademicSessionDto? ActiveSession { get; init; }
     public List<DepartmentTrackSummaryDto> DepartmentSummaries { get; init; } = new();
+    public List<OverviewCourseHierarchyDto> AcademicStructure { get; init; } = new();
+    public List<CollegeActivityItemDto> RecentActivities { get; init; } = new();
+    public List<CollegeNotificationItemDto> Notifications { get; init; } = new();
+}
+
+public record OverviewCourseHierarchyDto
+{
+    public Guid CourseId { get; init; }
+    public string Code { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public int BranchCount { get; init; }
+    public List<string> Branches { get; init; } = new();
+}
+
+public record CollegeActivityItemDto
+{
+    public string Title { get; init; } = string.Empty;
+    public string TimeAgo { get; init; } = string.Empty;
+    public DateTime OccurredAtUtc { get; init; }
+}
+
+public record CollegeNotificationItemDto
+{
+    public string Type { get; init; } = "info"; // success, info, warning
+    public string Message { get; init; } = string.Empty;
+    public string TimeAgo { get; init; } = string.Empty;
+    public DateTime CreatedAtUtc { get; init; }
 }
 
 public record DepartmentTrackSummaryDto
@@ -60,9 +97,96 @@ public record CreateDepartmentRequest
     public Guid? CourseProgramId { get; init; }
 }
 
+public record UpdateDepartmentRequest
+{
+    public string Name { get; init; } = string.Empty;
+    public string Code { get; init; } = string.Empty;
+    public int IntakeQuota { get; init; } = 120;
+    public Guid? CourseProgramId { get; init; }
+    public bool IsActive { get; init; } = true;
+}
+
 public record AppointHodRequest
 {
     public Guid HodUserId { get; init; }
+}
+
+public record CreateHodRequest
+{
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string EmployeeCode { get; init; } = string.Empty;
+    public Guid DepartmentId { get; init; }
+    public string? TemporaryPassword { get; init; }
+}
+
+public record HodManagementDto
+{
+    public Guid DepartmentId { get; init; }
+    public string DepartmentCode { get; init; } = string.Empty;
+    public string DepartmentName { get; init; } = string.Empty;
+    public Guid? CourseProgramId { get; init; }
+    public string? CourseProgramCode { get; init; }
+    public string? CourseProgramName { get; init; }
+    public Guid? HodUserId { get; init; }
+    public string? HodName { get; init; }
+    public string? HodEmail { get; init; }
+    public string? EmployeeCode { get; init; }
+    public bool IsActive { get; init; }
+    public DateTime? AppointedAtUtc { get; init; }
+}
+
+public record HodAssignmentHistoryDto
+{
+    public Guid Id { get; init; }
+    public Guid DepartmentId { get; init; }
+    public string DepartmentCode { get; init; } = string.Empty;
+    public string DepartmentName { get; init; } = string.Empty;
+    public Guid HodUserId { get; init; }
+    public string HodName { get; init; } = string.Empty;
+    public string HodEmail { get; init; } = string.Empty;
+    public string EmployeeCode { get; init; } = string.Empty;
+    public DateTime AppointedAtUtc { get; init; }
+    public string AppointedBy { get; init; } = "College Administrator";
+    public bool IsCurrent { get; init; }
+}
+
+public record CollegeStaffDto
+{
+    public Guid Id { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public UserRole Role { get; init; }
+    public Guid? DepartmentId { get; init; }
+    public string? DepartmentCode { get; init; }
+    public string? DepartmentName { get; init; }
+    public string? EmployeeCode { get; init; }
+    public bool IsActive { get; init; }
+    public bool IsActivated { get; init; }
+    public DateTime CreatedAtUtc { get; init; }
+    public DateTime? LastLoginAtUtc { get; init; }
+}
+
+public record CreateCollegeStaffRequest
+{
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public UserRole Role { get; init; } = UserRole.Faculty;
+    public Guid? DepartmentId { get; init; }
+    public string? EmployeeCode { get; init; }
+}
+
+public record UpdateCollegeStaffRequest
+{
+    public string? FullName { get; init; }
+    public UserRole? Role { get; init; }
+    public Guid? DepartmentId { get; init; }
+    public string? EmployeeCode { get; init; }
+}
+
+public record UpdateUserStatusRequest
+{
+    public bool IsActive { get; init; }
 }
 
 public record CollegeTrackDto
@@ -123,7 +247,17 @@ public record CollegeSettingsDto
     public bool EnforceStrictSso { get; init; }
     public string? CrestUrl { get; init; }
     public string? PrincipalSealUrl { get; init; }
+    public string? AffiliatedUniversity { get; init; }
+    public string? CampusAddress { get; init; }
+    public string? CampusesCsv { get; init; }
+    public bool NbaModuleEnabled { get; init; } = true;
+    public bool GithubIntegrationEnabled { get; init; } = true;
+    public bool JiraIntegrationEnabled { get; init; } = true;
+    public LicenseTier LicenseTier { get; init; } = LicenseTier.Pilot;
+    public int MaxStudentSeats { get; init; }
+    public int EnrolledStudentCount { get; init; }
     public int StorageQuotaGb { get; init; }
+    public double UsedStorageGb { get; init; }
 }
 
 public record UpdateCollegeSettingsRequest
@@ -132,11 +266,45 @@ public record UpdateCollegeSettingsRequest
     public bool? EnforceStrictSso { get; init; }
     public string? CrestUrl { get; init; }
     public string? PrincipalSealUrl { get; init; }
+    public string? AffiliatedUniversity { get; init; }
+    public string? CampusAddress { get; init; }
+    public string? CampusesCsv { get; init; }
+    public bool? NbaModuleEnabled { get; init; }
+    public bool? GithubIntegrationEnabled { get; init; }
+    public bool? JiraIntegrationEnabled { get; init; }
 }
 
 public record SignOffComplianceRequest
 {
     public string Remarks { get; init; } = string.Empty;
+}
+
+public record InstitutionalDossierDto
+{
+    public string CollegeName { get; init; } = string.Empty;
+    public string TenantCode { get; init; } = string.Empty;
+    public string SsoDomain { get; init; } = string.Empty;
+    public string AffiliatedUniversity { get; init; } = string.Empty;
+    public string AcademicYear { get; init; } = "2026–2027";
+    public int TotalDepartments { get; init; }
+    public int TotalStudents { get; init; }
+    public int TotalFaculty { get; init; }
+    public decimal OverallAttainmentPct { get; init; }
+    public bool IsAttested { get; init; }
+    public DateTime? AttestedAtUtc { get; init; }
+    public string? AttestedBy { get; init; }
+    public List<DepartmentAttainmentSummaryDto> Departments { get; init; } = new();
+}
+
+public record DepartmentAttainmentSummaryDto
+{
+    public string DepartmentCode { get; init; } = string.Empty;
+    public string DepartmentName { get; init; } = string.Empty;
+    public string? HodName { get; init; }
+    public int StudentCount { get; init; }
+    public decimal AttainmentPct { get; init; }
+    public bool IsSarAttested { get; init; }
+    public DateTime? SarAttestedAtUtc { get; init; }
 }
 
 // --- RGPV Catalog & Dynamic Academic Hierarchy DTOs ---
@@ -178,6 +346,14 @@ public record CreateCourseProgramRequest
     public AcademicProgramLevel Level { get; init; } = AcademicProgramLevel.UG;
     public int TotalSemesters { get; init; } = 8;
     public Guid? MasterProgramId { get; init; }
+}
+
+public record UpdateCourseProgramRequest
+{
+    public string Name { get; init; } = string.Empty;
+    public AcademicProgramLevel Level { get; init; } = AcademicProgramLevel.UG;
+    public int TotalSemesters { get; init; } = 8;
+    public bool IsActive { get; init; } = true;
 }
 
 public record AcademicSessionDto

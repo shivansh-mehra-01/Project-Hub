@@ -39,6 +39,12 @@ public class CollegeTenant : BaseEntity
     public bool EnforceStrictSso { get; set; } = true;
     public string? CrestUrl { get; set; }
     public string? PrincipalSealUrl { get; set; }
+    public string? AffiliatedUniversity { get; set; } = "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV)";
+    public string? CampusAddress { get; set; } = "Airport Road, Gandhi Nagar, Bhopal, MP 462036";
+    public string? CampusesCsv { get; set; } = "Main Campus (Bhopal), Extension Center";
+    public bool NbaModuleEnabled { get; set; } = true;
+    public bool GithubIntegrationEnabled { get; set; } = true;
+    public bool JiraIntegrationEnabled { get; set; } = true;
     public DateTime? SubscriptionExpiresAtUtc { get; set; }
 
     // Navigations

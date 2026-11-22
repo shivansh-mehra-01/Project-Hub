@@ -187,6 +187,7 @@ interface ProjectHubStoreContextType {
   importRgpvCatalog: (universityCode?: string, programCodes?: string[]) => Promise<{ programsImported: number; departmentsCreated: number; semesterTermsCreated: number; subjectOfferingsCreated: number; message: string }>;
   configureAcademicSession: (data: { academicYear: string; examCutoffDateUtc?: string; allowInterdisciplinaryTeams?: boolean }) => Promise<void>;
   addCourseProgram: (prog: Omit<CourseProgram, "id" | "collegeId">) => void;
+  removeCourseProgram: (codeOrId: string) => void;
   addSemesterTerm: (term: Omit<SemesterTerm, "id" | "collegeId">) => void;
   addSubjectOffering: (offering: Omit<SubjectOffering, "id" | "collegeId">) => void;
   resetToDefaults: () => void;
@@ -1066,6 +1067,24 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     showToast(`Program ${prog.code} added.`, "success");
   };
 
+  const removeCourseProgram = (codeOrId: string) => {
+    const progToRemove = coursePrograms.find(
+      (p) => p.id === codeOrId || p.code.toUpperCase() === codeOrId.toUpperCase()
+    );
+    setCoursePrograms((prev) =>
+      prev.filter((p) => p.id !== codeOrId && p.code.toUpperCase() !== codeOrId.toUpperCase())
+    );
+    // Also remove departments under this program
+    setDepartments((prev) =>
+      prev.filter((d) => {
+        if (d.courseProgramId === codeOrId) return false;
+        if (progToRemove && d.courseProgramId === progToRemove.id) return false;
+        if (progToRemove && d.courseProgramName?.toLowerCase() === progToRemove.name.toLowerCase()) return false;
+        return true;
+      })
+    );
+  };
+
   const addSemesterTerm = (term: Omit<SemesterTerm, "id" | "collegeId">) => {
     const newTerm: SemesterTerm = {
       id: `sem-${Date.now()}`,
@@ -1236,7 +1255,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
 
   const reassignHOD = (deptId: string, newHodName: string) => {
     setDepartments((prev) =>
-      prev.map((d) => (d.id === deptId ? { ...d, hodName: newHodName } : d))
+      prev.map((d) => (d.id === deptId || d.code.toUpperCase() === deptId.toUpperCase() ? { ...d, hodName: newHodName } : d))
     );
     showToast(`HOD reassigned to ${newHodName}.`, "info");
   };
@@ -1878,6 +1897,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         importRgpvCatalog,
         configureAcademicSession,
         addCourseProgram,
+        removeCourseProgram,
         addSemesterTerm,
         addSubjectOffering,
         resetToDefaults,

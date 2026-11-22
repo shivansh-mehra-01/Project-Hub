@@ -5,6 +5,7 @@ import {
   Compass,
   GraduationCap,
   User,
+  Users,
   Users2,
   FileCheck2,
   Sliders,
@@ -12,7 +13,13 @@ import {
   Layers,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   Briefcase,
+  FolderTree,
+  Award,
+  GitFork,
+  UserCheck,
+  CircleUser,
 } from "lucide-react";
 import { RoleType } from "@/mocks/store-types";
 
@@ -22,6 +29,7 @@ export type IconName =
   | "Compass"
   | "GraduationCap"
   | "User"
+  | "Users"
   | "Users2"
   | "FileCheck2"
   | "Sliders"
@@ -29,7 +37,13 @@ export type IconName =
   | "Layers"
   | "Shield"
   | "ShieldAlert"
-  | "Briefcase";
+  | "ShieldCheck"
+  | "Briefcase"
+  | "FolderTree"
+  | "Award"
+  | "GitFork"
+  | "UserCheck"
+  | "CircleUser";
 
 export interface RouteDefinition {
   path: string;
@@ -122,37 +136,148 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     sidebarOrder: 1,
   },
   {
-    path: "/college/departments",
-    label: "Departments & HODs",
+    path: "/college/courses",
+    label: "Courses & Branches",
     breadcrumbGroup: "Institutional Console",
-    breadcrumbTitle: "Academic Leadership & Quotas",
-    iconName: "Users2",
+    breadcrumbTitle: "Academic Degree Programs & Branches",
+    iconName: "GitFork",
     allowedRoles: ["CollegeAdmin"],
-    description: "Appointed departmental leadership, HOD assignments & student quotas",
+    description: "Degree programs (B.Tech, MBA, MCA) and branch hierarchy management",
     isSidebarItem: true,
     sidebarOrder: 2,
+  },
+  {
+    path: "/college/hods",
+    label: "HOD Leadership",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Department Leadership & Appointments",
+    iconName: "UserCheck",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Legacy route - redirects to courses & branches for direct HOD assignment",
+    isSidebarItem: false,
+  },
+  {
+    path: "/college/users",
+    label: "Staff Directory",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Institutional User Access & Staff Directory",
+    iconName: "Users",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Staff accounts, role assignments, activation & password resets",
+    isSidebarItem: true,
+    sidebarOrder: 3,
+  },
+  {
+    path: "/college/accreditation",
+    label: "Accreditation",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Accreditation Engine & Compliance Governance",
+    iconName: "ShieldCheck",
+    allowedRoles: ["CollegeAdmin"],
+    description: "NBA Tier-II SAR and NAAC Institutional Accreditation Engine",
+    isSidebarItem: true,
+    sidebarOrder: 4,
+  },
+  {
+    path: "/college/accreditation/frameworks",
+    label: "Frameworks & Cycles",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Frameworks & Assessment Cycles",
+    iconName: "ShieldCheck",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Manage accreditation frameworks, manuals and cycles",
+    isSidebarItem: false,
+  },
+  {
+    path: "/college/accreditation/programs",
+    label: "Program Mapping",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Academic Program Accreditation Mapping",
+    iconName: "GitFork",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Map academic branches and programs to NBA frameworks",
+    isSidebarItem: false,
+  },
+  {
+    path: "/college/accreditation/criteria",
+    label: "Criteria & Metrics",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Criteria, Sub-Criteria & Measurable Metrics",
+    iconName: "Layers",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Tree structure of accreditation criteria and attainment metrics",
+    isSidebarItem: false,
+  },
+  {
+    path: "/college/accreditation/evidence",
+    label: "Evidence & Documents",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Accreditation Document Vault",
+    iconName: "FileCheck2",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Central repository of institutional evidence and proof files",
+    isSidebarItem: false,
+  },
+  {
+    path: "/college/accreditation/reviews",
+    label: "Reviews & Approvals",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Accreditation Verification & Endorsements Queue",
+    iconName: "UserCheck",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Review workflow for submitted evidence and metrics",
+    isSidebarItem: false,
+  },
+  {
+    path: "/college/accreditation/reports",
+    label: "Reports & Export",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Official SAR / SSR Dossier Generation",
+    iconName: "Award",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Export self-assessment reports and Dean digital attestation",
+    isSidebarItem: false,
+  },
+  {
+    path: "/college/accreditation/activity",
+    label: "Activity Log",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Accreditation Audit Trail",
+    iconName: "ShieldAlert",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Immutable log of accreditation configuration and reviews",
+    isSidebarItem: false,
+  },
+  {
+    path: "/college/compliance",
+    label: "Accreditation",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Accreditation & Compliance",
+    iconName: "ShieldCheck",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Institutional accreditation sign-off matrix & SAR dossier exporter",
+    isSidebarItem: false,
   },
   {
     path: "/college/settings",
     label: "Campus Settings",
     breadcrumbGroup: "Institutional Console",
     breadcrumbTitle: "Institutional Configuration & Seal",
-    iconName: "Sliders",
+    iconName: "Building2",
     allowedRoles: ["CollegeAdmin"],
-    description: "Principal digital seal, SSO domain validation & CSV directory sync",
+    description: "Campus profile, digital seal, quotas, module toggles & SSO security",
     isSidebarItem: true,
-    sidebarOrder: 3,
+    sidebarOrder: 5,
   },
   {
-    path: "/college/compliance",
-    label: "Accreditation",
+    path: "/college/departments",
+    label: "Departments",
     breadcrumbGroup: "Institutional Console",
-    breadcrumbTitle: "NBA Criterion 2 & 3 Sign-Off",
-    iconName: "FileCheck2",
+    breadcrumbTitle: "Academic Leadership & Quotas",
+    iconName: "FolderTree",
     allowedRoles: ["CollegeAdmin"],
-    description: "Institutional accreditation sign-off matrix & SAR dossier exporter",
-    isSidebarItem: true,
-    sidebarOrder: 4,
+    description: "Legacy route - redirects to courses & branches",
+    isSidebarItem: false,
   },
 
   // =========================================================================
@@ -314,7 +439,7 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     label: "Profile",
     breadcrumbGroup: "Account & Profile",
     breadcrumbTitle: "Institutional Credentials & Security",
-    iconName: "User",
+    iconName: "CircleUser",
     allowedRoles: ["SuperAdmin", "CollegeAdmin", "HOD", "Faculty"],
     description: "University profile, institutional role authority & security credentials",
     isSidebarItem: true,
@@ -342,6 +467,7 @@ export const ICON_MAP: Record<IconName, React.ComponentType<{ className?: string
   Compass,
   GraduationCap,
   User,
+  Users,
   Users2,
   FileCheck2,
   Sliders,
@@ -349,7 +475,13 @@ export const ICON_MAP: Record<IconName, React.ComponentType<{ className?: string
   Layers,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   Briefcase,
+  FolderTree,
+  Award,
+  GitFork,
+  UserCheck,
+  CircleUser,
 };
 
 export const getRouteIcon = (name: IconName): React.ComponentType<{ className?: string; strokeWidth?: number }> => {

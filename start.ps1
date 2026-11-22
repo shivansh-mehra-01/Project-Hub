@@ -21,6 +21,21 @@ Write-Host ""
 # ------------------------------------------------------------------------------
 Write-Host "[1/5] Checking prerequisites & clearing stale ports..." -ForegroundColor Cyan
 
+# Auto-detect dotnet if not in current terminal session PATH
+if (-not (Get-Command "dotnet" -ErrorAction SilentlyContinue)) {
+    $commonDotnetPaths = @(
+        "$env:LOCALAPPDATA\Microsoft\dotnet",
+        "$env:ProgramFiles\dotnet"
+    )
+    foreach ($p in $commonDotnetPaths) {
+        if (Test-Path "$p\dotnet.exe") {
+            $env:PATH = "$p;$env:PATH"
+            $env:DOTNET_ROOT = $p
+            break
+        }
+    }
+}
+
 function Check-Command ($cmdName, $friendlyName) {
     if (-not (Get-Command $cmdName -ErrorAction SilentlyContinue)) {
         Write-Host "[-] Required CLI tool '$friendlyName' ($cmdName) is not found in PATH." -ForegroundColor Red
@@ -180,6 +195,10 @@ if (Test-Path "$RepoRoot/backend/src/ProjectHub.Api/ProjectHub.Api.csproj") {
 
 $backendScript = @"
 `$Host.UI.RawUI.WindowTitle = 'Collabex - .NET 10 Backend API (Port 5000)'
+if (Test-Path '$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe') {
+    `$env:PATH = '$env:LOCALAPPDATA\Microsoft\dotnet;' + `$env:PATH
+    `$env:DOTNET_ROOT = '$env:LOCALAPPDATA\Microsoft\dotnet'
+}
 Set-Location '$backendDir'
 Write-Host '==================================================' -ForegroundColor Cyan
 Write-Host '  Collabex .NET 10 Backend API' -ForegroundColor Green

@@ -1,6 +1,5 @@
-import { CollegeAdminView } from "@/features/college-admin/CollegeAdminView";
+import { AccreditationModule } from "@/features/college-admin/views/accreditation/AccreditationModule";
 
 export default function CollegeCompliancePage() {
-  return <CollegeAdminView initialTab="compliance" />;
+  return <AccreditationModule initialTab="overview" />;
 }
-

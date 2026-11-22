@@ -1,4 +1,5 @@
 export type UserRole = "SuperAdmin" | "CollegeAdmin" | "HOD" | "Faculty" | "Student";
+export type RoleType = UserRole | "TeamLead";
 
 export type AcademicProgramLevel = "UG" | "PG" | "Diploma" | "Research";
 export type ParticipationMode = "Team" | "Individual";
@@ -162,19 +163,53 @@ export interface PlatformAuditLogDto {
   occurredAtUtc: string;
 }
 
+export interface OverviewCourseHierarchyDto {
+  courseId: string;
+  code: string;
+  name: string;
+  branchCount: number;
+  branches: string[];
+}
+
+export interface CollegeActivityItemDto {
+  title: string;
+  timeAgo: string;
+  occurredAtUtc: string;
+}
+
+export interface CollegeNotificationItemDto {
+  type: "success" | "info" | "warning";
+  message: string;
+  timeAgo: string;
+  createdAtUtc: string;
+}
+
 // --- College DTOs ---
 export interface CollegeOverviewDto {
   collegeId: string;
   collegeName: string;
   tenantCode: string;
+  adminName?: string;
+  totalCourses?: number;
+  totalBranches?: number;
   totalDepartments: number;
   totalStudents: number;
   totalFaculty: number;
   totalProjects: number;
   criterion3AttainmentPct: number;
   strictSsoEnforced: boolean;
+  affiliatedUniversity?: string;
+  collegeType?: string;
+  establishedYear?: string;
+  campusesSummary?: string;
+  crestUrl?: string;
+  currentSemesterLabel?: string;
+  lastUpdatedUtc?: string;
   activeSession?: AcademicSessionDto;
   departmentSummaries?: DepartmentTrackSummaryDto[];
+  academicStructure?: OverviewCourseHierarchyDto[];
+  recentActivities?: CollegeActivityItemDto[];
+  notifications?: CollegeNotificationItemDto[];
 }
 
 export interface DepartmentTrackSummaryDto {
@@ -217,8 +252,87 @@ export interface CreateDepartmentRequest {
   courseProgramId?: string;
 }
 
+export interface UpdateDepartmentRequest {
+  name: string;
+  code: string;
+  intakeQuota?: number;
+  courseProgramId?: string;
+  isActive?: boolean;
+}
+
 export interface AppointHodRequest {
   hodUserId: string;
+}
+
+export interface CreateHodRequest {
+  fullName: string;
+  email: string;
+  employeeCode?: string;
+  departmentId: string;
+  temporaryPassword?: string;
+}
+
+export interface HodManagementDto {
+  departmentId: string;
+  departmentCode: string;
+  departmentName: string;
+  courseProgramId?: string;
+  courseProgramCode?: string;
+  courseProgramName?: string;
+  hodUserId?: string;
+  hodName?: string;
+  hodEmail?: string;
+  employeeCode?: string;
+  isActive: boolean;
+  appointedAtUtc?: string;
+}
+
+export interface HodAssignmentHistoryDto {
+  id: string;
+  departmentId: string;
+  departmentCode: string;
+  departmentName: string;
+  hodUserId: string;
+  hodName: string;
+  hodEmail: string;
+  employeeCode: string;
+  appointedAtUtc: string;
+  appointedBy: string;
+  isCurrent: boolean;
+}
+
+export interface CollegeStaffDto {
+  id: string;
+  fullName: string;
+  email: string;
+  role: RoleType;
+  departmentId?: string;
+  departmentCode?: string;
+  departmentName?: string;
+  employeeCode?: string;
+  isActive: boolean;
+  isActivated: boolean;
+  createdAtUtc: string;
+  lastLoginAtUtc?: string;
+}
+
+export interface CreateCollegeStaffRequest {
+  fullName: string;
+  email: string;
+  role: RoleType;
+  departmentId?: string;
+  employeeCode?: string;
+}
+
+export interface UpdateCollegeStaffRequest {
+  fullName?: string;
+  role?: RoleType;
+  departmentId?: string;
+  employeeCode?: string;
+}
+
+export interface UpdateUserStatusRequest {
+  isActive: boolean;
 }
 
 export interface CollegeTrackDto {
@@ -276,7 +390,17 @@ export interface CollegeSettingsDto {
   enforceStrictSso: boolean;
   crestUrl?: string;
   principalSealUrl?: string;
-  storageQuotaGb: number;
+  affiliatedUniversity?: string;
+  campusAddress?: string;
+  campusesCsv?: string;
+  nbaModuleEnabled?: boolean;
+  githubIntegrationEnabled?: boolean;
+  jiraIntegrationEnabled?: boolean;
+  licenseTier?: string;
+  maxStudentSeats?: number;
+  enrolledStudentCount?: number;
+  storageQuotaGb?: number;
+  usedStorageGb?: number;
 }
 
 export interface UpdateCollegeSettingsRequest {
@@ -284,10 +408,43 @@ export interface UpdateCollegeSettingsRequest {
   enforceStrictSso?: boolean;
   crestUrl?: string;
   principalSealUrl?: string;
+  affiliatedUniversity?: string;
+  campusAddress?: string;
+  campusesCsv?: string;
+  nbaModuleEnabled?: boolean;
+  githubIntegrationEnabled?: boolean;
+  jiraIntegrationEnabled?: boolean;
+  ssoDomain?: string;
 }
 
 export interface SignOffComplianceRequest {
   remarks: string;
+}
+
+export interface InstitutionalDossierDto {
+  collegeName: string;
+  tenantCode: string;
+  ssoDomain: string;
+  affiliatedUniversity: string;
+  academicYear: string;
+  totalDepartments: number;
+  totalStudents: number;
+  totalFaculty: number;
+  overallAttainmentPct: number;
+  isAttested: boolean;
+  attestedAtUtc?: string;
+  attestedBy?: string;
+  departments: DepartmentAttainmentSummaryDto[];
+}
+
+export interface DepartmentAttainmentSummaryDto {
+  departmentCode: string;
+  departmentName: string;
+  hodName?: string;
+  studentCount: number;
+  attainmentPct: number;
+  isSarAttested: boolean;
+  sarAttestedAtUtc?: string;
 }
 
 // --- HOD DTOs ---
@@ -679,6 +836,13 @@ export interface CreateCourseProgramRequest {
   level: AcademicProgramLevel;
   totalSemesters?: number;
   masterProgramId?: string;
+}
+
+export interface UpdateCourseProgramRequest {
+  name: string;
+  level: AcademicProgramLevel;
+  totalSemesters: number;
+  isActive?: boolean;
 }
 
 export interface AcademicSessionDto {
