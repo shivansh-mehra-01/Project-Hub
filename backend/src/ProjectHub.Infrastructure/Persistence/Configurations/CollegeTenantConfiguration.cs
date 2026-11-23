@@ -28,6 +28,42 @@ public class CollegeTenantConfiguration : IEntityTypeConfiguration<CollegeTenant
             .HasConversion<string>()
             .HasMaxLength(50);
 
+        builder.Property(c => c.AffiliatingUniversity)
+            .HasMaxLength(150)
+            .HasDefaultValue("RGPV");
+
+        builder.Property(c => c.CampusAddress)
+            .HasMaxLength(500)
+            .HasDefaultValue("Airport Road, Gandhi Nagar, Bhopal, MP 462036");
+
+        builder.Property(c => c.CampusesCsv)
+            .HasMaxLength(500)
+            .HasDefaultValue("Main Campus (Bhopal), Extension Center");
+
+        builder.Property(c => c.NbaModuleEnabled)
+            .HasDefaultValue(true);
+
+        builder.Property(c => c.GithubIntegrationEnabled)
+            .HasDefaultValue(true);
+
+        builder.Property(c => c.JiraIntegrationEnabled)
+            .HasDefaultValue(true);
+
+        builder.HasMany(c => c.Campuses)
+            .WithOne(cp => cp.College)
+            .HasForeignKey(cp => cp.CollegeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(c => c.HodHistories)
+            .WithOne(h => h.College)
+            .HasForeignKey(h => h.CollegeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(c => c.AccreditationCycles)
+            .WithOne(ac => ac.College)
+            .HasForeignKey(ac => ac.CollegeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasIndex(c => c.TenantCode)
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");

@@ -1,6 +1,5 @@
-import { SuperAdminView } from "@/features/platform-admin/SuperAdminView";
+import { redirect } from "next/navigation";
 
 export default function AdminPage() {
-  return <SuperAdminView />;
+  redirect("/platform/dashboard");
 }
-

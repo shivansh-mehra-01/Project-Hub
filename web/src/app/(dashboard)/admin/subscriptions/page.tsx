@@ -1,6 +1,5 @@
-import { SuperAdminView } from "@/features/platform-admin/SuperAdminView";
+import { redirect } from "next/navigation";
 
 export default function AdminSubscriptionsPage() {
-  return <SuperAdminView initialTab="subscriptions" />;
+  redirect("/platform/business/subscriptions");
 }
-

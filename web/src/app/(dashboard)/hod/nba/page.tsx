@@ -1,6 +1,5 @@
-import { HODView } from "@/features/hod/HODView";
+import { redirect } from "next/navigation";
 
 export default function HODNbaPage() {
-  return <HODView initialTab="nba" />;
+  redirect("/hod/quality");
 }
-

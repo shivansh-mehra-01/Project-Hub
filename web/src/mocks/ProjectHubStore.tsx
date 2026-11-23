@@ -184,7 +184,7 @@ interface ProjectHubStoreContextType {
   submitExceptionOverride: (override: Omit<ExceptionAuditLog, "id" | "requestedAt" | "status">) => void;
   reviewExceptionOverride: (overrideId: string, decision: "Approved" | "Rejected", remarks?: string) => void;
   submitCourseExitSurvey: (survey: Omit<CourseExitSurvey, "id" | "submittedAt">) => void;
-  importRgpvCatalog: (universityCode?: string, programCodes?: string[]) => Promise<{ programsImported: number; departmentsCreated: number; semesterTermsCreated: number; subjectOfferingsCreated: number; message: string }>;
+  importRgpvCatalog: (universityCode?: string, programCodes?: string[], branchCodes?: string[]) => Promise<{ programsImported: number; departmentsCreated: number; semesterTermsCreated: number; subjectOfferingsCreated: number; message: string }>;
   configureAcademicSession: (data: { academicYear: string; examCutoffDateUtc?: string; allowInterdisciplinaryTeams?: boolean }) => Promise<void>;
   addCourseProgram: (prog: Omit<CourseProgram, "id" | "collegeId">) => void;
   removeCourseProgram: (codeOrId: string) => void;
@@ -300,6 +300,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
                 strictSsoEnforced: t.enforceStrictSso,
                 renewalDate: t.subscriptionExpiresAtUtc?.split("T")[0] || "2027-06-30",
                 allocatedSeats: t.maxStudentSeats,
+                affiliatingUniversity: t.affiliatingUniversity || "RGPV",
                 principalEmail: t.principalEmail || (t.adminEmails && t.adminEmails[0]) || `principal@${t.ssoDomain}`,
                 adminEmails: t.adminEmails && t.adminEmails.length > 0 ? t.adminEmails : [`principal@${t.ssoDomain}`],
               }))
@@ -1131,7 +1132,8 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
 
   const importRgpvCatalog = async (
     universityCode: string = "RGPV",
-    programCodes?: string[]
+    programCodes?: string[],
+    branchCodes?: string[]
   ) => {
     if (getAuthToken()) {
       try {
@@ -1169,11 +1171,19 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
       { code: "CSBS", name: "Computer Science & Business Systems" },
     ];
 
-    setCoursePrograms(defaultPrograms);
+    const activePrograms = (programCodes && programCodes.length > 0)
+      ? defaultPrograms.filter((p) => programCodes.includes(p.code))
+      : defaultPrograms;
+
+    const filteredBranches = (branchCodes && branchCodes.length > 0)
+      ? rgpvBranches.filter((b) => branchCodes.includes(b.code))
+      : rgpvBranches;
+
+    setCoursePrograms(activePrograms);
 
     setDepartments((prev) => {
       const existingCodes = new Set(prev.map((d) => d.code));
-      const newlyAdded: Department[] = rgpvBranches
+      const newlyAdded: Department[] = filteredBranches
         .filter((b) => !existingCodes.has(b.code))
         .map((b) => ({
           id: `dept-${b.code.toLowerCase()}-${Date.now()}`,
@@ -1190,16 +1200,16 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
       return [...prev, ...newlyAdded];
     });
 
-    const msg = `Successfully loaded RGPV Master Catalog (4 Programs, 12 Core/Emerging Branches, CBCS/AICTE-Flex).`;
+    const msg = `Successfully loaded RGPV Master Catalog (${activePrograms.length} Programs, ${filteredBranches.length} Selected Branches, CBCS/AICTE-Flex).`;
     showToast(msg, "success");
 
     return {
       universityCode,
       universityName: "Rajiv Gandhi Proudyogiki Vishwavidyalaya",
-      programsImported: 4,
-      departmentsCreated: 8,
-      semesterTermsCreated: 16,
-      subjectOfferingsCreated: 24,
+      programsImported: activePrograms.length,
+      departmentsCreated: filteredBranches.length,
+      semesterTermsCreated: 8,
+      subjectOfferingsCreated: 3,
       message: msg,
     };
   };
@@ -1337,6 +1347,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
           enforceStrictSso: tenantData.strictSsoEnforced ?? true,
           principalName: tenantData.principalName || "College Principal",
           principalEmail: adminEmail,
+          affiliatingUniversity: tenantData.affiliatingUniversity || "RGPV",
         });
         if (res.tenant?.id) newTenantId = res.tenant.id;
         if (res.adminEmail) adminEmail = res.adminEmail;

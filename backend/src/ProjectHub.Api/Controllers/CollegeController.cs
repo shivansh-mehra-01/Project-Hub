@@ -26,6 +26,20 @@ public class CollegeController : ControllerBase
         _tenantContext = tenantContext;
     }
 
+    private async Task<(Guid? UserId, string Email, string FullName)> ResolveCallerIdentityAsync()
+    {
+        var userId = _tenantContext.UserId;
+        if (userId.HasValue)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+            if (user != null)
+            {
+                return (user.Id, user.Email, user.FullName);
+            }
+        }
+        return (null, "principal@college.ac.in", "College Administrator");
+    }
+
     [HttpGet("overview")]
     public async Task<ActionResult<CollegeOverviewDto>> GetOverview()
     {
@@ -84,10 +98,30 @@ public class CollegeController : ControllerBase
             .Where(t => t.DepartmentId.HasValue && t.IsActive && !t.IsDeleted)
             .ToListAsync();
 
+        var allCollegeUsers = await _context.Users
+            .Where(u => u.CollegeId == collegeId.Value && !u.IsDeleted)
+            .ToListAsync();
+
+        var vivaEvaluations = await _context.VivaEvaluations
+            .Include(v => v.ProjectTeam)
+            .Where(v => v.CollegeId == collegeId.Value && !v.IsDeleted)
+            .ToListAsync();
+
+        var overallAttainment = vivaEvaluations.Any()
+            ? Math.Round(vivaEvaluations.Average(e => e.SharedTotalScore > 0 ? (e.SharedTotalScore / 50m * 100m) : 0m), 1)
+            : 0m;
+
         var deptSummaries = depts.Select(d =>
         {
             var tracks = activeTracks.Where(t => t.DepartmentId == d.Id).ToList();
             var count = tracks.Count;
+            var deptFaculty = allCollegeUsers.Count(u => u.DepartmentId == d.Id && (u.Role == UserRole.Faculty || u.Role == UserRole.HOD));
+            var deptStudents = allCollegeUsers.Count(u => u.DepartmentId == d.Id && u.Role == UserRole.Student);
+            var deptEvals = vivaEvaluations.Where(v => v.ProjectTeam != null && v.ProjectTeam.DepartmentId == d.Id).ToList();
+            var deptAttainment = deptEvals.Any()
+                ? Math.Round(deptEvals.Average(e => e.SharedTotalScore > 0 ? (e.SharedTotalScore / 50m * 100m) : 0m), 1)
+                : 0m;
+
             return new DepartmentTrackSummaryDto
             {
                 DepartmentId = d.Id,
@@ -95,28 +129,19 @@ public class CollegeController : ControllerBase
                 DepartmentName = d.Name,
                 HodName = d.HodUser != null ? d.HodUser.FullName : null,
                 IntakeQuota = d.IntakeQuota > 0 ? d.IntakeQuota : 120,
-                StudentCount = d.IntakeQuota > 0 ? d.IntakeQuota : 120,
-                FacultyCount = 12,
-                Criterion3AttainmentPct = 82.5m,
+                StudentCount = deptStudents > 0 ? deptStudents : d.IntakeQuota,
+                FacultyCount = deptFaculty,
+                Criterion3AttainmentPct = deptAttainment,
                 TrackStatus = count > 0 ? "Active" : "Awaiting HOD Launch",
                 ActiveTrackCount = count,
                 ActiveTrackNames = tracks.Select(t => t.Name).ToList()
             };
         }).ToList();
 
-        var currentUserId = _tenantContext.UserId;
-        var currentUser = currentUserId.HasValue
-            ? await _context.Users.FirstOrDefaultAsync(u => u.Id == currentUserId.Value)
-            : null;
-        var adminName = currentUser?.FullName ?? "Dr. Keshvendra Choudhary";
+        var (currentUserId, _, adminName) = await ResolveCallerIdentityAsync();
 
-        var studentCountInDb = await _context.Users
-            .CountAsync(u => u.CollegeId == collegeId.Value && u.Role == UserRole.Student && !u.IsDeleted);
-        var totalEnrolledIntake = studentCountInDb > 20 ? studentCountInDb : deptSummaries.Sum(s => s.IntakeQuota > 0 ? s.IntakeQuota : 120);
-
-        var facultyCount = await _context.Users
-            .CountAsync(u => u.CollegeId == collegeId.Value && (u.Role == UserRole.Faculty || u.Role == UserRole.HOD) && !u.IsDeleted);
-        var totalFaculty = facultyCount > 5 ? facultyCount : deptSummaries.Count * 12;
+        var totalEnrolledIntake = allCollegeUsers.Count(u => u.Role == UserRole.Student);
+        var totalFaculty = allCollegeUsers.Count(u => u.Role == UserRole.Faculty || u.Role == UserRole.HOD);
 
         var projectCount = await _context.ProjectTeams.CountAsync(t => !t.IsDeleted);
 
@@ -241,9 +266,9 @@ public class CollegeController : ControllerBase
             TotalBranches = depts.Count,
             TotalDepartments = depts.Count,
             TotalStudents = totalEnrolledIntake,
-            TotalFaculty = facultyCount > 0 ? facultyCount : 48,
+            TotalFaculty = totalFaculty,
             TotalProjects = projectCount,
-            Criterion3AttainmentPct = 91.4m,
+            Criterion3AttainmentPct = overallAttainment,
             StrictSsoEnforced = college.EnforceStrictSso,
             AffiliatedUniversity = !string.IsNullOrWhiteSpace(college.AffiliatedUniversity)
                 ? college.AffiliatedUniversity
@@ -1174,11 +1199,37 @@ public class CollegeController : ControllerBase
 
         department.HodUserId = faculty.Id;
 
+        var (callerId, callerEmail, callerName) = await ResolveCallerIdentityAsync();
+
+        // Relieve previous active appointment
+        var pastAppts = await _context.HodAppointmentHistories
+            .Where(h => h.DepartmentId == department.Id && h.CollegeId == collegeId && h.IsCurrent && !h.IsDeleted)
+            .ToListAsync();
+        foreach (var past in pastAppts)
+        {
+            past.IsCurrent = false;
+            past.RelievedAtUtc = DateTime.UtcNow;
+        }
+
+        // Record appointment in history
+        var newAppt = new HodAppointmentHistory
+        {
+            CollegeId = collegeId,
+            DepartmentId = department.Id,
+            HodUserId = faculty.Id,
+            AppointedByUserId = callerId,
+            AppointedByName = callerName,
+            AppointedAtUtc = DateTime.UtcNow,
+            IsCurrent = true,
+            Remarks = $"Appointed by {callerName}"
+        };
+        await _context.HodAppointmentHistories.AddAsync(newAppt);
+
         // Audit log appointment
         var audit = new PlatformAuditLog
         {
-            ActorUserId = _tenantContext.UserId,
-            ActorEmail = "principal@sistec.ac.in",
+            ActorUserId = callerId,
+            ActorEmail = callerEmail,
             Action = "APPOINT_HOD",
             TargetTenantId = collegeId,
             TargetEntity = "Department",
@@ -1241,7 +1292,9 @@ public class CollegeController : ControllerBase
             .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
 
         UserAccount hod;
-        var defaultPassword = string.IsNullOrWhiteSpace(request.TemporaryPassword) ? "Pass@1234" : request.TemporaryPassword;
+        var defaultPassword = string.IsNullOrWhiteSpace(request.TemporaryPassword) 
+            ? $"Collabex!{System.Security.Cryptography.RandomNumberGenerator.GetHexString(3).ToUpper()}@{System.Security.Cryptography.RandomNumberGenerator.GetInt32(100, 999)}"
+            : request.TemporaryPassword;
         var passwordHash = PasswordHelper.HashPassword(defaultPassword);
 
         if (existingUser != null)
@@ -1255,6 +1308,7 @@ public class CollegeController : ControllerBase
             if (string.IsNullOrWhiteSpace(hod.PasswordHash))
             {
                 hod.PasswordHash = passwordHash;
+                hod.PasswordChangedAtUtc = null;
             }
         }
         else
@@ -1268,6 +1322,7 @@ public class CollegeController : ControllerBase
                 EnrollmentOrEmployeeCode = string.IsNullOrWhiteSpace(request.EmployeeCode) ? $"HOD-{dept.Code}" : request.EmployeeCode.Trim(),
                 Role = UserRole.HOD,
                 PasswordHash = passwordHash,
+                PasswordChangedAtUtc = null,
                 IsActivated = true,
                 IsActive = true
             };
@@ -1276,11 +1331,36 @@ public class CollegeController : ControllerBase
 
         dept.HodUserId = hod.Id;
 
+        var (callerId, callerEmail, callerName) = await ResolveCallerIdentityAsync();
+
+        // Relieve previous active appointment
+        var pastAppts = await _context.HodAppointmentHistories
+            .Where(h => h.DepartmentId == dept.Id && h.CollegeId == collegeId && h.IsCurrent && !h.IsDeleted)
+            .ToListAsync();
+        foreach (var past in pastAppts)
+        {
+            past.IsCurrent = false;
+            past.RelievedAtUtc = DateTime.UtcNow;
+        }
+
+        var newAppt = new HodAppointmentHistory
+        {
+            CollegeId = collegeId,
+            DepartmentId = dept.Id,
+            HodUserId = hod.Id,
+            AppointedByUserId = callerId,
+            AppointedByName = callerName,
+            AppointedAtUtc = DateTime.UtcNow,
+            IsCurrent = true,
+            Remarks = $"Direct appointment by {callerName}"
+        };
+        await _context.HodAppointmentHistories.AddAsync(newAppt);
+
         // Log appointment audit
         var audit = new PlatformAuditLog
         {
-            ActorUserId = _tenantContext.UserId,
-            ActorEmail = "principal@sistec.ac.in",
+            ActorUserId = callerId,
+            ActorEmail = callerEmail,
             Action = "APPOINT_HOD",
             TargetTenantId = collegeId,
             TargetEntity = "Department",
@@ -1313,30 +1393,58 @@ public class CollegeController : ControllerBase
     {
         var collegeId = _tenantContext.CollegeId!.Value;
 
-        var currentDepts = await _context.Departments
-            .Include(d => d.HodUser)
-            .Where(d => d.CollegeId == collegeId && !d.IsDeleted)
+        var historyEntities = await _context.HodAppointmentHistories
+            .Include(h => h.Department)
+            .Include(h => h.HodUser)
+            .Where(h => h.CollegeId == collegeId && !h.IsDeleted)
+            .OrderByDescending(h => h.AppointedAtUtc)
             .ToListAsync();
 
-        var history = new List<HodAssignmentHistoryDto>();
-
-        foreach (var d in currentDepts.Where(d => d.HodUser != null))
+        if (!historyEntities.Any())
         {
-            history.Add(new HodAssignmentHistoryDto
+            // Baseline from current departments
+            var currentDepts = await _context.Departments
+                .Include(d => d.HodUser)
+                .Where(d => d.CollegeId == collegeId && d.HodUserId.HasValue && !d.IsDeleted)
+                .ToListAsync();
+
+            var (_, _, callerName) = await ResolveCallerIdentityAsync();
+
+            foreach (var d in currentDepts.Where(d => d.HodUser != null))
             {
-                Id = Guid.NewGuid(),
-                DepartmentId = d.Id,
-                DepartmentCode = d.Code,
-                DepartmentName = d.Name,
-                HodUserId = d.HodUser!.Id,
-                HodName = d.HodUser.FullName,
-                HodEmail = d.HodUser.Email,
-                EmployeeCode = d.HodUser.EnrollmentOrEmployeeCode ?? "N/A",
-                AppointedAtUtc = d.HodUser.CreatedAtUtc,
-                AppointedBy = "Dr. Keshvendra Choudhary (Principal)",
-                IsCurrent = true
-            });
+                var entry = new HodAppointmentHistory
+                {
+                    CollegeId = collegeId,
+                    DepartmentId = d.Id,
+                    HodUserId = d.HodUser!.Id,
+                    AppointedByName = callerName,
+                    AppointedAtUtc = d.HodUser.CreatedAtUtc,
+                    IsCurrent = true,
+                    Remarks = "Initial Department HOD Assignment"
+                };
+                await _context.HodAppointmentHistories.AddAsync(entry);
+                historyEntities.Add(entry);
+            }
+            if (historyEntities.Any())
+            {
+                await _context.SaveChangesAsync();
+            }
         }
+
+        var history = historyEntities.Select(h => new HodAssignmentHistoryDto
+        {
+            Id = h.Id,
+            DepartmentId = h.DepartmentId,
+            DepartmentCode = h.Department?.Code ?? "N/A",
+            DepartmentName = h.Department?.Name ?? "Department",
+            HodUserId = h.HodUserId,
+            HodName = h.HodUser?.FullName ?? "Head of Department",
+            HodEmail = h.HodUser?.Email ?? "hod@college.ac.in",
+            EmployeeCode = h.HodUser?.EnrollmentOrEmployeeCode ?? "N/A",
+            AppointedAtUtc = h.AppointedAtUtc,
+            AppointedBy = h.AppointedByName,
+            IsCurrent = h.IsCurrent
+        }).ToList();
 
         return Ok(history);
     }
@@ -1407,7 +1515,7 @@ public class CollegeController : ControllerBase
         var exists = await _context.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == email && !u.IsDeleted);
         if (exists) return Conflict(new { message = $"User with email '{email}' already exists." });
 
-        var defaultPassword = "Pass@1234";
+        var tempPassword = $"Collabex!{System.Security.Cryptography.RandomNumberGenerator.GetHexString(3).ToUpper()}@{System.Security.Cryptography.RandomNumberGenerator.GetInt32(100, 999)}";
         var user = new UserAccount
         {
             CollegeId = collegeId,
@@ -1416,7 +1524,8 @@ public class CollegeController : ControllerBase
             Email = email,
             Role = request.Role,
             EnrollmentOrEmployeeCode = string.IsNullOrWhiteSpace(request.EmployeeCode) ? $"STAFF-{Guid.NewGuid().ToString("N")[..6].ToUpper()}" : request.EmployeeCode.Trim(),
-            PasswordHash = PasswordHelper.HashPassword(defaultPassword),
+            PasswordHash = PasswordHelper.HashPassword(tempPassword),
+            PasswordChangedAtUtc = null,
             IsActive = true,
             IsActivated = true
         };
@@ -1438,6 +1547,7 @@ public class CollegeController : ControllerBase
             DepartmentCode = dept?.Code,
             DepartmentName = dept?.Name,
             EmployeeCode = user.EnrollmentOrEmployeeCode,
+            TemporaryPassword = tempPassword,
             IsActive = user.IsActive,
             IsActivated = user.IsActivated,
             CreatedAtUtc = user.CreatedAtUtc,
@@ -1464,11 +1574,18 @@ public class CollegeController : ControllerBase
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id && u.CollegeId == collegeId && !u.IsDeleted);
         if (user == null) return NotFound(new { message = "User not found." });
 
-        user.PasswordHash = PasswordHelper.HashPassword("Pass@1234");
+        var tempPassword = $"Collabex!{System.Security.Cryptography.RandomNumberGenerator.GetHexString(3).ToUpper()}@{System.Security.Cryptography.RandomNumberGenerator.GetInt32(100, 999)}";
+        user.PasswordHash = PasswordHelper.HashPassword(tempPassword);
+        user.PasswordChangedAtUtc = null;
         user.IsActivated = true;
         await _context.SaveChangesAsync();
 
-        return Ok(new { success = true, message = "Password reset to Pass@1234 successfully." });
+        return Ok(new
+        {
+            success = true,
+            oneTimePassword = tempPassword,
+            message = "Secure temporary one-time credential generated. Communicate this credential securely to the staff member for immediate password change."
+        });
     }
 
     [HttpPut("users/{id}")]
@@ -1636,6 +1753,15 @@ public class CollegeController : ControllerBase
 
         var studentCount = await _context.Users.CountAsync(u => u.CollegeId == collegeId && u.Role == UserRole.Student && !u.IsDeleted);
 
+        var campuses = await _context.CollegeCampuses
+            .Where(c => c.CollegeId == collegeId && !c.IsDeleted)
+            .OrderByDescending(c => c.IsMainCampus)
+            .ToListAsync();
+
+        var campusesCsv = campuses.Any()
+            ? string.Join(", ", campuses.Select(c => c.Name))
+            : college.CampusesCsv ?? "Main Campus (Bhopal)";
+
         return Ok(new CollegeSettingsDto
         {
             Id = college.Id,
@@ -1647,13 +1773,13 @@ public class CollegeController : ControllerBase
             PrincipalSealUrl = college.PrincipalSealUrl,
             AffiliatedUniversity = college.AffiliatedUniversity ?? "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV)",
             CampusAddress = college.CampusAddress ?? "Airport Road, Gandhi Nagar, Bhopal, MP 462036",
-            CampusesCsv = college.CampusesCsv ?? "Main Campus (Bhopal), Extension Center",
+            CampusesCsv = campusesCsv,
             NbaModuleEnabled = college.NbaModuleEnabled,
             GithubIntegrationEnabled = college.GithubIntegrationEnabled,
             JiraIntegrationEnabled = college.JiraIntegrationEnabled,
             LicenseTier = college.LicenseTier,
             MaxStudentSeats = college.MaxStudentSeats,
-            EnrolledStudentCount = studentCount > 0 ? studentCount : 380,
+            EnrolledStudentCount = studentCount,
             StorageQuotaGb = college.StorageQuotaGb,
             UsedStorageGb = 14.8
         });
@@ -1675,7 +1801,47 @@ public class CollegeController : ControllerBase
         if (request.PrincipalSealUrl != null) college.PrincipalSealUrl = request.PrincipalSealUrl;
         if (request.AffiliatedUniversity != null) college.AffiliatedUniversity = request.AffiliatedUniversity.Trim();
         if (request.CampusAddress != null) college.CampusAddress = request.CampusAddress.Trim();
-        if (request.CampusesCsv != null) college.CampusesCsv = request.CampusesCsv.Trim();
+        if (request.CampusesCsv != null)
+        {
+            college.CampusesCsv = request.CampusesCsv.Trim();
+
+            // Sync normalized CollegeCampuses collection
+            var campusNames = college.CampusesCsv
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct()
+                .ToList();
+
+            var existingCampuses = await _context.CollegeCampuses
+                .Where(c => c.CollegeId == collegeId && !c.IsDeleted)
+                .ToListAsync();
+
+            // Soft-delete removed campuses
+            foreach (var ec in existingCampuses)
+            {
+                if (!campusNames.Contains(ec.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    ec.IsDeleted = true;
+                    ec.DeletedAtUtc = DateTime.UtcNow;
+                }
+            }
+
+            // Add new campuses
+            for (int i = 0; i < campusNames.Count; i++)
+            {
+                var name = campusNames[i];
+                var existing = existingCampuses.FirstOrDefault(ec => !ec.IsDeleted && string.Equals(ec.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (existing == null)
+                {
+                    await _context.CollegeCampuses.AddAsync(new CollegeCampus
+                    {
+                        CollegeId = collegeId,
+                        Name = name,
+                        IsMainCampus = i == 0,
+                        Address = i == 0 ? college.CampusAddress : null
+                    });
+                }
+            }
+        }
         if (request.NbaModuleEnabled.HasValue) college.NbaModuleEnabled = request.NbaModuleEnabled.Value;
         if (request.GithubIntegrationEnabled.HasValue) college.GithubIntegrationEnabled = request.GithubIntegrationEnabled.Value;
         if (request.JiraIntegrationEnabled.HasValue) college.JiraIntegrationEnabled = request.JiraIntegrationEnabled.Value;
@@ -1687,7 +1853,10 @@ public class CollegeController : ControllerBase
     [HttpPost("compliance/sign-off")]
     public async Task<IActionResult> SignOffCompliance([FromBody] SignOffComplianceRequest request)
     {
-        var departments = await _context.Departments.Where(d => !d.IsDeleted).ToListAsync();
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var departments = await _context.Departments
+            .Where(d => d.CollegeId == collegeId && !d.IsDeleted)
+            .ToListAsync();
         var utcNow = DateTime.UtcNow;
         var userId = _tenantContext.UserId;
 
@@ -1718,19 +1887,43 @@ public class CollegeController : ControllerBase
             .OrderBy(d => d.Code)
             .ToListAsync();
 
-        var deptSummaries = depts.Select(d => new DepartmentAttainmentSummaryDto
+        var allUsers = await _context.Users
+            .Where(u => u.CollegeId == collegeId && !u.IsDeleted)
+            .ToListAsync();
+
+        var vivaEvaluations = await _context.VivaEvaluations
+            .Include(v => v.ProjectTeam)
+            .Where(v => v.CollegeId == collegeId && !v.IsDeleted)
+            .ToListAsync();
+
+        var deptSummaries = depts.Select(d =>
         {
-            DepartmentCode = d.Code,
-            DepartmentName = d.Name,
-            HodName = d.HodUser?.FullName,
-            StudentCount = d.IntakeQuota,
-            AttainmentPct = 84.5m,
-            IsSarAttested = d.IsSarAttested,
-            SarAttestedAtUtc = d.SarAttestedAtUtc
+            var deptEvals = vivaEvaluations.Where(v => v.ProjectTeam != null && v.ProjectTeam.DepartmentId == d.Id).ToList();
+            var deptAttainment = deptEvals.Any()
+                ? Math.Round(deptEvals.Average(e => e.SharedTotalScore > 0 ? (e.SharedTotalScore / 50m * 100m) : 0m), 1)
+                : 0m;
+            var deptStudents = allUsers.Count(u => u.DepartmentId == d.Id && u.Role == UserRole.Student);
+
+            return new DepartmentAttainmentSummaryDto
+            {
+                DepartmentCode = d.Code,
+                DepartmentName = d.Name,
+                HodName = d.HodUser?.FullName,
+                StudentCount = deptStudents > 0 ? deptStudents : d.IntakeQuota,
+                AttainmentPct = deptAttainment,
+                IsSarAttested = d.IsSarAttested,
+                SarAttestedAtUtc = d.SarAttestedAtUtc
+            };
         }).ToList();
 
-        var totalStudents = deptSummaries.Sum(d => d.StudentCount);
+        var totalStudents = allUsers.Count(u => u.Role == UserRole.Student);
+        var totalFaculty = allUsers.Count(u => u.Role == UserRole.Faculty || u.Role == UserRole.HOD);
         var attestedCount = deptSummaries.Count(d => d.IsSarAttested);
+        var overallAttainment = vivaEvaluations.Any()
+            ? Math.Round(vivaEvaluations.Average(e => e.SharedTotalScore > 0 ? (e.SharedTotalScore / 50m * 100m) : 0m), 1)
+            : 0m;
+
+        var (_, _, callerName) = await ResolveCallerIdentityAsync();
 
         return Ok(new InstitutionalDossierDto
         {
@@ -1740,12 +1933,12 @@ public class CollegeController : ControllerBase
             AffiliatedUniversity = college.AffiliatedUniversity ?? "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV)",
             AcademicYear = "2026–2027",
             TotalDepartments = depts.Count,
-            TotalStudents = totalStudents > 0 ? totalStudents : 480,
-            TotalFaculty = 48,
-            OverallAttainmentPct = 84.2m,
+            TotalStudents = totalStudents,
+            TotalFaculty = totalFaculty,
+            OverallAttainmentPct = overallAttainment,
             IsAttested = attestedCount == depts.Count && depts.Count > 0,
             AttestedAtUtc = depts.FirstOrDefault(d => d.SarAttestedAtUtc.HasValue)?.SarAttestedAtUtc,
-            AttestedBy = "Dr. Keshvendra Choudhary (Principal / Dean)",
+            AttestedBy = $"{callerName} (College Administrator)",
             Departments = deptSummaries
         });
     }

@@ -230,6 +230,7 @@ public class AuthController : ControllerBase
         user.IsActive = true;
         user.PasswordResetOtpHashed = null;
         user.PasswordResetOtpExpiresAtUtc = null;
+        user.PasswordChangedAtUtc = DateTime.UtcNow;
         user.LastLoginAtUtc = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -268,7 +269,8 @@ public class AuthController : ControllerBase
             DepartmentName = user.Department?.Name,
             EnrollmentOrEmployeeCode = user.EnrollmentOrEmployeeCode,
             GitHubHandle = user.GitHubHandle,
-            JiraKey = user.JiraKey
+            JiraKey = user.JiraKey,
+            MustChangePassword = user.PasswordChangedAtUtc == null
         };
     }
 }

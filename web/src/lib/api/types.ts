@@ -95,6 +95,7 @@ export interface CollegeTenantDto {
   studentCount: number;
   principalEmail?: string;
   adminEmails?: string[];
+  affiliatingUniversity?: string;
 }
 
 export interface CreateTenantRequest {
@@ -109,11 +110,14 @@ export interface CreateTenantRequest {
   subscriptionExpiresAtUtc?: string;
   principalName?: string;
   principalEmail?: string;
+  affiliatingUniversity?: string;
 }
 
 export interface CreateTenantResponse {
   tenant: CollegeTenantDto;
   adminEmail: string;
+  devOtp?: string;
+  message?: string;
 }
 
 export interface ProvisionAdminResponse {
@@ -161,6 +165,27 @@ export interface PlatformAuditLogDto {
   metadataJson: string;
   ipAddress?: string;
   occurredAtUtc: string;
+}
+
+export interface CreatePlatformAuditLogRequest {
+  action: string;
+  targetEntity: string;
+  targetTenantId?: string;
+  metadataJson?: string;
+  ipAddress?: string;
+}
+
+export interface PlatformSessionDto {
+  id: string;
+  accountEmail: string;
+  accountName: string;
+  role: string;
+  device: string;
+  browser: string;
+  ipAddress: string;
+  loginTimeUtc: string;
+  lastActiveTimeUtc: string;
+  isCurrentSession: boolean;
 }
 
 export interface OverviewCourseHierarchyDto {
@@ -994,4 +1019,90 @@ export interface HodAcademicContextDto {
   availableSessions: AcademicSessionDto[];
   availableSemesters: SemesterTermDto[];
   availableOfferings: SubjectOfferingDto[];
+}
+
+// --- Account Management DTOs ---
+export interface NotificationPreferencesDto {
+  criticalOutages: boolean;
+  securityIncidents: boolean;
+  collegeApplications: boolean;
+  supportTickets: boolean;
+  subscriptionExpiry: boolean;
+  dailyDigest: boolean;
+  emailChannel: boolean;
+  smsChannel: boolean;
+}
+
+export interface ConsolePreferencesDto {
+  dateFormat: "DD/MM/YYYY" | "YYYY-MM-DD";
+  timezone: string;
+  density: "compact" | "comfortable";
+}
+
+export interface AdminProfileDto {
+  id: string;
+  fullName: string;
+  email: string;
+  isEmailVerified: boolean;
+  phoneNumber: string;
+  isPhoneVerified: boolean;
+  adminId: string;
+  role: string;
+  passwordChangedAtUtc: string;
+  mfaEnabled: boolean;
+  notificationPreferences: NotificationPreferencesDto;
+  consolePreferences: ConsolePreferencesDto;
+}
+
+export interface UpdateAdminProfileRequest {
+  fullName: string;
+  phoneNumber?: string;
+}
+
+export interface RequestEmailChangeRequest {
+  newEmail: string;
+}
+
+export interface VerifyEmailChangeRequest {
+  newEmail: string;
+  otp: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  revokeOtherSessions: boolean;
+}
+
+export interface ReauthenticateRequest {
+  currentPassword: string;
+}
+
+export interface MfaMethodDto {
+  id: string;
+  name: string;
+  type: string;
+  isConfigured: boolean;
+  isPrimary: boolean;
+  description: string;
+}
+
+export interface MfaStatusDto {
+  mfaStatus: string;
+  isMandatory: boolean;
+  explanation: string;
+  methods: MfaMethodDto[];
+  recoveryCodesConfigured: boolean;
+}
+
+export interface AccountSessionDto {
+  id: string;
+  device: string;
+  browser: string;
+  ipAddress: string;
+  location: string;
+  loginTimeUtc: string;
+  lastActiveTimeUtc: string;
+  isCurrentSession: boolean;
 }

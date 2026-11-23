@@ -43,6 +43,14 @@ public class UserAccount : BaseEntity, ITenantEntity
     public string? SkillsCsv { get; set; }
     public string? DigitalSignatureUrl { get; set; }
     public DateTime? LastLoginAtUtc { get; set; }
+    public string? PhoneNumber { get; set; }
+    public bool IsPhoneVerified { get; set; } = false;
+    public bool IsEmailVerified { get; set; } = true;
+    public DateTime? PasswordChangedAtUtc { get; set; }
+    public bool MfaEnabled { get; set; } = true;
+    public string? MfaSecret { get; set; }
+    public string? NotificationPreferencesJson { get; set; }
+    public string? ConsolePreferencesJson { get; set; }
 
     // Navigations
     public CollegeTenant? College { get; set; }

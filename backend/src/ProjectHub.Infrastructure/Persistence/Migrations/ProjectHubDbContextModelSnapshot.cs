@@ -28,6 +28,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AllowInterdisciplinaryTeams")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("CollegeId")
                         .HasColumnType("uuid");
 
@@ -41,6 +44,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExamCutoffDateUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsActive")
@@ -188,11 +194,475 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.ToTable("AcademicTracks", (string)null);
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationActivityLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CycleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("EntityTitle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PerformedByName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PerformedByRole")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("PerformedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollegeId");
+
+                    b.HasIndex("CycleId");
+
+                    b.ToTable("AccreditationActivityLogs");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationCriterion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AttainedMarks")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("AttainmentPercentage")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CycleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("MaxMarks")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollegeId");
+
+                    b.HasIndex("CycleId");
+
+                    b.ToTable("AccreditationCriteria");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationCycle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AcademicYear")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("AttainedScore")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("AttainmentPercentage")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("AttestationRemarks")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("AttestedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AttestedByName")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("AttestedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CourseProgramId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CycleName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FrameworkCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsAttested")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TargetScore")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VersionLabel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollegeId");
+
+                    b.HasIndex("CourseProgramId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.ToTable("AccreditationCycles");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CriterionCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CycleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FileType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MetricCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("MetricId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReviewNote")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedByName")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UploadedByName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UploadedByRole")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollegeId");
+
+                    b.HasIndex("CycleId");
+
+                    b.HasIndex("MetricId");
+
+                    b.ToTable("AccreditationEvidences");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationMetric", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AssignedHodUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AttainedMarks")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CriterionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("MaxMarks")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("MetricCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedHodUserId");
+
+                    b.HasIndex("CollegeId");
+
+                    b.HasIndex("CriterionId");
+
+                    b.ToTable("AccreditationMetrics");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.CollegeCampus", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Address")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CampusCode")
+                        .HasColumnType("text");
+
+                    b.Property<string>("City")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContactEmail")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContactPhone")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsMainCampus")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Pincode")
+                        .HasColumnType("text");
+
+                    b.Property<string>("State")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollegeId");
+
+                    b.ToTable("CollegeCampuses");
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.CollegeTenant", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("AffiliatingUniversity")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasDefaultValue("RGPV");
+
+                    b.Property<string>("CampusAddress")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("Airport Road, Gandhi Nagar, Bhopal, MP 462036");
+
+                    b.Property<string>("CampusesCsv")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("Main Campus (Bhopal), Extension Center");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -209,11 +679,21 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<bool>("EnforceStrictSso")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("GithubIntegrationEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<bool>("JiraIntegrationEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("LicenseTier")
                         .IsRequired()
@@ -227,6 +707,11 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
+
+                    b.Property<bool>("NbaModuleEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("PrincipalSealUrl")
                         .HasColumnType("text");
@@ -602,7 +1087,7 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
-                    b.Property<Guid>("ProjectTeamId")
+                    b.Property<Guid?>("ProjectTeamId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Reason")
@@ -632,6 +1117,66 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("CollegeId", "DepartmentId", "ProjectTeamId", "ActionType");
 
                     b.ToTable("ExceptionAuditLogs", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.HodAppointmentHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AppointedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AppointedByName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("AppointedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CollegeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HodUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("RelievedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Remarks")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollegeId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("HodUserId");
+
+                    b.ToTable("HodAppointmentHistories");
                 });
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.IndividualStudentScore", b =>
@@ -1734,6 +2279,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CollegeId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ConsolePreferencesJson")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -1776,6 +2324,12 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsEmailVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPhoneVerified")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsProjectCoordinator")
                         .HasColumnType("boolean");
 
@@ -1788,6 +2342,18 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<int>("MaxMentorTeams")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("MfaEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MfaSecret")
+                        .HasColumnType("text");
+
+                    b.Property<string>("NotificationPreferencesJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PasswordChangedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -1798,6 +2364,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<string>("PasswordResetOtpHashed")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasColumnType("text");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -1823,6 +2392,70 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("UserAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.UserSession", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("AccountEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("AccountName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("Browser")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Device")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("IpAddress")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("IsRevoked")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastActiveTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime>("LoginTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("TokenHash")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("UserSessions", (string)null);
                 });
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.VivaEvaluation", b =>
@@ -2133,6 +2766,128 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("SubjectOffering");
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationActivityLog", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany()
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.AccreditationCycle", "Cycle")
+                        .WithMany("ActivityLogs")
+                        .HasForeignKey("CycleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("College");
+
+                    b.Navigation("Cycle");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationCriterion", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany()
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.AccreditationCycle", "Cycle")
+                        .WithMany("Criteria")
+                        .HasForeignKey("CycleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("College");
+
+                    b.Navigation("Cycle");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationCycle", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany("AccreditationCycles")
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.CourseProgram", "CourseProgram")
+                        .WithMany()
+                        .HasForeignKey("CourseProgramId");
+
+                    b.HasOne("ProjectHub.Domain.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId");
+
+                    b.Navigation("College");
+
+                    b.Navigation("CourseProgram");
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationEvidence", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany()
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.AccreditationCycle", "Cycle")
+                        .WithMany("EvidenceItems")
+                        .HasForeignKey("CycleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.AccreditationMetric", "Metric")
+                        .WithMany("EvidenceItems")
+                        .HasForeignKey("MetricId");
+
+                    b.Navigation("College");
+
+                    b.Navigation("Cycle");
+
+                    b.Navigation("Metric");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationMetric", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.UserAccount", "AssignedHodUser")
+                        .WithMany()
+                        .HasForeignKey("AssignedHodUserId");
+
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany()
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.AccreditationCriterion", "Criterion")
+                        .WithMany("Metrics")
+                        .HasForeignKey("CriterionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AssignedHodUser");
+
+                    b.Navigation("College");
+
+                    b.Navigation("Criterion");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.CollegeCampus", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany("Campuses")
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("College");
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.CourseExitSurvey", b =>
                 {
                     b.HasOne("ProjectHub.Domain.Entities.ProjectTeam", "ProjectTeam")
@@ -2251,8 +3006,7 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.HasOne("ProjectHub.Domain.Entities.ProjectTeam", "ProjectTeam")
                         .WithMany("ExceptionLogs")
                         .HasForeignKey("ProjectTeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("ProjectHub.Domain.Entities.UserAccount", "RequestedByUser")
                         .WithMany()
@@ -2272,6 +3026,33 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("RequestedByUser");
 
                     b.Navigation("TargetUser");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.HodAppointmentHistory", b =>
+                {
+                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
+                        .WithMany("HodHistories")
+                        .HasForeignKey("CollegeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectHub.Domain.Entities.UserAccount", "HodUser")
+                        .WithMany()
+                        .HasForeignKey("HodUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("College");
+
+                    b.Navigation("Department");
+
+                    b.Navigation("HodUser");
                 });
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.IndividualStudentScore", b =>
@@ -2702,17 +3483,42 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("Teams");
                 });
 
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationCriterion", b =>
+                {
+                    b.Navigation("Metrics");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationCycle", b =>
+                {
+                    b.Navigation("ActivityLogs");
+
+                    b.Navigation("Criteria");
+
+                    b.Navigation("EvidenceItems");
+                });
+
+            modelBuilder.Entity("ProjectHub.Domain.Entities.AccreditationMetric", b =>
+                {
+                    b.Navigation("EvidenceItems");
+                });
+
             modelBuilder.Entity("ProjectHub.Domain.Entities.CollegeTenant", b =>
                 {
                     b.Navigation("AcademicSessions");
 
                     b.Navigation("AcademicTracks");
 
+                    b.Navigation("AccreditationCycles");
+
+                    b.Navigation("Campuses");
+
                     b.Navigation("CoursePrograms");
 
                     b.Navigation("CurriculumSchemes");
 
                     b.Navigation("Departments");
+
+                    b.Navigation("HodHistories");
 
                     b.Navigation("SemesterTerms");
 

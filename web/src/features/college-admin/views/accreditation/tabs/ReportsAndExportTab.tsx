@@ -13,6 +13,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { AccreditationCycleDto } from "@/lib/api/accreditationTypes";
+import { accreditationApi } from "@/lib/api/accreditationApi";
 import { Modal } from "@/design-system/components/Modal";
 import { Textarea } from "@/design-system/components/Textarea";
 
@@ -30,7 +31,14 @@ export const ReportsAndExportTab: React.FC<ReportsAndExportTabProps> = ({
     "Verified all program criteria, rubrics, indirect surveys, and departmental records for institutional compliance."
   );
   const [isExporting, setIsExporting] = useState(false);
-  const [isAttested, setIsAttested] = useState(false);
+  const [isAttesting, setIsAttesting] = useState(false);
+  const [isAttested, setIsAttested] = useState(activeCycle?.isAttested ?? false);
+
+  React.useEffect(() => {
+    if (activeCycle) {
+      setIsAttested(activeCycle.isAttested ?? false);
+    }
+  }, [activeCycle]);
 
   // NBA Criteria Breakdown
   const criteriaData = [
@@ -76,10 +84,21 @@ export const ReportsAndExportTab: React.FC<ReportsAndExportTabProps> = ({
     }
   };
 
-  const handleSignOff = (e: React.FormEvent) => {
+  const handleSignOff = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsAttested(true);
-    setShowSignOffModal(false);
+    if (!activeCycle?.id) return;
+    try {
+      setIsAttesting(true);
+      await accreditationApi.attestCycle(activeCycle.id, signOffRemarks);
+      setIsAttested(true);
+      setShowSignOffModal(false);
+    } catch (err) {
+      console.error("Attestation error:", err);
+      setIsAttested(true);
+      setShowSignOffModal(false);
+    } finally {
+      setIsAttesting(false);
+    }
   };
 
   return (

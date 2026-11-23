@@ -32,11 +32,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CollabexLogo } from "@/components/brand/CollabexLogo";
-import { getAuthToken } from "@/lib/api";
+import { getAuthToken, hodApi } from "@/lib/api";
 import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
 import { getSidebarNav, getBreadcrumbs, RouteGuard, SidebarNavItem } from "@/navigation";
+import { LogoutConfirmationModal, PendingActionsDrawer } from "@/features/platform/shared/GlobalPlatformModals";
 
 export const getAvatarInitials = (name: string): string => {
   const cleaned = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.|Er\.)\s+/i, "").trim();
@@ -140,7 +141,29 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const activeSessionLabel =
     academicSessions?.find((s) => s.isActive)?.label || academicSessions?.[0]?.label || "2026–2027";
 
-  const pendingHODCount = teams.filter((t) => t.state === "PendingHOD").length || 1;
+  const [realHodPendingCount, setRealHodPendingCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (currentPersona.role === "HOD" && getAuthToken()) {
+      hodApi
+        .getDashboard()
+        .then((dash) => {
+          if (dash) {
+            const total =
+              (dash.pendingProposals || 0) +
+              (dash.pendingGradeUnlocks || 0) +
+              (dash.pendingExceptions || 0);
+            setRealHodPendingCount(total);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentPersona.role, pathname]);
+
+  const pendingHODCount =
+    realHodPendingCount !== null
+      ? realHodPendingCount
+      : teams.filter((t) => t.state === "PendingHOD").length;
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCampusMenu, setShowCampusMenu] = useState(false);
@@ -197,7 +220,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   // Auto-sync persona with route if accessed directly via URL
   useEffect(() => {
-    if (pathname.startsWith("/admin") && currentPersona.role !== "SuperAdmin") {
+    if ((pathname.startsWith("/admin") || pathname.startsWith("/platform")) && currentPersona.role !== "SuperAdmin") {
       switchPersona("SuperAdmin");
     } else if (pathname.startsWith("/college") && currentPersona.role !== "CollegeAdmin") {
       switchPersona("CollegeAdmin");
@@ -298,14 +321,14 @@ const AppShellInner: React.FC<AppShellProps> = ({
         title: "Tenant Partition Provisioned",
         time: "30 mins ago",
         desc: "SISTec Bhopal partition healthy on ap-south-1.",
-        path: "/admin",
+        path: "/platform/colleges",
       },
       {
         id: "n-a2",
-        title: "Pilot Application Received",
+        title: "Onboarding Application Received",
         time: "3 hours ago",
-        desc: "Medicaps University submitted a 90-day institutional pilot trial request.",
-        path: "/admin/subscriptions",
+        desc: "New college submitted institutional onboarding application.",
+        path: "/platform/colleges?status=Pending Review",
       },
     ];
   })();
@@ -349,20 +372,46 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const displayBreadcrumb = breadcrumb || breadcrumbsInfo.breadcrumb;
   const currentActiveTab = activeTab;
 
-  const primaryItems = navItems.filter((i) => i.section !== "COORDINATOR" && i.label !== "Profile");
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showPendingDrawer, setShowPendingDrawer] = useState(false);
+
+  const SUPER_ADMIN_SECTIONS = [
+    "WORKSPACE",
+    "MANAGEMENT",
+    "OPERATIONS",
+    "ACCOUNT",
+  ] as const;
+
+  const primaryItems = navItems.filter((i) => i.section !== "COORDINATOR" && i.label !== "Profile" && i.label !== "My Profile");
   const coordinatorItems = navItems.filter((i) => i.section === "COORDINATOR");
-  const profileItem = navItems.find((i) => i.label === "Profile");
+  const profileItem = navItems.find((i) => i.label === "Profile" || i.label === "My Profile");
 
   const renderNavItem = (item: SidebarNavItem) => {
     const Icon = item.icon;
-    const isProfileItem = item.label === "Profile";
+    const isProfileItem = item.label === "Profile" || item.label === "My Profile";
+    const isLogoutItem = item.label === "Logout" || item.href === "/platform/logout";
     const isActive =
       currentActiveTab === item.label ||
       pathname === item.href ||
       (isProfileItem &&
         (currentActiveTab === "Account" ||
           pathname === "/account" ||
+          pathname === "/platform/account/profile" ||
           pathname === "/student/profile"));
+
+    if (isLogoutItem) {
+      return (
+        <button
+          key={item.label}
+          type="button"
+          onClick={() => setShowLogoutModal(true)}
+          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left"
+        >
+          <Icon className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={1.75} />
+          <span className="truncate">{item.label}</span>
+        </button>
+      );
+    }
 
     return (
       <Link
@@ -384,7 +433,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
           strokeWidth={isActive ? 2.2 : 1.75}
         />
         <span className="truncate tracking-[-0.01em]">{item.label}</span>
-        {item.count !== undefined && (
+        {item.count !== undefined && item.count > 0 && (
           <span
             className={cn(
               "ml-auto text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full",
@@ -402,14 +451,33 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   const renderMobileNavItem = (item: SidebarNavItem) => {
     const Icon = item.icon;
-    const isProfileItem = item.label === "Profile";
+    const isProfileItem = item.label === "Profile" || item.label === "My Profile";
+    const isLogoutItem = item.label === "Logout" || item.href === "/platform/logout";
     const isActive =
       currentActiveTab === item.label ||
       pathname === item.href ||
       (isProfileItem &&
         (currentActiveTab === "Account" ||
           pathname === "/account" ||
+          pathname === "/platform/account/profile" ||
           pathname === "/student/profile"));
+
+    if (isLogoutItem) {
+      return (
+        <button
+          key={item.label}
+          type="button"
+          onClick={() => {
+            setIsMobileDrawerOpen(false);
+            setShowLogoutModal(true);
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 min-h-[44px] text-xs font-medium rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left"
+        >
+          <Icon className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={1.75} />
+          <span className="truncate">{item.label}</span>
+        </button>
+      );
+    }
 
     return (
       <Link
@@ -429,7 +497,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
           strokeWidth={isActive ? 2.2 : 1.75}
         />
         <span className="truncate tracking-[-0.01em]">{item.label}</span>
-        {item.count !== undefined && (
+        {item.count !== undefined && item.count > 0 && (
           <span
             className={cn(
               "ml-auto text-[10px] font-mono font-bold px-2 py-0.5 rounded-full",
@@ -537,34 +605,60 @@ const AppShellInner: React.FC<AppShellProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <nav className="flex-1 px-3 py-2.5 space-y-1 overflow-y-auto">
-          <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 select-none">
-            Menu
-          </div>
-          {primaryItems.map(renderNavItem)}
-
-          {coordinatorItems.length > 0 && (
-            <>
-              <div className="pt-3 pb-1 px-2 border-t border-white/[0.06] text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400 mt-2">
-                Coordinator
+        {/* Navigation Tabs */}
+        <nav className="flex-1 px-3 py-2.5 space-y-1.5 overflow-y-auto">
+          {currentPersona.role === "SuperAdmin" ? (
+            <div className="space-y-0.5">
+              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
+                Platform Console
               </div>
-              {coordinatorItems.map(renderNavItem)}
-            </>
-          )}
-
-          {profileItem && (
-            <div className="pt-2 mt-1">
-              {renderNavItem(profileItem)}
+              {primaryItems.map(renderNavItem)}
+              {profileItem && (
+                <div className="pt-2 mt-2 border-t border-white/[0.08]">
+                  {renderNavItem(profileItem)}
+                </div>
+              )}
             </div>
+          ) : (
+            <>
+              <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 select-none">
+                Menu
+              </div>
+              {primaryItems.map(renderNavItem)}
+
+              {coordinatorItems.length > 0 && (
+                <>
+                  <div className="pt-3 pb-1 px-2 border-t border-white/[0.06] text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400 mt-2">
+                    Coordinator
+                  </div>
+                  {coordinatorItems.map(renderNavItem)}
+                </>
+              )}
+
+              {profileItem && (
+                <div className="pt-2 mt-1">
+                  {renderNavItem(profileItem)}
+                </div>
+              )}
+            </>
           )}
         </nav>
 
         {/* Unified Bottom-Left Sidebar Footer */}
         <div className="p-3 border-t border-white/[0.08] bg-[#111827]">
           {/* User Profile Mini Block */}
-          <div className="px-3 py-2 mb-2 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center justify-between">
+          <Link
+            href={currentPersona.role === "SuperAdmin" ? "/platform/account/profile" : "/account"}
+            className={cn(
+              "px-3 py-2 mb-2 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center justify-between hover:bg-white/[0.08] transition-colors group cursor-pointer block",
+              (pathname === "/platform/account/profile" || pathname === "/account") && "border-brand-primary/50 bg-white/[0.08]"
+            )}
+            title="My Profile & Security Settings"
+          >
             <div className="min-w-0 pr-2">
-              <p className="text-xs font-semibold text-white truncate">{currentPersona.name}</p>
+              <p className="text-xs font-semibold text-white truncate group-hover:text-emerald-400 transition-colors">
+                {currentPersona.name}
+              </p>
               <p className="text-[10px] text-slate-400 font-mono truncate">
                 {getRoleSubtitle(currentPersona.role, currentPersona.isProjectCoordinator)}
               </p>
@@ -572,12 +666,18 @@ const AppShellInner: React.FC<AppShellProps> = ({
             <div className="w-7 h-7 rounded-full bg-brand-primary/20 border border-brand-primary/40 flex items-center justify-center text-emerald-400 font-bold text-xs font-mono shrink-0">
               {getAvatarInitials(currentPersona.name)}
             </div>
-          </div>
+          </Link>
 
           {/* Minimal Log out Action */}
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={() => {
+              if (currentPersona.role === "SuperAdmin") {
+                setShowLogoutModal(true);
+              } else {
+                handleLogout();
+              }
+            }}
             className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-slate-400 hover:bg-white/[0.06] hover:text-white transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4 text-slate-400" strokeWidth={1.75} />
@@ -659,6 +759,19 @@ const AppShellInner: React.FC<AppShellProps> = ({
                   {cycle.academicYear || "2025–2026"} • Minor Sem {cycle.semester || "6"}
                 </span>
               </div>
+            )}
+
+            {/* Super Admin Quick Actions / Pending Approvals Queue */}
+            {currentPersona.role === "SuperAdmin" && (
+              <button
+                type="button"
+                onClick={() => setShowPendingDrawer(true)}
+                title="Pending Approvals & Onboarding Queue"
+                className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+              >
+                <Layers className="h-4 w-4" strokeWidth={1.75} />
+                <span className="absolute top-2.5 right-2.5 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+              </button>
             )}
 
             {/* Notification Bell */}
@@ -802,25 +915,41 @@ const AppShellInner: React.FC<AppShellProps> = ({
             </div>
 
             {/* Navigation Tabs */}
-            <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
-              <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
-                Menu
-              </div>
-              {primaryItems.map(renderMobileNavItem)}
-
-              {coordinatorItems.length > 0 && (
-                <>
-                  <div className="pt-3 pb-1 px-2 border-t border-white/[0.06] text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400 mt-2">
-                    Coordinator
+            <nav className="flex-1 px-3 py-3 space-y-2 overflow-y-auto">
+              {currentPersona.role === "SuperAdmin" ? (
+                <div className="space-y-0.5">
+                  <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
+                    Platform Console
                   </div>
-                  {coordinatorItems.map(renderMobileNavItem)}
-                </>
-              )}
-
-              {profileItem && (
-                <div className="pt-2 mt-1 border-t border-white/[0.06]">
-                  {renderMobileNavItem(profileItem)}
+                  {primaryItems.map(renderMobileNavItem)}
+                  {profileItem && (
+                    <div className="pt-2 mt-2 border-t border-white/[0.08]">
+                      {renderMobileNavItem(profileItem)}
+                    </div>
+                  )}
                 </div>
+              ) : (
+                <>
+                  <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
+                    Menu
+                  </div>
+                  {primaryItems.map(renderMobileNavItem)}
+
+                  {coordinatorItems.length > 0 && (
+                    <>
+                      <div className="pt-3 pb-1 px-2 border-t border-white/[0.06] text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400 mt-2">
+                        Coordinator
+                      </div>
+                      {coordinatorItems.map(renderMobileNavItem)}
+                    </>
+                  )}
+
+                  {profileItem && (
+                    <div className="pt-2 mt-1 border-t border-white/[0.06]">
+                      {renderMobileNavItem(profileItem)}
+                    </div>
+                  )}
+                </>
               )}
             </nav>
 
@@ -830,7 +959,11 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 type="button"
                 onClick={() => {
                   setIsMobileDrawerOpen(false);
-                  handleLogout();
+                  if (currentPersona.role === "SuperAdmin") {
+                    setShowLogoutModal(true);
+                  } else {
+                    handleLogout();
+                  }
                 }}
                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 min-h-[44px] text-xs font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer"
               >
@@ -848,6 +981,26 @@ const AppShellInner: React.FC<AppShellProps> = ({
       <CommandPalette
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
+      />
+
+      {/* Global Modals for Super Admin Console */}
+      <LogoutConfirmationModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={(revokeAll) => {
+          setShowLogoutModal(false);
+          logout();
+          router.replace("/login");
+        }}
+      />
+
+      <PendingActionsDrawer
+        isOpen={showPendingDrawer}
+        onClose={() => setShowPendingDrawer(false)}
+        onNavigate={(path) => {
+          setShowPendingDrawer(false);
+          router.push(path);
+        }}
       />
     </div>
   );

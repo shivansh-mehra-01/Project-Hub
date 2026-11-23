@@ -39,7 +39,15 @@ public class CollegeTenant : BaseEntity
     public bool EnforceStrictSso { get; set; } = true;
     public string? CrestUrl { get; set; }
     public string? PrincipalSealUrl { get; set; }
-    public string? AffiliatedUniversity { get; set; } = "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV)";
+    public string? AffiliatingUniversity { get; set; } = "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV)";
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? AffiliatedUniversity
+    {
+        get => AffiliatingUniversity;
+        set => AffiliatingUniversity = value;
+    }
+
     public string? CampusAddress { get; set; } = "Airport Road, Gandhi Nagar, Bhopal, MP 462036";
     public string? CampusesCsv { get; set; } = "Main Campus (Bhopal), Extension Center";
     public bool NbaModuleEnabled { get; set; } = true;
@@ -58,4 +66,7 @@ public class CollegeTenant : BaseEntity
     public ICollection<SemesterTerm> SemesterTerms { get; set; } = new List<SemesterTerm>();
     public ICollection<SubjectOffering> SubjectOfferings { get; set; } = new List<SubjectOffering>();
     public ICollection<StudentAcademicEnrollment> StudentEnrollments { get; set; } = new List<StudentAcademicEnrollment>();
+    public ICollection<CollegeCampus> Campuses { get; set; } = new List<CollegeCampus>();
+    public ICollection<HodAppointmentHistory> HodHistories { get; set; } = new List<HodAppointmentHistory>();
+    public ICollection<AccreditationCycle> AccreditationCycles { get; set; } = new List<AccreditationCycle>();
 }

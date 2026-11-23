@@ -1,9 +1,14 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using ProjectHub.Api.Authorization;
 using ProjectHub.Application.Common.Models;
+using ProjectHub.Application.Interfaces;
 using ProjectHub.Domain.Entities;
+using ProjectHub.Domain.Enums;
 using ProjectHub.Infrastructure.Persistence;
 
 namespace ProjectHub.Api.Controllers;
@@ -14,10 +19,20 @@ namespace ProjectHub.Api.Controllers;
 public class PlatformController : ControllerBase
 {
     private readonly ProjectHubDbContext _context;
+    private readonly IEmailSender _emailSender;
+    private readonly IWebHostEnvironment _environment;
+    private readonly ILogger<PlatformController> _logger;
 
-    public PlatformController(ProjectHubDbContext context)
+    public PlatformController(
+        ProjectHubDbContext context,
+        IEmailSender emailSender,
+        IWebHostEnvironment environment,
+        ILogger<PlatformController> logger)
     {
         _context = context;
+        _emailSender = emailSender;
+        _environment = environment;
+        _logger = logger;
     }
 
     [HttpGet("tenants")]
@@ -43,7 +58,8 @@ public class PlatformController : ControllerBase
                 DepartmentCount = t.Departments.Count(d => !d.IsDeleted),
                 StudentCount = t.Users.Count(u => u.Role == Domain.Enums.UserRole.Student && !u.IsDeleted),
                 PrincipalEmail = t.Users.Where(u => u.Role == Domain.Enums.UserRole.CollegeAdmin && !u.IsDeleted).Select(u => u.Email).FirstOrDefault(),
-                AdminEmails = t.Users.Where(u => u.Role == Domain.Enums.UserRole.CollegeAdmin && !u.IsDeleted).Select(u => u.Email).ToList()
+                AdminEmails = t.Users.Where(u => u.Role == Domain.Enums.UserRole.CollegeAdmin && !u.IsDeleted).Select(u => u.Email).ToList(),
+                AffiliatingUniversity = t.AffiliatingUniversity ?? "RGPV"
             })
             .ToListAsync();
 
@@ -53,8 +69,21 @@ public class PlatformController : ControllerBase
     [HttpPost("tenants")]
     public async Task<ActionResult<CreateTenantResponse>> CreateTenant([FromBody] CreateTenantRequest request)
     {
+        // 1. Auto-uppercase Institutional Code and sanitize SSO Domain
         var code = request.TenantCode.Trim().ToUpperInvariant();
-        var domain = request.SsoDomain.Trim().ToLowerInvariant();
+        var rawDomain = request.SsoDomain.Trim().ToLowerInvariant();
+        var domain = rawDomain
+            .Replace("https://", "")
+            .Replace("http://", "")
+            .Replace("www.", "")
+            .Replace("@", "")
+            .Trim('/')
+            .Split('/')[0];
+
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(domain))
+        {
+            return BadRequest(new { message = "Valid Institutional Code and SSO Email Domain are required." });
+        }
 
         var exists = await _context.CollegeTenants
             .IgnoreQueryFilters()
@@ -65,6 +94,7 @@ public class PlatformController : ControllerBase
             return Conflict(new { message = "A college tenant with the same code or SSO domain already exists." });
         }
 
+        // 2. Resolve Principal Full Name and Email
         var principalName = !string.IsNullOrWhiteSpace(request.PrincipalName)
             ? request.PrincipalName.Trim()
             : "College Principal";
@@ -82,6 +112,11 @@ public class PlatformController : ControllerBase
             return Conflict(new { message = $"A user account with email '{principalEmail}' already exists in the system." });
         }
 
+        // 3. Resolve Affiliating University Catalog
+        var affiliatingUniversity = !string.IsNullOrWhiteSpace(request.AffiliatingUniversity)
+            ? request.AffiliatingUniversity.Trim()
+            : "RGPV";
+
         var tenant = new CollegeTenant
         {
             Name = request.Name.Trim(),
@@ -93,12 +128,56 @@ public class PlatformController : ControllerBase
             EnforceStrictSso = request.EnforceStrictSso,
             CrestUrl = request.CrestUrl,
             SubscriptionExpiresAtUtc = request.SubscriptionExpiresAtUtc,
+            AffiliatingUniversity = affiliatingUniversity,
             IsActive = true
         };
 
         await _context.CollegeTenants.AddAsync(tenant);
 
+        // 4. Link Syllabus Catalog & Academic Architecture for the new tenant
+        var isRgpv = affiliatingUniversity.Contains("RGPV", StringComparison.OrdinalIgnoreCase);
+        var schemeCode = isRgpv ? "RGPV-AICTE-FLEX" : "AUTONOMOUS-CBCS";
+
+        var courseProgram = new CourseProgram
+        {
+            CollegeId = tenant.Id,
+            Name = "Bachelor of Technology",
+            Code = "BTECH",
+            Level = AcademicProgramLevel.UG,
+            TotalSemesters = 8,
+            IsActive = true
+        };
+        await _context.CoursePrograms.AddAsync(courseProgram);
+
+        var curriculumScheme = new CurriculumScheme
+        {
+            CollegeId = tenant.Id,
+            CourseProgramId = courseProgram.Id,
+            SchemeCode = schemeCode,
+            SchemeVersion = DateTime.UtcNow.Year.ToString(),
+            EffectiveAdmissionYear = DateTime.UtcNow.Year,
+            IsActive = true
+        };
+        await _context.CurriculumSchemes.AddAsync(curriculumScheme);
+
+        var currentYear = DateTime.UtcNow.Year;
+        var academicSession = new AcademicSession
+        {
+            CollegeId = tenant.Id,
+            Label = $"{currentYear}–{currentYear + 1}",
+            StartDate = new DateTime(currentYear, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+            EndDate = new DateTime(currentYear + 1, 6, 30, 23, 59, 59, DateTimeKind.Utc),
+            ExamCutoffDateUtc = new DateTime(currentYear + 1, 5, 31, 23, 59, 59, DateTimeKind.Utc),
+            AllowInterdisciplinaryTeams = true,
+            IsActive = true
+        };
+        await _context.AcademicSessions.AddAsync(academicSession);
+
+        // 5. Provision Principal Account with 24-hr Activation OTP
         var defaultPasswordHash = Infrastructure.Security.PasswordHelper.HashPassword("Pass@1234");
+        var otpNumber = RandomNumberGenerator.GetInt32(100000, 1000000);
+        var otp = otpNumber.ToString("D6");
+
         var principalUser = new UserAccount
         {
             CollegeId = tenant.Id,
@@ -107,6 +186,8 @@ public class PlatformController : ControllerBase
             EnrollmentOrEmployeeCode = $"EMP-{code}-001",
             Role = Domain.Enums.UserRole.CollegeAdmin,
             PasswordHash = defaultPasswordHash,
+            PasswordResetOtpHashed = Infrastructure.Security.PasswordHelper.HashPassword(otp),
+            PasswordResetOtpExpiresAtUtc = DateTime.UtcNow.AddHours(24),
             IsActivated = true,
             IsActive = true
         };
@@ -114,6 +195,12 @@ public class PlatformController : ControllerBase
         await _context.Users.AddAsync(principalUser);
 
         await _context.SaveChangesAsync();
+
+        // 6. Dispatch Activation OTP via IEmailSender
+        await _emailSender.SendPasswordResetOtpAsync(principalUser.Email, principalUser.FullName, otp);
+
+        _logger.LogInformation("[TENANT ONBOARDING] Provisioned College Tenant '{Name}' ({Code}) with Principal '{PrincipalName}' <{PrincipalEmail}>, linked to '{University}' catalog. Dispatched OTP: {Otp}",
+            tenant.Name, code, principalName, principalEmail, affiliatingUniversity, otp);
 
         var tenantDto = new CollegeTenantDto
         {
@@ -131,13 +218,18 @@ public class PlatformController : ControllerBase
             DepartmentCount = 0,
             StudentCount = 0,
             PrincipalEmail = principalEmail,
-            AdminEmails = new List<string> { principalEmail }
+            AdminEmails = new List<string> { principalEmail },
+            AffiliatingUniversity = affiliatingUniversity
         };
+
+        string? devOtp = _environment.IsDevelopment() ? otp : null;
 
         return StatusCode(StatusCodes.Status201Created, new CreateTenantResponse
         {
             Tenant = tenantDto,
-            AdminEmail = principalEmail
+            AdminEmail = principalEmail,
+            DevOtp = devOtp,
+            Message = $"College tenant '{tenant.Name}' provisioned successfully linked to {affiliatingUniversity} catalog. Temporary credentials and 24-hr activation OTP dispatched to {principalEmail}."
         });
     }
 
@@ -304,7 +396,7 @@ public class PlatformController : ControllerBase
     }
 
     [HttpGet("audit-logs")]
-    public async Task<ActionResult<List<PlatformAuditLogDto>>> GetAuditLogs([FromQuery] int take = 50)
+    public async Task<ActionResult<List<PlatformAuditLogDto>>> GetAuditLogs([FromQuery] int take = 100)
     {
         var logs = await _context.PlatformAuditLogs
             .IgnoreQueryFilters()
@@ -325,5 +417,97 @@ public class PlatformController : ControllerBase
             .ToListAsync();
 
         return Ok(logs);
+    }
+
+    [HttpPost("audit-logs")]
+    public async Task<ActionResult<PlatformAuditLogDto>> CreateAuditLog([FromBody] CreatePlatformAuditLogRequest request)
+    {
+        var actorEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
+            ?? User.FindFirst("email")?.Value 
+            ?? "admin@collabex.in";
+
+        var log = new PlatformAuditLog
+        {
+            Id = Guid.NewGuid(),
+            ActorEmail = actorEmail,
+            Action = request.Action,
+            TargetEntity = request.TargetEntity,
+            TargetTenantId = request.TargetTenantId,
+            MetadataJson = request.MetadataJson ?? "{}",
+            IpAddress = request.IpAddress ?? HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1",
+            OccurredAtUtc = DateTime.UtcNow
+        };
+
+        _context.PlatformAuditLogs.Add(log);
+        await _context.SaveChangesAsync();
+
+        return Ok(new PlatformAuditLogDto
+        {
+            Id = log.Id,
+            ActorUserId = log.ActorUserId,
+            ActorEmail = log.ActorEmail,
+            Action = log.Action,
+            TargetTenantId = log.TargetTenantId,
+            TargetEntity = log.TargetEntity,
+            MetadataJson = log.MetadataJson,
+            IpAddress = log.IpAddress,
+            OccurredAtUtc = log.OccurredAtUtc
+        });
+    }
+
+    [HttpGet("sessions")]
+    public async Task<ActionResult<List<PlatformSessionDto>>> GetSessions()
+    {
+        var sessions = await _context.UserSessions
+            .Where(s => !s.IsRevoked)
+            .OrderByDescending(s => s.LastActiveTimeUtc)
+            .Select(s => new PlatformSessionDto
+            {
+                Id = s.Id,
+                AccountEmail = s.AccountEmail,
+                AccountName = s.AccountName,
+                Role = s.Role,
+                Device = s.Device,
+                Browser = s.Browser,
+                IpAddress = s.IpAddress,
+                LoginTimeUtc = s.LoginTimeUtc,
+                LastActiveTimeUtc = s.LastActiveTimeUtc,
+                IsCurrentSession = s.Id == "sess-cur-01"
+            })
+            .ToListAsync();
+
+        return Ok(sessions);
+    }
+
+    [HttpPost("sessions/{id}/revoke")]
+    public async Task<IActionResult> RevokeSession(string id)
+    {
+        var currentEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
+            ?? User.FindFirst("email")?.Value 
+            ?? "admin@collabex.in";
+
+        var session = await _context.UserSessions.FirstOrDefaultAsync(s => s.Id == id);
+        if (session != null)
+        {
+            session.IsRevoked = true;
+            session.RevokedAtUtc = DateTime.UtcNow;
+        }
+
+        var log = new PlatformAuditLog
+        {
+            Id = Guid.NewGuid(),
+            ActorEmail = currentEmail,
+            Action = "Admin Session Revoked",
+            TargetEntity = $"Session: {id}",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1",
+            OccurredAtUtc = DateTime.UtcNow,
+            MetadataJson = $"{{\"revokedSessionId\":\"{id}\",\"revokedBy\":\"{currentEmail}\",\"category\":\"Authentication\",\"result\":\"Success\",\"details\":\"Active platform administrative session invalidated immediately.\"}}"
+        };
+
+        _context.PlatformAuditLogs.Add(log);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Administrative session {SessionId} revoked by {ActorEmail}", id, currentEmail);
+        return Ok(new { success = true, revokedSessionId = id });
     }
 }

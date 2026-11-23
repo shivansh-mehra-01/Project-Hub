@@ -288,6 +288,7 @@ export interface TenantCollege {
   principalEmail?: string;
   principalName?: string;
   adminEmails?: string[];
+  affiliatingUniversity?: string;
 }
 
 export interface PilotRequest {

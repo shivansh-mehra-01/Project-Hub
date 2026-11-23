@@ -61,6 +61,10 @@ export interface AccreditationCycleDto {
   completionPct: number;
   pendingReviews: number;
   evidenceCount: number;
+  isAttested?: boolean;
+  attestedAtUtc?: string;
+  attestedByName?: string;
+  attestationRemarks?: string;
   createdAtUtc: string;
   updatedAtUtc: string;
 }

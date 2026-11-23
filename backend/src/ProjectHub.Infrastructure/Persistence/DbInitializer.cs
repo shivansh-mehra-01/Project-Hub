@@ -57,6 +57,7 @@ public static class DbInitializer
 
     // Deterministic User Persona IDs
     public static readonly Guid SuperAdminUserId = Guid.Parse("20000000-0000-0000-0000-000000000000");
+    public static readonly Guid SuperAdminCollabexUserId = Guid.Parse("20000000-0000-0000-0000-000000000099");
     public static readonly Guid HodSharmaUserId = Guid.Parse("20000000-0000-0000-0000-000000000001");
     public static readonly Guid PrincipalChoudharyUserId = Guid.Parse("20000000-0000-0000-0000-000000000002");
     public static readonly Guid FacultyNairUserId = Guid.Parse("20000000-0000-0000-0000-000000000003");
@@ -87,6 +88,7 @@ public static class DbInitializer
             await SeedSistecAcademicHierarchyAsync(context);
             await SeedAcademicTracksAsync(context);
             await SeedTeamAndArtifactsAsync(context);
+            await SeedPlatformAuditLogsAsync(context);
 
             if (isDevelopment)
             {
@@ -721,7 +723,7 @@ public static class DbInitializer
             },
             new()
             {
-                Id = Guid.Parse("20000000-0000-0000-0000-000000000099"),
+                Id = SuperAdminCollabexUserId,
                 CollegeId = SistecTenantId, // partition default
                 DepartmentId = null,
                 FullName = "Dev Startup Admin",
@@ -1299,5 +1301,116 @@ public static class DbInitializer
         Console.WriteLine("====================================================================================================");
         Console.ResetColor();
         Console.WriteLine();
+    }
+
+    private static async Task SeedPlatformAuditLogsAsync(ProjectHubDbContext context)
+    {
+        if (await context.PlatformAuditLogs.IgnoreQueryFilters().AnyAsync()) return;
+
+        var logs = new List<PlatformAuditLog>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorUserId = SuperAdminUserId,
+                ActorEmail = "admin@projecthub.in",
+                Action = "Admin Login Success",
+                TargetEntity = "Session: sess-01",
+                IpAddress = "103.21.244.10",
+                OccurredAtUtc = DateTime.UtcNow.AddMinutes(-35),
+                MetadataJson = "{\"actorName\":\"Dev Startup Admin\",\"category\":\"Authentication\",\"result\":\"Success\",\"details\":\"FIDO2 hardware key WebAuthn verified. Session established.\",\"clientBrowser\":\"Chrome 131.0\",\"clientOs\":\"Windows 11\"}"
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorUserId = SuperAdminUserId,
+                ActorEmail = "admin@projecthub.in",
+                Action = "College Application Approved",
+                TargetEntity = "IES College of Technology (IES-BPL)",
+                IpAddress = "103.21.244.10",
+                OccurredAtUtc = DateTime.UtcNow.AddHours(-1),
+                MetadataJson = "{\"actorName\":\"Dev Startup Admin\",\"category\":\"College Management\",\"result\":\"Success\",\"details\":\"Reviewed institutional accreditation documents and approved platform onboarding application APP-2026-003.\",\"changes\":{\"before\":\"Under Review\",\"after\":\"Approved\"}}"
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorUserId = SuperAdminUserId,
+                ActorEmail = "admin@projecthub.in",
+                Action = "Platform Announcement Published",
+                TargetEntity = "All Affiliated Colleges",
+                IpAddress = "103.21.244.10",
+                OccurredAtUtc = DateTime.UtcNow.AddHours(-3),
+                MetadataJson = "{\"actorName\":\"Dev Startup Admin\",\"category\":\"Platform Management\",\"result\":\"Success\",\"details\":\"Broadcasted scheduled platform maintenance notification for multi-AZ database engine minor update.\",\"announcementId\":\"ann-01\",\"priority\":\"High\"}"
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorUserId = SuperAdminUserId,
+                ActorEmail = "admin@projecthub.in",
+                Action = "College Tenant Activated",
+                TargetEntity = "University Institute of Technology, RGPV",
+                IpAddress = "103.21.244.10",
+                OccurredAtUtc = DateTime.UtcNow.AddHours(-5),
+                MetadataJson = "{\"actorName\":\"Dev Startup Admin\",\"category\":\"College Management\",\"result\":\"Success\",\"details\":\"Tenant partition tenant_uit_rgpv_prod activated with 1,800 licensed student capacity.\",\"tenantCode\":\"UIT-RGPV\",\"seats\":1800}"
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorUserId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0002"),
+                ActorEmail = "aditi.security@collabex.in",
+                Action = "Academic Reference Template Published",
+                TargetEntity = "Regulation: RGPV-AICTE-FLEX-2022 (v2.4)",
+                IpAddress = "103.21.244.12",
+                OccurredAtUtc = DateTime.UtcNow.AddHours(-18),
+                MetadataJson = "{\"actorName\":\"Aditi Trivedi\",\"category\":\"Platform Management\",\"result\":\"Success\",\"details\":\"Locked and published standardized RGPV 8-semester curriculum scheme template for affiliated colleges.\",\"version\":\"v2.4\"}"
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorUserId = SuperAdminUserId,
+                ActorEmail = "admin@projecthub.in",
+                Action = "Subscription Plan Renewed",
+                TargetEntity = "Sagar Institute of Science and Technology (SISTec)",
+                IpAddress = "103.21.244.10",
+                OccurredAtUtc = DateTime.UtcNow.AddDays(-1),
+                MetadataJson = "{\"actorName\":\"Dev Startup Admin\",\"category\":\"Subscription Management\",\"result\":\"Success\",\"details\":\"Annual Enterprise Academic subscription renewed for academic year 2026–2027 (GST Invoice INV-2026-001).\",\"amountInr\":566400,\"cycle\":\"Annual\"}"
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorUserId = null,
+                ActorEmail = "principal@ipsacademy.org",
+                Action = "Failed Login Attempts Rate-Limited",
+                TargetEntity = "Account: principal@ipsacademy.org",
+                IpAddress = "117.200.14.8",
+                OccurredAtUtc = DateTime.UtcNow.AddHours(-14),
+                MetadataJson = "{\"actorName\":\"Unknown Client\",\"category\":\"Authentication\",\"result\":\"Failure\",\"details\":\"5 consecutive incorrect password entries triggered automated 15-minute IP rate-limit lockout.\",\"failedAttempts\":5,\"lockoutDuration\":\"15 minutes\"}"
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorUserId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0002"),
+                ActorEmail = "aditi.security@collabex.in",
+                Action = "Super Admin Security Settings Updated",
+                TargetEntity = "Security Policy: Privileged MFA Enforcement",
+                IpAddress = "103.21.244.12",
+                OccurredAtUtc = DateTime.UtcNow.AddDays(-2),
+                MetadataJson = "{\"actorName\":\"Aditi Trivedi\",\"category\":\"Administrator Management\",\"result\":\"Success\",\"details\":\"FIDO2 hardware security token enrolled for privileged multi-factor authentication (K27-Feitian).\",\"policy\":\"MFA_HARDWARE_KEY_ENFORCED\"}"
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorUserId = SuperAdminUserId,
+                ActorEmail = "admin@projecthub.in",
+                Action = "Admin Session Revoked",
+                TargetEntity = "Session: sess-old-09 (Rohit Saxena)",
+                IpAddress = "103.21.244.10",
+                OccurredAtUtc = DateTime.UtcNow.AddDays(-3),
+                MetadataJson = "{\"actorName\":\"Dev Startup Admin\",\"category\":\"Authentication\",\"result\":\"Success\",\"details\":\"Terminated idle workstation session for Support Engineer Rohit Saxena.\",\"revokedSessionId\":\"sess-old-09\"}"
+            }
+        };
+
+        context.PlatformAuditLogs.AddRange(logs);
+        await context.SaveChangesAsync();
     }
 }

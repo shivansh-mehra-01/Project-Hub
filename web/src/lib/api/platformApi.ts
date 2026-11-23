@@ -26,5 +26,21 @@ export const platformApi = {
 
   getSdgs: () => apiClient.get<MasterSdgDto[]>("/api/platform/sdgs"),
 
-  getAuditLogs: () => apiClient.get<PlatformAuditLogDto[]>("/api/platform/audit-logs"),
+  getAuditLogs: (take = 100) =>
+    apiClient.get<PlatformAuditLogDto[]>(`/api/platform/audit-logs?take=${take}`),
+
+  createAuditLog: (data: {
+    action: string;
+    targetEntity: string;
+    targetTenantId?: string;
+    metadataJson?: string;
+    ipAddress?: string;
+  }) => apiClient.post<PlatformAuditLogDto>("/api/platform/audit-logs", data),
+
+  getSessions: () => apiClient.get<any[]>("/api/platform/sessions"),
+
+  revokeSession: (sessionId: string) =>
+    apiClient.post<{ success: boolean; revokedSessionId: string }>(
+      `/api/platform/sessions/${sessionId}/revoke`
+    ),
 };

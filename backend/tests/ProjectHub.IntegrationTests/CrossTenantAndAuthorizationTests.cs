@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using ProjectHub.Application.Common.Models;
 using ProjectHub.Domain.Enums;
 using ProjectHub.Infrastructure.Persistence;
@@ -411,5 +413,151 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
 
         var forbiddenRes = await _client.SendAsync(forbiddenReq);
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task InspectDatabaseContents_OutputsAllTablesAndRecords()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+
+        var tenants = await db.CollegeTenants.IgnoreQueryFilters().ToListAsync();
+        var depts = await db.Departments.IgnoreQueryFilters().ToListAsync();
+        var users = await db.Users.IgnoreQueryFilters().ToListAsync();
+        var tracks = await db.AcademicTracks.IgnoreQueryFilters().ToListAsync();
+        var teams = await db.ProjectTeams.IgnoreQueryFilters().Include(t => t.Members).ToListAsync();
+        var sessions = await db.AcademicSessions.IgnoreQueryFilters().ToListAsync();
+        var terms = await db.SemesterTerms.IgnoreQueryFilters().ToListAsync();
+        var offerings = await db.SubjectOfferings.IgnoreQueryFilters().ToListAsync();
+        var enrollments = await db.StudentAcademicEnrollments.IgnoreQueryFilters().ToListAsync();
+        var artifacts = await db.TeamArtifacts.IgnoreQueryFilters().ToListAsync();
+        var weeklyLogs = await db.WeeklyLogbooks.IgnoreQueryFilters().ToListAsync();
+
+        Console.WriteLine("\n========================================================");
+        Console.WriteLine("           PROJECT HUB DATABASE DUMP                   ");
+        Console.WriteLine("========================================================");
+        Console.WriteLine($"[1] CollegeTenants: {tenants.Count} records");
+        foreach (var t in tenants) Console.WriteLine($"   - [{t.TenantCode}] {t.Name} (Domain: {t.SsoDomain}, Seats: {t.MaxStudentSeats}, Tier: {t.LicenseTier})");
+
+        Console.WriteLine($"\n[2] Departments: {depts.Count} records");
+        foreach (var d in depts) Console.WriteLine($"   - [{d.Code}] {d.Name} (Intake: {d.IntakeQuota})");
+
+        Console.WriteLine($"\n[3] UserAccounts: {users.Count} records");
+        foreach (var u in users) Console.WriteLine($"   - {u.FullName,-22} | {u.Role,-12} | {u.Email,-26} | USN/Code: {u.EnrollmentOrEmployeeCode,-14} | Active: {u.IsActive}");
+
+        Console.WriteLine($"\n[4] AcademicSessions & Terms: {sessions.Count} sessions, {terms.Count} terms");
+        foreach (var s in sessions) Console.WriteLine($"   - Session: {s.Label} (Cutoff: {s.ExamCutoffDateUtc:yyyy-MM-dd}, Interdisciplinary: {s.AllowInterdisciplinaryTeams})");
+        foreach (var tm in terms) Console.WriteLine($"   - Term: {tm.SemesterName} (Sem {tm.SemesterNumber}, Parity: {tm.Parity})");
+
+        Console.WriteLine($"\n[5] SubjectOfferings & AcademicTracks: {offerings.Count} offerings, {tracks.Count} tracks");
+        foreach (var o in offerings) Console.WriteLine($"   - Subject: [{o.SubjectCode}] {o.SubjectName} (Credits: {o.Credits}, Type: {o.SubjectType})");
+        foreach (var tr in tracks) Console.WriteLine($"   - Track: {tr.Name} (Year: {tr.AcademicYear}, Mode: {tr.ParticipationMode})");
+
+        Console.WriteLine($"\n[6] ProjectTeams: {teams.Count} teams");
+        foreach (var tm in teams) Console.WriteLine($"   - [{tm.TeamCode}] \"{tm.Title}\" | Status: {tm.Status} | Members: {tm.Members.Count}");
+
+        Console.WriteLine($"\n[7] StudentAcademicEnrollments: {enrollments.Count} enrollments");
+        foreach (var en in enrollments) Console.WriteLine($"   - Student ID: {en.StudentUserId} | Batch: {en.AdmissionBatch} | Status: {en.AcademicStatus}");
+
+        Console.WriteLine($"\n[8] TeamArtifacts & WeeklyLogbooks: {artifacts.Count} artifacts, {weeklyLogs.Count} logs");
+        foreach (var a in artifacts) Console.WriteLine($"   - Artifact: {a.FileName} ({a.SlotType}, Status: {a.Status}, Size: {a.FileSizeBytes} bytes)");
+        foreach (var w in weeklyLogs) Console.WriteLine($"   - Week {w.WeekNumber}: \"{w.AccomplishmentsSummary}\" ({w.HoursLogged} hrs, Verified: {w.IsVerified})");
+        Console.WriteLine("========================================================\n");
+
+        Assert.NotEmpty(tenants);
+        Assert.NotEmpty(users);
+        Assert.NotEmpty(teams);
+    }
+
+    [Fact]
+    public async Task CollegeAdmin_CannotAccessCoordinatorExportMarksheet_ReturnsForbidden()
+    {
+        // P0 Security Boundary: College Admin is strictly institutional governor and must NOT access
+        // individual student marksheets or viva scores under CoordinatorOrHod policy.
+        var adminToken = await GetTokenForPersonaAsync("CollegeAdmin");
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/coordinator/export-marksheet");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CollegeAdmin_CannotAccessFacultyEndpoints_ReturnsForbidden()
+    {
+        // P0 Security Boundary: College Admin is excluded from FacultyOrAbove policy
+        // and cannot access faculty action queues or submit evaluations
+        var adminToken = await GetTokenForPersonaAsync("CollegeAdmin");
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/faculty/action-queue");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        // Also verify POST /api/faculty/evaluations returns Forbidden
+        var evalRequest = new HttpRequestMessage(HttpMethod.Post, "/api/faculty/evaluations")
+        {
+            Content = JsonContent.Create(new
+            {
+                ProjectTeamId = Guid.NewGuid(),
+                TotalScore = 45m
+            })
+        };
+        evalRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var evalResponse = await _client.SendAsync(evalRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, evalResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task CollegeAdmin_SignOffCompliance_IsStrictlyTenantIsolated()
+    {
+        // P0 Tenant Isolation: Verify SignOffCompliance only mutates departments belonging to caller's tenant
+        var adminToken = await GetTokenForPersonaAsync("CollegeAdmin");
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/college/compliance/sign-off")
+        {
+            Content = JsonContent.Create(new SignOffComplianceRequest
+            {
+                Remarks = "Official Institutional NBA Compliance Sign-off"
+            })
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Verify across DB that non-Sistec departments are untouched
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+
+        var nonSistecDepts = await db.Departments
+            .IgnoreQueryFilters()
+            .Where(d => d.CollegeId != DbInitializer.SistecTenantId && !d.IsDeleted)
+            .ToListAsync();
+
+        Assert.All(nonSistecDepts, d => Assert.False(d.IsSarAttested));
+    }
+
+    [Fact]
+    public async Task AccreditationEndpoints_AllowCollegeAdmin_BlocksStudent()
+    {
+        // 1. CollegeAdmin can access accreditation overview
+        var adminToken = await GetTokenForPersonaAsync("CollegeAdmin");
+        var adminReq = new HttpRequestMessage(HttpMethod.Get, "/api/college/accreditation/overview");
+        adminReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var adminRes = await _client.SendAsync(adminReq);
+        Assert.Equal(HttpStatusCode.OK, adminRes.StatusCode);
+        var overview = await adminRes.Content.ReadFromJsonAsync<AccreditationOverviewDto>();
+        Assert.NotNull(overview);
+        Assert.NotEmpty(overview.Cycles);
+
+        // 2. Student is blocked with 403 Forbidden
+        var studentToken = await GetTokenForPersonaAsync("Student");
+        var studentReq = new HttpRequestMessage(HttpMethod.Get, "/api/college/accreditation/overview");
+        studentReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", studentToken);
+
+        var studentRes = await _client.SendAsync(studentReq);
+        Assert.Equal(HttpStatusCode.Forbidden, studentRes.StatusCode);
     }
 }
