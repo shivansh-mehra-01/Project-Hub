@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { HodManagementView } from "@/features/college-admin/views/HodManagementView";
 
 export default function CollegeHodsPage() {
-  redirect("/college/courses");
+  return <HodManagementView />;
 }

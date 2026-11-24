@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { isRouteAuthorized, ROLE_HOME_ROUTES, PUBLIC_ROUTES } from "./routeRegistry";
@@ -19,18 +19,29 @@ export interface RouteGuardProps {
 export const RouteGuard: React.FC<RouteGuardProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentPersona, isAuthenticated, logout } = useProjectHubStore();
-  const [isAuthVerified, setIsAuthVerified] = useState(false);
+  const { currentPersona, isAuthenticated, isLoaded, logout } = useProjectHubStore();
 
   const isPublic = PUBLIC_ROUTES.includes(pathname);
+  const token = typeof window !== "undefined" ? getAuthToken() : null;
+  const isAuthorized =
+    isPublic ||
+    (isLoaded &&
+      !!token &&
+      isAuthenticated &&
+      !!currentPersona &&
+      isRouteAuthorized(
+        pathname,
+        currentPersona.role,
+        currentPersona.isProjectCoordinator
+      ));
 
   // Back-Forward Cache (bfcache) protection:
   // Whenever the page is restored from bfcache or traversed via history without a valid JWT,
   // immediately purge memory state and hard-replace to /login.
   useEffect(() => {
     const handlePageShow = (event: PageTransitionEvent) => {
-      const token = getAuthToken();
-      if ((event.persisted || !token) && !token && !PUBLIC_ROUTES.includes(pathname)) {
+      const currentToken = getAuthToken();
+      if ((event.persisted || !currentToken) && !currentToken && !PUBLIC_ROUTES.includes(pathname)) {
         logout();
         window.location.replace("/login");
       }
@@ -45,19 +56,22 @@ export const RouteGuard: React.FC<RouteGuardProps> = ({ children }) => {
   useEffect(() => {
     // 1. Allow public routes without verification
     if (isPublic) {
-      setIsAuthVerified(true);
       return;
     }
 
-    // 2. Validate token and authentication: if logged out, redirect cleanly via replace
-    const token = getAuthToken();
-    if (!token || !isAuthenticated || !currentPersona) {
-      setIsAuthVerified(false);
+    // 2. Wait until persistent storage hydration is verified
+    if (!isLoaded) {
+      return;
+    }
+
+    // 3. Validate token and authentication: if logged out, redirect cleanly via replace
+    const activeToken = getAuthToken();
+    if (!activeToken || !isAuthenticated || !currentPersona) {
       router.replace("/login");
       return;
     }
 
-    // 3. Validate role-level route authorization against routeRegistry
+    // 4. Validate role-level route authorization against routeRegistry
     const authorized = isRouteAuthorized(
       pathname,
       currentPersona.role,
@@ -65,18 +79,14 @@ export const RouteGuard: React.FC<RouteGuardProps> = ({ children }) => {
     );
 
     if (!authorized) {
-      setIsAuthVerified(false);
       const homeRoute = ROLE_HOME_ROUTES[currentPersona.role] || "/login";
       router.replace(homeRoute);
-      return;
     }
-
-    setIsAuthVerified(true);
-  }, [pathname, currentPersona, isAuthenticated, isPublic, router]);
+  }, [pathname, currentPersona, isAuthenticated, isLoaded, isPublic, router]);
 
   // While verifying authentication on protected routes, render neutral check screen—never flash children
   // Retain children in a hidden container during prerender/verification so Next.js instant navigation validation is never dropped
-  if (!isPublic && !isAuthVerified) {
+  if (!isAuthorized) {
     return (
       <>
         <div className="min-h-[50vh] flex items-center justify-center p-6 text-slate-600 select-none">

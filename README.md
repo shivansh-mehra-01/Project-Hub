@@ -125,12 +125,13 @@ The database is seeded with ready-to-test accounts across all roles (default pas
 
 | Role | Name | Email | Default Password | Primary Workspace Route |
 |---|---|---|---|---|
-| **SuperAdmin** | Platform Ops Admin | `admin@collabex.in` | `Pass@1234` | `/admin` |
-| **CollegeAdmin** | Dr. Keshvendra Choudhary (Principal) | `principal@sistec.ac.in` | `Pass@1234` | `/college` |
-| **HOD (CSE)** | Dr. Ravindra Kumar Sharma | `hod.cse@sistec.ac.in` | `Pass@1234` | `/hod` |
-| **Coordinator** | Prof. Priya Nair | `priya.nair@sistec.ac.in` | `Pass@1234` | `/coordinator` |
-| **Faculty Guide** | Prof. S. K. Verma | `sk.verma@sistec.ac.in` | `Pass@1234` | `/faculty` |
-| **Student (Team Lead)** | Shivansh Mehra | `0176cs221045@sistec.ac.in` | `Pass@1234` | `/student` |
+| **SuperAdmin** | Platform Ops Admin | `superadmin@collabex.in` | `Pass@1234` | `/admin` |
+| **CollegeAdmin** | Dr. Keshvendra Choudhary (Principal) | `collegeadmin@sistec.ac.in` | `Pass@1234` | `/college` |
+| **HOD (CSE)** | Dr. Ravindra Kumar Sharma | `hod@sistec.ac.in` | `Pass@1234` | `/hod` |
+| **Coordinator** | Prof. Priya Nair | `coordinator@sistec.ac.in` | `Pass@1234` | `/coordinator` |
+| **Faculty Guide** | Prof. S. K. Verma | `faculty@sistec.ac.in` | `Pass@1234` | `/faculty` |
+| **Student (Team Lead)** | Shivansh Mehra | `student@sistec.ac.in` | `Pass@1234` | `/student` |
+| **Student (Member)** | Aarav Sharma | `student2@sistec.ac.in` | `Pass@1234` | `/student` |
 
 ---
 

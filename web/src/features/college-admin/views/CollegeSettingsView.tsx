@@ -30,16 +30,15 @@ import {
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { collegeApi } from "@/lib/api/collegeApi";
 import { CollegeSettingsDto, UpdateCollegeSettingsRequest } from "@/lib/api/types";
-import { useProjectHubStore } from "@/mocks/ProjectHubStore";
+import { ApiConnectionBanner } from "../components/ApiConnectionBanner";
 
 export const CollegeSettingsView: React.FC = () => {
-  const { college: mockCollege, onboardCollege } = useProjectHubStore();
-
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"general" | "plan" | "integrations" | "security">("general");
 
   // General Details
-  const [collegeName, setCollegeName] = useState(mockCollege.name || "Sagar Institute of Science and Technology (SISTec)");
+  const [collegeName, setCollegeName] = useState("Sagar Institute of Science and Technology (SISTec)");
   const [affiliatedUniversity, setAffiliatedUniversity] = useState(
     "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV)"
   );
@@ -71,7 +70,7 @@ export const CollegeSettingsView: React.FC = () => {
   const [jiraEnabled, setJiraEnabled] = useState(false);
 
   // Security & SSO
-  const [ssoDomain, setSsoDomain] = useState(mockCollege.domain || "@sistec.ac.in");
+  const [ssoDomain, setSsoDomain] = useState("@sistec.ac.in");
   const [enforceStrictSso, setEnforceStrictSso] = useState(false);
 
   // File Upload Refs
@@ -82,8 +81,8 @@ export const CollegeSettingsView: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useDashboardHeader({
-    title: "Campus Settings",
-    breadcrumb: "Institutional Configuration & Platform Control",
+    title: "College Settings",
+    breadcrumb: "Institutional profile, official crest, digital seal, and security controls",
   });
 
   const showToast = (msg: string) => {
@@ -94,6 +93,7 @@ export const CollegeSettingsView: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
+      setApiError(null);
       const res = await collegeApi.getSettings();
       if (res) {
         if (res.name) setCollegeName(res.name);
@@ -117,8 +117,9 @@ export const CollegeSettingsView: React.FC = () => {
         if (res.maxStudentSeats) setMaxSeats(res.maxStudentSeats);
         if (res.enrolledStudentCount) setEnrolledCount(res.enrolledStudentCount);
       }
-    } catch (err) {
-      console.warn("Settings API fallback used", err);
+    } catch (err: any) {
+      console.error("Settings API error:", err);
+      setApiError(err?.message || "Failed to load institutional settings from backend.");
     } finally {
       setLoading(false);
     }
@@ -200,11 +201,6 @@ export const CollegeSettingsView: React.FC = () => {
       };
 
       await collegeApi.updateSettings(payload);
-      onboardCollege({
-        name: payload.name,
-        domain: ssoDomain,
-      });
-
       showToast("Settings successfully saved!");
     } catch (err) {
       console.error(err);
@@ -225,6 +221,10 @@ export const CollegeSettingsView: React.FC = () => {
           <CheckCircle2 className="h-4 w-4" />
           {toastMessage}
         </div>
+      )}
+
+      {apiError && (
+        <ApiConnectionBanner onRetry={loadData} message={apiError} isRetrying={loading} />
       )}
 
       {/* ========================================================================= */}
@@ -290,7 +290,7 @@ export const CollegeSettingsView: React.FC = () => {
           }`}
         >
           <Building2 className="h-4 w-4" />
-          <span>General & Identity</span>
+          <span>General</span>
         </button>
 
         <button
@@ -303,7 +303,7 @@ export const CollegeSettingsView: React.FC = () => {
           }`}
         >
           <Layers className="h-4 w-4" />
-          <span>Plan & Quotas</span>
+          <span>Plan & Usage</span>
         </button>
 
         <button
@@ -316,7 +316,7 @@ export const CollegeSettingsView: React.FC = () => {
           }`}
         >
           <SlidersHorizontal className="h-4 w-4" />
-          <span>Integrations & Add-ons</span>
+          <span>Integrations</span>
         </button>
 
         <button
@@ -706,7 +706,7 @@ export const CollegeSettingsView: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
                   <span>{(storageQuotaGb - usedStorageGb).toFixed(1)} GB remaining</span>
-                  <span className="font-semibold text-emerald-700">Multi-region GCS Backup</span>
+                  <span className="font-semibold text-emerald-700">Automatic Cloud Backup</span>
                 </div>
               </div>
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ShieldCheck,
@@ -12,9 +12,10 @@ import {
   BarChart3,
   Clock,
   Plus,
+  Award,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
-import { useProjectHubStore } from "@/mocks/ProjectHubStore";
+import { getUserProfile } from "@/lib/api/apiClient";
 import { useAccreditation } from "./accreditationStore";
 import { OverviewTab } from "./tabs/OverviewTab";
 import { FrameworksAndCyclesTab } from "./tabs/FrameworksAndCyclesTab";
@@ -23,9 +24,12 @@ import { CriteriaAndMetricsTab } from "./tabs/CriteriaAndMetricsTab";
 import { EvidenceAndDocumentsTab } from "./tabs/EvidenceAndDocumentsTab";
 import { ReviewsAndApprovalsTab } from "./tabs/ReviewsAndApprovalsTab";
 import { ReportsAndExportTab } from "./tabs/ReportsAndExportTab";
+import { ExaminationTab } from "./tabs/ExaminationTab";
 import { ActivityLogTab } from "./tabs/ActivityLogTab";
 import { Modal } from "@/design-system/components/Modal";
 import { Input } from "@/design-system/components/Input";
+import { collegeApi } from "@/lib/api/collegeApi";
+import { DepartmentDto } from "@/lib/api/types";
 
 export type AccreditationTab =
   | "overview"
@@ -35,6 +39,7 @@ export type AccreditationTab =
   | "evidence"
   | "reviews"
   | "reports"
+  | "examination"
   | "activity";
 
 interface AccreditationModuleProps {
@@ -45,10 +50,16 @@ export const AccreditationModule: React.FC<AccreditationModuleProps> = ({
   initialTab = "overview",
 }) => {
   const router = useRouter();
-  const { college } = useProjectHubStore();
 
   const [activeTab, setActiveTab] = useState<AccreditationTab>(initialTab);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("2026–2027");
+  const [departments, setDepartments] = useState<DepartmentDto[]>([]);
+
+  useEffect(() => {
+    collegeApi.getDepartments().then((res) => {
+      if (res) setDepartments(res);
+    }).catch(() => {});
+  }, []);
 
   // Load accreditation state
   const {
@@ -81,21 +92,23 @@ export const AccreditationModule: React.FC<AccreditationModuleProps> = ({
   const [newCycleYear, setNewCycleYear] = useState("2026–2027");
 
   useDashboardHeader({
-    title: "Accreditation & Compliance",
-    breadcrumb: "Institution-wide accreditation management",
+    title: "Accreditation & Examination",
+    breadcrumb: "NBA SAR preparation, NAAC compliance, evidence verification, and examination results",
   });
 
-  const institutionName = college?.name || "Sagar Institute of Science and Technology (SISTec)";
+  const currentUser = getUserProfile();
+  const institutionName = currentUser?.collegeName || "Sagar Institute of Science and Technology (SISTec)";
 
   // Clean, concise tab definitions (no bloated labels)
   const tabItems: Array<{ id: AccreditationTab; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }>; count?: number }> = [
     { id: "overview", label: "Overview", icon: Layers },
-    { id: "frameworks", label: "Frameworks", icon: ShieldCheck, count: cycles.length },
+    { id: "frameworks", label: "Frameworks & Cycles", icon: ShieldCheck, count: cycles.length },
     { id: "programs", label: "Program Mapping", icon: GitFork },
-    { id: "criteria", label: "Criteria & Marks", icon: BarChart3 },
+    { id: "criteria", label: "Criteria & Metrics", icon: BarChart3 },
     { id: "evidence", label: "Evidence Vault", icon: FolderArchive, count: evidenceList.length },
-    { id: "reviews", label: "Reviews", icon: FileCheck2, count: reviews.filter((r) => r.status === "Pending").length },
-    { id: "reports", label: "Export Dossier", icon: ShieldCheck },
+    { id: "reviews", label: "Reviews & Approvals", icon: FileCheck2, count: reviews.filter((r) => r.status === "Pending").length },
+    { id: "reports", label: "Reports & Dossier", icon: ShieldCheck },
+    { id: "examination", label: "Examination Register", icon: Award },
     { id: "activity", label: "Audit Trail", icon: Clock },
   ];
 
@@ -133,7 +146,7 @@ export const AccreditationModule: React.FC<AccreditationModuleProps> = ({
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold text-slate-900 tracking-tight">
-              Accreditation & Compliance
+              Accreditation & Examination
             </h1>
             <span className="text-slate-300">•</span>
             <span className="text-xs font-medium text-slate-500 truncate max-w-xs">
@@ -141,7 +154,7 @@ export const AccreditationModule: React.FC<AccreditationModuleProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            Manage NBA and NAAC accreditation readiness, evidence, and SAR dossiers.
+            NBA SAR preparation, NAAC compliance, evidence verification, and examination results.
           </p>
         </div>
 
@@ -273,6 +286,10 @@ export const AccreditationModule: React.FC<AccreditationModuleProps> = ({
           activeCycle={activeCycle}
           onNavigateTab={(t) => handleTabChange(t as AccreditationTab)}
         />
+      )}
+
+      {activeTab === "examination" && (
+        <ExaminationTab departments={departments} />
       )}
 
       {activeTab === "activity" && (

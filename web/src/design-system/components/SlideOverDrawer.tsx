@@ -9,6 +9,7 @@ export interface SlideOverDrawerProps {
   onClose: () => void;
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
+  description?: React.ReactNode;
   badge?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
@@ -20,11 +21,13 @@ export const SlideOverDrawer: React.FC<SlideOverDrawerProps> = ({
   onClose,
   title,
   subtitle,
+  description,
   badge,
   children,
   footer,
   width = "md",
 }) => {
+  const effectiveSubtitle = subtitle || description;
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -76,8 +79,8 @@ export const SlideOverDrawer: React.FC<SlideOverDrawerProps> = ({
                 )}
                 {badge}
               </div>
-              {subtitle && (
-                <p className="text-xs text-[#475569] leading-relaxed">{subtitle}</p>
+              {effectiveSubtitle && (
+                <p className="text-xs text-[#475569] leading-relaxed">{effectiveSubtitle}</p>
               )}
             </div>
             <button

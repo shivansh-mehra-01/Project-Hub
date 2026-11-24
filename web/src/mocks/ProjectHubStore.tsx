@@ -79,16 +79,16 @@ export const initialFacultyRoster: FacultyRosterItem[] = [
   {
     id: "usr-fac-verma",
     name: "Prof. S. K. Verma",
-    email: "sk.verma@sistec.ac.in",
+    email: "faculty@sistec.ac.in",
     designation: "Associate Professor",
-    isProjectCoordinator: true,
+    isProjectCoordinator: false,
     maxTeams: 4,
     guidedCount: 2,
   },
   {
     id: "usr-fac-nair",
     name: "Prof. Priya Nair",
-    email: "priya.nair@sistec.ac.in",
+    email: "coordinator@sistec.ac.in",
     designation: "Assistant Professor",
     isProjectCoordinator: true,
     maxTeams: 4,
@@ -137,6 +137,7 @@ interface ProjectHubStoreContextType {
   isAuthenticated: boolean;
   isLiveSession: boolean;
   isHydrating: boolean;
+  isLoaded: boolean;
   // Actions
   logout: () => void;
   login: (persona?: UserPersona) => void;
@@ -196,7 +197,23 @@ interface ProjectHubStoreContextType {
 const ProjectHubStoreContext = createContext<ProjectHubStoreContextType | null>(null);
 
 export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentPersona, setCurrentPersona] = useState<UserPersona>(initialPersonas.studentLead);
+  const [currentPersona, setCurrentPersona] = useState<UserPersona>(() => {
+    const userProfile = getUserProfile();
+    if (userProfile) {
+      return {
+        id: userProfile.id,
+        name: userProfile.fullName,
+        email: userProfile.email,
+        role: userProfile.role as RoleType,
+        collegeId: userProfile.collegeId,
+        departmentId: userProfile.departmentId || undefined,
+        isProjectCoordinator: userProfile.isProjectCoordinator,
+        enrollmentNumber: userProfile.enrollmentOrEmployeeCode,
+        employeeId: userProfile.enrollmentOrEmployeeCode,
+      };
+    }
+    return initialPersonas.studentLead;
+  });
   const [college, setCollege] = useState<College>(initialCollege);
   const [departments, setDepartments] = useState<Department[]>(initialDepartments);
   const [cycle, setCycle] = useState<ProjectCycle>(initialCycle);
@@ -215,7 +232,9 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   const [academicSessions, setAcademicSessions] = useState<AcademicSession[]>(initialAcademicSessions);
   const [semesterTerms, setSemesterTerms] = useState<SemesterTerm[]>(initialSemesterTerms);
   const [subjectOfferings, setSubjectOfferings] = useState<SubjectOffering[]>(initialSubjectOfferings);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return !!getAuthToken();
+  });
   const [isLiveSession, setIsLiveSession] = useState<boolean>(false);
   const [isHydrating, setIsHydrating] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -397,7 +416,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
                 d.code === dashRes.value.departmentCode
                   ? {
                       ...d,
-                      criterion3Attainment: dashRes.value.nbaBlendedCriterion3Pct,
+                      criterion3Attainment: dashRes.value.nbaBlendedCriterion3Pct ?? undefined,
                       hodSignOffStatus: dashRes.value.isSarAttested ? "Attested & Locked" : d.hodSignOffStatus,
                     }
                   : d
@@ -461,9 +480,8 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
           }
         } else if (role === "Faculty") {
           if (currentPersona.isProjectCoordinator) {
-            const [coordTeams, coordExcs, mentoredRes] = await Promise.allSettled([
+            const [coordTeams, mentoredRes] = await Promise.allSettled([
               coordinatorApi.getTeams(),
-              coordinatorApi.getExceptions(),
               facultyApi.getMentoredTeams(),
             ]);
 
@@ -487,25 +505,6 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
                   members: [],
                   tasks: [],
                   weeklyLogs: [],
-                }))
-              );
-            }
-
-            if (isMounted && coordExcs.status === "fulfilled") {
-              setExceptionAuditLogs(
-                coordExcs.value.map((e) => ({
-                  id: e.id,
-                  teamId: e.projectTeamId,
-                  teamCode: e.teamCode,
-                  teamTitle: `Team ${e.teamCode}`,
-                  type: (e.actionType === "ReassignGuide" ? "ReassignGuide" : e.actionType === "RemoveDroppedMember" ? "RemoveMember" : "ReVivaUnlock") as "ReassignGuide" | "RemoveMember" | "ReVivaUnlock" | "DeadlineExtension",
-                  description: e.reason,
-                  requestedBy: e.requestedByName || "Faculty Coordinator",
-                  requestedAt: e.createdAtUtc,
-                  status: (e.isApproved ? "Approved" : "PendingHOD") as "PendingHOD" | "Approved" | "Rejected",
-                  reason: e.reason,
-                  reviewedBy: e.isApproved ? "Dr. Ravindra Kumar Sharma (HOD)" : undefined,
-                  reviewedAt: e.approvedAtUtc,
                 }))
               );
             }
@@ -1865,6 +1864,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         isAuthenticated,
         isLiveSession,
         isHydrating,
+        isLoaded,
         logout,
         login,
         switchPersona,

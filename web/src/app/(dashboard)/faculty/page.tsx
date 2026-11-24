@@ -1,6 +1,5 @@
-import { FacultyView } from "@/features/faculty/FacultyView";
+import { FacultyDashboardView } from "@/features/faculty/views/FacultyDashboardView";
 
 export default function FacultyPage() {
-  return <FacultyView />;
+  return <FacultyDashboardView />;
 }
-

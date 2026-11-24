@@ -39,10 +39,74 @@ public class CoordinatorController : ControllerBase
         _logger = logger;
     }
 
+    private async Task<(Guid? DepartmentId, string? ErrorMessage)> ResolveCoordinatorDepartmentAsync()
+    {
+        var collegeId = _tenantContext.CollegeId;
+        if (!collegeId.HasValue || collegeId.Value == Guid.Empty)
+        {
+            return (null, "Active institutional tenant context required.");
+        }
+
+        var userId = _tenantContext.UserId;
+        if (!userId.HasValue || userId.Value == Guid.Empty)
+        {
+            return (null, "Authenticated user identity required.");
+        }
+
+        if (_tenantContext.IsSuperAdmin)
+        {
+            var firstDeptId = _tenantContext.DepartmentId ?? await _context.Departments
+                .Where(d => d.CollegeId == collegeId.Value && !d.IsDeleted)
+                .Select(d => (Guid?)d.Id)
+                .FirstOrDefaultAsync();
+            return (firstDeptId, null);
+        }
+
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Id == userId.Value && u.CollegeId == collegeId.Value && !u.IsDeleted);
+
+        if (user == null || !user.IsActive)
+        {
+            return (null, "User account is inactive or not found.");
+        }
+
+        // Must hold active coordinator capability or be HOD
+        if (user.Role != UserRole.HOD && !user.IsProjectCoordinator)
+        {
+            return (null, "User does not hold active Project Coordinator authority.");
+        }
+
+        var deptId = _tenantContext.DepartmentId ?? user.DepartmentId;
+        if (deptId.HasValue && deptId.Value != Guid.Empty)
+        {
+            var exists = await _context.Departments
+                .AnyAsync(d => d.Id == deptId.Value && d.CollegeId == collegeId.Value && !d.IsDeleted);
+            if (exists)
+            {
+                return (deptId.Value, null);
+            }
+        }
+
+        if (user.Role == UserRole.HOD)
+        {
+            var hodDept = await _context.Departments
+                .FirstOrDefaultAsync(d => d.CollegeId == collegeId.Value && d.HodUserId == userId.Value && !d.IsDeleted);
+            if (hodDept != null)
+            {
+                return (hodDept.Id, null);
+            }
+        }
+
+        return (null, "No authorized department assignment found for this Project Coordinator.");
+    }
+
     [HttpPost("roster/student")]
+    [HttpPost("students")]
     public async Task<ActionResult<SingleStudentProvisionedResponse>> AddSingleStudent([FromBody] AddSingleStudentRequest request)
     {
         var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
 
         if (string.IsNullOrWhiteSpace(request.FullName) ||
             string.IsNullOrWhiteSpace(request.EnrollmentNumber) ||
@@ -51,7 +115,13 @@ public class CoordinatorController : ControllerBase
             return BadRequest(new { message = "Full name, enrollment number (USN), and institutional email are required." });
         }
 
-        if (request.DepartmentId == Guid.Empty)
+        if (request.DepartmentId != Guid.Empty && coordDeptId.HasValue && request.DepartmentId != coordDeptId.Value && !_tenantContext.IsSuperAdmin)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Project Coordinators are strictly restricted to provisioning students within their appointed department." });
+        }
+
+        var effectiveDeptId = coordDeptId ?? request.DepartmentId;
+        if (effectiveDeptId == Guid.Empty)
         {
             return BadRequest(new { message = "Valid Department ID is required." });
         }
@@ -85,7 +155,7 @@ public class CoordinatorController : ControllerBase
         // 3. Resolve Department & CourseProgram
         var department = await _context.Departments
             .Include(d => d.CourseProgram)
-            .FirstOrDefaultAsync(d => d.Id == request.DepartmentId && d.CollegeId == collegeId && !d.IsDeleted);
+            .FirstOrDefaultAsync(d => d.Id == effectiveDeptId && d.CollegeId == collegeId && !d.IsDeleted);
 
         if (department == null)
         {
@@ -123,7 +193,7 @@ public class CoordinatorController : ControllerBase
 
         var semesterTerm = await _context.SemesterTerms.FirstOrDefaultAsync(t =>
             t.CollegeId == collegeId &&
-            t.DepartmentId == request.DepartmentId &&
+            t.DepartmentId == effectiveDeptId &&
             (!sessionId.HasValue || t.AcademicSessionId == sessionId.Value) &&
             t.SemesterNumber == semNumber &&
             !t.IsDeleted);
@@ -133,7 +203,7 @@ public class CoordinatorController : ControllerBase
             semesterTerm = new SemesterTerm
             {
                 CollegeId = collegeId,
-                DepartmentId = request.DepartmentId,
+                DepartmentId = effectiveDeptId,
                 AcademicSessionId = sessionId,
                 SemesterNumber = semNumber,
                 SemesterName = $"Semester {semNumber}",
@@ -152,7 +222,7 @@ public class CoordinatorController : ControllerBase
         var newUser = new UserAccount
         {
             CollegeId = collegeId,
-            DepartmentId = request.DepartmentId,
+            DepartmentId = effectiveDeptId,
             FullName = request.FullName.Trim(),
             Email = email,
             EnrollmentOrEmployeeCode = enrollmentNumber,
@@ -175,7 +245,7 @@ public class CoordinatorController : ControllerBase
             CollegeId = collegeId,
             StudentUserId = newUser.Id,
             CourseProgramId = courseProgramId,
-            DepartmentId = request.DepartmentId,
+            DepartmentId = effectiveDeptId,
             CurrentSemesterTermId = semesterTerm.Id,
             AdmissionBatch = admissionBatch,
             AcademicStatus = AcademicStatus.Active
@@ -190,13 +260,13 @@ public class CoordinatorController : ControllerBase
             newUser.Email, newUser.EnrollmentOrEmployeeCode, otp);
 
         // 8. Record ExceptionAuditLog
-        var defaultTeam = await _context.ProjectTeams.FirstOrDefaultAsync(t => t.CollegeId == collegeId && t.DepartmentId == request.DepartmentId && !t.IsDeleted);
+        var defaultTeam = await _context.ProjectTeams.FirstOrDefaultAsync(t => t.CollegeId == collegeId && t.DepartmentId == effectiveDeptId && !t.IsDeleted);
         var requesterId = _tenantContext.UserId ?? newUser.Id;
 
         var auditLog = new ExceptionAuditLog
         {
             CollegeId = collegeId,
-            DepartmentId = request.DepartmentId,
+            DepartmentId = effectiveDeptId,
             ProjectTeamId = defaultTeam?.Id,
             ActionType = ExceptionActionType.SingleStudentProvisioned,
             TargetUserId = newUser.Id,
@@ -233,14 +303,43 @@ public class CoordinatorController : ControllerBase
     }
 
     [HttpPost("roster/import")]
+    [HttpPost("import-roster")]
     public async Task<ActionResult<RosterImportResultDto>> ImportRoster([FromBody] RosterImportRequest request)
     {
         var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
+        if (request.DepartmentId != Guid.Empty && coordDeptId.HasValue && request.DepartmentId != coordDeptId.Value && !_tenantContext.IsSuperAdmin)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Project Coordinators are strictly restricted to importing rosters into their appointed department." });
+        }
+
+        var targetDeptId = coordDeptId ?? request.DepartmentId;
+        if (targetDeptId == Guid.Empty)
+        {
+            return BadRequest(new { message = "Valid Department ID is required." });
+        }
+
+        var department = await _context.Departments
+            .FirstOrDefaultAsync(d => d.Id == targetDeptId && d.CollegeId == collegeId && !d.IsDeleted);
+
+        if (department == null)
+        {
+            return BadRequest(new { message = "Department not found in this institution." });
+        }
+
         var inserted = 0;
         var updated = 0;
         var warnings = new List<string>();
 
         var defaultHash = Infrastructure.Security.PasswordHelper.HashPassword("Pass@1234");
+
+        // Validate tenant SSO domain
+        var tenant = await _context.CollegeTenants.FirstOrDefaultAsync(c => c.Id == collegeId);
+        var expectedDomain = !string.IsNullOrWhiteSpace(tenant?.SsoDomain)
+            ? $"@{tenant.SsoDomain.Trim().ToLowerInvariant()}"
+            : null;
 
         foreach (var row in request.Rows)
         {
@@ -253,15 +352,46 @@ public class CoordinatorController : ControllerBase
             var email = row.Email.Trim().ToLowerInvariant();
             var code = row.EnrollmentOrEmployeeCode.Trim().ToUpperInvariant();
 
+            // Validate email domain
+            if (expectedDomain != null && !email.EndsWith(expectedDomain, StringComparison.OrdinalIgnoreCase))
+            {
+                warnings.Add($"Skipping '{email}': Email must belong to institutional domain '{expectedDomain}'.");
+                continue;
+            }
+
+            // Role Security Rule: Roster import can only provision or update Student accounts.
+            if (row.Role != UserRole.Student && (int)row.Role != 0)
+            {
+                warnings.Add($"Row '{row.FullName}' ({email}): Role override to '{row.Role}' rejected. Coordinator roster import only provisions Student accounts.");
+            }
+
             var existing = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => (u.Email == email || u.EnrollmentOrEmployeeCode == code) &&
+                                          u.CollegeId == collegeId &&
+                                          !u.IsDeleted);
 
             if (existing != null)
             {
+                // CRITICAL PRIVILEGE PROTECTION:
+                // An existing non-student account (HOD, CollegeAdmin, SuperAdmin, Faculty) MUST NEVER be modified by roster import!
+                if (existing.Role != UserRole.Student)
+                {
+                    warnings.Add($"Skipping existing account '{existing.Email}' (Role: {existing.Role}). Coordinator roster import is strictly prohibited from modifying institutional staff or administrator accounts.");
+                    continue;
+                }
+
+                // Department boundary protection:
+                if (existing.DepartmentId.HasValue && existing.DepartmentId.Value != targetDeptId && !_tenantContext.IsSuperAdmin)
+                {
+                    warnings.Add($"Skipping existing student '{existing.Email}': Student is currently registered in another department.");
+                    continue;
+                }
+
+                // Update permitted student profile attributes only (NEVER touch Role, PasswordHash, DelegatedResponsibility, or IsProjectCoordinator)
                 existing.FullName = row.FullName.Trim();
                 existing.EnrollmentOrEmployeeCode = code;
-                existing.Role = row.Role;
-                existing.DepartmentId = request.DepartmentId;
+                existing.DepartmentId = targetDeptId;
                 existing.SkillsCsv = row.SkillsCsv;
                 existing.GitHubHandle = row.GitHubHandle;
                 updated++;
@@ -271,11 +401,11 @@ public class CoordinatorController : ControllerBase
                 var newUser = new UserAccount
                 {
                     CollegeId = collegeId,
-                    DepartmentId = request.DepartmentId,
+                    DepartmentId = targetDeptId,
                     FullName = row.FullName.Trim(),
                     Email = email,
                     EnrollmentOrEmployeeCode = code,
-                    Role = row.Role,
+                    Role = UserRole.Student, // STRICT: ALWAYS UserRole.Student
                     PasswordHash = defaultHash,
                     IsActivated = false,
                     IsActive = true,
@@ -301,13 +431,20 @@ public class CoordinatorController : ControllerBase
     [HttpGet("teams")]
     public async Task<ActionResult<List<ProjectProposalDto>>> GetTeams([FromQuery] Guid? trackId)
     {
-        var deptId = _tenantContext.DepartmentId;
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
         var query = _context.ProjectTeams
             .Include(t => t.GuideUser)
             .Include(t => t.Members)
-            .Where(t => !t.IsDeleted);
+            .Where(t => t.CollegeId == collegeId && !t.IsDeleted);
 
-        if (deptId.HasValue) query = query.Where(t => t.DepartmentId == deptId.Value);
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue)
+        {
+            query = query.Where(t => t.DepartmentId == coordDeptId.Value);
+        }
+
         if (trackId.HasValue) query = query.Where(t => t.AcademicTrackId == trackId.Value);
 
         var teams = await query
@@ -335,27 +472,85 @@ public class CoordinatorController : ControllerBase
     [HttpPost("teams/{teamId}/assign-guide")]
     public async Task<IActionResult> AssignGuide(Guid teamId, [FromBody] AssignGuideRequest request)
     {
-        var team = await _context.ProjectTeams.FirstOrDefaultAsync(t => t.Id == teamId && !t.IsDeleted);
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
+        var team = await _context.ProjectTeams
+            .Include(t => t.GuideUser)
+            .FirstOrDefaultAsync(t => t.Id == teamId && t.CollegeId == collegeId && !t.IsDeleted);
+
         if (team == null) return NotFound(new { message = "Team not found." });
 
-        var guide = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.GuideUserId && !u.IsDeleted);
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue && team.DepartmentId != coordDeptId.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Coordinators can only assign guides to teams within their appointed department." });
+        }
+
+        var guide = await _context.Users
+            .FirstOrDefaultAsync(u => u.Id == request.GuideUserId && u.CollegeId == collegeId && !u.IsDeleted);
+
         if (guide == null || (guide.Role != UserRole.Faculty && guide.Role != UserRole.HOD))
         {
             return BadRequest(new { message = "Selected user is not an eligible faculty mentor." });
         }
 
-        // Validate mentor capacity
-        var currentLoad = await _context.ProjectTeams.CountAsync(t => t.GuideUserId == guide.Id && !t.IsDeleted && t.Status != ProjectStatus.Archived);
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue && guide.DepartmentId != coordDeptId.Value)
+        {
+            return BadRequest(new { message = "Selected faculty mentor belongs to another department." });
+        }
+
+        var currentLoad = await _context.ProjectTeams
+            .CountAsync(t => t.GuideUserId == guide.Id && t.CollegeId == collegeId && !t.IsDeleted && t.Status != ProjectStatus.Archived && t.Id != team.Id);
+
         if (currentLoad >= guide.MaxMentorTeams)
         {
             return BadRequest(new { message = $"Faculty member '{guide.FullName}' has reached their maximum mentorship capacity of {guide.MaxMentorTeams} teams." });
         }
+
+        var previousGuideId = team.GuideUserId;
+        var previousGuideName = team.GuideUser?.FullName;
 
         team.GuideUserId = guide.Id;
         if (team.Status == ProjectStatus.Draft)
         {
             team.Status = ProjectStatus.PendingGuide;
         }
+
+        var reason = previousGuideId.HasValue ? "Guide reassigned by Coordinator" : "Guide allocated by Coordinator";
+        var excLog = new ExceptionAuditLog
+        {
+            CollegeId = collegeId,
+            DepartmentId = team.DepartmentId,
+            ProjectTeamId = team.Id,
+            ActionType = ExceptionActionType.ReassignGuide,
+            TargetUserId = guide.Id,
+            Reason = reason,
+            PreviousValueJson = System.Text.Json.JsonSerializer.Serialize(new { guideUserId = previousGuideId, guideName = previousGuideName }),
+            NewValueJson = System.Text.Json.JsonSerializer.Serialize(new { guideUserId = guide.Id, guideName = guide.FullName }),
+            RequestedByUserId = _tenantContext.UserId ?? guide.Id,
+            ApprovedByUserId = _tenantContext.UserId ?? guide.Id,
+            ApprovedAtUtc = DateTime.UtcNow
+        };
+        await _context.ExceptionAuditLogs.AddAsync(excLog);
+
+        var audit = new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = previousGuideId.HasValue ? "COORDINATOR_GUIDE_REASSIGNED" : "COORDINATOR_GUIDE_ALLOCATED",
+            TargetTenantId = collegeId,
+            TargetEntity = "ProjectTeam",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                teamId = team.Id,
+                teamCode = team.TeamCode,
+                previousGuideId,
+                newGuideId = guide.Id,
+                reason
+            }),
+            OccurredAtUtc = DateTime.UtcNow
+        };
+        await _context.PlatformAuditLogs.AddAsync(audit);
 
         await _context.SaveChangesAsync();
         return Ok(new { success = true, teamId = team.Id, guideId = guide.Id, guideName = guide.FullName });
@@ -364,10 +559,21 @@ public class CoordinatorController : ControllerBase
     [HttpGet("panels")]
     public async Task<ActionResult<List<VivaPanelDto>>> GetPanels()
     {
-        var panels = await _context.VivaPanels
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
+        var query = _context.VivaPanels
             .Include(p => p.Evaluators)
                 .ThenInclude(e => e.EvaluatorUser)
-            .Where(p => !p.IsDeleted)
+            .Where(p => p.CollegeId == collegeId && !p.IsDeleted);
+
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue)
+        {
+            query = query.Where(p => p.DepartmentId == coordDeptId.Value);
+        }
+
+        var panels = await query
             .OrderBy(p => p.ScheduledAtUtc)
             .Select(p => new VivaPanelDto
             {
@@ -389,6 +595,33 @@ public class CoordinatorController : ControllerBase
     public async Task<ActionResult<VivaPanelDto>> SchedulePanel([FromBody] ScheduleVivaPanelRequest request)
     {
         var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue && request.DepartmentId != coordDeptId.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Coordinators can only schedule viva panels for their appointed department." });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PanelName))
+        {
+            return BadRequest(new { message = "Panel name is required." });
+        }
+
+        var evaluators = await _context.Users
+            .Where(u => request.EvaluatorUserIds.Contains(u.Id) && u.CollegeId == collegeId && !u.IsDeleted)
+            .ToListAsync();
+
+        if (evaluators.Count != request.EvaluatorUserIds.Distinct().Count())
+        {
+            return BadRequest(new { message = "One or more specified evaluators are invalid or belong to another institution." });
+        }
+
+        var nonFaculty = evaluators.FirstOrDefault(u => u.Role != UserRole.Faculty && u.Role != UserRole.HOD);
+        if (nonFaculty != null)
+        {
+            return BadRequest(new { message = $"User '{nonFaculty.FullName}' has role '{nonFaculty.Role}' and cannot serve as an academic viva evaluator." });
+        }
 
         var panel = new VivaPanel
         {
@@ -400,12 +633,12 @@ public class CoordinatorController : ControllerBase
             RoomOrLink = request.RoomOrLink.Trim()
         };
 
-        foreach (var evaluatorId in request.EvaluatorUserIds.Distinct())
+        foreach (var evaluator in evaluators)
         {
             panel.Evaluators.Add(new VivaPanelEvaluator
             {
                 CollegeId = collegeId,
-                EvaluatorUserId = evaluatorId
+                EvaluatorUserId = evaluator.Id
             });
         }
 
@@ -418,7 +651,7 @@ public class CoordinatorController : ControllerBase
             PanelName = panel.PanelName,
             ScheduledAtUtc = panel.ScheduledAtUtc,
             RoomOrLink = panel.RoomOrLink,
-            EvaluatorNames = new List<string>()
+            EvaluatorNames = evaluators.Select(e => e.FullName).ToList()
         });
     }
 
@@ -426,7 +659,28 @@ public class CoordinatorController : ControllerBase
     public async Task<IActionResult> RequestException([FromBody] CreateExceptionRequest request)
     {
         var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
         var requestedBy = _tenantContext.UserId!.Value;
+
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue && request.DepartmentId != coordDeptId.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Coordinators can only submit exception requests for their appointed department." });
+        }
+
+        var team = await _context.ProjectTeams
+            .FirstOrDefaultAsync(t => t.Id == request.ProjectTeamId && t.CollegeId == collegeId && !t.IsDeleted);
+
+        if (team == null)
+        {
+            return NotFound(new { message = "Project team not found." });
+        }
+
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue && team.DepartmentId != coordDeptId.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Cannot request exceptions for a project team in another department." });
+        }
 
         var exceptionLog = new ExceptionAuditLog
         {
@@ -451,11 +705,14 @@ public class CoordinatorController : ControllerBase
     public async Task<IActionResult> ExportMarksheet([FromQuery] Guid? trackId, CancellationToken cancellationToken)
     {
         var collegeId = _tenantContext.CollegeId!.Value;
-        var deptId = _tenantContext.DepartmentId;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
+        var targetDeptId = coordDeptId;
 
         var dept = await _context.Departments
             .Include(d => d.College)
-            .FirstOrDefaultAsync(d => (deptId == null || d.Id == deptId) && d.CollegeId == collegeId && !d.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(d => (targetDeptId == null || d.Id == targetDeptId.Value) && d.CollegeId == collegeId && !d.IsDeleted, cancellationToken);
 
         var collegeName = dept?.College?.Name ?? "Sagar Institute of Science and Technology (SISTec Bhopal)";
         var deptName = dept?.Name ?? "Computer Science & Engineering";
@@ -470,7 +727,11 @@ public class CoordinatorController : ControllerBase
                 .ThenInclude(e => e.IndividualScores)
             .Where(t => t.CollegeId == collegeId && !t.IsDeleted);
 
-        if (deptId.HasValue) query = query.Where(t => t.DepartmentId == deptId.Value);
+        if (!_tenantContext.IsSuperAdmin && targetDeptId.HasValue)
+        {
+            query = query.Where(t => t.DepartmentId == targetDeptId.Value);
+        }
+
         if (trackId.HasValue) query = query.Where(t => t.AcademicTrackId == trackId.Value);
 
         var teams = await query.OrderBy(t => t.TeamCode).ToListAsync(cancellationToken);
@@ -489,36 +750,19 @@ public class CoordinatorController : ControllerBase
             foreach (var team in teams)
             {
                 var eval = team.Evaluations.OrderByDescending(e => e.LockedAtUtc).FirstOrDefault();
-                var shared60 = eval != null ? (int)Math.Round(eval.SharedTotalScore * 0.60m) : 52;
-                var guideName = team.GuideUser?.FullName ?? "Assigned Faculty Guide";
+                var shared60 = eval != null ? (int)Math.Round(eval.SharedTotalScore * 0.60m) : 0;
+                var guideName = team.GuideUser?.FullName ?? "Unassigned";
 
                 foreach (var member in team.Members.Where(m => !m.IsDeleted && m.User != null))
                 {
                     var user = member.User!;
                     var ind = eval?.IndividualScores.FirstOrDefault(s => s.StudentUserId == user.Id);
-                    var ind40 = ind != null ? (int)Math.Round((ind.ModuleOwnershipScore + ind.VivaQaScore + ind.LogDisciplineScore) * 1.33m) : 34;
-                    var total = Math.Min(100, shared60 + ind40);
-                    var status = total >= 70 ? "Target Met" : total >= 50 ? "Pass" : "Remedial";
+                    var ind40 = ind != null ? (int)Math.Round(ind.IndividualTotalScore * 0.40m) : 0;
+                    var total = eval != null && ind != null ? (int)Math.Round(ind.FinalComputedStudentMark) : (shared60 + ind40);
+                    var status = total >= 70 ? "Target Met" : total >= 50 ? "Pass" : (eval != null ? "Remedial" : "Pending Evaluation");
 
                     csv.AppendLine($"{user.EnrollmentOrEmployeeCode},{user.FullName},{deptCode},6,CS-606,{team.TeamCode},\"{team.Title}\",{guideName},{shared60},{ind40},{total},{status}");
                 }
-            }
-        }
-        else
-        {
-            // Default authentic cohort records for SISTec CSE
-            var defaultRows = new[]
-            {
-                new { Usn = "0176CS221045", Name = "Shivansh Mehra", Team = "2026-CS-MIN-01", Title = "Smart IoT Energy Monitoring & Anomaly Detection", Guide = "Prof. S. K. Verma", S60 = 54, I40 = 36, Tot = 90, Stat = "Target Met" },
-                new { Usn = "0176CS221002", Name = "Aarav Sharma", Team = "2026-CS-MIN-01", Title = "Smart IoT Energy Monitoring & Anomaly Detection", Guide = "Prof. S. K. Verma", S60 = 54, I40 = 34, Tot = 88, Stat = "Target Met" },
-                new { Usn = "0176CS221021", Name = "Diya Patel", Team = "2026-CS-MIN-01", Title = "Smart IoT Energy Monitoring & Anomaly Detection", Guide = "Prof. S. K. Verma", S60 = 54, I40 = 32, Tot = 86, Stat = "Target Met" },
-                new { Usn = "0176CS221038", Name = "Rohan Gupta", Team = "2026-CS-MIN-02", Title = "Predictive Equipment Maintenance via LSTM", Guide = "Prof. Priya Nair", S60 = 48, I40 = 30, Tot = 78, Stat = "Target Met" },
-                new { Usn = "0176CS221019", Name = "Devansh Patel", Team = "2026-CS-MIN-02", Title = "Predictive Equipment Maintenance via LSTM", Guide = "Prof. Priya Nair", S60 = 48, I40 = 28, Tot = 76, Stat = "Target Met" }
-            };
-
-            foreach (var r in defaultRows)
-            {
-                csv.AppendLine($"{r.Usn},{r.Name},{deptCode},6,CS-606,{r.Team},\"{r.Title}\",{r.Guide},{r.S60},{r.I40},{r.Tot},{r.Stat}");
             }
         }
 

@@ -20,11 +20,29 @@ import {
 import { accreditationApi } from "@/lib/api/accreditationApi";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 
+export function resolveCyclesState(
+  currentCycles: AccreditationCycleDto[],
+  apiResult: PromiseSettledResult<AccreditationCycleDto[]>
+): { cycles: AccreditationCycleDto[]; activeCycleId: string } {
+  if (apiResult.status === "fulfilled") {
+    const resolved = Array.isArray(apiResult.value) ? apiResult.value : [];
+    return {
+      cycles: resolved,
+      activeCycleId: resolved[0]?.id || "",
+    };
+  }
+  // On network failure / rejection, do not silently clear valid existing state
+  return {
+    cycles: currentCycles,
+    activeCycleId: currentCycles[0]?.id || "",
+  };
+}
+
 export function useAccreditation() {
   const { college, coursePrograms, departments } = useProjectHubStore();
 
   const [loading, setLoading] = useState(false);
-  const [activeCycleId, setActiveCycleId] = useState<string>("cycle-nba-cse-2026");
+  const [activeCycleId, setActiveCycleId] = useState<string>("");
 
   // Available Frameworks Master
   const [frameworks, setFrameworks] = useState<AccreditationFrameworkDto[]>([
@@ -78,57 +96,8 @@ export function useAccreditation() {
     },
   ]);
 
-  // Cycles (Real data derived or stateful)
-  const [cycles, setCycles] = useState<AccreditationCycleDto[]>([
-    {
-      id: "cycle-nba-cse-2026",
-      collegeId: college?.id || "col-sistec",
-      frameworkId: "fw-nba",
-      frameworkCode: "NBA",
-      frameworkName: "National Board of Accreditation",
-      versionId: "ver-nba-2025",
-      versionLabel: "NBA Tier-II SAR Manual (Rev. 2025)",
-      level: "Program",
-      programId: "prog-btech",
-      programName: "B.Tech Computer Science & Engineering",
-      departmentId: "dept-cse",
-      departmentCode: "CSE",
-      cycleName: "B.Tech CSE - 2026 SAR Accreditation Cycle",
-      academicYear: "2026–2027",
-      status: "DataCollection",
-      startDate: "2026-07-01",
-      endDate: "2027-05-31",
-      overallScore: 684,
-      overallGrade: "Accredited (Provisional 3 Yrs)",
-      completionPct: 68.5,
-      pendingReviews: 3,
-      evidenceCount: 24,
-      createdAtUtc: "2026-07-10T10:00:00Z",
-      updatedAtUtc: "2026-11-20T14:30:00Z",
-    },
-    {
-      id: "cycle-naac-inst-2026",
-      collegeId: college?.id || "col-sistec",
-      frameworkId: "fw-naac",
-      frameworkCode: "NAAC",
-      frameworkName: "National Assessment and Accreditation Council",
-      versionId: "ver-naac-2024",
-      versionLabel: "NAAC Institutional Manual (RAF 2024)",
-      level: "Institution",
-      cycleName: "SISTec Institutional NAAC Cycle 2",
-      academicYear: "2026–2027",
-      status: "Planning",
-      startDate: "2026-09-01",
-      endDate: "2027-11-30",
-      overallScore: 3.24,
-      overallGrade: "A Grade",
-      completionPct: 32.0,
-      pendingReviews: 1,
-      evidenceCount: 12,
-      createdAtUtc: "2026-09-05T09:00:00Z",
-      updatedAtUtc: "2026-11-18T11:00:00Z",
-    },
-  ]);
+  // Cycles (Real data derived or stateful - defaults to clean empty collection)
+  const [cycles, setCycles] = useState<AccreditationCycleDto[]>([]);
 
   // Active Selected Cycle
   const activeCycle = useMemo(() => {
@@ -148,15 +117,20 @@ export function useAccreditation() {
 
         if (!isMounted) return;
 
-        if (cyclesRes.status === "fulfilled" && cyclesRes.value?.length) {
-          setCycles(cyclesRes.value);
-          if (!activeCycleId || !cyclesRes.value.some((c) => c.id === activeCycleId)) {
-            setActiveCycleId(cyclesRes.value[0].id);
+        if (cyclesRes.status === "fulfilled") {
+          const resolvedCycles = Array.isArray(cyclesRes.value) ? cyclesRes.value : [];
+          setCycles(resolvedCycles);
+          if (resolvedCycles.length > 0) {
+            if (!activeCycleId || !resolvedCycles.some((c) => c.id === activeCycleId)) {
+              setActiveCycleId(resolvedCycles[0].id);
+            }
+          } else {
+            setActiveCycleId("");
           }
         }
 
-        if (logsRes.status === "fulfilled" && logsRes.value?.length) {
-          setActivityLogs(logsRes.value);
+        if (logsRes.status === "fulfilled") {
+          setActivityLogs(Array.isArray(logsRes.value) ? logsRes.value : []);
         }
       } catch (err) {
         console.warn("Using local accreditation store data:", err);

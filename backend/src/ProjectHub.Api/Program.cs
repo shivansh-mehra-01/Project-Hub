@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ProjectHub.Api.Endpoints;
@@ -69,7 +71,23 @@ builder.Services.AddProjectHubAuthorization();
 // 6. OpenAPI & Documentation
 builder.Services.AddOpenApi("v1");
 
-// 7. CORS Configuration
+// 7. Rate Limiting for Security Endpoints (Password Reset OTP brute-force protection)
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("PasswordResetLimit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+});
+
+// 8. CORS Configuration
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
                      ?? new[] { "http://localhost:3000" };
 
@@ -77,10 +95,35 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.SetIsOriginAllowed(origin =>
+            {
+                if (string.IsNullOrEmpty(origin)) return false;
+                if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+                if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                    uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                    uri.Host.Equals("::1", StringComparison.OrdinalIgnoreCase)) return true;
+                if (uri.Host.StartsWith("192.168.", StringComparison.OrdinalIgnoreCase) ||
+                    uri.Host.StartsWith("10.", StringComparison.OrdinalIgnoreCase)) return true;
+                if (System.Net.IPAddress.TryParse(uri.Host, out var ip))
+                {
+                    var bytes = ip.GetAddressBytes();
+                    if (bytes.Length == 4 && bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return true;
+                }
+                return allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase);
+            })
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+        }
+        else
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        }
     });
 });
 
@@ -92,6 +135,34 @@ app.Use(async (context, next) =>
     try
     {
         await next();
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        Log.Warning("Authorization boundary blocked access to {Path}: {Message}", context.Request.Path, ex.Message);
+        if (!context.Response.HasStarted)
+        {
+            context.Response.Clear();
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+    catch (BadHttpRequestException ex)
+    {
+        Log.Warning("Bad HTTP request processing {Method} {Path}: {Message}", context.Request.Method, context.Request.Path, ex.Message);
+        if (!context.Response.HasStarted)
+        {
+            context.Response.Clear();
+            context.Response.StatusCode = ex.StatusCode;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                message = ex.Message
+            });
+        }
     }
     catch (Exception ex)
     {
@@ -113,6 +184,8 @@ app.Use(async (context, next) =>
 app.UseSerilogRequestLogging();
 
 app.UseCors("AllowFrontend");
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseTenantResolution();

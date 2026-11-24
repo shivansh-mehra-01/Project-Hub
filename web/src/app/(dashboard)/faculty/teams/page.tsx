@@ -1,6 +1,5 @@
-import { FacultyView } from "@/features/faculty/FacultyView";
+import { FacultyTeamsView } from "@/features/faculty/views/FacultyTeamsView";
 
 export default function FacultyTeamsPage() {
-  return <FacultyView initialTab="teams" />;
+  return <FacultyTeamsView />;
 }
-

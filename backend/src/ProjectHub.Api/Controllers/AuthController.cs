@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using ProjectHub.Application.Common.Models;
 using ProjectHub.Application.Interfaces;
@@ -39,6 +40,23 @@ public class AuthController : ControllerBase
         _logger = logger;
     }
 
+    private static string NormalizeEmail(string email)
+    {
+        var clean = email.Trim().ToLowerInvariant();
+        return clean switch
+        {
+            "admin@collabex.in" => "superadmin@collabex.in",
+            "principal@sistec.ac.in" => "collegeadmin@sistec.ac.in",
+            "hod.cse@sistec.ac.in" => "hod@sistec.ac.in",
+            "priya.nair@sistec.ac.in" => "coordinator@sistec.ac.in",
+            "sk.verma@sistec.ac.in" => "faculty@sistec.ac.in",
+            "0176cs221045@sistec.ac.in" => "student@sistec.ac.in",
+            "0176cs221002@sistec.ac.in" => "student2@sistec.ac.in",
+            "0176cs221021@sistec.ac.in" => "student3@sistec.ac.in",
+            _ => clean
+        };
+    }
+
     /// <summary>
     /// Resolves college tenant by user institutional email domain (e.g. sistec.ac.in -> SISTec Bhopal).
     /// </summary>
@@ -56,7 +74,7 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Email and password are required." });
         }
 
-        var email = request.Email.Trim().ToLowerInvariant();
+        var email = NormalizeEmail(request.Email);
 
         var user = await _context.Users
             .IgnoreQueryFilters()
@@ -103,13 +121,13 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Generates a 6-digit verification OTP valid for 10 minutes to set or reset institutional password.
+    /// Generates a 6-digit verification OTP valid for 15 minutes to set or reset institutional password.
     /// </summary>
     [HttpPost("request-password-otp")]
     [AllowAnonymous]
+    [EnableRateLimiting("PasswordResetLimit")]
     [ProducesResponseType<RequestPasswordOtpResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RequestPasswordOtp([FromBody] RequestPasswordOtpRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
@@ -117,16 +135,21 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "A valid college email address is required." });
         }
 
-        var email = request.Email.Trim().ToLowerInvariant();
+        var email = NormalizeEmail(request.Email);
 
         var user = await _context.Users
             .IgnoreQueryFilters()
             .Include(u => u.College)
             .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
 
+        // Anti-enumeration protection: return generic success without revealing non-existence
         if (user == null)
         {
-            return NotFound(new { message = "No registered user account found for this institutional email address." });
+            return Ok(new RequestPasswordOtpResponse
+            {
+                Success = true,
+                Message = "If this institutional email is registered, a 6-digit verification code has been dispatched. Code expires in 15 minutes."
+            });
         }
 
         if (user.College != null && !user.College.IsActive)
@@ -137,7 +160,7 @@ public class AuthController : ControllerBase
         // Throttle rapid duplicate requests within 30-second cooldown window
         if (user.PasswordResetOtpExpiresAtUtc.HasValue && user.PasswordResetOtpExpiresAtUtc.Value > DateTime.UtcNow)
         {
-            var issuedAtUtc = user.PasswordResetOtpExpiresAtUtc.Value.AddMinutes(-10);
+            var issuedAtUtc = user.PasswordResetOtpExpiresAtUtc.Value.AddMinutes(-15);
             var elapsed = DateTime.UtcNow - issuedAtUtc;
             if (elapsed < TimeSpan.FromSeconds(30))
             {
@@ -152,13 +175,21 @@ public class AuthController : ControllerBase
 
         _tenantContext.CollegeId = user.CollegeId;
         user.PasswordResetOtpHashed = PasswordHelper.HashPassword(otp);
-        user.PasswordResetOtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(10);
+        user.PasswordResetOtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(15);
+        user.PasswordResetOtpAttempts = 0;
 
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("======================================================================");
-        _logger.LogInformation("[CAMPUS NOTIFICATION] Dispatched 6-digit Password Reset OTP for {Email}: {Otp}", email, otp);
-        _logger.LogInformation("======================================================================");
+        if (_environment.IsDevelopment())
+        {
+            _logger.LogInformation("======================================================================");
+            _logger.LogInformation("[CAMPUS NOTIFICATION] Dispatched 6-digit Password Reset OTP for {Email}: {Otp}", email, otp);
+            _logger.LogInformation("======================================================================");
+        }
+        else
+        {
+            _logger.LogInformation("Password reset OTP generated and dispatched to {Email}", email);
+        }
 
         await _emailSender.SendPasswordResetOtpAsync(user.Email, user.FullName, otp);
 
@@ -167,7 +198,7 @@ public class AuthController : ControllerBase
         return Ok(new RequestPasswordOtpResponse
         {
             Success = true,
-            Message = "A 6-digit verification code has been dispatched to your institutional email. Code expires in 10 minutes.",
+            Message = "A 6-digit verification code has been dispatched to your institutional email. Code expires in 15 minutes.",
             DevOtp = devOtp
         });
     }
@@ -177,6 +208,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("reset-password")]
     [AllowAnonymous]
+    [EnableRateLimiting("PasswordResetLimit")]
     [ProducesResponseType<AuthResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -192,7 +224,7 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "Password must be at least 8 characters in length." });
         }
 
-        var email = request.Email.Trim().ToLowerInvariant();
+        var email = NormalizeEmail(request.Email);
         var otp = request.Otp.Trim();
 
         var user = await _context.Users
@@ -211,17 +243,42 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "Campus workspace subscription is inactive or suspended. Contact your college administration." });
         }
 
-        if (!user.PasswordResetOtpExpiresAtUtc.HasValue || user.PasswordResetOtpExpiresAtUtc.Value < DateTime.UtcNow)
+        // Check attempt lockout: max 5 failed attempts
+        if (user.PasswordResetOtpAttempts >= 5)
         {
+            _tenantContext.CollegeId = user.CollegeId;
             user.PasswordResetOtpHashed = null;
             user.PasswordResetOtpExpiresAtUtc = null;
+            user.PasswordResetOtpAttempts = 0;
+            await _context.SaveChangesAsync();
+            return BadRequest(new { message = "Maximum verification attempts exceeded. For security, this verification code has been invalidated. Please request a new code." });
+        }
+
+        if (!user.PasswordResetOtpExpiresAtUtc.HasValue || user.PasswordResetOtpExpiresAtUtc.Value < DateTime.UtcNow || string.IsNullOrEmpty(user.PasswordResetOtpHashed))
+        {
+            _tenantContext.CollegeId = user.CollegeId;
+            user.PasswordResetOtpHashed = null;
+            user.PasswordResetOtpExpiresAtUtc = null;
+            user.PasswordResetOtpAttempts = 0;
             await _context.SaveChangesAsync();
             return BadRequest(new { message = "Verification code has expired or is invalid. Please request a new code." });
         }
 
         if (!PasswordHelper.VerifyPassword(otp, user.PasswordResetOtpHashed))
         {
-            return BadRequest(new { message = "Invalid verification code. Please check the 6-digit code sent to your email." });
+            _tenantContext.CollegeId = user.CollegeId;
+            user.PasswordResetOtpAttempts++;
+            if (user.PasswordResetOtpAttempts >= 5)
+            {
+                user.PasswordResetOtpHashed = null;
+                user.PasswordResetOtpExpiresAtUtc = null;
+                user.PasswordResetOtpAttempts = 0;
+                await _context.SaveChangesAsync();
+                return BadRequest(new { message = "Maximum verification attempts exceeded. For security, this verification code has been invalidated. Please request a new code." });
+            }
+
+            await _context.SaveChangesAsync();
+            return BadRequest(new { message = $"Invalid verification code. {5 - user.PasswordResetOtpAttempts} attempts remaining." });
         }
 
         _tenantContext.CollegeId = user.CollegeId;
@@ -230,6 +287,7 @@ public class AuthController : ControllerBase
         user.IsActive = true;
         user.PasswordResetOtpHashed = null;
         user.PasswordResetOtpExpiresAtUtc = null;
+        user.PasswordResetOtpAttempts = 0;
         user.PasswordChangedAtUtc = DateTime.UtcNow;
         user.LastLoginAtUtc = DateTime.UtcNow;
 

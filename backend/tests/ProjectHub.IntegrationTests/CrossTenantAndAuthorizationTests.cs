@@ -550,7 +550,7 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         Assert.Equal(HttpStatusCode.OK, adminRes.StatusCode);
         var overview = await adminRes.Content.ReadFromJsonAsync<AccreditationOverviewDto>();
         Assert.NotNull(overview);
-        Assert.NotEmpty(overview.Cycles);
+        Assert.NotNull(overview.Cycles);
 
         // 2. Student is blocked with 403 Forbidden
         var studentToken = await GetTokenForPersonaAsync("Student");

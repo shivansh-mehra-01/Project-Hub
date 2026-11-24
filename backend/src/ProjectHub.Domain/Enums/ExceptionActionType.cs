@@ -9,5 +9,7 @@ public enum ExceptionActionType
     RemoveDroppedMember = 2,
     AmendLockedRoster = 3,
     IndividualReVivaUnlock = 4,
-    SingleStudentProvisioned = 5
+    SingleStudentProvisioned = 5,
+    ReturnProposal = 6,
+    RejectProposal = 7
 }

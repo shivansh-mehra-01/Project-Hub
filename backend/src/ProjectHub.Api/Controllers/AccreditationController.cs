@@ -185,8 +185,6 @@ public class AccreditationController : ControllerBase
         var collegeId = _tenantContext.CollegeId;
         if (!collegeId.HasValue) return BadRequest(new { message = "Active tenant context required." });
 
-        await EnsureDefaultCycleExistsAsync(collegeId.Value);
-
         var cycles = await _context.AccreditationCycles
             .Include(c => c.Department)
             .Include(c => c.CourseProgram)
@@ -194,36 +192,51 @@ public class AccreditationController : ControllerBase
             .OrderByDescending(c => c.CreatedAtUtc)
             .ToListAsync();
 
-        var cycleDtos = cycles.Select(c => new AccreditationCycleDto
+        var cycleEvidences = await _context.AccreditationEvidences
+            .Where(e => e.CollegeId == collegeId.Value && !e.IsDeleted)
+            .GroupBy(e => e.CycleId)
+            .Select(g => new
+            {
+                CycleId = g.Key,
+                TotalEvidence = g.Count(),
+                PendingReviews = g.Count(e => e.Status == "UnderReview")
+            })
+            .ToDictionaryAsync(x => x.CycleId, x => (x.TotalEvidence, x.PendingReviews));
+
+        var cycleDtos = cycles.Select(c =>
         {
-            Id = c.Id,
-            CollegeId = c.CollegeId,
-            FrameworkId = c.FrameworkCode == "NBA" ? "fw-nba" : "fw-naac",
-            FrameworkCode = c.FrameworkCode,
-            FrameworkName = c.FrameworkCode == "NBA" ? "National Board of Accreditation" : "National Assessment and Accreditation Council",
-            VersionId = c.FrameworkCode == "NBA" ? "ver-nba-2025" : "ver-naac-2024",
-            VersionLabel = c.VersionLabel,
-            Level = c.Level,
-            ProgramId = c.CourseProgramId,
-            ProgramName = c.CourseProgram?.Name,
-            DepartmentId = c.DepartmentId,
-            DepartmentCode = c.Department?.Code,
-            CycleName = c.CycleName,
-            AcademicYear = c.AcademicYear,
-            Status = c.Status,
-            StartDate = c.StartDate,
-            EndDate = c.EndDate,
-            OverallScore = c.AttainedScore,
-            OverallGrade = c.AttainmentPercentage >= 65m ? "Accredited (3 Years)" : "Provisionally Accredited",
-            CompletionPct = c.AttainmentPercentage,
-            PendingReviews = 2,
-            EvidenceCount = 18,
-            IsAttested = c.IsAttested,
-            AttestedAtUtc = c.AttestedAtUtc,
-            AttestedByName = c.AttestedByName,
-            AttestationRemarks = c.AttestationRemarks,
-            CreatedAtUtc = c.CreatedAtUtc,
-            UpdatedAtUtc = c.UpdatedAtUtc
+            var counts = cycleEvidences.TryGetValue(c.Id, out var cv) ? cv : (TotalEvidence: 0, PendingReviews: 0);
+            return new AccreditationCycleDto
+            {
+                Id = c.Id,
+                CollegeId = c.CollegeId,
+                FrameworkId = c.FrameworkCode == "NBA" ? "fw-nba" : "fw-naac",
+                FrameworkCode = c.FrameworkCode,
+                FrameworkName = c.FrameworkCode == "NBA" ? "National Board of Accreditation" : "National Assessment and Accreditation Council",
+                VersionId = c.FrameworkCode == "NBA" ? "ver-nba-2025" : "ver-naac-2024",
+                VersionLabel = c.VersionLabel,
+                Level = c.Level,
+                ProgramId = c.CourseProgramId,
+                ProgramName = c.CourseProgram?.Name,
+                DepartmentId = c.DepartmentId,
+                DepartmentCode = c.Department?.Code,
+                CycleName = c.CycleName,
+                AcademicYear = c.AcademicYear,
+                Status = c.Status,
+                StartDate = c.StartDate,
+                EndDate = c.EndDate,
+                OverallScore = c.AttainedScore,
+                OverallGrade = c.AttainmentPercentage >= 65m ? "Accredited (3 Years)" : "Provisionally Accredited",
+                CompletionPct = c.AttainmentPercentage,
+                PendingReviews = counts.PendingReviews,
+                EvidenceCount = counts.TotalEvidence,
+                IsAttested = c.IsAttested,
+                AttestedAtUtc = c.AttestedAtUtc,
+                AttestedByName = c.AttestedByName,
+                AttestationRemarks = c.AttestationRemarks,
+                CreatedAtUtc = c.CreatedAtUtc,
+                UpdatedAtUtc = c.UpdatedAtUtc
+            };
         }).ToList();
 
         var recentActivities = await _context.AccreditationActivityLogs
@@ -260,10 +273,12 @@ public class AccreditationController : ControllerBase
                 FrameworkName = "National Board of Accreditation",
                 Level = "Program",
                 ActiveCyclesCount = cycleDtos.Count(c => c.FrameworkCode == "NBA"),
-                ProgramsConfigured = 4,
-                CurrentStatus = "Active",
+                ProgramsConfigured = cycleDtos.Count(c => c.FrameworkCode == "NBA"),
+                CurrentStatus = cycleDtos.Any(c => c.FrameworkCode == "NBA") ? "Active" : "Not Started",
                 LatestVersionLabel = "NBA Tier-II SAR Manual (Rev. 2025)",
-                OverallCompletionPct = 68.5m
+                OverallCompletionPct = cycleDtos.Any(c => c.FrameworkCode == "NBA")
+                    ? Math.Round(cycleDtos.Where(c => c.FrameworkCode == "NBA").Average(c => c.CompletionPct), 1)
+                    : 0m
             },
             new()
             {
@@ -272,19 +287,21 @@ public class AccreditationController : ControllerBase
                 FrameworkName = "National Assessment and Accreditation Council",
                 Level = "Institution",
                 ActiveCyclesCount = cycleDtos.Count(c => c.FrameworkCode == "NAAC"),
-                ProgramsConfigured = 1,
-                CurrentStatus = "Active",
+                ProgramsConfigured = cycleDtos.Count(c => c.FrameworkCode == "NAAC"),
+                CurrentStatus = cycleDtos.Any(c => c.FrameworkCode == "NAAC") ? "Active" : "Not Started",
                 LatestVersionLabel = "NAAC Institutional Manual (RAF 2024)",
-                OverallCompletionPct = 32.0m
+                OverallCompletionPct = cycleDtos.Any(c => c.FrameworkCode == "NAAC")
+                    ? Math.Round(cycleDtos.Where(c => c.FrameworkCode == "NAAC").Average(c => c.CompletionPct), 1)
+                    : 0m
             }
         };
 
         return Ok(new AccreditationOverviewDto
         {
-            ActiveFrameworks = 2,
-            AccreditationPrograms = 4,
-            PendingReviews = pendingReviewsCount > 0 ? pendingReviewsCount : 2,
-            EvidenceDocuments = evidenceCount > 0 ? evidenceCount : 24,
+            ActiveFrameworks = cycleDtos.Select(c => c.FrameworkCode).Distinct().Count(),
+            AccreditationPrograms = cycleDtos.Select(c => c.ProgramId).Where(id => id.HasValue).Distinct().Count(),
+            PendingReviews = pendingReviewsCount,
+            EvidenceDocuments = evidenceCount,
             Cycles = cycleDtos,
             RecentActivities = recentActivities,
             FrameworkSummaries = frameworks
@@ -366,8 +383,6 @@ public class AccreditationController : ControllerBase
         var collegeId = _tenantContext.CollegeId;
         if (!collegeId.HasValue) return BadRequest(new { message = "Active tenant context required." });
 
-        await EnsureDefaultCycleExistsAsync(collegeId.Value);
-
         var query = _context.AccreditationCycles
             .Include(c => c.Department)
             .Include(c => c.CourseProgram)
@@ -386,36 +401,51 @@ public class AccreditationController : ControllerBase
 
         var cycles = await query.OrderByDescending(c => c.CreatedAtUtc).ToListAsync();
 
-        var result = cycles.Select(c => new AccreditationCycleDto
+        var cycleEvidences = await _context.AccreditationEvidences
+            .Where(e => e.CollegeId == collegeId.Value && !e.IsDeleted)
+            .GroupBy(e => e.CycleId)
+            .Select(g => new
+            {
+                CycleId = g.Key,
+                TotalEvidence = g.Count(),
+                PendingReviews = g.Count(e => e.Status == "UnderReview")
+            })
+            .ToDictionaryAsync(x => x.CycleId, x => (x.TotalEvidence, x.PendingReviews));
+
+        var result = cycles.Select(c =>
         {
-            Id = c.Id,
-            CollegeId = c.CollegeId,
-            FrameworkId = c.FrameworkCode == "NBA" ? "fw-nba" : "fw-naac",
-            FrameworkCode = c.FrameworkCode,
-            FrameworkName = c.FrameworkCode == "NBA" ? "National Board of Accreditation" : "National Assessment and Accreditation Council",
-            VersionId = c.FrameworkCode == "NBA" ? "ver-nba-2025" : "ver-naac-2024",
-            VersionLabel = c.VersionLabel,
-            Level = c.Level,
-            ProgramId = c.CourseProgramId,
-            ProgramName = c.CourseProgram?.Name,
-            DepartmentId = c.DepartmentId,
-            DepartmentCode = c.Department?.Code,
-            CycleName = c.CycleName,
-            AcademicYear = c.AcademicYear,
-            Status = c.Status,
-            StartDate = c.StartDate,
-            EndDate = c.EndDate,
-            OverallScore = c.AttainedScore,
-            OverallGrade = c.AttainmentPercentage >= 65m ? "Accredited" : "Provisionally Accredited",
-            CompletionPct = c.AttainmentPercentage,
-            PendingReviews = 2,
-            EvidenceCount = 18,
-            IsAttested = c.IsAttested,
-            AttestedAtUtc = c.AttestedAtUtc,
-            AttestedByName = c.AttestedByName,
-            AttestationRemarks = c.AttestationRemarks,
-            CreatedAtUtc = c.CreatedAtUtc,
-            UpdatedAtUtc = c.UpdatedAtUtc
+            var counts = cycleEvidences.TryGetValue(c.Id, out var cv) ? cv : (TotalEvidence: 0, PendingReviews: 0);
+            return new AccreditationCycleDto
+            {
+                Id = c.Id,
+                CollegeId = c.CollegeId,
+                FrameworkId = c.FrameworkCode == "NBA" ? "fw-nba" : "fw-naac",
+                FrameworkCode = c.FrameworkCode,
+                FrameworkName = c.FrameworkCode == "NBA" ? "National Board of Accreditation" : "National Assessment and Accreditation Council",
+                VersionId = c.FrameworkCode == "NBA" ? "ver-nba-2025" : "ver-naac-2024",
+                VersionLabel = c.VersionLabel,
+                Level = c.Level,
+                ProgramId = c.CourseProgramId,
+                ProgramName = c.CourseProgram?.Name,
+                DepartmentId = c.DepartmentId,
+                DepartmentCode = c.Department?.Code,
+                CycleName = c.CycleName,
+                AcademicYear = c.AcademicYear,
+                Status = c.Status,
+                StartDate = c.StartDate,
+                EndDate = c.EndDate,
+                OverallScore = c.AttainedScore,
+                OverallGrade = c.AttainmentPercentage >= 65m ? "Accredited" : "Provisionally Accredited",
+                CompletionPct = c.AttainmentPercentage,
+                PendingReviews = counts.PendingReviews,
+                EvidenceCount = counts.TotalEvidence,
+                IsAttested = c.IsAttested,
+                AttestedAtUtc = c.AttestedAtUtc,
+                AttestedByName = c.AttestedByName,
+                AttestationRemarks = c.AttestationRemarks,
+                CreatedAtUtc = c.CreatedAtUtc,
+                UpdatedAtUtc = c.UpdatedAtUtc
+            };
         }).ToList();
 
         return Ok(result);
@@ -433,6 +463,9 @@ public class AccreditationController : ControllerBase
             .FirstOrDefaultAsync(c => c.Id == cycleId && c.CollegeId == collegeId.Value && !c.IsDeleted);
 
         if (c == null) return NotFound(new { message = "Accreditation cycle not found." });
+
+        var evidenceCount = await _context.AccreditationEvidences.CountAsync(e => e.CycleId == cycleId && !e.IsDeleted);
+        var pendingReviews = await _context.AccreditationEvidences.CountAsync(e => e.CycleId == cycleId && e.Status == "UnderReview" && !e.IsDeleted);
 
         return Ok(new AccreditationCycleDto
         {
@@ -456,8 +489,8 @@ public class AccreditationController : ControllerBase
             OverallScore = c.AttainedScore,
             OverallGrade = c.AttainmentPercentage >= 65m ? "Accredited" : "Provisionally Accredited",
             CompletionPct = c.AttainmentPercentage,
-            PendingReviews = 2,
-            EvidenceCount = 18,
+            PendingReviews = pendingReviews,
+            EvidenceCount = evidenceCount,
             IsAttested = c.IsAttested,
             AttestedAtUtc = c.AttestedAtUtc,
             AttestedByName = c.AttestedByName,
@@ -601,6 +634,15 @@ public class AccreditationController : ControllerBase
         var collegeId = _tenantContext.CollegeId;
         if (!collegeId.HasValue) return BadRequest(new { message = "Active tenant context required." });
 
+        var cycle = await _context.AccreditationCycles
+            .FirstOrDefaultAsync(c => c.Id == cycleId && c.CollegeId == collegeId.Value && !c.IsDeleted);
+
+        var evidenceCount = await _context.AccreditationEvidences
+            .CountAsync(e => e.CycleId == cycleId && !e.IsDeleted);
+        var pendingReviews = await _context.AccreditationEvidences
+            .CountAsync(e => e.CycleId == cycleId && e.Status == "UnderReview" && !e.IsDeleted);
+        var completionPct = cycle?.AttainmentPercentage ?? 0m;
+
         var depts = await _context.Departments
             .Include(d => d.HodUser)
             .Include(d => d.CourseProgram)
@@ -621,10 +663,10 @@ public class AccreditationController : ControllerBase
             HodName = d.HodUser?.FullName,
             IsEligible = true,
             MappingStatus = "Mapped",
-            CriteriaCompletionPct = 68.4m,
-            EvidenceCount = 18,
-            PendingReviews = 2,
-            LastUpdatedUtc = DateTime.UtcNow
+            CriteriaCompletionPct = completionPct,
+            EvidenceCount = evidenceCount,
+            PendingReviews = pendingReviews,
+            LastUpdatedUtc = cycle?.UpdatedAtUtc ?? DateTime.UtcNow
         }).ToList();
 
         return Ok(result);
@@ -671,8 +713,6 @@ public class AccreditationController : ControllerBase
     {
         var collegeId = _tenantContext.CollegeId;
         if (!collegeId.HasValue) return BadRequest(new { message = "Active tenant context required." });
-
-        await EnsureDefaultCycleExistsAsync(collegeId.Value);
 
         var criteria = await _context.AccreditationCriteria
             .Include(c => c.Metrics)

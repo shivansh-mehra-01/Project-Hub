@@ -24,6 +24,11 @@ public record CollegeOverviewDto
     public string CurrentSemesterLabel { get; init; } = "Odd Semester";
     public DateTime LastUpdatedUtc { get; init; } = DateTime.UtcNow;
     public AcademicSessionDto? ActiveSession { get; init; }
+    public CohortEnrollmentCapacityDto? CohortCapacity { get; init; }
+    public List<AicteCadreComplianceDto> ProgramAicteCompliance { get; init; } = new();
+    public decimal SarDepartmentAttestationPct { get; init; }
+    public int AttestedDepartmentsCount { get; init; }
+    public int TotalDepartmentsForSar { get; init; }
     public List<DepartmentTrackSummaryDto> DepartmentSummaries { get; init; } = new();
     public List<OverviewCourseHierarchyDto> AcademicStructure { get; init; } = new();
     public List<CollegeActivityItemDto> RecentActivities { get; init; } = new();
@@ -157,6 +162,8 @@ public record CollegeStaffDto
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public UserRole Role { get; init; }
+    public FacultyDesignation? Designation { get; init; }
+    public InstitutionalResponsibility DelegatedResponsibility { get; init; } = InstitutionalResponsibility.None;
     public Guid? DepartmentId { get; init; }
     public string? DepartmentCode { get; init; }
     public string? DepartmentName { get; init; }
@@ -173,6 +180,8 @@ public record CreateCollegeStaffRequest
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public UserRole Role { get; init; } = UserRole.Faculty;
+    public FacultyDesignation? Designation { get; init; }
+    public InstitutionalResponsibility DelegatedResponsibility { get; init; } = InstitutionalResponsibility.None;
     public Guid? DepartmentId { get; init; }
     public string? EmployeeCode { get; init; }
 }
@@ -181,6 +190,8 @@ public record UpdateCollegeStaffRequest
 {
     public string? FullName { get; init; }
     public UserRole? Role { get; init; }
+    public FacultyDesignation? Designation { get; init; }
+    public InstitutionalResponsibility? DelegatedResponsibility { get; init; }
     public Guid? DepartmentId { get; init; }
     public string? EmployeeCode { get; init; }
 }
@@ -509,4 +520,113 @@ public record MasterProgramSummaryDto
     public int TotalSemesters { get; init; }
     public int BranchCount { get; init; }
     public List<string> Branches { get; init; } = new();
+}
+
+// --- Statutory AICTE Compliance & Cadre Ratio Models ---
+
+public record AicteCadreComplianceDto
+{
+    public string ProgramLevel { get; init; } = string.Empty; // "UG Engineering", "PG Engineering", "MBA", "MCA"
+    public string ProgramCode { get; init; } = string.Empty;
+    public int SanctionedIntake { get; init; }
+    public int ProgramDurationYears { get; init; }
+    public int TotalSanctionedStrength { get; init; }
+    public int RequiredFaculty { get; init; }
+    public int AvailableFaculty { get; init; }
+    public string RequiredRatio { get; init; } = "1:20";
+    public string ActualRatio { get; init; } = string.Empty;
+    public bool IsCompliant { get; init; }
+    public string CadreStatus { get; init; } = "Insufficient Data"; // "Compliant", "NonCompliant", "Insufficient Data"
+    public int RequiredProfessors { get; init; }
+    public int ActualProfessors { get; init; }
+    public int RequiredAssociateProfessors { get; init; }
+    public int ActualAssociateProfessors { get; init; }
+    public int RequiredAssistantProfessors { get; init; }
+    public int ActualAssistantProfessors { get; init; }
+    public string StatusMessage { get; init; } = string.Empty;
+    public bool IsSubstituted { get; init; } = false;
+    public int SubstitutedProfessorsCount { get; init; } = 0;
+    public string? QualificationVerificationNotice { get; init; }
+}
+
+public record CohortEnrollmentCapacityDto
+{
+    public int TotalSanctionedMultiCohortCapacity { get; init; }
+    public int TotalEnrolledStudents { get; init; }
+    public decimal UtilizationPercentage { get; init; }
+    public bool HasReliableEnrollmentRecords { get; init; }
+    public string StatusMessage { get; init; } = string.Empty;
+}
+
+// --- University Examination Tabulation Register Models ---
+
+public record ExaminationTabulationRowDto
+{
+    public Guid StudentId { get; init; }
+    public string EnrollmentNumber { get; init; } = string.Empty;
+    public string StudentName { get; init; } = string.Empty;
+    public string DepartmentCode { get; init; } = string.Empty;
+    public string TeamNumber { get; init; } = string.Empty;
+    public string ProjectTitle { get; init; } = string.Empty;
+    public decimal GuideScore { get; init; } // e.g. out of 30
+    public decimal MidTermScore { get; init; } // e.g. out of 30
+    public decimal FinalVivaScore { get; init; } // e.g. out of 40
+    public decimal TotalScore { get; init; } // out of 100
+    public string Grade { get; init; } = "F"; // "A+", "A", "B+", "B", "C+", "C", "F"
+    public int GradePoints { get; init; } // 10, 9, 8, 7, 6, 5, 0
+    public string ResultStatus { get; init; } = "Pass"; // "Pass", "Fail", "Pending"
+    public bool MeetsNbaAttainmentThreshold { get; init; }
+}
+
+public record ExaminationTabulationRegisterDto
+{
+    public string AcademicYear { get; init; } = "2026–2027";
+    public string TrackName { get; init; } = "Major Project Capstone";
+    public int GuideWeightPct { get; init; } = 30;
+    public int MidTermWeightPct { get; init; } = 30;
+    public int FinalVivaWeightPct { get; init; } = 40;
+    public bool IsCertified { get; init; }
+    public DateTime? CertifiedAtUtc { get; init; }
+    public string? CertifiedBy { get; init; }
+    public string? CertificationChecksum { get; init; }
+    public int TotalStudentsTabulated { get; init; }
+    public int TotalPassed { get; init; }
+    public int TotalFailed { get; init; }
+    public decimal AverageTotalScore { get; init; }
+    public List<ExaminationTabulationRowDto> Rows { get; init; } = new();
+}
+
+public record CertifyExaminationRegisterRequest
+{
+    public string Remarks { get; init; } = string.Empty;
+}
+
+public record ResetPasswordResponseDto
+{
+    public string Message { get; init; } = string.Empty;
+    public bool EmailDispatched { get; init; }
+    public DateTime ExpiresAtUtc { get; init; }
+}
+
+public record BulkStaffUploadRowDto
+{
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string DepartmentCode { get; init; } = string.Empty;
+    public string EmployeeCode { get; init; } = string.Empty;
+    public UserRole Role { get; init; } = UserRole.Faculty;
+    public FacultyDesignation? Designation { get; init; }
+}
+
+public record BulkStaffUploadRequest
+{
+    public List<BulkStaffUploadRowDto> StaffRows { get; init; } = new();
+}
+
+public record BulkStaffUploadResultDto
+{
+    public int TotalSubmitted { get; init; }
+    public int SuccessfullyCreated { get; init; }
+    public int FailedCount { get; init; }
+    public List<string> Errors { get; init; } = new();
 }
