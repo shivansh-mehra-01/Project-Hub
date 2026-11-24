@@ -31,10 +31,13 @@ public class UserAccount : BaseEntity, ITenantEntity
     }
 
     public UserRole Role { get; set; } = UserRole.Student;
+    public FacultyDesignation? Designation { get; set; }
+    public InstitutionalResponsibility DelegatedResponsibility { get; set; } = InstitutionalResponsibility.None;
     public string? PasswordHash { get; set; }
     public bool IsActivated { get; set; } = true;
     public string? PasswordResetOtpHashed { get; set; }
     public DateTime? PasswordResetOtpExpiresAtUtc { get; set; }
+    public int PasswordResetOtpAttempts { get; set; } = 0;
     public bool IsProjectCoordinator { get; set; } = false;
     public bool IsActive { get; set; } = true;
     public int MaxMentorTeams { get; set; } = 4;

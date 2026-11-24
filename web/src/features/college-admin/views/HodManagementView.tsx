@@ -15,6 +15,7 @@ import {
   ArrowRight,
   ShieldCheck,
   RotateCcw,
+  AlertTriangle,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Modal } from "@/design-system/components/Modal";
@@ -27,20 +28,16 @@ import {
   DepartmentDto,
   HodAssignmentHistoryDto,
   HodManagementDto,
+  CollegeStaffDto,
 } from "@/lib/api/types";
-import { useProjectHubStore } from "@/mocks/ProjectHubStore";
+import { ApiConnectionBanner } from "../components/ApiConnectionBanner";
 
 export const HodManagementView: React.FC = () => {
-  const {
-    departments: mockDepartments,
-    coursePrograms,
-    facultyRoster,
-    reassignHOD: mockReassignHod,
-  } = useProjectHubStore();
-
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [hods, setHods] = useState<HodManagementDto[]>([]);
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
+  const [facultyList, setFacultyList] = useState<CollegeStaffDto[]>([]);
   const [historyList, setHistoryList] = useState<HodAssignmentHistoryDto[]>([]);
 
   // Filtering State
@@ -59,7 +56,6 @@ export const HodManagementView: React.FC = () => {
   const [newHodName, setNewHodName] = useState("");
   const [newHodEmail, setNewHodEmail] = useState("");
   const [newHodCode, setNewHodCode] = useState("");
-  const [newHodPassword, setNewHodPassword] = useState("Pass@1234");
   const [submitting, setSubmitting] = useState(false);
 
   // Toast
@@ -67,7 +63,7 @@ export const HodManagementView: React.FC = () => {
 
   useDashboardHeader({
     title: "Department Leadership",
-    breadcrumb: "HOD Appointments & Leadership Governance",
+    breadcrumb: "Department HOD appointments, vacancies, and leadership succession",
   });
 
   const showToast = (msg: string) => {
@@ -78,71 +74,19 @@ export const HodManagementView: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [hodRes, deptRes] = await Promise.allSettled([
+      setApiError(null);
+      const [hodRes, deptRes, staffRes] = await Promise.all([
         collegeApi.getHods(),
         collegeApi.getDepartments(),
+        collegeApi.getStaffUsers({ role: "Faculty" }),
       ]);
 
-      // Build the actual college departments from mock store (ground truth for this college's config)
-      const mockDepts: DepartmentDto[] = mockDepartments.map((d: any) => ({
-        id: d.id,
-        collegeId: "col-sistec-bpl",
-        code: d.code,
-        name: d.name,
-        intakeQuota: d.intakeQuota || 120,
-        studentCount: d.studentCount || 120,
-        facultyCount: d.facultyCount || 12,
-        isSarAttested: d.isSarAttested || false,
-        hodName: d.hodName,
-        courseProgramId: d.courseProgramId,
-        courseProgramCode: d.courseProgramCode,
-        courseProgramName: d.courseProgramName,
-      }));
-
-      // For HOD list: prefer live API data only if it has reasonable count (<=50 and matches college depts)
-      // Backend may return master RGPV catalog — filter to only departments matching our college's mock depts
-      let resolvedHods: HodManagementDto[] = [];
-      if (hodRes.status === "fulfilled" && hodRes.value?.length) {
-        const collegeDeptCodes = new Set(mockDepartments.map((d: any) => d.code.toUpperCase()));
-        const filteredHods = hodRes.value.filter(
-          (h) => collegeDeptCodes.has(h.departmentCode?.toUpperCase() ?? "")
-        );
-        if (filteredHods.length > 0) {
-          resolvedHods = filteredHods;
-        }
-      }
-
-      // Fall back to building HOD list from mock departments
-      if (resolvedHods.length === 0 && mockDepartments?.length) {
-        resolvedHods = mockDepartments.map((d: any) => ({
-          departmentId: d.id,
-          departmentCode: d.code,
-          departmentName: d.name,
-          courseProgramCode: d.courseProgramCode || "",
-          courseProgramName: d.courseProgramName || "",
-          hodUserId: d.hodName ? `usr-hod-${d.code.toLowerCase()}` : undefined,
-          hodName: d.hodName || undefined,
-          hodEmail: d.hodName ? `hod.${d.code.toLowerCase()}@sistec.ac.in` : undefined,
-          employeeCode: d.hodName ? `EMP-HOD-${d.code}` : undefined,
-          isActive: Boolean(d.hodName),
-          appointedAtUtc: d.hodName ? "2026-07-01T00:00:00Z" : undefined,
-        }));
-      }
-
-      setHods(resolvedHods);
-
-      // For departments dropdown (appoint modal): use mock store (actual college config)
-      if (deptRes.status === "fulfilled" && deptRes.value?.length) {
-        const collegeDeptCodes = new Set(mockDepartments.map((d: any) => d.code.toUpperCase()));
-        const filtered = deptRes.value.filter(
-          (d) => collegeDeptCodes.has(d.code?.toUpperCase() ?? "")
-        );
-        setDepartments(filtered.length > 0 ? filtered : mockDepts);
-      } else {
-        setDepartments(mockDepts);
-      }
-    } catch (err) {
-      console.error(err);
+      setHods(hodRes || []);
+      setDepartments(deptRes || []);
+      setFacultyList(staffRes || []);
+    } catch (err: any) {
+      console.error("Failed to load department leadership data:", err);
+      setApiError(err?.message || "Failed to connect to backend service. Leadership data unavailable.");
     } finally {
       setLoading(false);
     }
@@ -151,26 +95,10 @@ export const HodManagementView: React.FC = () => {
   const loadHistory = async () => {
     try {
       const res = await collegeApi.getHodHistory();
-      if (res) {
-        setHistoryList(res);
-      }
+      setHistoryList(res || []);
     } catch (err) {
-      console.warn("Failed to load HOD history, using fallback", err);
-      setHistoryList([
-        {
-          id: "hist-1",
-          departmentId: "dept-cse",
-          departmentCode: "CSE",
-          departmentName: "Computer Science & Engineering",
-          hodUserId: "usr-hod-cse",
-          hodName: "Dr. Ravindra Kumar Sharma",
-          hodEmail: "hod.cse@sistec.ac.in",
-          employeeCode: "EMP-CSE-001",
-          appointedAtUtc: "2026-07-01T09:00:00Z",
-          appointedBy: "admin@collabex.in",
-          isCurrent: true,
-        },
-      ]);
+      console.error("Failed to load HOD history:", err);
+      showToast("Unable to fetch tenure history from database.");
     }
     setShowHistoryDrawer(true);
   };
@@ -182,11 +110,10 @@ export const HodManagementView: React.FC = () => {
   const handleOpenAppoint = (deptId?: string) => {
     const dId = deptId || departments[0]?.id || hods[0]?.departmentId || "";
     setTargetDepartmentId(dId);
-    setSelectedFacultyId(facultyRoster[0]?.id || "");
+    setSelectedFacultyId(facultyList[0]?.id || "");
     setNewHodName("");
     setNewHodEmail("");
     setNewHodCode("");
-    setNewHodPassword("Pass@1234");
     setAppointMode("promote");
     setShowAppointModal(true);
   };
@@ -201,30 +128,33 @@ export const HodManagementView: React.FC = () => {
       const deptDisplayName = targetDept?.name || targetHod?.departmentName || "Department";
 
       if (appointMode === "promote") {
-        if (!selectedFacultyId) return;
-        const fac = facultyRoster.find((f) => f.id === selectedFacultyId);
+        if (!selectedFacultyId) {
+          showToast("Please select a faculty candidate.");
+          return;
+        }
+        const fac = facultyList.find((f) => f.id === selectedFacultyId);
         await collegeApi.appointHod(targetDepartmentId, { hodUserId: selectedFacultyId });
-        mockReassignHod(targetDepartmentId, fac?.name || "Appointed HOD");
-        showToast(`Assigned ${fac?.name || "Faculty"} as HOD of ${deptDisplayName}.`);
+        showToast(`Assigned ${fac?.fullName || "Faculty"} as HOD of ${deptDisplayName}.`);
       } else {
-        if (!newHodName.trim() || !newHodEmail.trim()) return;
+        if (!newHodName.trim() || !newHodEmail.trim()) {
+          showToast("Name and email are required.");
+          return;
+        }
         const payload: CreateHodRequest = {
           fullName: newHodName.trim(),
           email: newHodEmail.trim(),
           employeeCode: newHodCode.trim() || `EMP-${Date.now().toString().slice(-4)}`,
           departmentId: targetDepartmentId,
-          temporaryPassword: newHodPassword || "Pass@1234",
         };
         await collegeApi.createHod(payload);
-        mockReassignHod(targetDepartmentId, payload.fullName);
         showToast(`Created and appointed ${payload.fullName} as HOD of ${deptDisplayName}.`);
       }
 
       setShowAppointModal(false);
       loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast("Error appointing HOD.");
+      showToast(err?.message || "Error appointing HOD.");
     } finally {
       setSubmitting(false);
     }
@@ -239,13 +169,13 @@ export const HodManagementView: React.FC = () => {
       setHods((prev) =>
         prev.map((h) => (h.hodUserId === item.hodUserId ? { ...h, isActive: newStatus } : h))
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       showToast("Failed to update HOD status.");
     }
   };
 
-  // Helper to infer degree program cleanly
+  // Program Info helper
   const getProgramInfo = (item: HodManagementDto): { code: string; badgeClass: string } => {
     if (item.courseProgramCode) {
       const c = item.courseProgramCode.toUpperCase();
@@ -261,7 +191,7 @@ export const HodManagementView: React.FC = () => {
   };
 
   // Counts
-  const totalDepartmentsCount = hods.length || departments.length || 9;
+  const totalDepartmentsCount = hods.length || departments.length;
   const activeHodCount = hods.filter((h) => h.hodUserId && h.hodName).length;
   const vacantDeptCount = totalDepartmentsCount - activeHodCount;
 
@@ -281,483 +211,347 @@ export const HodManagementView: React.FC = () => {
       (statusFilter === "appointed" && isAppointed) ||
       (statusFilter === "vacant" && !isAppointed);
 
-    const prog = getProgramInfo(h);
+    const progInfo = getProgramInfo(h);
     const matchesProgram =
-      programFilter === "all" ||
-      prog.code.toLowerCase() === programFilter.toLowerCase() ||
-      (programFilter === "btech" && prog.code.includes("Tech"));
+      programFilter === "all" || progInfo.code.toLowerCase() === programFilter.toLowerCase();
 
     return matchesSearch && matchesStatus && matchesProgram;
   });
 
   return (
-    <div className="space-y-4 pb-8 font-sans">
-      {/* Toast Notification */}
+    <div className="space-y-6 pb-12 font-sans bg-[#f8fafc]">
       {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg shadow-lg animate-in fade-in">
-          <CheckCircle2 className="h-4 w-4" />
-          {toastMessage}
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-800 text-white text-xs font-semibold rounded-lg shadow-lg">
+          <CheckCircle2 className="h-4 w-4" strokeWidth={1.75} />
+          <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 1. COMPACT SAAS METRIC ROW (CLEAN, NO FLUFF)                              */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Total Departments */}
-        <button
-          type="button"
-          onClick={() => setStatusFilter("all")}
-          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer bg-white ${
-            statusFilter === "all"
-              ? "border-slate-800 shadow-2xs ring-1 ring-slate-800/10"
-              : "border-slate-200 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Total Departments</span>
-            <Building2 className="h-4 w-4 text-slate-400" />
-          </div>
-          <div className="text-xl font-bold text-slate-900 mt-1 font-mono tabular-nums">
+      {apiError && (
+        <ApiConnectionBanner onRetry={loadData} message={apiError} isRetrying={loading} />
+      )}
+
+      {/* Header Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Branches</span>
+          <span className="block text-2xl font-bold text-slate-900 font-mono mt-1">
             {totalDepartmentsCount}
-          </div>
-        </button>
+          </span>
+          <span className="text-[11px] text-slate-500">Department branches across all programs</span>
+        </div>
 
-        {/* Appointed */}
-        <button
-          type="button"
-          onClick={() => setStatusFilter("appointed")}
-          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer bg-white ${
-            statusFilter === "appointed"
-              ? "border-emerald-600 shadow-2xs ring-1 ring-emerald-600/15"
-              : "border-slate-200 hover:border-emerald-300"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-emerald-800 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-              Appointed HODs
-            </span>
-            <UserCheck className="h-4 w-4 text-emerald-600" />
-          </div>
-          <div className="text-xl font-bold text-emerald-700 mt-1 font-mono tabular-nums">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Appointed HODs</span>
+          <span className="block text-2xl font-bold text-emerald-800 font-mono mt-1">
             {activeHodCount}
-          </div>
-        </button>
+          </span>
+          <span className="text-[11px] text-emerald-700 font-medium">Active HOD credentials provisioned</span>
+        </div>
 
-        {/* Vacant */}
-        <button
-          type="button"
-          onClick={() => setStatusFilter("vacant")}
-          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer bg-white ${
-            statusFilter === "vacant"
-              ? "border-amber-600 shadow-2xs ring-1 ring-amber-600/15"
-              : "border-slate-200 hover:border-amber-300"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-amber-800 flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Vacant Positions
-            </span>
-            <AlertCircle className="h-4 w-4 text-amber-600" />
-          </div>
-          <div className="text-xl font-bold text-amber-700 mt-1 font-mono tabular-nums">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Vacant Positions</span>
+          <span className={`block text-2xl font-bold font-mono mt-1 ${vacantDeptCount > 0 ? "text-rose-600" : "text-slate-400"}`}>
             {vacantDeptCount}
-          </div>
-        </button>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 2. MINIMALIST SEARCH & ACTION TOOLBAR                                      */}
-      {/* ========================================================================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-        {/* Left: Search & Filters */}
-        <div className="flex flex-wrap items-center gap-2 flex-1">
-          {/* Search Box */}
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search departments..."
-              className="w-full pl-8 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-            />
-          </div>
-
-          {/* Status Tabs */}
-          <div className="inline-flex items-center p-0.5 rounded-lg border border-slate-200 bg-slate-50 text-xs">
-            <button
-              type="button"
-              onClick={() => setStatusFilter("all")}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
-                statusFilter === "all"
-                  ? "bg-white text-slate-900 font-semibold shadow-2xs"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              All ({totalDepartmentsCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("vacant")}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
-                statusFilter === "vacant"
-                  ? "bg-white text-amber-800 font-semibold shadow-2xs"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              Vacant ({vacantDeptCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("appointed")}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
-                statusFilter === "appointed"
-                  ? "bg-white text-emerald-800 font-semibold shadow-2xs"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              Appointed ({activeHodCount})
-            </button>
-          </div>
-
-          {/* Program Select */}
-          <select
-            value={programFilter}
-            onChange={(e) => setProgramFilter(e.target.value)}
-            className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-500"
-          >
-            <option value="all">All Programs</option>
-            <option value="btech">B.Tech</option>
-            <option value="mba">MBA</option>
-            <option value="mca">MCA</option>
-          </select>
-        </div>
-
-        {/* Right: Actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={loadHistory}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors cursor-pointer"
-          >
-            <History className="h-3.5 w-3.5 text-slate-400" />
-            <span>History</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleOpenAppoint()}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Appoint HOD</span>
-          </button>
+          </span>
+          <span className="text-[11px] text-slate-500">Awaiting leadership appointment</span>
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 3. RAZOR-SHARP B2B SAAS TABLE (CLEAN, NO EMPTY HYPHENS)                   */}
-      {/* ========================================================================= */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                <th className="py-2.5 px-4 min-w-[220px]">Department</th>
-                <th className="py-2.5 px-4 min-w-[110px]">Program</th>
-                <th className="py-2.5 px-4 min-w-[260px]">Head of Department</th>
-                <th className="py-2.5 px-4 min-w-[100px]">Status</th>
-                <th className="py-2.5 px-4 min-w-[130px] text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {loading ? (
+      {/* Main Table Card */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+        {/* Table Controls */}
+        <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search branch, code, or HOD..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-700"
+              />
+            </div>
+
+            <select
+              value={statusFilter}
+              onChange={(e: any) => setStatusFilter(e.target.value)}
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
+            >
+              <option value="all">All Statuses</option>
+              <option value="appointed">Appointed</option>
+              <option value="vacant">Vacant</option>
+            </select>
+
+            <select
+              value={programFilter}
+              onChange={(e) => setProgramFilter(e.target.value)}
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
+            >
+              <option value="all">All Programs</option>
+              <option value="B.Tech">B.Tech</option>
+              <option value="M.Tech">M.Tech</option>
+              <option value="MBA">MBA</option>
+              <option value="MCA">MCA</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={loadHistory}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+            >
+              <History className="h-4 w-4 text-slate-500" />
+              <span>Tenure History</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleOpenAppoint()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-800 rounded-lg hover:bg-emerald-900 cursor-pointer shadow-xs"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Appoint HOD</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Table Body */}
+        {loading ? (
+          <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center">
+            <Loader2 className="h-5 w-5 animate-spin mr-2 text-emerald-800" />
+            Loading department leadership roster...
+          </div>
+        ) : filteredHods.length === 0 ? (
+          <div className="p-12 text-center text-xs text-slate-500">
+            No departments match your filter criteria.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
                 <tr>
-                  <td colSpan={5} className="py-10 text-center text-slate-400">
-                    <Loader2 className="h-5 w-5 animate-spin mx-auto mb-1.5 text-emerald-600" />
-                    <span>Loading leadership roster...</span>
-                  </td>
+                  <th className="p-3">Department Branch</th>
+                  <th className="p-3">Program</th>
+                  <th className="p-3">Head of Department</th>
+                  <th className="p-3">Employee ID</th>
+                  <th className="p-3">Account Status</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
-              ) : filteredHods.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-10 text-center text-slate-400">
-                    No departments match the current filter.
-                  </td>
-                </tr>
-              ) : (
-                filteredHods.map((item) => {
-                  const hasHod = Boolean(item.hodUserId && item.hodName);
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {filteredHods.map((item) => {
                   const prog = getProgramInfo(item);
+                  const isAppointed = Boolean(item.hodUserId && item.hodName);
 
                   return (
-                    <tr
-                      key={item.departmentId}
-                      className="hover:bg-slate-50/70 transition-colors"
-                    >
-                      {/* Department Name + Code */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
-                            {item.departmentCode}
-                          </span>
-                          <span className="font-semibold text-slate-900 truncate">
-                            {item.departmentName}
-                          </span>
-                        </div>
+                    <tr key={item.departmentId} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="p-3">
+                        <div className="font-bold text-slate-900">{item.departmentName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">Code: {item.departmentCode}</div>
                       </td>
-
-                      {/* Program */}
-                      <td className="py-3 px-4">
-                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md border shrink-0 ${prog.badgeClass}`}>
+                      <td className="p-3">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-semibold border ${prog.badgeClass}`}>
                           {prog.code}
                         </span>
                       </td>
-
-                      {/* Head of Department */}
-                      <td className="py-3 px-4">
-                        {hasHod ? (
-                          <div className="flex items-center gap-2.5">
-                            <div className="h-7 w-7 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center shrink-0">
-                              {item.hodName?.replace(/^(Dr\.|Prof\.)\s+/i, "").charAt(0) || "H"}
-                            </div>
-                            <div className="min-w-0">
-                              <span className="block font-medium text-slate-900 truncate">
-                                {item.hodName}
-                              </span>
-                              <span className="block text-[11px] font-mono text-slate-400 truncate">
-                                {item.hodEmail} {item.employeeCode ? `• ${item.employeeCode}` : ""}
-                              </span>
-                            </div>
+                      <td className="p-3">
+                        {isAppointed ? (
+                          <div>
+                            <div className="font-semibold text-slate-900">{item.hodName}</div>
+                            <div className="text-[11px] text-slate-500">{item.hodEmail}</div>
                           </div>
                         ) : (
-                          <span className="text-slate-400 font-normal italic">Unassigned</span>
-                        )}
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3 px-4">
-                        {hasHod ? (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-700">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold">
+                            <AlertCircle className="h-3 w-3" />
                             Vacant
                           </span>
                         )}
                       </td>
-
-                      {/* Action */}
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
-                        {hasHod ? (
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenAppoint(item.departmentId)}
-                              className="text-xs font-medium text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-md border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer"
-                            >
-                              Reassign
-                            </button>
+                      <td className="p-3 font-mono text-[11px] text-slate-600">
+                        {item.employeeCode || "—"}
+                      </td>
+                      <td className="p-3">
+                        {isAppointed ? (
+                          <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
+                            item.isActive
+                              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                              : "bg-slate-100 text-slate-600 border border-slate-200"
+                          }`}>
+                            {item.isActive ? "Active" : "Deactivated"}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right space-x-2">
+                        {isAppointed ? (
+                          <>
                             <button
                               type="button"
                               onClick={() => handleToggleStatus(item)}
-                              className="text-xs font-medium text-slate-400 hover:text-slate-600 p-1 rounded-md transition-colors cursor-pointer"
-                              title={item.isActive ? "Deactivate" : "Activate"}
+                              className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
                             >
                               {item.isActive ? "Deactivate" : "Activate"}
                             </button>
-                          </div>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAppoint(item.departmentId)}
+                              className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 cursor-pointer"
+                            >
+                              Reassign
+                            </button>
+                          </>
                         ) : (
                           <button
                             type="button"
                             onClick={() => handleOpenAppoint(item.departmentId)}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-emerald-800 hover:bg-emerald-900 rounded-md cursor-pointer"
                           >
-                            <Plus className="h-3 w-3" />
-                            <span>Assign HOD</span>
+                            Appoint HOD
                           </button>
                         )}
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* MODAL: Appoint / Replace HOD                                              */}
-      {/* ========================================================================= */}
+      {/* Appoint / Promote Modal */}
       <Modal
         isOpen={showAppointModal}
         onClose={() => setShowAppointModal(false)}
-        title="Appoint Department Head (HOD)"
-        description="Select a department and assign faculty leadership."
+        title="Appoint Head of Department (HOD)"
+        description="Assign a faculty member or onboard an external appointee as Head of Department."
+        size="md"
       >
-        <form onSubmit={handleAppointSubmit} className="space-y-4 pt-1">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-700">Target Department</label>
-            <Select
-              value={targetDepartmentId}
-              onChange={(e) => setTargetDepartmentId(e.target.value)}
-              options={departments.map((d) => ({
-                value: d.id,
-                label: `${d.name} (${d.code})`,
-              }))}
-            />
-          </div>
+        <form onSubmit={handleAppointSubmit} className="space-y-4">
+          <Select
+            label="Department Branch"
+            value={targetDepartmentId}
+            onChange={(e) => setTargetDepartmentId(e.target.value)}
+            options={departments.map((d) => ({
+              label: `${d.name} (${d.code})`,
+              value: d.id,
+            }))}
+            required
+          />
 
-          {/* Mode Switcher */}
-          <div className="flex border border-slate-200 rounded-lg p-0.5 bg-slate-50 text-xs">
+          <div className="flex border-b border-slate-200 pb-2 gap-4 text-xs font-semibold">
             <button
               type="button"
               onClick={() => setAppointMode("promote")}
-              className={`flex-1 py-1.5 font-medium rounded-md transition-all ${
-                appointMode === "promote"
-                  ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                  : "text-slate-500 hover:text-slate-900"
-              }`}
+              className={`pb-1 cursor-pointer ${appointMode === "promote" ? "text-emerald-800 border-b-2 border-emerald-800" : "text-slate-500"}`}
             >
-              Promote Faculty
+              Promote Existing Faculty
             </button>
             <button
               type="button"
               onClick={() => setAppointMode("create")}
-              className={`flex-1 py-1.5 font-medium rounded-md transition-all ${
-                appointMode === "create"
-                  ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                  : "text-slate-500 hover:text-slate-900"
-              }`}
+              className={`pb-1 cursor-pointer ${appointMode === "create" ? "text-emerald-800 border-b-2 border-emerald-800" : "text-slate-500"}`}
             >
-              New Account
+              Onboard External HOD
             </button>
           </div>
 
           {appointMode === "promote" ? (
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">Select Faculty Member</label>
+            <div>
               <Select
+                label="Select Faculty Candidate"
                 value={selectedFacultyId}
                 onChange={(e) => setSelectedFacultyId(e.target.value)}
-                options={facultyRoster.map((f) => ({
+                options={facultyList.map((f) => ({
+                  label: `${f.fullName} (${f.email}) - ${f.designation || "Faculty"}`,
                   value: f.id,
-                  label: `${f.name} • ${f.designation} (${f.email})`,
                 }))}
+                required
               />
+              <p className="text-[11px] text-slate-500 mt-1">
+                The selected faculty member will be assigned Head of Department responsibilities for this branch.
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-700">Full Name</label>
-                <Input
-                  value={newHodName}
-                  onChange={(e) => setNewHodName(e.target.value)}
-                  placeholder="e.g. Dr. Rajesh Verma"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-700">Email Address</label>
-                <Input
-                  type="email"
-                  value={newHodEmail}
-                  onChange={(e) => setNewHodEmail(e.target.value)}
-                  placeholder="e.g. rajesh.verma@sistec.ac.in"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700">Employee Code</label>
-                  <Input
-                    value={newHodCode}
-                    onChange={(e) => setNewHodCode(e.target.value)}
-                    placeholder="e.g. EMP-102"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700">Temporary Password</label>
-                  <Input
-                    value={newHodPassword}
-                    onChange={(e) => setNewHodPassword(e.target.value)}
-                    placeholder="Pass@1234"
-                  />
-                </div>
-              </div>
+              <Input
+                label="Full Name"
+                placeholder="Dr. Full Name"
+                value={newHodName}
+                onChange={(e) => setNewHodName(e.target.value)}
+                required
+              />
+              <Input
+                label="Official Email"
+                type="email"
+                placeholder="hod.dept@college.ac.in"
+                value={newHodEmail}
+                onChange={(e) => setNewHodEmail(e.target.value)}
+                required
+              />
+              <Input
+                label="Employee ID (Optional)"
+                placeholder="EMP-HOD-01"
+                value={newHodCode}
+                onChange={(e) => setNewHodCode(e.target.value)}
+              />
+              <p className="text-[11px] text-slate-500">
+                An account invitation will be dispatched to this email address to establish access credentials.
+              </p>
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setShowAppointModal(false)}
-              className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors"
+              className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-colors"
+              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-800 rounded-lg hover:bg-emerald-900 cursor-pointer disabled:opacity-50"
             >
-              {submitting ? "Appointing..." : "Save Appointment"}
+              {submitting ? "Appointing..." : "Confirm Appointment"}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* DRAWER: HOD Assignment History                                            */}
-      {/* ========================================================================= */}
+      {/* History Slide-Over Drawer */}
       <SlideOverDrawer
         isOpen={showHistoryDrawer}
         onClose={() => setShowHistoryDrawer(false)}
-        title="Leadership History"
-        subtitle="Departmental leadership assignment audit trail"
+        title="Leadership Succession History"
+        description="Chronological record of department leadership appointments and tenure."
       >
-        <div className="space-y-4 pt-2">
+        <div className="space-y-4">
           {historyList.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-400">
-              No historical records found.
+            <div className="text-center py-8 text-xs text-slate-500">
+              No historical appointment records found.
             </div>
           ) : (
-            <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
-              {historyList.map((item) => (
-                <div key={item.id} className="relative space-y-0.5">
-                  <div
-                    className={`absolute -left-6 top-1 h-3 w-3 rounded-full border-2 ${
-                      item.isCurrent
-                        ? "bg-emerald-600 border-white ring-2 ring-emerald-200"
-                        : "bg-slate-300 border-white"
-                    }`}
-                  />
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-900">{item.hodName}</span>
-                    {item.isCurrent && (
-                      <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                        Current
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-slate-500">
-                    {item.departmentName} ({item.departmentCode})
-                  </div>
-                  <div className="text-[10px] text-slate-400 pt-0.5">
-                    {new Date(item.appointedAtUtc).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    {item.appointedBy && ` • By ${item.appointedBy}`}
-                  </div>
+            historyList.map((h) => (
+              <div key={h.id} className="p-3.5 rounded-lg border border-slate-200 bg-white space-y-1.5 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-slate-900">{h.hodName}</span>
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${h.isCurrent ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-slate-100 text-slate-600"}`}>
+                    {h.isCurrent ? "Current HOD" : "Relieved"}
+                  </span>
                 </div>
-              ))}
-            </div>
+                <div className="text-xs text-slate-600">Department: {h.departmentName} ({h.departmentCode})</div>
+                <div className="text-[11px] text-slate-500">Email: {h.hodEmail} • Emp: {h.employeeCode}</div>
+                <div className="text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-100">
+                  Appointed: {new Date(h.appointedAtUtc).toLocaleDateString()} by {h.appointedBy}
+                </div>
+              </div>
+            ))
           )}
         </div>
       </SlideOverDrawer>

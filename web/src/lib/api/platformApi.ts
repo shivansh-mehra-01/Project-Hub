@@ -11,7 +11,7 @@ import {
 } from "./types";
 
 export const platformApi = {
-  getTenants: () => apiClient.get<CollegeTenantDto[]>("/api/platform/tenants"),
+  getTenants: () => apiClient.get<CollegeTenantDto[]>("/api/platform/tenants", { suppressToast: true }),
 
   createTenant: (data: CreateTenantRequest) =>
     apiClient.post<CreateTenantResponse>("/api/platform/tenants", data),
@@ -27,7 +27,7 @@ export const platformApi = {
   getSdgs: () => apiClient.get<MasterSdgDto[]>("/api/platform/sdgs"),
 
   getAuditLogs: (take = 100) =>
-    apiClient.get<PlatformAuditLogDto[]>(`/api/platform/audit-logs?take=${take}`),
+    apiClient.get<PlatformAuditLogDto[]>(`/api/platform/audit-logs?take=${take}`, { suppressToast: true }),
 
   createAuditLog: (data: {
     action: string;
@@ -37,7 +37,7 @@ export const platformApi = {
     ipAddress?: string;
   }) => apiClient.post<PlatformAuditLogDto>("/api/platform/audit-logs", data),
 
-  getSessions: () => apiClient.get<any[]>("/api/platform/sessions"),
+  getSessions: () => apiClient.get<any[]>("/api/platform/sessions", { suppressToast: true }),
 
   revokeSession: (sessionId: string) =>
     apiClient.post<{ success: boolean; revokedSessionId: string }>(

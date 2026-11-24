@@ -1,5 +1,5 @@
-import { CoursesAndBranchesView } from "@/features/college-admin/views/CoursesAndBranchesView";
+import { redirect } from "next/navigation";
 
 export default function CollegeDepartmentsPage() {
-  return <CoursesAndBranchesView />;
+  redirect("/college/courses");
 }

@@ -3,6 +3,9 @@ import {
   AcademicHierarchyTreeDto,
   AcademicSessionDto,
   AppointHodRequest,
+  BulkStaffUploadRequest,
+  BulkStaffUploadResultDto,
+  CertifyExaminationRegisterRequest,
   CollegeOverviewDto,
   CollegeSettingsDto,
   CollegeStaffDto,
@@ -19,6 +22,7 @@ import {
   CreateSemesterTermRequest,
   CreateSubjectOfferingRequest,
   DepartmentDto,
+  ExaminationTabulationRegisterDto,
   HodAssignmentHistoryDto,
   HodManagementDto,
   ImportCatalogResultDto,
@@ -101,9 +105,27 @@ export const collegeApi = {
     apiClient.put<{ success: boolean; message: string }>(`/api/college/users/${id}/status`, data),
 
   resetStaffPassword: (id: string) =>
-    apiClient.post<{ success: boolean; message: string }>(`/api/college/users/${id}/reset-password`),
+    apiClient.post<{ success: boolean; message: string; emailDispatched?: boolean; expiresAtUtc?: string }>(`/api/college/users/${id}/reset-password`),
 
-  // F. Accreditation & Institutional Reports
+  bulkUploadStaff: (data: BulkStaffUploadRequest) =>
+    apiClient.post<BulkStaffUploadResultDto>("/api/college/users/bulk", data),
+
+  // F. Examination Tabulation Register
+  getExaminationResults: (params?: { trackId?: string; departmentId?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.trackId) query.set("trackId", params.trackId);
+    if (params?.departmentId) query.set("departmentId", params.departmentId);
+    const qs = query.toString();
+    return apiClient.get<ExaminationTabulationRegisterDto>(`/api/college/results${qs ? `?${qs}` : ""}`);
+  },
+
+  certifyExaminationResults: (data: CertifyExaminationRegisterRequest) =>
+    apiClient.post<{ success: boolean; message: string; certifiedBy: string; certifiedAtUtc: string; checksum: string }>(
+      "/api/college/results/certify",
+      data
+    ),
+
+  // G. Accreditation & Institutional Reports
   getComplianceDossier: () => apiClient.get<InstitutionalDossierDto>("/api/college/compliance/dossier"),
 
   signOffCompliance: (data: SignOffComplianceRequest) =>

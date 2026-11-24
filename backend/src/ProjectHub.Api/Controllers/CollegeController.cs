@@ -19,11 +19,22 @@ public class CollegeController : ControllerBase
 {
     private readonly ProjectHubDbContext _context;
     private readonly ITenantContext _tenantContext;
+    private readonly IEmailSender _emailSender;
+    private readonly IWebHostEnvironment _environment;
+    private readonly ILogger<CollegeController> _logger;
 
-    public CollegeController(ProjectHubDbContext context, ITenantContext tenantContext)
+    public CollegeController(
+        ProjectHubDbContext context,
+        ITenantContext tenantContext,
+        IEmailSender emailSender,
+        IWebHostEnvironment environment,
+        ILogger<CollegeController> logger)
     {
         _context = context;
         _tenantContext = tenantContext;
+        _emailSender = emailSender;
+        _environment = environment;
+        _logger = logger;
     }
 
     private async Task<(Guid? UserId, string Email, string FullName)> ResolveCallerIdentityAsync()
@@ -108,7 +119,7 @@ public class CollegeController : ControllerBase
             .ToListAsync();
 
         var overallAttainment = vivaEvaluations.Any()
-            ? Math.Round(vivaEvaluations.Average(e => e.SharedTotalScore > 0 ? (e.SharedTotalScore / 50m * 100m) : 0m), 1)
+            ? Math.Round(vivaEvaluations.Average(e => e.SharedTotalScore > 0 ? Math.Min(100m, Math.Max(0m, e.SharedTotalScore)) : 0m), 1)
             : 0m;
 
         var deptSummaries = depts.Select(d =>
@@ -119,7 +130,7 @@ public class CollegeController : ControllerBase
             var deptStudents = allCollegeUsers.Count(u => u.DepartmentId == d.Id && u.Role == UserRole.Student);
             var deptEvals = vivaEvaluations.Where(v => v.ProjectTeam != null && v.ProjectTeam.DepartmentId == d.Id).ToList();
             var deptAttainment = deptEvals.Any()
-                ? Math.Round(deptEvals.Average(e => e.SharedTotalScore > 0 ? (e.SharedTotalScore / 50m * 100m) : 0m), 1)
+                ? Math.Round(deptEvals.Average(e => e.SharedTotalScore > 0 ? Math.Min(100m, Math.Max(0m, e.SharedTotalScore)) : 0m), 1)
                 : 0m;
 
             return new DepartmentTrackSummaryDto
@@ -129,7 +140,7 @@ public class CollegeController : ControllerBase
                 DepartmentName = d.Name,
                 HodName = d.HodUser != null ? d.HodUser.FullName : null,
                 IntakeQuota = d.IntakeQuota > 0 ? d.IntakeQuota : 120,
-                StudentCount = deptStudents > 0 ? deptStudents : d.IntakeQuota,
+                StudentCount = deptStudents,
                 FacultyCount = deptFaculty,
                 Criterion3AttainmentPct = deptAttainment,
                 TrackStatus = count > 0 ? "Active" : "Awaiting HOD Launch",
@@ -142,6 +153,220 @@ public class CollegeController : ControllerBase
 
         var totalEnrolledIntake = allCollegeUsers.Count(u => u.Role == UserRole.Student);
         var totalFaculty = allCollegeUsers.Count(u => u.Role == UserRole.Faculty || u.Role == UserRole.HOD);
+
+        // 3. Cohort-Adjusted Capacity Calculation
+        var enrollmentQuery = _context.StudentAcademicEnrollments
+            .Include(e => e.CurrentSemesterTerm)
+            .Where(e => e.CollegeId == collegeId.Value && !e.IsDeleted && e.AcademicStatus == AcademicStatus.Active);
+
+        if (activeSession != null)
+        {
+            enrollmentQuery = enrollmentQuery.Where(e => e.CurrentSemesterTerm == null || e.CurrentSemesterTerm.AcademicSessionId == activeSession.Id);
+        }
+
+        var studentEnrollments = await enrollmentQuery.ToListAsync();
+
+        int totalSanctionedCapacity = 0;
+        foreach (var d in depts)
+        {
+            var prog = courses.FirstOrDefault(c => c.Id == d.CourseProgramId);
+            var durationYears = (prog?.TotalSemesters ?? 8) / 2;
+            if (durationYears < 1) durationYears = 4;
+            totalSanctionedCapacity += (d.IntakeQuota > 0 ? d.IntakeQuota : 120) * durationYears;
+        }
+
+        // Distinct student counting avoids multi-counting a student who has multiple historical semester enrollment records
+        int distinctEnrolledStudents = studentEnrollments.Any()
+            ? studentEnrollments.Select(e => e.StudentUserId).Distinct().Count()
+            : totalEnrolledIntake;
+
+        int totalEnrolledStudents = distinctEnrolledStudents > 0 ? distinctEnrolledStudents : totalEnrolledIntake;
+
+        decimal utilizationPct = totalSanctionedCapacity > 0
+            ? Math.Round((decimal)totalEnrolledStudents / totalSanctionedCapacity * 100m, 1)
+            : 0m;
+
+        var cohortCapacity = new CohortEnrollmentCapacityDto
+        {
+            TotalSanctionedMultiCohortCapacity = totalSanctionedCapacity,
+            TotalEnrolledStudents = totalEnrolledStudents,
+            UtilizationPercentage = utilizationPct,
+            HasReliableEnrollmentRecords = studentEnrollments.Count > 0,
+            StatusMessage = studentEnrollments.Count > 0
+                ? $"Calculated across {depts.Count} departments over full multi-year degree cohorts."
+                : "Active student accounts used; formal semester cohort enrollment records recommended for statutory audit."
+        };
+
+        // 4. Statutory AICTE Cadre & FSR Compliance per Program
+        var aicteComplianceList = new List<AicteCadreComplianceDto>();
+        foreach (var prog in courses)
+        {
+            var childDepts = depts.Where(d => d.CourseProgramId == prog.Id || (!d.CourseProgramId.HasValue && prog.Code == "BTECH")).ToList();
+            var sanctionedIntake = childDepts.Sum(d => d.IntakeQuota);
+            var durationYears = prog.TotalSemesters / 2;
+            if (durationYears < 1) durationYears = (prog.Level == AcademicProgramLevel.PG ? 2 : 4);
+            var totalStrength = sanctionedIntake * durationYears;
+
+            // Determine statutory programme type and discipline per AICTE APH 2024-2027 Annexure 5
+            var codeUpper = prog.Code?.Trim().ToUpperInvariant() ?? "";
+            var nameUpper = prog.Name?.Trim().ToUpperInvariant() ?? "";
+
+            bool isManagement = codeUpper.Contains("MBA") || codeUpper.Contains("PGDM") || nameUpper.Contains("MANAGEMENT");
+            bool isMca = codeUpper.Contains("MCA") || nameUpper.Contains("COMPUTER APPLICATION");
+            bool isPgEngineering = prog.Level == AcademicProgramLevel.PG && !isManagement && !isMca;
+
+            // Statutory Faculty-to-Student Ratio (FSR):
+            // - PG Engineering (M.Tech): 1:15
+            // - UG Engineering (B.Tech): 1:20
+            // - Management (MBA): 1:20
+            // - Computer Applications (MCA): 1:20
+            int ratioDenominator = isPgEngineering ? 15 : 20;
+            int requiredFaculty = totalStrength > 0 ? (int)Math.Ceiling((double)totalStrength / ratioDenominator) : 0;
+
+            var childDeptIds = childDepts.Select(d => d.Id).ToHashSet();
+            var progFaculty = allCollegeUsers.Where(u => u.DepartmentId.HasValue && childDeptIds.Contains(u.DepartmentId.Value) && (u.Role == UserRole.Faculty || u.Role == UserRole.HOD)).ToList();
+            int availableFaculty = progFaculty.Count;
+
+            int actualProf = progFaculty.Count(f => f.Designation == FacultyDesignation.Professor);
+            int actualAssoc = progFaculty.Count(f => f.Designation == FacultyDesignation.AssociateProfessor);
+            int actualAsst = progFaculty.Count(f => f.Designation == FacultyDesignation.AssistantProfessor);
+
+            int reqProf = 0, reqAssoc = 0, reqAsst = 0;
+            if (requiredFaculty > 0)
+            {
+                if (isPgEngineering)
+                {
+                    // AICTE APH Annexure 5: PG Engineering Cadre ratio is 1 Professor : 1 Assoc Professor : 1 Asst Professor (Divisor: 3)
+                    // For requiredFaculty = 4 (30 intake * 2 yrs = 60 students / 15): 1 Prof, 1 Assoc, 2 Asst.
+                    if (requiredFaculty == 1)
+                    {
+                        reqProf = 1; reqAssoc = 0; reqAsst = 0;
+                    }
+                    else if (requiredFaculty == 2)
+                    {
+                        reqProf = 1; reqAssoc = 1; reqAsst = 0;
+                    }
+                    else
+                    {
+                        reqProf = Math.Max(1, requiredFaculty / 3);
+                        reqAssoc = Math.Max(1, (requiredFaculty - reqProf) / 2);
+                        reqAsst = Math.Max(0, requiredFaculty - reqProf - reqAssoc);
+                    }
+                }
+                else
+                {
+                    // AICTE APH Annexure 5: UG Engineering, MBA, MCA Cadre ratio is 1 Professor : 2 Assoc Professors : 6 Asst Professors (Divisor: 9)
+                    if (requiredFaculty == 1)
+                    {
+                        reqProf = 1; reqAssoc = 0; reqAsst = 0;
+                    }
+                    else if (requiredFaculty == 2)
+                    {
+                        reqProf = 1; reqAssoc = 1; reqAsst = 0;
+                    }
+                    else
+                    {
+                        reqProf = Math.Min(requiredFaculty, Math.Max(1, (int)Math.Round((double)requiredFaculty / 9.0, MidpointRounding.AwayFromZero)));
+                        reqAssoc = Math.Min(requiredFaculty - reqProf, Math.Max(1, (int)Math.Round((double)requiredFaculty * 2.0 / 9.0, MidpointRounding.AwayFromZero)));
+                        reqAsst = Math.Max(0, requiredFaculty - reqProf - reqAssoc);
+                    }
+                }
+            }
+
+            bool hasDesignations = progFaculty.Any(f => f.Designation.HasValue);
+            string cadreStatus;
+            string statusMsg;
+            bool isSubstituted = false;
+            int substitutedProf = 0;
+            string? qualificationNotice = null;
+
+            if (totalStrength == 0)
+            {
+                cadreStatus = "Compliant";
+                statusMsg = "Zero sanctioned intake; no mandatory AICTE cadre requirement.";
+            }
+            else if (availableFaculty == 0)
+            {
+                cadreStatus = "NonCompliant";
+                statusMsg = "Faculty count falls below AICTE sanctioned norms.";
+            }
+            else if (!hasDesignations)
+            {
+                cadreStatus = "Insufficient Data";
+                statusMsg = "Faculty cadre designations (Professor, Assoc Prof, Asst Prof) must be assigned in Staff Directory for AICTE audit.";
+            }
+            else
+            {
+                // Professor substitution rule per AICTE APH Annexure 5 Note:
+                // An eligible Associate Professor may be considered in lieu of a Professor if a Professor is unavailable.
+                int profDeficit = Math.Max(0, reqProf - actualProf);
+                int assocSurplus = Math.Max(0, actualAssoc - reqAssoc);
+                substitutedProf = Math.Min(profDeficit, assocSurplus);
+                int effectiveProf = actualProf + substitutedProf;
+                int effectiveAssoc = actualAssoc - substitutedProf;
+
+                bool isCadreCompliant = availableFaculty >= requiredFaculty &&
+                                        effectiveProf >= reqProf &&
+                                        effectiveAssoc >= reqAssoc;
+
+                if (isCadreCompliant)
+                {
+                    isSubstituted = substitutedProf > 0;
+                    cadreStatus = isSubstituted
+                        ? "Compliant — subject to qualification verification"
+                        : "Compliant";
+                    statusMsg = isSubstituted
+                        ? "Meets AICTE APH cadre requirements via eligible Associate Professor substitution in lieu of Professor per Annexure 5 Note."
+                        : "Meets AICTE APH cadre and FSR requirements.";
+                    qualificationNotice = isSubstituted
+                        ? "Statutory Qualification Notice: Associate Professor substitution in lieu of Professor is permitted under AICTE APH 2024–2027 Annexure 5 Note only if the substituting faculty member satisfies prescribed Professor qualifications (PhD degree and applicable teaching/research experience). Colabex does not independently validate academic credentials; the institution must independently verify and document qualification eligibility."
+                        : null;
+                }
+                else
+                {
+                    cadreStatus = "NonCompliant";
+                    statusMsg = "Faculty count or cadre distribution falls below AICTE sanctioned norms.";
+                }
+            }
+
+            string actualRatio = availableFaculty > 0 
+                ? (totalStrength == 0 ? "1:0" : $"1:{Math.Round((decimal)totalStrength / availableFaculty, 1)}")
+                : "N/A";
+
+            string programLevelDisplay = isPgEngineering
+                ? "PG Engineering"
+                : (isManagement ? "MBA" : (isMca ? "MCA" : (prog.Level == AcademicProgramLevel.UG ? "UG Engineering" : prog.Level.ToString())));
+
+            aicteComplianceList.Add(new AicteCadreComplianceDto
+            {
+                ProgramLevel = programLevelDisplay,
+                ProgramCode = prog.Code,
+                SanctionedIntake = sanctionedIntake,
+                ProgramDurationYears = durationYears,
+                TotalSanctionedStrength = totalStrength,
+                RequiredFaculty = requiredFaculty,
+                AvailableFaculty = availableFaculty,
+                RequiredRatio = $"1:{ratioDenominator}",
+                ActualRatio = actualRatio,
+                IsCompliant = cadreStatus.StartsWith("Compliant"),
+                CadreStatus = cadreStatus,
+                RequiredProfessors = reqProf,
+                ActualProfessors = actualProf,
+                RequiredAssociateProfessors = reqAssoc,
+                ActualAssociateProfessors = actualAssoc,
+                RequiredAssistantProfessors = reqAsst,
+                ActualAssistantProfessors = actualAsst,
+                StatusMessage = statusMsg,
+                IsSubstituted = isSubstituted,
+                SubstitutedProfessorsCount = substitutedProf,
+                QualificationVerificationNotice = qualificationNotice
+            });
+        }
+
+        // 5. Department SAR Attestation Progress
+        int totalDeptsForSar = depts.Count;
+        int attestedDeptsCount = depts.Count(d => d.IsSarAttested);
+        decimal sarAttestPct = totalDeptsForSar > 0 ? Math.Round((decimal)attestedDeptsCount / totalDeptsForSar * 100m, 1) : 0m;
 
         var projectCount = await _context.ProjectTeams.CountAsync(t => !t.IsDeleted);
 
@@ -205,28 +430,6 @@ public class CollegeController : ControllerBase
             });
         }
 
-        if (recentActivities.Count == 0)
-        {
-            recentActivities.Add(new CollegeActivityItemDto
-            {
-                Title = "Academic session 2026–2027 configured",
-                TimeAgo = "2 hours ago",
-                OccurredAtUtc = DateTime.UtcNow.AddHours(-2)
-            });
-            recentActivities.Add(new CollegeActivityItemDto
-            {
-                Title = "HOD assigned for CSE Branch",
-                TimeAgo = "3 hours ago",
-                OccurredAtUtc = DateTime.UtcNow.AddHours(-3)
-            });
-            recentActivities.Add(new CollegeActivityItemDto
-            {
-                Title = "NBA Dossier Exported",
-                TimeAgo = "1 day ago",
-                OccurredAtUtc = DateTime.UtcNow.AddDays(-1)
-            });
-        }
-
         // Real Notifications
         var pendingSarCount = depts.Count(d => !d.IsSarAttested);
         var notifications = new List<CollegeNotificationItemDto>
@@ -279,6 +482,11 @@ public class CollegeController : ControllerBase
             CrestUrl = college.CrestUrl,
             CurrentSemesterLabel = "Odd Semester",
             LastUpdatedUtc = DateTime.UtcNow,
+            CohortCapacity = cohortCapacity,
+            ProgramAicteCompliance = aicteComplianceList,
+            SarDepartmentAttestationPct = sarAttestPct,
+            AttestedDepartmentsCount = attestedDeptsCount,
+            TotalDepartmentsForSar = totalDeptsForSar,
             ActiveSession = new AcademicSessionDto
             {
                 Id = activeSession.Id,
@@ -1067,9 +1275,16 @@ public class CollegeController : ControllerBase
             .OrderBy(d => d.Code)
             .ToListAsync();
 
+        var deptUsers = await _context.Users
+            .Where(u => u.CollegeId == collegeId && u.DepartmentId.HasValue && !u.IsDeleted)
+            .Select(u => new { u.DepartmentId, u.Role })
+            .ToListAsync();
+
         var result = departments.Select(d =>
         {
             var count = activeTracks.Count(id => id == d.Id);
+            var fCount = deptUsers.Count(u => u.DepartmentId == d.Id && (u.Role == UserRole.Faculty || u.Role == UserRole.HOD));
+            var sCount = deptUsers.Count(u => u.DepartmentId == d.Id && u.Role == UserRole.Student);
             return new DepartmentDto
             {
                 Id = d.Id,
@@ -1082,8 +1297,8 @@ public class CollegeController : ControllerBase
                 HodUserId = d.HodUserId,
                 HodName = d.HodUser != null ? d.HodUser.FullName : null,
                 IntakeQuota = d.IntakeQuota > 0 ? d.IntakeQuota : 120,
-                StudentCount = d.IntakeQuota > 0 ? d.IntakeQuota : 120,
-                FacultyCount = d.Users.Count(u => u.Role == UserRole.Faculty && !u.IsDeleted) is var f && f > 0 ? f : 12,
+                StudentCount = sCount > 0 ? sCount : (d.IntakeQuota > 0 ? d.IntakeQuota : 120),
+                FacultyCount = fCount,
                 IsSarAttested = d.IsSarAttested,
                 SarAttestedAtUtc = d.SarAttestedAtUtc,
                 TrackStatus = count > 0 ? "Active" : "Awaiting HOD Launch",
@@ -1149,6 +1364,9 @@ public class CollegeController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        var facultyCount = await _context.Users.CountAsync(u => u.DepartmentId == dept.Id && (u.Role == UserRole.Faculty || u.Role == UserRole.HOD) && !u.IsDeleted);
+        var studentCount = await _context.Users.CountAsync(u => u.DepartmentId == dept.Id && u.Role == UserRole.Student && !u.IsDeleted);
+
         return Ok(new DepartmentDto
         {
             Id = dept.Id,
@@ -1161,8 +1379,8 @@ public class CollegeController : ControllerBase
             HodUserId = dept.HodUserId,
             HodName = dept.HodUser?.FullName,
             IntakeQuota = dept.IntakeQuota,
-            StudentCount = dept.IntakeQuota,
-            FacultyCount = 12,
+            StudentCount = studentCount > 0 ? studentCount : dept.IntakeQuota,
+            FacultyCount = facultyCount,
             IsSarAttested = dept.IsSarAttested,
             SarAttestedAtUtc = dept.SarAttestedAtUtc
         });
@@ -1190,8 +1408,13 @@ public class CollegeController : ControllerBase
         var department = await _context.Departments.FirstOrDefaultAsync(d => d.Id == id && d.CollegeId == collegeId && !d.IsDeleted);
         if (department == null) return NotFound(new { message = "Department not found." });
 
-        var faculty = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.HodUserId && !u.IsDeleted);
-        if (faculty == null) return NotFound(new { message = "Appointed faculty user not found." });
+        var faculty = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.HodUserId && u.CollegeId == collegeId && !u.IsDeleted);
+        if (faculty == null) return NotFound(new { message = "Appointed faculty user not found in this institution." });
+
+        if (faculty.Role == UserRole.SuperAdmin)
+        {
+            return BadRequest(new { message = "Platform SuperAdmin accounts cannot be assigned as department HOD." });
+        }
 
         // Promote user role to HOD and assign to department
         faculty.Role = UserRole.HOD;
@@ -1291,6 +1514,16 @@ public class CollegeController : ControllerBase
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
 
+        if (existingUser != null && existingUser.CollegeId != collegeId)
+        {
+            return Conflict(new { message = $"User with email '{email}' is registered under another institution." });
+        }
+
+        if (existingUser != null && existingUser.Role == UserRole.SuperAdmin)
+        {
+            return BadRequest(new { message = "Platform SuperAdmin accounts cannot be reassigned as department HOD." });
+        }
+
         UserAccount hod;
         var defaultPassword = string.IsNullOrWhiteSpace(request.TemporaryPassword) 
             ? $"Collabex!{System.Security.Cryptography.RandomNumberGenerator.GetHexString(3).ToUpper()}@{System.Security.Cryptography.RandomNumberGenerator.GetInt32(100, 999)}"
@@ -1302,7 +1535,6 @@ public class CollegeController : ControllerBase
             hod = existingUser;
             hod.Role = UserRole.HOD;
             hod.DepartmentId = dept.Id;
-            hod.CollegeId = collegeId;
             hod.IsActive = true;
             hod.IsActivated = true;
             if (string.IsNullOrWhiteSpace(hod.PasswordHash))
@@ -1492,6 +1724,8 @@ public class CollegeController : ControllerBase
                 FullName = u.FullName,
                 Email = u.Email,
                 Role = u.Role,
+                Designation = u.Designation,
+                DelegatedResponsibility = u.DelegatedResponsibility,
                 DepartmentId = u.DepartmentId,
                 DepartmentCode = u.Department != null ? u.Department.Code : null,
                 DepartmentName = u.Department != null ? u.Department.Name : null,
@@ -1512,6 +1746,11 @@ public class CollegeController : ControllerBase
         var collegeId = _tenantContext.CollegeId!.Value;
         var email = request.Email.Trim().ToLowerInvariant();
 
+        if (request.Role == UserRole.SuperAdmin)
+        {
+            return BadRequest(new { message = "College administrators cannot create or assign the SuperAdmin platform role." });
+        }
+
         var exists = await _context.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == email && !u.IsDeleted);
         if (exists) return Conflict(new { message = $"User with email '{email}' already exists." });
 
@@ -1523,6 +1762,8 @@ public class CollegeController : ControllerBase
             FullName = request.FullName.Trim(),
             Email = email,
             Role = request.Role,
+            Designation = request.Designation,
+            DelegatedResponsibility = request.DelegatedResponsibility,
             EnrollmentOrEmployeeCode = string.IsNullOrWhiteSpace(request.EmployeeCode) ? $"STAFF-{Guid.NewGuid().ToString("N")[..6].ToUpper()}" : request.EmployeeCode.Trim(),
             PasswordHash = PasswordHelper.HashPassword(tempPassword),
             PasswordChangedAtUtc = null,
@@ -1543,11 +1784,13 @@ public class CollegeController : ControllerBase
             FullName = user.FullName,
             Email = user.Email,
             Role = user.Role,
+            Designation = user.Designation,
+            DelegatedResponsibility = user.DelegatedResponsibility,
             DepartmentId = user.DepartmentId,
             DepartmentCode = dept?.Code,
             DepartmentName = dept?.Name,
             EmployeeCode = user.EnrollmentOrEmployeeCode,
-            TemporaryPassword = tempPassword,
+            TemporaryPassword = null, // Plaintext credential never exposed in production
             IsActive = user.IsActive,
             IsActivated = user.IsActivated,
             CreatedAtUtc = user.CreatedAtUtc,
@@ -1562,6 +1805,16 @@ public class CollegeController : ControllerBase
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id && u.CollegeId == collegeId && !u.IsDeleted);
         if (user == null) return NotFound(new { message = "User not found." });
 
+        if (id == _tenantContext.UserId && !request.IsActive)
+        {
+            return BadRequest(new { message = "Administrators cannot deactivate their own active account." });
+        }
+
+        if (user.Role == UserRole.SuperAdmin)
+        {
+            return Forbid();
+        }
+
         user.IsActive = request.IsActive;
         await _context.SaveChangesAsync();
         return Ok(new { success = true, isActive = user.IsActive });
@@ -1574,17 +1827,46 @@ public class CollegeController : ControllerBase
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id && u.CollegeId == collegeId && !u.IsDeleted);
         if (user == null) return NotFound(new { message = "User not found." });
 
-        var tempPassword = $"Collabex!{System.Security.Cryptography.RandomNumberGenerator.GetHexString(3).ToUpper()}@{System.Security.Cryptography.RandomNumberGenerator.GetInt32(100, 999)}";
-        user.PasswordHash = PasswordHelper.HashPassword(tempPassword);
+        if (user.Role == UserRole.SuperAdmin)
+        {
+            return Forbid();
+        }
+
+        // Generate cryptographically secure 6-digit OTP matching platform standard for /api/auth/reset-password
+        var otpNumber = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000);
+        var otp = otpNumber.ToString("D6");
+
+        user.PasswordResetOtpHashed = PasswordHelper.HashPassword(otp);
+        user.PasswordResetOtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(15);
+        user.PasswordResetOtpAttempts = 0;
         user.PasswordChangedAtUtc = null;
-        user.IsActivated = true;
         await _context.SaveChangesAsync();
+
+        bool emailDispatched = false;
+        try
+        {
+            await _emailSender.SendPasswordResetOtpAsync(user.Email, user.FullName, otp);
+            emailDispatched = true;
+            _logger.LogInformation("Password reset OTP dispatched to staff member {Email} for tenant {CollegeId}", user.Email, collegeId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to dispatch password reset OTP email to {Email}", user.Email);
+            emailDispatched = false;
+        }
+
+        // In development only, supply devOtp for test harnesses. In production, never expose credentials.
+        string? devOtp = _environment.IsDevelopment() ? otp : null;
 
         return Ok(new
         {
             success = true,
-            oneTimePassword = tempPassword,
-            message = "Secure temporary one-time credential generated. Communicate this credential securely to the staff member for immediate password change."
+            message = emailDispatched
+                ? "Password reset token generated and dispatched to staff member's official email address."
+                : "Password reset token generated, but email delivery failed. Please check institutional mail service.",
+            emailDispatched = emailDispatched,
+            expiresAtUtc = user.PasswordResetOtpExpiresAtUtc,
+            devOtp = devOtp
         });
     }
 
@@ -1596,7 +1878,16 @@ public class CollegeController : ControllerBase
         if (user == null) return NotFound(new { message = "User not found." });
 
         if (!string.IsNullOrWhiteSpace(request.FullName)) user.FullName = request.FullName.Trim();
-        if (request.Role.HasValue) user.Role = request.Role.Value;
+        if (request.Role.HasValue)
+        {
+            if (request.Role.Value == UserRole.SuperAdmin)
+            {
+                return BadRequest(new { message = "College administrators cannot assign the SuperAdmin platform role." });
+            }
+            user.Role = request.Role.Value;
+        }
+        if (request.Designation.HasValue) user.Designation = request.Designation.Value;
+        if (request.DelegatedResponsibility.HasValue) user.DelegatedResponsibility = request.DelegatedResponsibility.Value;
         if (request.EmployeeCode != null) user.EnrollmentOrEmployeeCode = request.EmployeeCode.Trim();
         user.DepartmentId = request.DepartmentId;
 
@@ -1614,6 +1905,8 @@ public class CollegeController : ControllerBase
             FullName = user.FullName,
             Email = user.Email,
             Role = user.Role,
+            Designation = user.Designation,
+            DelegatedResponsibility = user.DelegatedResponsibility,
             DepartmentId = user.DepartmentId,
             DepartmentCode = user.Department?.Code,
             DepartmentName = user.Department?.Name,
@@ -1624,12 +1917,157 @@ public class CollegeController : ControllerBase
         });
     }
 
+    [HttpPost("users/bulk")]
+    public async Task<ActionResult<BulkStaffUploadResultDto>> BulkUploadStaff([FromBody] BulkStaffUploadRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        if (request.StaffRows == null || request.StaffRows.Count == 0)
+        {
+            return BadRequest(new { message = "No staff records provided in request." });
+        }
+
+        var errors = new List<string>();
+        var emailsInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var depts = await _context.Departments
+            .Where(d => d.CollegeId == collegeId && !d.IsDeleted)
+            .ToListAsync();
+
+        var existingEmails = (await _context.Users
+            .IgnoreQueryFilters()
+            .Where(u => !u.IsDeleted)
+            .Select(u => u.Email)
+            .ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var usersToAdd = new List<UserAccount>();
+
+        for (int i = 0; i < request.StaffRows.Count; i++)
+        {
+            var row = request.StaffRows[i];
+            int rowNum = i + 1;
+
+            if (string.IsNullOrWhiteSpace(row.FullName))
+            {
+                errors.Add($"Row {rowNum}: Full name is required.");
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(row.Email) || !row.Email.Contains('@'))
+            {
+                errors.Add($"Row {rowNum}: Valid institutional email is required.");
+                continue;
+            }
+
+            if (row.Role == UserRole.SuperAdmin)
+            {
+                errors.Add($"Row {rowNum}: College administrators cannot provision the SuperAdmin platform role.");
+                continue;
+            }
+
+            var normalizedEmail = row.Email.Trim().ToLowerInvariant();
+            if (emailsInFile.Contains(normalizedEmail))
+            {
+                errors.Add($"Row {rowNum}: Duplicate email '{normalizedEmail}' in upload file.");
+                continue;
+            }
+            emailsInFile.Add(normalizedEmail);
+
+            if (existingEmails.Contains(normalizedEmail))
+            {
+                errors.Add($"Row {rowNum}: User with email '{normalizedEmail}' already exists in platform.");
+                continue;
+            }
+
+            Guid? deptId = null;
+            if (!string.IsNullOrWhiteSpace(row.DepartmentCode))
+            {
+                var dept = depts.FirstOrDefault(d => string.Equals(d.Code, row.DepartmentCode.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (dept == null)
+                {
+                    errors.Add($"Row {rowNum}: Department with code '{row.DepartmentCode}' not found.");
+                    continue;
+                }
+                deptId = dept.Id;
+            }
+
+            var tempPassword = $"Collabex!{System.Security.Cryptography.RandomNumberGenerator.GetHexString(3).ToUpper()}@{System.Security.Cryptography.RandomNumberGenerator.GetInt32(100, 999)}";
+            var user = new UserAccount
+            {
+                CollegeId = collegeId,
+                DepartmentId = deptId,
+                FullName = row.FullName.Trim(),
+                Email = normalizedEmail,
+                Role = row.Role,
+                Designation = row.Designation,
+                EnrollmentOrEmployeeCode = string.IsNullOrWhiteSpace(row.EmployeeCode) ? $"STAFF-{Guid.NewGuid().ToString("N")[..6].ToUpper()}" : row.EmployeeCode.Trim(),
+                PasswordHash = PasswordHelper.HashPassword(tempPassword),
+                PasswordChangedAtUtc = null,
+                IsActive = true,
+                IsActivated = true
+            };
+
+            usersToAdd.Add(user);
+        }
+
+        // Pass 1: In-Memory Validation Gate (All-or-Nothing Atomicity)
+        // If ANY row in the upload fails validation, ZERO records are persisted.
+        if (errors.Count > 0)
+        {
+            return BadRequest(new BulkStaffUploadResultDto
+            {
+                TotalSubmitted = request.StaffRows.Count,
+                SuccessfullyCreated = 0,
+                FailedCount = errors.Count,
+                Errors = errors
+            });
+        }
+
+        // Pass 2: Atomic Transactional Database Persistence
+        if (usersToAdd.Count > 0)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                using var tx = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    await _context.Users.AddRangeAsync(usersToAdd);
+                    await _context.SaveChangesAsync();
+                    await tx.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await tx.RollbackAsync();
+                    _logger.LogError(ex, "Transaction rolled back during bulk staff import for college {CollegeId}", collegeId);
+                    throw;
+                }
+            });
+        }
+
+        return Ok(new BulkStaffUploadResultDto
+        {
+            TotalSubmitted = request.StaffRows.Count,
+            SuccessfullyCreated = usersToAdd.Count,
+            FailedCount = 0,
+            Errors = new List<string>()
+        });
+    }
+
     [HttpDelete("users/{id}")]
     public async Task<IActionResult> DeleteStaffUser(Guid id)
     {
         var collegeId = _tenantContext.CollegeId!.Value;
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id && u.CollegeId == collegeId && !u.IsDeleted);
         if (user == null) return NotFound(new { message = "User not found." });
+
+        if (id == _tenantContext.UserId)
+        {
+            return BadRequest(new { message = "Administrators cannot delete their own active account." });
+        }
+
+        if (user.Role == UserRole.SuperAdmin)
+        {
+            return Forbid();
+        }
 
         user.IsDeleted = true;
         user.DeletedAtUtc = DateTime.UtcNow;
@@ -1644,6 +2082,236 @@ public class CollegeController : ControllerBase
 
         await _context.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpGet("results")]
+    public async Task<ActionResult<ExaminationTabulationRegisterDto>> GetExaminationTabulationRegister([FromQuery] Guid? trackId, [FromQuery] Guid? departmentId)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        // 1. Resolve AcademicTrack for weights
+        AcademicTrack? track = null;
+        if (trackId.HasValue)
+        {
+            track = await _context.AcademicTracks.FirstOrDefaultAsync(t => t.Id == trackId.Value && t.CollegeId == collegeId && !t.IsDeleted);
+        }
+        if (track == null)
+        {
+            track = await _context.AcademicTracks
+                .Where(t => t.CollegeId == collegeId && t.IsActive && !t.IsDeleted)
+                .OrderByDescending(t => t.CreatedAtUtc)
+                .FirstOrDefaultAsync();
+        }
+
+        int guideWeight = track?.GuideWeightPct ?? 30;
+        int midTermWeight = track?.MidTermWeightPct ?? 30;
+        int finalVivaWeight = track?.FinalVivaWeightPct ?? 40;
+
+        // 2. Query Viva Evaluations and Team Members
+        var query = _context.TeamMembers
+            .Include(m => m.User)
+            .Include(m => m.ProjectTeam)
+                .ThenInclude(t => t!.Department)
+            .Include(m => m.ProjectTeam)
+                .ThenInclude(t => t!.Evaluations)
+            .Where(m => m.ProjectTeam != null && m.ProjectTeam.CollegeId == collegeId && !m.IsDeleted && !m.ProjectTeam.IsDeleted);
+
+        if (departmentId.HasValue)
+        {
+            query = query.Where(m => m.ProjectTeam!.DepartmentId == departmentId.Value);
+        }
+
+        var members = await query.ToListAsync();
+        var allScores = await _context.IndividualStudentScores
+            .Where(s => s.CollegeId == collegeId && !s.IsDeleted)
+            .ToListAsync();
+
+        var rows = new List<ExaminationTabulationRowDto>();
+        foreach (var m in members)
+        {
+            var student = m.User;
+            var team = m.ProjectTeam;
+            var evals = team?.Evaluations.Where(e => !e.IsDeleted).ToList() ?? new List<VivaEvaluation>();
+            var indivScores = allScores.Where(s => s.StudentUserId == m.UserId).ToList();
+
+            decimal latestShared = evals.Any() ? evals.Average(e => e.SharedTotalScore) : 0m;
+            decimal indivScore = indivScores.Any() ? indivScores.Average(s => s.IndividualTotalScore) : 0m;
+
+            // Reject negative score anomalies
+            if (latestShared < 0m) latestShared = 0m;
+            if (indivScore < 0m) indivScore = 0m;
+
+            // Normalize blended rubric score (0-100 scale) to continuous evaluation weights
+            decimal guideBlended = (latestShared * 0.6m + indivScore * 0.4m);
+            decimal midTermBlended = (latestShared * 0.7m + indivScore * 0.3m);
+            decimal finalVivaBlended = (latestShared * 0.5m + indivScore * 0.5m);
+
+            // Guard against out-of-range source scores: clamp blended to [0, 100]
+            guideBlended = Math.Clamp(guideBlended, 0m, 100m);
+            midTermBlended = Math.Clamp(midTermBlended, 0m, 100m);
+            finalVivaBlended = Math.Clamp(finalVivaBlended, 0m, 100m);
+
+            decimal guideScore = Math.Round((guideBlended / 100m) * guideWeight, 1);
+            decimal midTermScore = Math.Round((midTermBlended / 100m) * midTermWeight, 1);
+            decimal finalVivaScore = Math.Round((finalVivaBlended / 100m) * finalVivaWeight, 1);
+
+            // Component-level maximum-weight enforcement
+            guideScore = Math.Min((decimal)guideWeight, Math.Max(0m, guideScore));
+            midTermScore = Math.Min((decimal)midTermWeight, Math.Max(0m, midTermScore));
+            finalVivaScore = Math.Min((decimal)finalVivaWeight, Math.Max(0m, finalVivaScore));
+
+            decimal totalScore = Math.Round(guideScore + midTermScore + finalVivaScore, 1);
+            totalScore = Math.Min(100m, Math.Max(0m, totalScore));
+
+            // Grade calculation (10-point CBCS scale)
+            string grade;
+            int gradePoints;
+            string resultStatus;
+
+            if (totalScore >= 90m) { grade = "A+"; gradePoints = 10; resultStatus = "Pass"; }
+            else if (totalScore >= 80m) { grade = "A"; gradePoints = 9; resultStatus = "Pass"; }
+            else if (totalScore >= 70m) { grade = "B+"; gradePoints = 8; resultStatus = "Pass"; }
+            else if (totalScore >= 60m) { grade = "B"; gradePoints = 7; resultStatus = "Pass"; }
+            else if (totalScore >= 50m) { grade = "C+"; gradePoints = 6; resultStatus = "Pass"; }
+            else if (totalScore >= 40m) { grade = "C"; gradePoints = 5; resultStatus = "Pass"; }
+            else { grade = "F"; gradePoints = 0; resultStatus = totalScore > 0 ? "Fail" : "Pending"; }
+
+            rows.Add(new ExaminationTabulationRowDto
+            {
+                StudentId = student?.Id ?? m.UserId,
+                EnrollmentNumber = student?.EnrollmentOrEmployeeCode ?? "ENR-" + m.Id.ToString()[..6],
+                StudentName = student?.FullName ?? "Student Member",
+                DepartmentCode = team?.Department?.Code ?? "ENGG",
+                TeamNumber = team?.TeamCode ?? "TM-00",
+                ProjectTitle = team?.Title ?? "Untitled Capstone Project",
+                GuideScore = guideScore,
+                MidTermScore = midTermScore,
+                FinalVivaScore = finalVivaScore,
+                TotalScore = totalScore,
+                Grade = grade,
+                GradePoints = gradePoints,
+                ResultStatus = resultStatus,
+                MeetsNbaAttainmentThreshold = totalScore >= 60m
+            });
+        }
+
+        int totalPassed = rows.Count(r => r.ResultStatus == "Pass");
+        int totalFailed = rows.Count(r => r.ResultStatus == "Fail");
+        decimal avgScore = rows.Any() ? Math.Round(rows.Average(r => r.TotalScore), 1) : 0m;
+
+        return Ok(new ExaminationTabulationRegisterDto
+        {
+            AcademicYear = track?.AcademicYear ?? "2026–2027",
+            TrackName = track?.Name ?? "Major Project Capstone Track",
+            GuideWeightPct = guideWeight,
+            MidTermWeightPct = midTermWeight,
+            FinalVivaWeightPct = finalVivaWeight,
+            IsCertified = false,
+            TotalStudentsTabulated = rows.Count,
+            TotalPassed = totalPassed,
+            TotalFailed = totalFailed,
+            AverageTotalScore = avgScore,
+            Rows = rows
+        });
+    }
+
+    [HttpPost("results/certify")]
+    public async Task<IActionResult> CertifyExaminationRegister([FromBody] CertifyExaminationRegisterRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var (callerId, callerEmail, callerName) = await ResolveCallerIdentityAsync();
+
+        // 1. Resolve Active Track & Continuous Examination Weights
+        var activeSession = await _context.AcademicSessions
+            .Where(s => s.CollegeId == collegeId && !s.IsDeleted && s.IsActive)
+            .OrderByDescending(s => s.StartDate)
+            .FirstOrDefaultAsync();
+
+        AcademicTrack? track = null;
+        if (activeSession != null)
+        {
+            track = await _context.AcademicTracks
+                .Where(t => t.CollegeId == collegeId && t.AcademicSessionId == activeSession.Id && !t.IsDeleted && t.IsActive)
+                .FirstOrDefaultAsync();
+        }
+
+        int guideWeight = track?.GuideWeightPct ?? 30;
+        int midTermWeight = track?.MidTermWeightPct ?? 30;
+        int finalVivaWeight = track?.FinalVivaWeightPct ?? 40;
+
+        // 2. Query Tabulated Student Scores for Deterministic Digest
+        var members = await _context.TeamMembers
+            .Include(m => m.ProjectTeam)
+                .ThenInclude(t => t!.Evaluations)
+            .Where(m => m.ProjectTeam != null && m.ProjectTeam.CollegeId == collegeId && !m.IsDeleted && !m.ProjectTeam.IsDeleted)
+            .ToListAsync();
+
+        var allScores = await _context.IndividualStudentScores
+            .Where(s => s.CollegeId == collegeId && !s.IsDeleted)
+            .ToListAsync();
+
+        // 3. Construct Canonical Tabulation Payload (sorted deterministically by UserId)
+        var canonicalEntries = members
+            .OrderBy(m => m.UserId)
+            .Select(m =>
+            {
+                var evals = m.ProjectTeam?.Evaluations.Where(e => !e.IsDeleted).ToList() ?? new List<VivaEvaluation>();
+                var indivScores = allScores.Where(s => s.StudentUserId == m.UserId).ToList();
+
+                decimal latestShared = evals.Any() ? Math.Clamp(evals.Average(e => e.SharedTotalScore), 0m, 100m) : 0m;
+                decimal indivScore = indivScores.Any() ? Math.Clamp(indivScores.Average(s => s.IndividualTotalScore), 0m, 100m) : 0m;
+
+                decimal guideBlended = Math.Clamp(latestShared * 0.6m + indivScore * 0.4m, 0m, 100m);
+                decimal midTermBlended = Math.Clamp(latestShared * 0.7m + indivScore * 0.3m, 0m, 100m);
+                decimal finalVivaBlended = Math.Clamp(latestShared * 0.5m + indivScore * 0.5m, 0m, 100m);
+
+                decimal guideScore = Math.Min((decimal)guideWeight, Math.Max(0m, Math.Round((guideBlended / 100m) * guideWeight, 1)));
+                decimal midTermScore = Math.Min((decimal)midTermWeight, Math.Max(0m, Math.Round((midTermBlended / 100m) * midTermWeight, 1)));
+                decimal finalVivaScore = Math.Min((decimal)finalVivaWeight, Math.Max(0m, Math.Round((finalVivaBlended / 100m) * finalVivaWeight, 1)));
+
+                decimal total = Math.Min(100m, Math.Max(0m, Math.Round(guideScore + midTermScore + finalVivaScore, 1)));
+                string grade = total >= 90m ? "A+" : (total >= 80m ? "A" : (total >= 70m ? "B+" : (total >= 60m ? "B" : (total >= 50m ? "C+" : (total >= 40m ? "C" : "F")))));
+                string status = total >= 40m ? "Pass" : (total > 0 ? "Fail" : "Pending");
+
+                return $"{m.UserId:N}:{total:F1}:{grade}:{status}";
+            });
+
+        var canonicalDataString = string.Join(";", canonicalEntries);
+        var canonicalPayload = $"v1:{collegeId}:{DateTime.UtcNow:yyyyMMddHH}:{callerEmail}:{request.Remarks}:{canonicalDataString}";
+        var checksum = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(canonicalPayload)));
+
+        var log = new PlatformAuditLog
+        {
+            TargetTenantId = collegeId,
+            Action = "CERTIFY_EXAMINATION_REGISTER",
+            TargetEntity = "ExaminationTabulationRegister",
+            ActorUserId = callerId,
+            ActorEmail = callerEmail,
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                CertifiedBy = callerName,
+                CertifiedAtUtc = DateTime.UtcNow,
+                Checksum = checksum,
+                Remarks = request.Remarks,
+                TotalStudentsTabulated = members.Count,
+                SchemaVersion = "v1"
+            }),
+            OccurredAtUtc = DateTime.UtcNow
+        };
+
+        await _context.PlatformAuditLogs.AddAsync(log);
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            message = "Examination tabulation register officially certified and archived.",
+            certifiedBy = callerName,
+            certifiedAtUtc = DateTime.UtcNow,
+            checksum = checksum,
+            totalStudentsTabulated = members.Count,
+            schemaVersion = "v1"
+        });
     }
 
     #endregion
@@ -1753,6 +2421,14 @@ public class CollegeController : ControllerBase
 
         var studentCount = await _context.Users.CountAsync(u => u.CollegeId == collegeId && u.Role == UserRole.Student && !u.IsDeleted);
 
+        var artifactBytes = await _context.TeamArtifacts
+            .Where(a => a.CollegeId == collegeId && !a.IsDeleted)
+            .SumAsync(a => (long?)a.FileSizeBytes) ?? 0L;
+        var evidenceBytes = await _context.AccreditationEvidences
+            .Where(e => e.CollegeId == collegeId && !e.IsDeleted)
+            .SumAsync(e => (long?)e.FileSizeBytes) ?? 0L;
+        var usedStorageGb = Math.Round((double)(artifactBytes + evidenceBytes) / (1024.0 * 1024.0 * 1024.0), 2);
+
         var campuses = await _context.CollegeCampuses
             .Where(c => c.CollegeId == collegeId && !c.IsDeleted)
             .OrderByDescending(c => c.IsMainCampus)
@@ -1781,7 +2457,7 @@ public class CollegeController : ControllerBase
             MaxStudentSeats = college.MaxStudentSeats,
             EnrolledStudentCount = studentCount,
             StorageQuotaGb = college.StorageQuotaGb,
-            UsedStorageGb = 14.8
+            UsedStorageGb = usedStorageGb
         });
     }
 
@@ -1900,7 +2576,7 @@ public class CollegeController : ControllerBase
         {
             var deptEvals = vivaEvaluations.Where(v => v.ProjectTeam != null && v.ProjectTeam.DepartmentId == d.Id).ToList();
             var deptAttainment = deptEvals.Any()
-                ? Math.Round(deptEvals.Average(e => e.SharedTotalScore > 0 ? (e.SharedTotalScore / 50m * 100m) : 0m), 1)
+                ? Math.Round(deptEvals.Average(e => e.SharedTotalScore > 0 ? Math.Min(100m, Math.Max(0m, e.SharedTotalScore)) : 0m), 1)
                 : 0m;
             var deptStudents = allUsers.Count(u => u.DepartmentId == d.Id && u.Role == UserRole.Student);
 
@@ -1920,7 +2596,7 @@ public class CollegeController : ControllerBase
         var totalFaculty = allUsers.Count(u => u.Role == UserRole.Faculty || u.Role == UserRole.HOD);
         var attestedCount = deptSummaries.Count(d => d.IsSarAttested);
         var overallAttainment = vivaEvaluations.Any()
-            ? Math.Round(vivaEvaluations.Average(e => e.SharedTotalScore > 0 ? (e.SharedTotalScore / 50m * 100m) : 0m), 1)
+            ? Math.Round(vivaEvaluations.Average(e => e.SharedTotalScore > 0 ? Math.Min(100m, Math.Max(0m, e.SharedTotalScore)) : 0m), 1)
             : 0m;
 
         var (_, _, callerName) = await ResolveCallerIdentityAsync();

@@ -72,6 +72,10 @@ public static class DbInitializer
     public static readonly Guid CollegeSessionTrackId = Guid.Parse("30000000-0000-0000-0000-000000000002");
     public static readonly Guid Team01Id = Guid.Parse("40000000-0000-0000-0000-000000000001");
 
+    // Deterministic Viva Defense Panel IDs
+    public static readonly Guid DefensePanel01Id = Guid.Parse("70000000-0000-0000-0000-000000000001");
+    public static readonly Guid DefenseEvaluatorNairId = Guid.Parse("70000000-0000-0000-0000-000000000002");
+
     public static async Task SeedAsync(ProjectHubDbContext context, ITenantContext tenantContext, bool isDevelopment = false)
     {
         var originalSuperAdmin = tenantContext.IsSuperAdmin;
@@ -713,7 +717,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId, // partition default
                 DepartmentId = null,
                 FullName = "Collabex Super Admin",
-                Email = "admin@collabex.in",
+                Email = "superadmin@collabex.in",
                 EnrollmentOrEmployeeCode = "EMP-SUPER-001",
                 Role = UserRole.SuperAdmin,
                 PasswordHash = defaultHash,
@@ -741,7 +745,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 DepartmentId = null,
                 FullName = "Dr. Keshvendra Choudhary",
-                Email = "principal@sistec.ac.in",
+                Email = "collegeadmin@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "EMP-SISTEC-001",
                 Role = UserRole.CollegeAdmin,
                 PasswordHash = defaultHash,
@@ -755,7 +759,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 DepartmentId = CseDepartmentId,
                 FullName = "Dr. Ravindra Kumar Sharma",
-                Email = "hod.cse@sistec.ac.in",
+                Email = "hod@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "EMP-CSE-001",
                 Role = UserRole.HOD,
                 PasswordHash = defaultHash,
@@ -769,7 +773,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 DepartmentId = CseDepartmentId,
                 FullName = "Prof. Priya Nair",
-                Email = "priya.nair@sistec.ac.in",
+                Email = "coordinator@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "EMP-CSE-042",
                 Role = UserRole.Faculty,
                 PasswordHash = defaultHash,
@@ -784,7 +788,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 DepartmentId = CseDepartmentId,
                 FullName = "Prof. S. K. Verma",
-                Email = "sk.verma@sistec.ac.in",
+                Email = "faculty@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "EMP-CSE-019",
                 Role = UserRole.Faculty,
                 PasswordHash = defaultHash,
@@ -799,7 +803,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 DepartmentId = CseDepartmentId,
                 FullName = "Shivansh Mehra",
-                Email = "0176cs221045@sistec.ac.in",
+                Email = "student@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "0176CS221045",
                 Role = UserRole.Student,
                 PasswordHash = defaultHash,
@@ -815,7 +819,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 DepartmentId = CseDepartmentId,
                 FullName = "Aarav Sharma",
-                Email = "0176cs221002@sistec.ac.in",
+                Email = "student2@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "0176CS221002",
                 Role = UserRole.Student,
                 PasswordHash = defaultHash,
@@ -830,7 +834,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 DepartmentId = CseDepartmentId,
                 FullName = "Diya Patel",
-                Email = "0176cs221021@sistec.ac.in",
+                Email = "student3@sistec.ac.in",
                 EnrollmentOrEmployeeCode = "0176CS221021",
                 Role = UserRole.Student,
                 PasswordHash = defaultHash,
@@ -1273,6 +1277,29 @@ public static class DbInitializer
         };
 
         await context.WeeklyLogbooks.AddRangeAsync(weeklyLogs);
+
+        // Scheduled Viva Defense Panel & Appointed Panel Evaluator (Dr. Nair appointed for CSE Minor Track)
+        var panel = new VivaPanel
+        {
+            Id = DefensePanel01Id,
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDepartmentId,
+            AcademicTrackId = MinorTrackId,
+            PanelName = "CSE Minor Project Defense Panel 1",
+            ScheduledAtUtc = DateTime.UtcNow.AddDays(7),
+            RoomOrLink = "Seminar Hall B-204"
+        };
+        await context.VivaPanels.AddAsync(panel);
+
+        var panelEvaluator = new VivaPanelEvaluator
+        {
+            Id = DefenseEvaluatorNairId,
+            CollegeId = SistecTenantId,
+            VivaPanelId = DefensePanel01Id,
+            EvaluatorUserId = FacultyNairUserId
+        };
+        await context.VivaPanelEvaluators.AddAsync(panelEvaluator);
+
         await context.SaveChangesAsync();
     }
 
@@ -1289,14 +1316,14 @@ public static class DbInitializer
         Console.ResetColor();
         Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "ROLE", "NAME", "EMAIL", "DESIGNATION"));
         Console.WriteLine(new string('-', 100));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "SuperAdmin", "Collabex Super Admin", "admin@collabex.in", "Platform Administrator"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "SuperAdmin", "Collabex Super Admin", "superadmin@collabex.in", "Platform Administrator"));
         Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "SuperAdmin (Alt)", "Dev Startup Admin", "admin@projecthub.in", "Platform Administrator"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "CollegeAdmin", "Dr. Keshvendra Choudhary", "principal@sistec.ac.in", "Campus Principal / Dean"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "HOD", "Dr. Ravindra Kumar Sharma", "hod.cse@sistec.ac.in", "Head of Dept (CSE)"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "ProjectCoordinator", "Prof. Priya Nair", "priya.nair@sistec.ac.in", "Project Coordinator"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "FacultyGuide", "Prof. S. K. Verma", "sk.verma@sistec.ac.in", "Faculty Mentor / Guide"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "TeamLead", "Shivansh Mehra", "0176cs221045@sistec.ac.in", "Student Team Lead"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "Student", "Aarav Sharma", "0176cs221002@sistec.ac.in", "Student Team Member"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "CollegeAdmin", "Dr. Keshvendra Choudhary", "collegeadmin@sistec.ac.in", "Campus Principal / Dean"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "HOD", "Dr. Ravindra Kumar Sharma", "hod@sistec.ac.in", "Head of Dept (CSE)"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "ProjectCoordinator", "Prof. Priya Nair", "coordinator@sistec.ac.in", "Project Coordinator"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "FacultyGuide", "Prof. S. K. Verma", "faculty@sistec.ac.in", "Faculty Mentor / Guide"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "TeamLead", "Shivansh Mehra", "student@sistec.ac.in", "Student Team Lead"));
+        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "Student", "Aarav Sharma", "student2@sistec.ac.in", "Student Team Member"));
         Console.ForegroundColor = ConsoleColor.DarkGreen;
         Console.WriteLine("====================================================================================================");
         Console.ResetColor();

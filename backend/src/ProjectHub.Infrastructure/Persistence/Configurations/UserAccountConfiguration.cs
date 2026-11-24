@@ -36,6 +36,9 @@ public class UserAccountConfiguration : IEntityTypeConfiguration<UserAccount>
 
         builder.Property(u => u.PasswordResetOtpExpiresAtUtc);
 
+        builder.Property(u => u.PasswordResetOtpAttempts)
+            .HasDefaultValue(0);
+
         // Composite unique filtered indexes
         builder.HasIndex(u => new { u.CollegeId, u.Email })
             .IsUnique()

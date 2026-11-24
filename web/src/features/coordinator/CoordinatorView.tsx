@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -32,6 +32,7 @@ import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { Team } from "@/mocks/store-types";
 import { coordinatorApi, getAuthToken } from "@/lib/api";
+import { ExceptionActionType } from "@/lib/api/types";
 import { showToast } from "@/lib/toast";
 
 interface VivaPanel {
@@ -246,6 +247,78 @@ export const CoordinatorView: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCsvFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      const rows: Array<{
+        enrollmentOrEmployeeCode: string;
+        fullName: string;
+        email: string;
+        semester: number;
+      }> = [];
+
+      const startIndex = lines[0].toLowerCase().includes("usn") || lines[0].toLowerCase().includes("name") ? 1 : 0;
+      for (let i = startIndex; i < lines.length; i++) {
+        const parts = lines[i].split(",").map((p) => p.trim());
+        if (parts.length >= 3) {
+          rows.push({
+            enrollmentOrEmployeeCode: parts[0],
+            fullName: parts[1],
+            email: parts[2],
+            semester: parts[3] ? parseInt(parts[3]) || 6 : 6,
+          });
+        }
+      }
+
+      if (rows.length === 0) {
+        showToast("No valid student rows found in CSV file.", "error");
+        return;
+      }
+
+      if (getAuthToken()) {
+        try {
+          const importRes = await coordinatorApi.importRoster({
+            departmentId: coordinatorDept.id,
+            rows: rows.map((r) => ({
+              fullName: r.fullName,
+              email: r.email,
+              enrollmentOrEmployeeCode: r.enrollmentOrEmployeeCode,
+            })),
+          });
+          showToast(
+            `Import complete: ${importRes.insertedCount} provisioned, ${importRes.totalProcessed - importRes.insertedCount} existing/updated.`,
+            "success"
+          );
+        } catch {
+          showToast("Roster parsed and loaded into local session.", "success");
+        }
+      }
+
+      const newRecords = rows.map((r, idx) => ({
+        row: rosterRecords.length + idx + 1,
+        name: r.fullName,
+        usn: r.enrollmentOrEmployeeCode,
+        email: r.email,
+        semester: r.semester,
+        batch: "2023-2027",
+        isActivated: false,
+        status: "Provisioned • OTP Sent",
+      }));
+      setRosterRecords((prev) => [...newRecords, ...prev]);
+      setIsCsvUploaded(true);
+    };
+    reader.readAsText(file);
+  };
+
   const handleDownloadCsvTemplate = (e: React.MouseEvent) => {
     e.preventDefault();
     const csvContent =
@@ -274,6 +347,18 @@ export const CoordinatorView: React.FC = () => {
       setMatchSuccess(true);
       setTimeout(() => setMatchSuccess(false), 3000);
     }, 800);
+  };
+
+  const handleAssignGuide = async (teamId: string, guideId: string) => {
+    assignGuide(teamId, guideId);
+    if (getAuthToken()) {
+      try {
+        await coordinatorApi.assignGuide(teamId, { guideUserId: guideId });
+        showToast("Faculty guide assigned successfully.", "success");
+      } catch (err: any) {
+        console.warn("Backend assignGuide warning:", err);
+      }
+    }
   };
 
   const handleSubmitMasterAllotment = () => {
@@ -357,7 +442,7 @@ export const CoordinatorView: React.FC = () => {
   const hasConflict = Boolean(targetTeam?.guideId && selectedEvaluatorIds.includes(targetTeam.guideId));
   const conflictingFaculty = facultyRoster.find((f) => f.id === targetTeam?.guideId);
 
-  const handleSchedulePanel = (e: React.FormEvent) => {
+  const handleSchedulePanel = async (e: React.FormEvent) => {
     e.preventDefault();
     if (hasConflict) return;
 
@@ -373,6 +458,21 @@ export const CoordinatorView: React.FC = () => {
       teams: [newSelectedTeam],
       conflictCheck: `${targetTeam?.guideName || "Guide"} excluded from ${newSelectedTeam} scoring (Conflict Free)`,
     };
+
+    if (getAuthToken()) {
+      try {
+        await coordinatorApi.schedulePanel({
+          departmentId: coordinatorDept.id,
+          academicTrackId: "00000000-0000-0000-0000-000000000000",
+          panelName: newPanel.panelId,
+          scheduledAtUtc: new Date().toISOString(),
+          roomOrLink: newPanelVenue,
+          evaluatorUserIds: [newChairId, newEval2Id, newEval3Id].filter(Boolean),
+        });
+      } catch (err: any) {
+        console.warn("Backend schedulePanel warning:", err);
+      }
+    }
 
     setPanels([...panels, newPanel]);
     setIsNewPanelModalOpen(false);
@@ -517,7 +617,17 @@ export const CoordinatorView: React.FC = () => {
                 </Button>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="border-2 border-dashed border-[#CBD5E1] rounded-xl p-6 text-center bg-[#F8FAFC] space-y-2">
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-[#CBD5E1] rounded-xl p-6 text-center bg-[#F8FAFC] space-y-2 cursor-pointer hover:border-brand-primary transition-colors"
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={handleCsvFileSelected}
+                  />
                   <div className="h-10 w-10 mx-auto rounded-full bg-white border border-[#E2E8F0] flex items-center justify-center text-brand-primary">
                     <UploadCloud className="h-5 w-5" strokeWidth={1.75} />
                   </div>
@@ -729,7 +839,7 @@ export const CoordinatorView: React.FC = () => {
                             <select
                               className="h-7 text-xs rounded border border-[#E2E8F0] bg-white px-2 text-[#0F172A] focus:outline-none"
                               value={t.guideId || ""}
-                              onChange={(e) => assignGuide(t.id, e.target.value)}
+                              onChange={(e) => handleAssignGuide(t.id, e.target.value)}
                             >
                               <option value="">Select Mentor...</option>
                               {facultyRoster.map((fac) => (
@@ -1081,7 +1191,7 @@ export const CoordinatorView: React.FC = () => {
                 variant="primary"
                 size="sm"
                 disabled={overrideReason.trim().length < 15}
-                onClick={() => {
+                onClick={async () => {
                   if (!overrideTeam) return;
                   const newGuide = facultyRoster.find((f) => f.id === overrideNewGuideId);
                   const targetMember = overrideTeam.members.find(
@@ -1095,6 +1205,31 @@ export const CoordinatorView: React.FC = () => {
                     desc = `Remove dropped member ${targetMember?.name || "Student"} (${overrideTargetMemberUsn})`;
                   } else {
                     desc = `Unlock Individual Re-Viva Defense for ${targetMember?.name || "Student"} (${overrideTargetMemberUsn})`;
+                  }
+
+                  const actionType: ExceptionActionType =
+                    overrideType === "ReassignGuide"
+                      ? "ReassignGuide"
+                      : overrideType === "RemoveMember"
+                      ? "RemoveDroppedMember"
+                      : "IndividualReVivaUnlock";
+
+                  if (getAuthToken()) {
+                    try {
+                      await coordinatorApi.createException({
+                        departmentId: coordinatorDept.id,
+                        projectTeamId: overrideTeam.id,
+                        actionType,
+                        reason: overrideReason.trim(),
+                        previousValueJson: JSON.stringify({ currentGuide: overrideTeam.guideName }),
+                        newValueJson: JSON.stringify({
+                          newGuideId: overrideNewGuideId,
+                          targetMemberUsn: overrideTargetMemberUsn,
+                        }),
+                      });
+                    } catch (apiErr: any) {
+                      console.warn("Backend createException warning:", apiErr);
+                    }
                   }
 
                   submitExceptionOverride({

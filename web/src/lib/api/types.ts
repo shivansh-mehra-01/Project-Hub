@@ -1,5 +1,7 @@
 export type UserRole = "SuperAdmin" | "CollegeAdmin" | "HOD" | "Faculty" | "Student";
 export type RoleType = UserRole | "TeamLead";
+export type FacultyDesignation = "Professor" | "AssociateProfessor" | "AssistantProfessor" | "AdjunctFaculty";
+export type InstitutionalResponsibility = "None" | "Principal" | "CampusDirector" | "DeanAcademics" | "ControllerOfExaminations" | "IqacCoordinator" | "Registrar";
 
 export type AcademicProgramLevel = "UG" | "PG" | "Diploma" | "Research";
 export type ParticipationMode = "Team" | "Individual";
@@ -210,6 +212,38 @@ export interface CollegeNotificationItemDto {
 }
 
 // --- College DTOs ---
+export interface AicteCadreComplianceDto {
+  programLevel: string;
+  programCode: string;
+  sanctionedIntake: number;
+  programDurationYears: number;
+  totalSanctionedStrength: number;
+  requiredFaculty: number;
+  availableFaculty: number;
+  requiredRatio: string;
+  actualRatio: string;
+  isCompliant: boolean;
+  cadreStatus: "Compliant" | "Compliant — subject to qualification verification" | "NonCompliant" | "Insufficient Data";
+  requiredProfessors: number;
+  actualProfessors: number;
+  requiredAssociateProfessors: number;
+  actualAssociateProfessors: number;
+  requiredAssistantProfessors: number;
+  actualAssistantProfessors: number;
+  statusMessage?: string;
+  isSubstituted?: boolean;
+  substitutedProfessorsCount?: number;
+  qualificationVerificationNotice?: string;
+}
+
+export interface CohortEnrollmentCapacityDto {
+  totalSanctionedMultiCohortCapacity: number;
+  totalEnrolledStudents: number;
+  utilizationPercentage: number;
+  hasReliableEnrollmentRecords: boolean;
+  statusMessage?: string;
+}
+
 export interface CollegeOverviewDto {
   collegeId: string;
   collegeName: string;
@@ -231,6 +265,11 @@ export interface CollegeOverviewDto {
   currentSemesterLabel?: string;
   lastUpdatedUtc?: string;
   activeSession?: AcademicSessionDto;
+  cohortCapacity?: CohortEnrollmentCapacityDto;
+  programAicteCompliance?: AicteCadreComplianceDto[];
+  sarDepartmentAttestationPct?: number;
+  attestedDepartmentsCount?: number;
+  totalDepartmentsForSar?: number;
   departmentSummaries?: DepartmentTrackSummaryDto[];
   academicStructure?: OverviewCourseHierarchyDto[];
   recentActivities?: CollegeActivityItemDto[];
@@ -331,6 +370,8 @@ export interface CollegeStaffDto {
   fullName: string;
   email: string;
   role: RoleType;
+  designation?: FacultyDesignation;
+  delegatedResponsibility?: InstitutionalResponsibility;
   departmentId?: string;
   departmentCode?: string;
   departmentName?: string;
@@ -345,6 +386,8 @@ export interface CreateCollegeStaffRequest {
   fullName: string;
   email: string;
   role: RoleType;
+  designation?: FacultyDesignation;
+  delegatedResponsibility?: InstitutionalResponsibility;
   departmentId?: string;
   employeeCode?: string;
 }
@@ -352,8 +395,68 @@ export interface CreateCollegeStaffRequest {
 export interface UpdateCollegeStaffRequest {
   fullName?: string;
   role?: RoleType;
+  designation?: FacultyDesignation;
+  delegatedResponsibility?: InstitutionalResponsibility;
   departmentId?: string;
   employeeCode?: string;
+}
+
+export interface BulkStaffUploadRowDto {
+  fullName: string;
+  email: string;
+  departmentCode?: string;
+  employeeCode?: string;
+  role: RoleType;
+  designation?: FacultyDesignation;
+}
+
+export interface BulkStaffUploadRequest {
+  staffRows: BulkStaffUploadRowDto[];
+}
+
+export interface BulkStaffUploadResultDto {
+  totalSubmitted: number;
+  successfullyCreated: number;
+  failedCount: number;
+  errors: string[];
+}
+
+export interface ExaminationTabulationRowDto {
+  studentId: string;
+  enrollmentNumber: string;
+  studentName: string;
+  departmentCode: string;
+  teamNumber: string;
+  projectTitle: string;
+  guideScore: number;
+  midTermScore: number;
+  finalVivaScore: number;
+  totalScore: number;
+  grade: string;
+  gradePoints: number;
+  resultStatus: string;
+  meetsNbaAttainmentThreshold: boolean;
+}
+
+export interface ExaminationTabulationRegisterDto {
+  academicYear: string;
+  trackName: string;
+  guideWeightPct: number;
+  midTermWeightPct: number;
+  finalVivaWeightPct: number;
+  isCertified: boolean;
+  certifiedAtUtc?: string;
+  certifiedBy?: string;
+  certificationChecksum?: string;
+  totalStudentsTabulated: number;
+  totalPassed: number;
+  totalFailed: number;
+  averageTotalScore: number;
+  rows: ExaminationTabulationRowDto[];
+}
+
+export interface CertifyExaminationRegisterRequest {
+  remarks?: string;
 }
 
 export interface UpdateUserStatusRequest {
@@ -481,12 +584,126 @@ export interface HodDashboardDto {
   activeBuildTeams: number;
   atRiskTeams: number;
   readyForVivaTeams: number;
+  completedTeams: number;
+  draftTeams: number;
+  projectsWithoutGuide: number;
+  pendingProposals: number;
+  pendingGradeUnlocks: number;
+  pendingExceptions: number;
   totalStudentsEnrolled: number;
   availableMentors: number;
-  nbaDirectAttainmentPct: number;
-  nbaIndirectAttainmentPct: number;
-  nbaBlendedCriterion3Pct: number;
+  nbaDirectAttainmentPct?: number | null;
+  nbaIndirectAttainmentPct?: number | null;
+  nbaBlendedCriterion3Pct?: number | null;
   isSarAttested: boolean;
+  sarAttestedAtUtc?: string;
+}
+
+export interface HodProjectMemberDto {
+  userId: string;
+  fullName: string;
+  enrollmentNumber: string;
+  isTeamLead: boolean;
+  moduleResponsibility?: string;
+}
+
+export interface HodProjectDto {
+  id: string;
+  teamCode: string;
+  title: string;
+  abstract: string;
+  domainTag: string;
+  sdgCode: string;
+  status: ProjectStatus;
+  academicTrackId: string;
+  academicTrackName?: string;
+  guideUserId?: string;
+  guideName?: string;
+  memberCount: number;
+  isRosterLocked: boolean;
+  missedLogStreak: number;
+  similarityScorePct?: number;
+  repoUrl?: string;
+  members: HodProjectMemberDto[];
+  latestEvaluationScore?: number;
+  latestEvaluationCheckpoint?: string;
+  createdAtUtc: string;
+}
+
+export interface HodAssignGuideRequest {
+  guideUserId: string;
+  reason?: string;
+}
+
+export interface TrackReportStatDto {
+  trackId: string;
+  trackName: string;
+  projectCount: number;
+  studentCount: number;
+  completedCount: number;
+}
+
+export interface DomainDistributionDto {
+  domain: string;
+  count: number;
+}
+
+export interface HodReportsSummaryDto {
+  departmentId: string;
+  departmentName: string;
+  departmentCode: string;
+  totalProjects: number;
+  completedProjects: number;
+  activeProjects: number;
+  atRiskProjects: number;
+  projectsWithoutGuide: number;
+  totalStudents: number;
+  totalFaculty: number;
+  averageFacultyLoad: number;
+  trackStats: TrackReportStatDto[];
+  domainDistribution: DomainDistributionDto[];
+}
+
+export interface GradeUnlockRequestDto {
+  id: string;
+  evaluationId: string;
+  teamId: string;
+  teamCode: string;
+  teamTitle: string;
+  requestedByFacultyName: string;
+  reason: string;
+  checkpointType: string;
+  requestedAtUtc: string;
+}
+
+export interface ApproveGradeUnlockRequest {
+  remarks?: string;
+}
+
+export interface RejectGradeUnlockRequest {
+  remarks?: string;
+  reason?: string;
+}
+
+export interface DepartmentStudentResultDto {
+  usn: string;
+  studentName: string;
+  teamCode: string;
+  projectTitle: string;
+  guideScore: number;
+  midTermScore: number;
+  externalVivaScore: number;
+  totalMarks: number;
+  letterGrade: string;
+  nbaAttainmentStatus: string;
+}
+
+export interface AttestSarResponse {
+  success: boolean;
+  attestedAtUtc: string;
+  attestedByName: string;
+  status: string;
+  message: string;
 }
 
 export interface CreateDepartmentTrackRequest {
@@ -551,18 +768,18 @@ export interface UpdateMentorCapRequest {
 export interface PoAttainmentScoreDto {
   poCode: string;
   title: string;
-  directAttainmentPct: number;
-  indirectAttainmentPct: number;
-  blendedAttainmentPct: number;
+  directAttainmentPct?: number | null;
+  indirectAttainmentPct?: number | null;
+  blendedAttainmentPct?: number | null;
   targetMet: boolean;
 }
 
 export interface NbaAttainmentReportDto {
   departmentId: string;
   academicYear: string;
-  overallDirectPct: number;
-  overallIndirectPct: number;
-  overallBlendedPct: number;
+  overallDirectPct?: number | null;
+  overallIndirectPct?: number | null;
+  overallBlendedPct?: number | null;
   poBreakdown: PoAttainmentScoreDto[];
 }
 
@@ -670,7 +887,59 @@ export interface ActionQueueDto {
 }
 
 export interface VerifyLogRequest {
+  decision?: "Approved" | "NeedsRevision";
+  isApproved?: boolean;
   remarks?: string;
+}
+
+export interface ReturnProposalRequest {
+  remarks: string;
+  reason?: string;
+}
+
+export interface ReviewArtifactRequest {
+  isApproved: boolean;
+  reviewerNote?: string;
+}
+
+export interface AssignedDefenseTeamMemberDto {
+  userId: string;
+  fullName: string;
+  enrollmentCode: string;
+  isTeamLead: boolean;
+  moduleResponsibility: string;
+}
+
+export interface AssignedDefenseTeamDto {
+  teamId: string;
+  teamCode: string;
+  title: string;
+  abstract: string;
+  domainTag: string;
+  guideUserId?: string;
+  guideName?: string;
+  isGuideConflict: boolean;
+  checkpointType: CheckpointType;
+  isEvaluationLocked: boolean;
+  scheduledAtUtc?: string;
+  roomOrLink?: string;
+  members: AssignedDefenseTeamMemberDto[];
+}
+
+export interface ProblemBankStatement {
+  id: string;
+  collegeId: string;
+  departmentId: string;
+  academicTrackId: string;
+  proposedByFacultyId: string;
+  title: string;
+  abstract: string;
+  sdgCode: string;
+  prerequisitesCsv?: string;
+  maxTeamCapacity: number;
+  isAllocated: boolean;
+  allocatedTeamId?: string;
+  createdAtUtc: string;
 }
 
 export interface CreateProblemStatementRequest {

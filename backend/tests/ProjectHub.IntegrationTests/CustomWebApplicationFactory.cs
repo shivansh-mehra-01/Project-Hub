@@ -38,12 +38,14 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             services.AddDbContext<ProjectHubDbContext>((sp, options) =>
             {
                 options.UseInMemoryDatabase(_inMemoryDbName)
+                       .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
                        .UseInternalServiceProvider(inMemoryServiceProvider);
             });
 
             services.AddDbContext<AppDbContext>((sp, options) =>
             {
                 options.UseInMemoryDatabase(_inMemoryDbName)
+                       .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
                        .UseInternalServiceProvider(inMemoryServiceProvider);
             });
         });

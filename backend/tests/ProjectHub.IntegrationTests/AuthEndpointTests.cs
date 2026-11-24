@@ -128,16 +128,20 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task RequestPasswordOtp_UnknownEmail_ReturnsNotFound()
+    public async Task RequestPasswordOtp_UnknownEmail_ReturnsGenericSuccess_PreventingEnumeration()
     {
-        // Act: Request OTP for unknown user
+        // Act: Request OTP for unknown user (anti-enumeration security standard)
         var response = await _client.PostAsJsonAsync("/api/auth/request-password-otp", new RequestPasswordOtpRequest
         {
             Email = "unknown.student@sistec.ac.in"
         });
 
-        // Assert
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        // Assert: Must return 200 OK without disclosing user non-existence or leaking devOtp
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<RequestPasswordOtpResponse>();
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Null(result.DevOtp);
     }
 
     [Fact]
@@ -168,7 +172,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         // 1. Request OTP for candidate Diya
         var otpResponse = await _client.PostAsJsonAsync("/api/auth/request-password-otp", new RequestPasswordOtpRequest
         {
-            Email = "0176cs221021@sistec.ac.in"
+            Email = "student3@sistec.ac.in"
         });
         otpResponse.EnsureSuccessStatusCode();
         var otpResult = await otpResponse.Content.ReadFromJsonAsync<RequestPasswordOtpResponse>();
@@ -177,7 +181,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         // 2. Reset / Set password
         var resetResponse = await _client.PostAsJsonAsync("/api/auth/reset-password", new ResetPasswordRequest
         {
-            Email = "0176cs221021@sistec.ac.in",
+            Email = "student3@sistec.ac.in",
             Otp = otpResult.DevOtp,
             NewPassword = "DiyaSecurePassword@2026"
         });
@@ -187,12 +191,12 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         var auth = await resetResponse.Content.ReadFromJsonAsync<AuthResponse>();
         Assert.NotNull(auth);
         Assert.False(string.IsNullOrWhiteSpace(auth.Token));
-        Assert.Equal("0176cs221021@sistec.ac.in", auth.User.Email);
+        Assert.Equal("student3@sistec.ac.in", auth.User.Email);
 
         // 3. Verify OTP single-use: Replaying the same OTP returns 400 Bad Request
         var replayResponse = await _client.PostAsJsonAsync("/api/auth/reset-password", new ResetPasswordRequest
         {
-            Email = "0176cs221021@sistec.ac.in",
+            Email = "student3@sistec.ac.in",
             Otp = otpResult.DevOtp,
             NewPassword = "AnotherPassword@2026"
         });
@@ -201,7 +205,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         // 4. Verify user can now log in directly with their new password
         var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Email = "0176cs221021@sistec.ac.in",
+            Email = "student3@sistec.ac.in",
             Password = "DiyaSecurePassword@2026"
         });
         Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);

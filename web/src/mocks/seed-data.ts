@@ -341,15 +341,15 @@ export const initialCycle: ProjectCycle = {
 export const initialPersonas: Record<string, UserPersona> = {
   superAdmin: {
     id: "usr-super-01",
-    name: "Dev Startup Admin",
-    email: "admin@collabex.in",
+    name: "Collabex Super Admin",
+    email: "superadmin@collabex.in",
     role: "SuperAdmin",
     collegeId: "col-sistec-01",
   },
   collegeAdmin: {
     id: "usr-ca-01",
     name: "Dr. Keshvendra Choudhary",
-    email: "principal@sistec.ac.in",
+    email: "collegeadmin@sistec.ac.in",
     role: "CollegeAdmin",
     collegeId: "col-sistec-01",
     employeeId: "EMP-PRIN-001",
@@ -357,7 +357,7 @@ export const initialPersonas: Record<string, UserPersona> = {
   hod: {
     id: "usr-hod-01",
     name: "Dr. Ravindra Kumar Sharma",
-    email: "hod.cse@sistec.ac.in",
+    email: "hod@sistec.ac.in",
     role: "HOD",
     collegeId: "col-sistec-01",
     departmentId: "dept-cse-01",
@@ -366,17 +366,17 @@ export const initialPersonas: Record<string, UserPersona> = {
   facultyGuide: {
     id: "usr-fac-verma",
     name: "Prof. S. K. Verma",
-    email: "sk.verma@sistec.ac.in",
+    email: "faculty@sistec.ac.in",
     role: "Faculty",
     collegeId: "col-sistec-01",
     departmentId: "dept-cse-01",
-    isProjectCoordinator: true,
+    isProjectCoordinator: false,
     employeeId: "EMP-CSE-014",
   },
   facultyCoordinator: {
     id: "usr-fac-nair",
     name: "Prof. Priya Nair",
-    email: "priya.nair@sistec.ac.in",
+    email: "coordinator@sistec.ac.in",
     role: "Faculty",
     collegeId: "col-sistec-01",
     departmentId: "dept-cse-01",
@@ -386,7 +386,7 @@ export const initialPersonas: Record<string, UserPersona> = {
   studentLead: {
     id: "usr-stu-shivansh",
     name: "Shivansh Mehra",
-    email: "0176cs221045@sistec.ac.in",
+    email: "student@sistec.ac.in",
     role: "TeamLead",
     collegeId: "col-sistec-01",
     departmentId: "dept-cse-01",
@@ -395,7 +395,7 @@ export const initialPersonas: Record<string, UserPersona> = {
   studentMember: {
     id: "usr-stu-aarav",
     name: "Aarav Sharma",
-    email: "0176cs221002@sistec.ac.in",
+    email: "student2@sistec.ac.in",
     role: "Student",
     collegeId: "col-sistec-01",
     departmentId: "dept-cse-01",

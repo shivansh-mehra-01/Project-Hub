@@ -1,5 +1,5 @@
-import { AccreditationModule } from "@/features/college-admin/views/accreditation/AccreditationModule";
+import { redirect } from "next/navigation";
 
 export default function CollegeCompliancePage() {
-  return <AccreditationModule initialTab="overview" />;
+  redirect("/college/accreditation");
 }

@@ -25,7 +25,9 @@ public class VivaEvaluationConfiguration : IEntityTypeConfiguration<VivaEvaluati
         builder.Property(ve => ve.GeneralRemarks)
             .HasMaxLength(2000);
 
-        builder.HasIndex(ve => new { ve.CollegeId, ve.ProjectTeamId, ve.CheckpointType });
+        builder.HasIndex(ve => new { ve.CollegeId, ve.ProjectTeamId, ve.CheckpointType })
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false");
 
         builder.HasOne(ve => ve.ProjectTeam)
             .WithMany(t => t.Evaluations)

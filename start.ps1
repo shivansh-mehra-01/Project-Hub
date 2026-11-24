@@ -266,12 +266,13 @@ Write-Host "  Interactive API Docs: http://localhost:5000/scalar/v1" -Foreground
 Write-Host "  Health Endpoint:      http://localhost:5000/api/health" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  --- PRE-CONFIGURED DEMO ACCOUNTS (Password: Pass@1234) ---" -ForegroundColor DarkCyan
-Write-Host "  SuperAdmin:           admin@collabex.in" -ForegroundColor White
-Write-Host "  CollegeAdmin (Dean):  principal@sistec.ac.in" -ForegroundColor White
-Write-Host "  HOD (CSE):            hod.cse@sistec.ac.in" -ForegroundColor White
-Write-Host "  Coordinator:          priya.nair@sistec.ac.in" -ForegroundColor White
-Write-Host "  Faculty Guide:        sk.verma@sistec.ac.in" -ForegroundColor White
-Write-Host "  Student (Lead):       0176cs221045@sistec.ac.in" -ForegroundColor White
+Write-Host "  SuperAdmin:           superadmin@collabex.in" -ForegroundColor White
+Write-Host "  CollegeAdmin (Dean):  collegeadmin@sistec.ac.in" -ForegroundColor White
+Write-Host "  HOD (CSE):            hod@sistec.ac.in" -ForegroundColor White
+Write-Host "  Coordinator:          coordinator@sistec.ac.in" -ForegroundColor White
+Write-Host "  Faculty Guide:        faculty@sistec.ac.in" -ForegroundColor White
+Write-Host "  Student (Lead):       student@sistec.ac.in" -ForegroundColor White
+Write-Host "  Student (Member):     student2@sistec.ac.in" -ForegroundColor White
 Write-Host ""
 Write-Host "======================================================================" -ForegroundColor Green
 Write-Host "  Tip: Press Ctrl+C in the respective terminal windows to stop services." -ForegroundColor DarkGray

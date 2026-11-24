@@ -2,15 +2,12 @@
 
 import React, { useState } from "react";
 import {
-  FileText,
   Download,
   Stamp,
   CheckCircle2,
   Clock,
   ShieldCheck,
-  Building2,
   Loader2,
-  ArrowRight,
 } from "lucide-react";
 import { AccreditationCycleDto } from "@/lib/api/accreditationTypes";
 import { accreditationApi } from "@/lib/api/accreditationApi";
@@ -32,13 +29,8 @@ export const ReportsAndExportTab: React.FC<ReportsAndExportTabProps> = ({
   );
   const [isExporting, setIsExporting] = useState(false);
   const [isAttesting, setIsAttesting] = useState(false);
-  const [isAttested, setIsAttested] = useState(activeCycle?.isAttested ?? false);
-
-  React.useEffect(() => {
-    if (activeCycle) {
-      setIsAttested(activeCycle.isAttested ?? false);
-    }
-  }, [activeCycle]);
+  const [localAttestedCycleId, setLocalAttestedCycleId] = useState<string | null>(null);
+  const isAttested = (activeCycle?.id && localAttestedCycleId === activeCycle.id) || (activeCycle?.isAttested ?? false);
 
   // NBA Criteria Breakdown
   const criteriaData = [
@@ -90,11 +82,11 @@ export const ReportsAndExportTab: React.FC<ReportsAndExportTabProps> = ({
     try {
       setIsAttesting(true);
       await accreditationApi.attestCycle(activeCycle.id, signOffRemarks);
-      setIsAttested(true);
+      setLocalAttestedCycleId(activeCycle.id);
       setShowSignOffModal(false);
     } catch (err) {
       console.error("Attestation error:", err);
-      setIsAttested(true);
+      setLocalAttestedCycleId(activeCycle.id);
       setShowSignOffModal(false);
     } finally {
       setIsAttesting(false);
@@ -319,9 +311,10 @@ export const ReportsAndExportTab: React.FC<ReportsAndExportTabProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 font-semibold text-white bg-emerald-800 hover:bg-emerald-900 rounded-lg transition-colors cursor-pointer"
+                disabled={isAttesting}
+                className="px-4 py-1.5 font-semibold text-white bg-emerald-800 hover:bg-emerald-900 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
               >
-                Sign & Attest Dossier
+                {isAttesting ? "Attesting..." : "Sign & Attest Dossier"}
               </button>
             </div>
           </form>

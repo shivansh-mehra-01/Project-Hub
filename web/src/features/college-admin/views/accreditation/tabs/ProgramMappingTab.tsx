@@ -55,7 +55,7 @@ export const ProgramMappingTab: React.FC<ProgramMappingTabProps> = ({
             </p>
           </div>
           <span className="text-xs font-semibold text-slate-600">
-            Hierarchy: College → Course → Branch → Program → NBA Cycle
+            Academic Lineage: Institution → Degree Program → Department Branch → Assessment Cycle
           </span>
         </div>
 

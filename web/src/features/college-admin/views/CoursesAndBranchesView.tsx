@@ -21,10 +21,6 @@ import {
   Layers,
   FlaskConical,
   Palette,
-  Sparkles,
-  UserCheck,
-  UserPlus,
-  Users,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
@@ -40,9 +36,8 @@ import {
   DepartmentDto,
   UpdateCourseProgramRequest,
   UpdateDepartmentRequest,
-  CollegeStaffDto,
 } from "@/lib/api/types";
-import { useProjectHubStore } from "@/mocks/ProjectHubStore";
+import { ApiConnectionBanner } from "../components/ApiConnectionBanner";
 import {
   COURSE_CATALOG,
   COURSE_CATEGORIES,
@@ -74,25 +69,14 @@ function iconBg(icon: CatalogCourse["icon"]) {
   return "bg-blue-50 text-blue-700";
 }
 
-function levelBadgeColor(level: AcademicProgramLevel) {
-  if (level === "PG") return "bg-violet-50 text-violet-700 border-violet-200";
-  if (level === "Diploma") return "bg-orange-50 text-orange-700 border-orange-200";
-  if (level === "Research") return "bg-rose-50 text-rose-700 border-rose-200";
+function levelBadgeColor(level: string) {
+  if (level === "PG" || level?.includes("PG")) return "bg-violet-50 text-violet-700 border-violet-200";
+  if (level === "Diploma" || level?.includes("Diploma")) return "bg-orange-50 text-orange-700 border-orange-200";
+  if (level === "Research" || level?.includes("Research")) return "bg-rose-50 text-rose-700 border-rose-200";
   return "bg-sky-50 text-sky-700 border-sky-200";
 }
 
 export const CoursesAndBranchesView: React.FC = () => {
-  const {
-    departments: mockDepartments,
-    coursePrograms: mockPrograms,
-    facultyRoster,
-    addDepartment: mockAddDept,
-    addCourseProgram: mockAddProg,
-    removeCourseProgram: mockRemoveProg,
-    reassignHOD: mockReassignHod,
-    importRgpvCatalog,
-  } = useProjectHubStore();
-
   const [loading, setLoading] = useState(true);
   const [programs, setPrograms] = useState<CourseProgramDto[]>([]);
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
@@ -108,6 +92,11 @@ export const CoursesAndBranchesView: React.FC = () => {
   const [showEditBranchModal, setShowEditBranchModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<DepartmentDto | null>(null);
 
+  // ── Confirmation Modals ───────────────────────────────────────────────────
+  const [programToArchive, setProgramToArchive] = useState<CourseProgramDto | null>(null);
+  const [branchToDeactivate, setBranchToDeactivate] = useState<DepartmentDto | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // ── NEW: Course Catalog Picker modal ──────────────────────────────────────
   const [showCourseCatalogModal, setShowCourseCatalogModal] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -122,17 +111,8 @@ export const CoursesAndBranchesView: React.FC = () => {
   const [catalogBranchIntakes, setCatalogBranchIntakes] = useState<Record<string, number>>({});
   const [isBatchAddingBranches, setIsBatchAddingBranches] = useState(false);
 
-  // ── NEW: Inline Assign HOD modal state ────────────────────────────────────
-  const [staffList, setStaffList] = useState<CollegeStaffDto[]>([]);
-  const [showAssignHodModal, setShowAssignHodModal] = useState(false);
-  const [assigningBranch, setAssigningBranch] = useState<DepartmentDto | null>(null);
-  const [assignHodTab, setAssignHodTab] = useState<"select" | "create">("select");
-  const [selectedStaffId, setSelectedStaffId] = useState<string>("");
-  const [candidateSearch, setCandidateSearch] = useState<string>("");
-  const [newHodName, setNewHodName] = useState<string>("");
-  const [newHodEmail, setNewHodEmail] = useState<string>("");
-  const [newHodCode, setNewHodCode] = useState<string>("");
-  const [submittingHod, setSubmittingHod] = useState(false);
+  // ── Network / API error state ─────────────────────────────────────────────
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // ── Toast feedback ────────────────────────────────────────────────────────
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -151,8 +131,8 @@ export const CoursesAndBranchesView: React.FC = () => {
   const [submittingBranch, setSubmittingBranch] = useState(false);
 
   useDashboardHeader({
-    title: "Courses & Branches",
-    breadcrumb: "Academic Structure Management",
+    title: "Programs & Branches",
+    breadcrumb: "Degree programs, department branches, and sanctioned student intake quotas",
   });
 
   const showToast = (msg: string) => {
@@ -163,14 +143,15 @@ export const CoursesAndBranchesView: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [progRes, deptRes, staffRes] = await Promise.allSettled([
+      const [progRes, deptRes] = await Promise.allSettled([
         collegeApi.getCoursePrograms(),
         collegeApi.getDepartments(),
-        collegeApi.getStaffUsers(),
       ]);
 
-      if (staffRes.status === "fulfilled" && staffRes.value?.length) {
-        setStaffList(staffRes.value);
+      if (progRes.status === "rejected" || deptRes.status === "rejected") {
+        setApiError("Unable to reach the Colabex central API server. Displaying cached academic structure.");
+      } else {
+        setApiError(null);
       }
 
       let progs: CourseProgramDto[] = [];
@@ -178,36 +159,10 @@ export const CoursesAndBranchesView: React.FC = () => {
 
       if (progRes.status === "fulfilled" && progRes.value?.length) {
         progs = progRes.value;
-      } else if (mockPrograms?.length) {
-        progs = mockPrograms.map((p) => ({
-          id: p.id,
-          collegeId: p.collegeId,
-          code: p.code,
-          name: p.name,
-          level: (p.level as AcademicProgramLevel) || "UG",
-          totalSemesters: p.totalSemesters || 8,
-          isActive: true,
-          departmentCount: 0,
-        }));
       }
 
       if (deptRes.status === "fulfilled" && deptRes.value?.length) {
         depts = deptRes.value;
-      } else if (mockDepartments?.length) {
-        depts = mockDepartments.map((d: any) => ({
-          id: d.id,
-          collegeId: "col-sistec-bpl",
-          code: d.code,
-          name: d.name,
-          intakeQuota: d.intakeQuota || 120,
-          studentCount: d.studentCount || 120,
-          facultyCount: d.facultyCount || 12,
-          isSarAttested: d.isSarAttested || false,
-          courseProgramId: d.courseProgramId || progs[0]?.id,
-          courseProgramCode: progs[0]?.code || "BTECH",
-          courseProgramName: progs[0]?.name || "Bachelor of Technology",
-          hodName: d.hodName,
-        }));
       }
 
       setPrograms(progs);
@@ -308,13 +263,6 @@ export const CoursesAndBranchesView: React.FC = () => {
         totalSemesters: Number(progSemesters),
       };
       const newProg = await collegeApi.createCourseProgram(payload);
-      mockAddProg({
-        code: payload.code,
-        name: payload.name,
-        level: payload.level,
-        totalSemesters: payload.totalSemesters || 8,
-        isActive: true,
-      });
       showToast(`Course "${payload.code}" created successfully!`);
       setShowAddProgramModal(false);
       await loadData();
@@ -358,18 +306,19 @@ export const CoursesAndBranchesView: React.FC = () => {
     }
   };
 
-  const handleDeleteProgram = async (prog: CourseProgramDto) => {
-    if (
-      !confirm(
-        `Are you sure you want to archive "${prog.name}" (${prog.code})? This will remove all branches under it.`
-      )
-    ) return;
+  const handleDeleteProgram = (prog: CourseProgramDto) => {
+    setProgramToArchive(prog);
+  };
+
+  const confirmArchiveProgram = async () => {
+    if (!programToArchive) return;
+    const prog = programToArchive;
+    setIsDeleting(true);
     try {
       const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prog.id);
       if (isGuid) {
         await collegeApi.deleteCourseProgram(prog.id, { suppressToast: true }).catch(() => {});
       }
-      mockRemoveProg(prog.id);
       
       setPrograms((prev) => {
         const next = prev.filter((p) => p.id !== prog.id);
@@ -379,16 +328,19 @@ export const CoursesAndBranchesView: React.FC = () => {
       setDepartments((prev) =>
         prev.filter((d) => d.courseProgramId !== prog.id && d.courseProgramCode?.toUpperCase() !== prog.code.toUpperCase())
       );
-      showToast(`Course "${prog.code}" archived.`);
+      showToast(`Program "${prog.code}" archived successfully.`);
+      setProgramToArchive(null);
     } catch (err) {
       console.error(err);
-      mockRemoveProg(prog.id);
       setPrograms((prev) => {
         const next = prev.filter((p) => p.id !== prog.id);
         setSelectedProgramId(next[0]?.id || "");
         return next;
       });
-      showToast(`Course "${prog.code}" archived.`);
+      showToast(`Program "${prog.code}" archived.`);
+      setProgramToArchive(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -412,7 +364,6 @@ export const CoursesAndBranchesView: React.FC = () => {
         courseProgramId: selectedProgram.id,
       };
       await collegeApi.createDepartment(payload);
-      mockAddDept(payload.name, payload.code, "Awaiting HOD Appointment", payload.intakeQuota, 12, payload.courseProgramId);
       showToast(`Branch "${payload.code}" added to ${selectedProgram.code}!`);
       setShowAddBranchModal(false);
       loadData();
@@ -456,12 +407,14 @@ export const CoursesAndBranchesView: React.FC = () => {
     }
   };
 
-  const handleDeleteBranch = async (dept: DepartmentDto) => {
-    if (
-      !confirm(
-        `Are you sure you want to deactivate branch "${dept.name}" (${dept.code})? Existing students will remain archived.`
-      )
-    ) return;
+  const handleDeleteBranch = (dept: DepartmentDto) => {
+    setBranchToDeactivate(dept);
+  };
+
+  const confirmDeactivateBranch = async () => {
+    if (!branchToDeactivate) return;
+    const dept = branchToDeactivate;
+    setIsDeleting(true);
     try {
       const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dept.id);
       if (isGuid) {
@@ -469,120 +422,14 @@ export const CoursesAndBranchesView: React.FC = () => {
       }
       setDepartments((prev) => prev.filter((d) => d.id !== dept.id && d.code !== dept.code));
       showToast(`Branch "${dept.code}" deactivated.`);
+      setBranchToDeactivate(null);
     } catch (err) {
       console.error(err);
       setDepartments((prev) => prev.filter((d) => d.id !== dept.id && d.code !== dept.code));
       showToast(`Branch "${dept.code}" deactivated.`);
-    }
-  };
-
-  // ── NEW: Inline Assign HOD Handlers ───────────────────────────────────────
-  const combinedCandidates = useMemo(() => {
-    // Only real HOD accounts from the database
-    return staffList
-      .filter((u) => u.role === "HOD")
-      .map((u) => ({
-        id: u.id,
-        name: u.fullName,
-        email: u.email,
-        role: "HOD" as const,
-        departmentCode: u.departmentCode,
-        departmentName: u.departmentName,
-        employeeCode: u.employeeCode,
-      }));
-  }, [staffList]);
-
-  const filteredCandidates = useMemo(() => {
-    if (!candidateSearch.trim()) return combinedCandidates;
-    const q = candidateSearch.toLowerCase();
-    return combinedCandidates.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        (c.employeeCode && c.employeeCode.toLowerCase().includes(q)) ||
-        (c.departmentCode && c.departmentCode.toLowerCase().includes(q))
-    );
-  }, [combinedCandidates, candidateSearch]);
-
-  const handleOpenAssignHod = (branch: DepartmentDto) => {
-    setAssigningBranch(branch);
-    setAssignHodTab("select");
-    setSelectedStaffId(branch.hodUserId || "");
-    setCandidateSearch("");
-    setNewHodName("");
-    setNewHodEmail("");
-    setNewHodCode(`EMP-HOD-${branch.code}`);
-    setShowAssignHodModal(true);
-  };
-
-  const handleAssignHodSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!assigningBranch) return;
-    setSubmittingHod(true);
-    try {
-      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assigningBranch.id);
-
-      if (assignHodTab === "select") {
-        if (!selectedStaffId) {
-          showToast("Please select a faculty or HOD candidate.");
-          setSubmittingHod(false);
-          return;
-        }
-        const candidate = combinedCandidates.find((c) => c.id === selectedStaffId);
-        const candidateName = candidate?.name || "Appointed HOD";
-
-        if (isGuid) {
-          await collegeApi.appointHod(assigningBranch.id, { hodUserId: selectedStaffId }).catch(() => {});
-        }
-        mockReassignHod(assigningBranch.id, candidateName);
-
-        setDepartments((prev) =>
-          prev.map((d) =>
-            d.id === assigningBranch.id || d.code.toUpperCase() === assigningBranch.code.toUpperCase()
-              ? { ...d, hodName: candidateName, hodUserId: selectedStaffId }
-              : d
-          )
-        );
-        showToast(`Assigned ${candidateName} as HOD of ${assigningBranch.name}!`);
-      } else {
-        if (!newHodName.trim() || !newHodEmail.trim()) {
-          showToast("Please enter HOD full name and institutional email.");
-          setSubmittingHod(false);
-          return;
-        }
-        const hodName = newHodName.trim();
-        const hodEmail = newHodEmail.trim();
-        const hodCode = newHodCode.trim() || `EMP-HOD-${assigningBranch.code}`;
-
-        if (isGuid) {
-          await collegeApi
-            .createHod({
-              departmentId: assigningBranch.id,
-              fullName: hodName,
-              email: hodEmail,
-              employeeCode: hodCode,
-              temporaryPassword: "Pass@1234",
-            })
-            .catch(() => {});
-        }
-        mockReassignHod(assigningBranch.id, hodName);
-
-        setDepartments((prev) =>
-          prev.map((d) =>
-            d.id === assigningBranch.id || d.code.toUpperCase() === assigningBranch.code.toUpperCase()
-              ? { ...d, hodName: hodName }
-              : d
-          )
-        );
-        showToast(`Created and assigned ${hodName} as HOD of ${assigningBranch.name}!`);
-      }
-
-      setShowAssignHodModal(false);
-    } catch (err) {
-      console.error(err);
-      showToast("Error assigning HOD.");
+      setBranchToDeactivate(null);
     } finally {
-      setSubmittingHod(false);
+      setIsDeleting(false);
     }
   };
 
@@ -615,7 +462,6 @@ export const CoursesAndBranchesView: React.FC = () => {
           totalSemesters: catalog.totalSemesters,
         };
         const created = await collegeApi.createCourseProgram(payload);
-        mockAddProg({ code: payload.code, name: payload.name, level: payload.level, totalSemesters: payload.totalSemesters || 8, isActive: true });
         if (created?.id) lastId = created.id;
       }
       showToast(`${selectedCatalogCodes.length} course${selectedCatalogCodes.length > 1 ? "s" : ""} added successfully!`);
@@ -661,7 +507,6 @@ export const CoursesAndBranchesView: React.FC = () => {
           courseProgramId: selectedProgram.id,
         };
         await collegeApi.createDepartment(payload);
-        mockAddDept(payload.name, payload.code, "Awaiting HOD Appointment", payload.intakeQuota, 12, payload.courseProgramId);
       }
       showToast(`${selectedBranchCodes.length} branch${selectedBranchCodes.length > 1 ? "es" : ""} added to ${selectedProgram.code}!`);
       setShowBranchCatalogModal(false);
@@ -687,6 +532,9 @@ export const CoursesAndBranchesView: React.FC = () => {
         </div>
       )}
 
+      {/* Network / API Error Banner */}
+      <ApiConnectionBanner error={apiError} onRetry={loadData} />
+
       {loading ? (
         <div className="p-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
           <Loader2 className="h-7 w-7 animate-spin mx-auto mb-2 text-emerald-600" />
@@ -702,9 +550,9 @@ export const CoursesAndBranchesView: React.FC = () => {
             <GraduationCap className="h-7 w-7" strokeWidth={1.8} />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-800">Setup Your Academic Programs</h3>
+            <h3 className="text-sm font-bold text-slate-800">Set Up Academic Programs</h3>
             <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1">
-              Choose from AICTE/UGC standard degree programs or add a custom course.
+              Choose from AICTE/UGC standard degree programs or add a custom program.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -714,7 +562,7 @@ export const CoursesAndBranchesView: React.FC = () => {
               className="inline-flex items-center gap-2 h-9 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
             >
               <BookOpen className="h-4 w-4" />
-              Browse Course Catalog
+              Browse Program Catalog
             </button>
             <button
               type="button"
@@ -722,7 +570,7 @@ export const CoursesAndBranchesView: React.FC = () => {
               className="inline-flex items-center gap-2 h-9 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
-              Custom Course
+              Add Program
             </button>
           </div>
         </div>
@@ -745,10 +593,10 @@ export const CoursesAndBranchesView: React.FC = () => {
                     type="button"
                     onClick={handleOpenCourseCatalog}
                     className="inline-flex flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-2xs whitespace-nowrap transition-colors cursor-pointer"
-                    title="Browse Course Catalog"
+                    title="Browse Program Catalog"
                   >
                     <BookOpen className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                    <span>Catalog</span>
+                    <span>From Catalog</span>
                   </button>
                   <button
                     type="button"
@@ -757,7 +605,7 @@ export const CoursesAndBranchesView: React.FC = () => {
                     title="Add new degree program"
                   >
                     <Plus className="h-3.5 w-3.5 shrink-0" />
-                    <span>New Course</span>
+                    <span>Add Program</span>
                   </button>
                 </div>
               </div>
@@ -838,7 +686,7 @@ export const CoursesAndBranchesView: React.FC = () => {
                           <span>•</span>
                           <span>{currentBranches.length} {currentBranches.length === 1 ? "Branch" : "Branches"}</span>
                           <span>•</span>
-                          <span className="font-mono">{selectedProgramIntake.toLocaleString()} Approved Seats</span>
+                          <span className="font-mono">{selectedProgramIntake.toLocaleString()} Sanctioned Seats</span>
                         </p>
                       </div>
                     </div>
@@ -847,14 +695,16 @@ export const CoursesAndBranchesView: React.FC = () => {
                         type="button"
                         onClick={() => handleOpenEditProgram(selectedProgram)}
                         className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap"
+                        title="Edit degree program"
                       >
                         <Pencil className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        Edit Course
+                        Edit Program
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteProgram(selectedProgram)}
                         className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-600 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap"
+                        title="Archive degree program"
                       >
                         <Trash2 className="h-3.5 w-3.5 shrink-0" />
                         Archive
@@ -865,7 +715,7 @@ export const CoursesAndBranchesView: React.FC = () => {
                   {/* Branches section header + toolbar */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Configured Branches ({currentBranches.length})
+                      Department Branches ({currentBranches.length})
                     </span>
                     <div className="flex items-center gap-2 shrink-0">
                       {currentBranches.length > 3 && (
@@ -875,7 +725,7 @@ export const CoursesAndBranchesView: React.FC = () => {
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Filter branches..."
+                            placeholder="Search branches..."
                             className="w-full pl-8 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
                           />
                         </div>
@@ -957,26 +807,24 @@ export const CoursesAndBranchesView: React.FC = () => {
                               </span>
                               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                                 {branch.hodName ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenAssignHod(branch)}
+                                  <Link
+                                    href="/college/hods"
                                     className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 text-[11px] whitespace-nowrap cursor-pointer transition-colors duration-200 ease-out"
-                                    title="Click to change or reassign HOD"
+                                    title="Manage HOD tenure in Department Leadership"
                                   >
                                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
                                     <span>HOD: <strong className="font-semibold text-slate-900">{branch.hodName}</strong></span>
-                                    <Pencil className="h-2.5 w-2.5 text-slate-400 ml-0.5" strokeWidth={1.75} />
-                                  </button>
+                                    <ArrowRight className="h-2.5 w-2.5 text-slate-400 ml-0.5" strokeWidth={1.75} />
+                                  </Link>
                                 ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenAssignHod(branch)}
+                                  <Link
+                                    href="/college/hods"
                                     className="inline-flex items-center gap-1.5 font-medium text-amber-800 bg-amber-50 hover:bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200 text-[11px] whitespace-nowrap cursor-pointer transition-colors duration-200 ease-out group/btn"
-                                    title="Click to assign HOD to this branch"
+                                    title="Appoint HOD in Department Leadership"
                                   >
-                                    <span>Awaiting HOD</span>
-                                    <span className="text-emerald-800 group-hover/btn:underline font-bold">Assign →</span>
-                                  </button>
+                                    <span>Vacant</span>
+                                    <span className="text-emerald-800 group-hover/btn:underline font-bold">Appoint HOD →</span>
+                                  </Link>
                                 )}
                                 <span>•</span>
                                 <span className="font-mono text-slate-600 whitespace-nowrap">{branch.intakeQuota || 120} Seats</span>
@@ -1029,14 +877,14 @@ export const CoursesAndBranchesView: React.FC = () => {
       {/* =====================================================================
           MODAL 1: ADD DEGREE PROGRAM (manual)
           ===================================================================== */}
-      <Modal isOpen={showAddProgramModal} onClose={() => setShowAddProgramModal(false)} title="Create New Degree Program" description="Add a degree course (e.g., B.Tech, M.Tech, MBA, MCA, Diploma).">
+      <Modal isOpen={showAddProgramModal} onClose={() => setShowAddProgramModal(false)} title="Add Degree Program" description="Configure an AICTE/UGC recognized degree program (e.g., B.Tech, M.Tech, MBA, MCA, Diploma).">
         <form onSubmit={handleCreateProgram} className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-700">Course Code (e.g. BTECH, MBA, MCA)</label>
+            <label className="text-xs font-semibold text-slate-700">Program Code (e.g. BTECH, MBA, MCA)</label>
             <Input value={progCode} onChange={(e) => setProgCode(e.target.value)} placeholder="e.g. BTECH" required />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-700">Degree Full Name</label>
+            <label className="text-xs font-semibold text-slate-700">Program Name</label>
             <Input value={progName} onChange={(e) => setProgName(e.target.value)} placeholder="e.g. Bachelor of Technology" required />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1051,7 +899,7 @@ export const CoursesAndBranchesView: React.FC = () => {
           </div>
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
             <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddProgramModal(false)}>Cancel</Button>
-            <Button type="submit" variant="primary" size="sm" disabled={submittingProg}>{submittingProg ? "Creating..." : "Create Course"}</Button>
+            <Button type="submit" variant="primary" size="sm" disabled={submittingProg}>{submittingProg ? "Creating..." : "Create Program"}</Button>
           </div>
         </form>
       </Modal>
@@ -1059,10 +907,10 @@ export const CoursesAndBranchesView: React.FC = () => {
       {/* =====================================================================
           MODAL 2: EDIT DEGREE PROGRAM
           ===================================================================== */}
-      <Modal isOpen={showEditProgramModal} onClose={() => setShowEditProgramModal(false)} title={`Edit Course: ${editingProgram?.code}`} description="Update course name, academic level, or semester duration.">
+      <Modal isOpen={showEditProgramModal} onClose={() => setShowEditProgramModal(false)} title={`Edit Program: ${editingProgram?.code}`} description="Update program name, academic level, or semester duration.">
         <form onSubmit={handleUpdateProgram} className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-700">Degree Full Name</label>
+            <label className="text-xs font-semibold text-slate-700">Program Name</label>
             <Input value={progName} onChange={(e) => setProgName(e.target.value)} placeholder="e.g. Bachelor of Technology" required />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1092,11 +940,11 @@ export const CoursesAndBranchesView: React.FC = () => {
             <Input value={branchCode} onChange={(e) => setBranchCode(e.target.value)} placeholder="e.g. CSE" required />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-700">Branch Full Name</label>
+            <label className="text-xs font-semibold text-slate-700">Branch Name</label>
             <Input value={branchName} onChange={(e) => setBranchName(e.target.value)} placeholder="e.g. Computer Science & Engineering" required />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-700">Approved Student Intake Quota</label>
+            <label className="text-xs font-semibold text-slate-700">Sanctioned Student Intake Quota</label>
             <Input type="number" min={10} max={1000} value={branchIntake} onChange={(e) => setBranchIntake(parseInt(e.target.value) || 120)} required />
           </div>
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
@@ -1109,14 +957,14 @@ export const CoursesAndBranchesView: React.FC = () => {
       {/* =====================================================================
           MODAL 4: EDIT BRANCH
           ===================================================================== */}
-      <Modal isOpen={showEditBranchModal} onClose={() => setShowEditBranchModal(false)} title={`Edit Branch: ${editingBranch?.code}`} description="Update branch name or approved student intake quota.">
+      <Modal isOpen={showEditBranchModal} onClose={() => setShowEditBranchModal(false)} title={`Edit Branch: ${editingBranch?.code}`} description="Update branch name or sanctioned student intake quota.">
         <form onSubmit={handleUpdateBranch} className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-700">Branch Full Name</label>
+            <label className="text-xs font-semibold text-slate-700">Branch Name</label>
             <Input value={branchName} onChange={(e) => setBranchName(e.target.value)} placeholder="e.g. Computer Science & Engineering" required />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-700">Approved Student Intake Quota</label>
+            <label className="text-xs font-semibold text-slate-700">Sanctioned Student Intake Quota</label>
             <Input type="number" min={10} max={1000} value={branchIntake} onChange={(e) => setBranchIntake(parseInt(e.target.value) || 120)} required />
           </div>
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
@@ -1142,7 +990,7 @@ export const CoursesAndBranchesView: React.FC = () => {
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
               <div>
-                <h2 className="text-sm font-bold text-slate-900">Course Catalog</h2>
+                <h2 className="text-sm font-bold text-slate-900">Program Catalog</h2>
                 <p className="text-[11px] text-slate-500 mt-0.5">Select standard AICTE/UGC degree programs to add</p>
               </div>
               <button
@@ -1163,7 +1011,7 @@ export const CoursesAndBranchesView: React.FC = () => {
                   type="text"
                   value={catalogSearch}
                   onChange={(e) => setCatalogSearch(e.target.value)}
-                  placeholder="Search courses... (e.g. B.Tech, MBA, Pharmacy)"
+                  placeholder="Search programs... (e.g. B.Tech, MBA, Pharmacy)"
                   className="w-full pl-9 pr-4 h-9 text-xs rounded-xl border border-slate-200 bg-slate-50 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-colors"
                   autoFocus
                 />
@@ -1191,10 +1039,10 @@ export const CoursesAndBranchesView: React.FC = () => {
             <div className="flex-1 overflow-y-auto px-6 py-4">
               {filteredCatalogCourses.length === 0 ? (
                 <div className="py-16 text-center text-xs text-slate-400">
-                  {catalogSearch ? `No courses match "${catalogSearch}"` : "All courses in this category have already been added."}
+                  {catalogSearch ? `No programs match "${catalogSearch}"` : "All programs in this category have already been added."}
                   <br />
                   <button type="button" onClick={handleOpenAddProgram} className="mt-3 text-emerald-600 font-semibold hover:underline cursor-pointer">
-                    + Add a custom course instead
+                    + Add a custom program instead
                   </button>
                 </div>
               ) : (
@@ -1249,10 +1097,10 @@ export const CoursesAndBranchesView: React.FC = () => {
               <div className="text-xs text-slate-500">
                 {selectedCatalogCodes.length > 0 ? (
                   <span className="font-semibold text-emerald-700">
-                    {selectedCatalogCodes.length} course{selectedCatalogCodes.length > 1 ? "s" : ""} selected
+                    {selectedCatalogCodes.length} program{selectedCatalogCodes.length > 1 ? "s" : ""} selected
                   </span>
                 ) : (
-                  "Select courses to add"
+                  "Select programs to add"
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -1273,7 +1121,7 @@ export const CoursesAndBranchesView: React.FC = () => {
                   {isBatchAddingCourses ? (
                     <><Loader2 className="h-3.5 w-3.5 animate-spin" />Adding...</>
                   ) : (
-                    <>Add {selectedCatalogCodes.length > 0 ? selectedCatalogCodes.length : ""} Course{selectedCatalogCodes.length !== 1 ? "s" : ""}</>
+                    <>Add {selectedCatalogCodes.length > 0 ? selectedCatalogCodes.length : ""} Program{selectedCatalogCodes.length !== 1 ? "s" : ""}</>
                   )}
                 </button>
               </div>
@@ -1439,241 +1287,76 @@ export const CoursesAndBranchesView: React.FC = () => {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL: Inline Assign HOD to Branch                                        */}
-      {/* ========================================================================= */}
-      {showAssignHodModal && assigningBranch && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => !submittingHod && setShowAssignHodModal(false)}
-          />
-
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0">
-                  <UserCheck className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900">
-                    Assign HOD: {assigningBranch.name}
-                  </h2>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Select an appointed HOD to lead the <strong className="font-semibold text-slate-700">{assigningBranch.code}</strong> department.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAssignHodModal(false)}
-                disabled={submittingHod}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Mode Tabs */}
-            <div className="px-6 pt-3 pb-0 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50 shrink-0">
-              <button
-                type="button"
-                onClick={() => setAssignHodTab("select")}
-                className={`px-3 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
-                  assignHodTab === "select"
-                    ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg shadow-2xs"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Choose from Appointed HODs ({combinedCandidates.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setAssignHodTab("create")}
-                className={`px-3 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
-                  assignHodTab === "create"
-                    ? "border-emerald-600 text-emerald-800 bg-white rounded-t-lg shadow-2xs"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                + Create New HOD Account
-              </button>
-            </div>
-
-            {/* Body */}
-            <form onSubmit={handleAssignHodSubmit} className="flex flex-col flex-1 overflow-hidden">
-              <div className="p-6 overflow-y-auto space-y-4 flex-1">
-                {assignHodTab === "select" ? (
-                  <div className="space-y-3">
-                    {/* Search */}
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                      <input
-                        type="text"
-                        value={candidateSearch}
-                        onChange={(e) => setCandidateSearch(e.target.value)}
-                        placeholder="Search HOD by name, email, department..."
-                        className="w-full pl-8 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                      />
-                    </div>
-
-                    {/* Candidate Cards */}
-                    <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                      {filteredCandidates.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">
-                          No HOD accounts found in directory. Use &ldquo;+ Create New HOD Account&rdquo; above to add an HOD.
-                        </div>
-                      ) : (
-                        filteredCandidates.map((c) => {
-                          const isSelected = selectedStaffId === c.id;
-                          const initials = c.name
-                            .replace(/^(Dr\.|Prof\.)\s+/i, "")
-                            .split(" ")
-                            .map((n) => n[0])
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .join("")
-                            .toUpperCase() || "H";
-
-                          return (
-                            <div
-                              key={c.id}
-                              onClick={() => setSelectedStaffId(c.id)}
-                              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                                isSelected
-                                  ? "border-emerald-600 bg-emerald-50/50 ring-1 ring-emerald-600 shadow-2xs"
-                                  : "border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/70"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="h-8 w-8 rounded-full font-bold text-xs flex items-center justify-center shrink-0 bg-blue-100 text-blue-800">
-                                  {initials}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-semibold text-xs text-slate-900 truncate">
-                                      {c.name}
-                                    </span>
-                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
-                                      HOD
-                                    </span>
-                                  </div>
-                                  <div className="text-[11px] text-slate-400 font-mono truncate">
-                                    {c.email} {c.employeeCode ? `• ${c.employeeCode}` : ""}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                {c.departmentCode ? (
-                                  <span className="text-[10px] font-medium font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                                    {c.departmentCode}
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-medium text-emerald-600">
-                                    Available
-                                  </span>
-                                )}
-                                <div
-                                  className={`h-4 w-4 rounded-full border flex items-center justify-center transition-all ${
-                                    isSelected
-                                      ? "border-emerald-600 bg-emerald-600 text-white"
-                                      : "border-slate-300 bg-white"
-                                  }`}
-                                >
-                                  {isSelected && <Check className="h-2.5 w-2.5" />}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3 pt-1">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-700">Full Name (with honorific)</label>
-                      <Input
-                        value={newHodName}
-                        onChange={(e) => setNewHodName(e.target.value)}
-                        placeholder="e.g. Dr. Rajesh Kumar"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-700">Institutional Email</label>
-                      <Input
-                        type="email"
-                        value={newHodEmail}
-                        onChange={(e) => setNewHodEmail(e.target.value)}
-                        placeholder="e.g. rajesh.kumar@sistec.ac.in"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-700">Employee / Staff ID</label>
-                      <Input
-                        value={newHodCode}
-                        onChange={(e) => setNewHodCode(e.target.value)}
-                        placeholder={`e.g. EMP-HOD-${assigningBranch.code}`}
-                      />
-                    </div>
-                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600">
-                      Initial temporary password will be <span className="font-mono font-semibold">Pass@1234</span>. The HOD can change this upon their first login.
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0 bg-white">
-                <div className="text-xs text-slate-500">
-                  {assignHodTab === "select" ? (
-                    selectedStaffId ? (
-                      <span className="text-emerald-700 font-semibold">
-                        Ready to assign HOD: {combinedCandidates.find((c) => c.id === selectedStaffId)?.name}
-                      </span>
-                    ) : (
-                      "Click on any HOD above to select"
-                    )
-                  ) : (
-                    "New account will be granted HOD role automatically"
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAssignHodModal(false)}
-                    disabled={submittingHod}
-                    className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submittingHod || (assignHodTab === "select" && !selectedStaffId)}
-                    className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-2xs transition-colors cursor-pointer"
-                  >
-                    {submittingHod ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Assigning...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="h-3.5 w-3.5" />
-                        Assign HOD
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </form>
+      {/* =====================================================================
+          MODAL 7: CONFIRM ARCHIVE PROGRAM
+          ===================================================================== */}
+      <Modal
+        isOpen={!!programToArchive}
+        onClose={() => setProgramToArchive(null)}
+        title="Archive Degree Program"
+        description="This action archives the degree program and all affiliated branches."
+      >
+        <div className="space-y-4 pt-2">
+          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
+            <p className="font-semibold">
+              Are you sure you want to archive &ldquo;{programToArchive?.name}&rdquo; ({programToArchive?.code})?
+            </p>
+            <p className="mt-1 text-rose-700">
+              All associated department branches and quotas under this program will be deactivated. Historical student and accreditation data remain safely retained in audit records.
+            </p>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setProgramToArchive(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              disabled={isDeleting}
+              onClick={confirmArchiveProgram}
+            >
+              {isDeleting ? "Archiving..." : "Archive Program"}
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
+
+      {/* =====================================================================
+          MODAL 8: CONFIRM DEACTIVATE BRANCH
+          ===================================================================== */}
+      <Modal
+        isOpen={!!branchToDeactivate}
+        onClose={() => setBranchToDeactivate(null)}
+        title="Deactivate Department Branch"
+        description="This action deactivates the department branch from active enrollment."
+      >
+        <div className="space-y-4 pt-2">
+          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
+            <p className="font-semibold">
+              Are you sure you want to deactivate branch &ldquo;{branchToDeactivate?.name}&rdquo; ({branchToDeactivate?.code})?
+            </p>
+            <p className="mt-1 text-rose-700">
+              Active students and faculty affiliations will be archived. Academic records will remain preserved for statutory compliance.
+            </p>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setBranchToDeactivate(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              disabled={isDeleting}
+              onClick={confirmDeactivateBranch}
+            >
+              {isDeleting ? "Deactivating..." : "Deactivate Branch"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
     </div>
   );
 };

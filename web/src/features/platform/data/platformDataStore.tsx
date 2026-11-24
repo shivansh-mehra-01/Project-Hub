@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { platformApi } from "@/lib/api/platformApi";
+import { getUserProfile } from "@/lib/api";
 import { showToast } from "@/lib/toast";
 
 // =============================================================================
@@ -3003,19 +3004,27 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
     setAuditLogs((prev) => [newLog, ...prev]);
 
-    platformApi.createAuditLog({
-      action: newLog.action,
-      targetEntity: newLog.affectedResource,
-      metadataJson: newLog.metadataJson || "{}",
-      ipAddress: newLog.ipAddress,
-    }).catch(() => {});
+    const currentUser = getUserProfile();
+    if (currentUser?.role === "SuperAdmin") {
+      platformApi.createAuditLog({
+        action: newLog.action,
+        targetEntity: newLog.affectedResource,
+        metadataJson: newLog.metadataJson || "{}",
+        ipAddress: newLog.ipAddress,
+      }).catch(() => {});
+    }
   };
 
   const failedLoginAttemptsCount = 5;
 
-  // Sync with real backend API if available on mount
+  // Sync with real backend API if available on mount (SuperAdmin only)
   useEffect(() => {
     async function loadBackendData() {
+      const user = getUserProfile();
+      if (!user || user.role !== "SuperAdmin") {
+        return;
+      }
+
       try {
         const backendTenants = await platformApi.getTenants();
         if (backendTenants && backendTenants.length > 0) {

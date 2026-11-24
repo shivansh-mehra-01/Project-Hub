@@ -1,7 +1,16 @@
 import { showToast } from "@/lib/toast";
 import { UserProfileDto } from "./types";
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+export const getApiBaseUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined" && window.location.hostname && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    const protocol = window.location.protocol || "http:";
+    return `${protocol}//${window.location.hostname}:5000`;
+  }
+  return "http://localhost:5000";
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 const TOKEN_KEY = "projecthub_jwt_token";
 const USER_KEY = "projecthub_user_profile";
@@ -67,7 +76,8 @@ interface RequestOptions extends RequestInit {
 }
 
 export async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  let url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  const baseUrl = getApiBaseUrl();
+  let url = `${baseUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
   if (options.params) {
     const searchParams = new URLSearchParams();

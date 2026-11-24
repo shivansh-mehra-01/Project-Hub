@@ -3,7 +3,6 @@ import {
   AddSingleStudentRequest,
   AssignGuideRequest,
   CreateExceptionRequest,
-  ExceptionAuditLogDto,
   ProjectProposalDto,
   RosterImportRequest,
   RosterImportResultDto,
@@ -35,10 +34,8 @@ export const coordinatorApi = {
   schedulePanel: (data: ScheduleVivaPanelRequest) =>
     apiClient.post<VivaPanelDto>("/api/coordinator/panels", data),
 
-  getExceptions: () => apiClient.get<ExceptionAuditLogDto[]>("/api/coordinator/exceptions"),
-
   createException: (data: CreateExceptionRequest) =>
-    apiClient.post<{ success: boolean; id: string }>("/api/coordinator/exceptions", data),
+    apiClient.post<{ success: boolean; exceptionId?: string; status?: string }>("/api/coordinator/exceptions", data),
 
   exportMarksheetCsvBlob: (trackId?: string) =>
     apiClient.getBlob("/api/coordinator/export-marksheet", {

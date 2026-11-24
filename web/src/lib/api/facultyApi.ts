@@ -1,8 +1,13 @@
 import { apiClient } from "./apiClient";
 import {
   ActionQueueDto,
+  ArtifactSlotDto,
+  AssignedDefenseTeamDto,
   CreateProblemStatementRequest,
+  ProblemBankStatement,
   ProjectProposalDto,
+  ReturnProposalRequest,
+  ReviewArtifactRequest,
   SubmitVivaEvaluationRequest,
   VerifyLogRequest,
 } from "./types";
@@ -14,23 +19,47 @@ export const facultyApi = {
     apiClient.get<ProjectProposalDto[]>("/api/faculty/mentored-teams"),
 
   verifyLog: (logId: string, data: VerifyLogRequest) =>
-    apiClient.post<{ success: boolean; logId: string; isVerified: boolean }>(
-      `/api/faculty/logs/${logId}/verify`,
-      data
-    ),
+    apiClient.post<{
+      success: boolean;
+      logId: string;
+      isVerified: boolean;
+      status: string;
+      mentorRemarks?: string;
+    }>(`/api/faculty/logs/${logId}/verify`, data),
 
   endorseProposal: (teamId: string) =>
     apiClient.post<{ success: boolean; teamId: string; status: string }>(
       `/api/faculty/proposals/${teamId}/endorse`
     ),
 
-  getProblemBank: () => apiClient.get<any[]>("/api/faculty/problem-bank"),
+  returnProposal: (teamId: string, data: ReturnProposalRequest) =>
+    apiClient.post<{
+      success: boolean;
+      teamId: string;
+      status: string;
+      isReturned: boolean;
+      remarks: string;
+    }>(`/api/faculty/proposals/${teamId}/return`, data),
+
+  rejectProposal: (teamId: string, data: ReturnProposalRequest) =>
+    apiClient.post<{
+      success: boolean;
+      teamId: string;
+      status: string;
+      isRejected: boolean;
+      remarks: string;
+    }>(`/api/faculty/proposals/${teamId}/reject`, data),
+
+  getProblemBank: () => apiClient.get<ProblemBankStatement[]>("/api/faculty/problem-bank"),
 
   createProblemStatement: (data: CreateProblemStatementRequest) =>
-    apiClient.post<{ success: boolean; id: string; title: string }>(
+    apiClient.post<ProblemBankStatement>(
       "/api/faculty/problem-bank",
       data
     ),
+
+  getAssignedDefenseTeams: () =>
+    apiClient.get<AssignedDefenseTeamDto[]>("/api/faculty/defense-teams"),
 
   submitVivaEvaluation: (data: SubmitVivaEvaluationRequest) =>
     apiClient.post<{
@@ -38,12 +67,16 @@ export const facultyApi = {
       evaluationId: string;
       isLocked: boolean;
       individualScoresCount: number;
+      isUpdated: boolean;
     }>("/api/faculty/evaluations", data),
 
   getTeamArtifacts: (teamId: string) =>
-    apiClient.get<any[]>(`/api/faculty/teams/${teamId}/artifacts`),
+    apiClient.get<ArtifactSlotDto[]>(`/api/faculty/teams/${teamId}/artifacts`),
 
-  reviewArtifact: (artifactId: string, data: { isApproved: boolean; reviewerNote?: string }) =>
+  downloadArtifact: (artifactId: string) =>
+    apiClient.getBlob(`/api/artifacts/${artifactId}/download`),
+
+  reviewArtifact: (artifactId: string, data: ReviewArtifactRequest) =>
     apiClient.post<{
       success: boolean;
       artifactId: string;

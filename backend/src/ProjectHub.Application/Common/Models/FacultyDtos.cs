@@ -22,7 +22,35 @@ public record ActionQueueDto
 
 public record VerifyLogRequest
 {
+    public string? Decision { get; init; } // "Approved", "NeedsRevision"
+    public bool? IsApproved { get; init; }
     public string? Remarks { get; init; }
+}
+
+public record AssignedDefenseTeamMemberDto
+{
+    public Guid UserId { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string EnrollmentCode { get; init; } = string.Empty;
+    public bool IsTeamLead { get; init; }
+    public string ModuleResponsibility { get; init; } = string.Empty;
+}
+
+public record AssignedDefenseTeamDto
+{
+    public Guid TeamId { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string Title { get; init; } = string.Empty;
+    public string Abstract { get; init; } = string.Empty;
+    public string DomainTag { get; init; } = string.Empty;
+    public Guid? GuideUserId { get; init; }
+    public string? GuideName { get; init; }
+    public bool IsGuideConflict { get; init; }
+    public CheckpointType CheckpointType { get; init; } = CheckpointType.MidTermReview;
+    public bool IsEvaluationLocked { get; init; }
+    public DateTime? ScheduledAtUtc { get; init; }
+    public string? RoomOrLink { get; init; }
+    public List<AssignedDefenseTeamMemberDto> Members { get; init; } = new();
 }
 
 public record CreateProblemStatementRequest

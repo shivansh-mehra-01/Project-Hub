@@ -12,6 +12,7 @@ export interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -22,7 +23,9 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   footer,
   maxWidth = "md",
+  size,
 }) => {
+  const effectiveMaxWidth = size || maxWidth;
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -62,7 +65,7 @@ export const Modal: React.FC<ModalProps> = ({
         aria-modal="true"
         className={cn(
           "relative w-[calc(100vw-24px)] sm:w-full max-h-[90dvh] flex flex-col rounded-xl bg-white shadow-xl border border-[#E2E8F0] z-10 overflow-hidden transform transition-all my-auto sm:my-8",
-          maxWidthClasses[maxWidth]
+          maxWidthClasses[effectiveMaxWidth]
         )}
       >
         {/* Sticky Header */}

@@ -13,6 +13,9 @@ obj/
 *.userprefs
 .vs/
 *.dotCover
+TestResults/
+*.trx
+*.coverage
 
 # Capstone Document Vault (binary files)
 backend/src/ProjectHub.Api/App_Data/vault/*
@@ -40,6 +43,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .vercel
+test-results/
+web/test-results/
+playwright-report/
+web/playwright-report/
+blob-report/
+coverage/
 
 # ------------------------------------------------------------------------------
 # Environment & Secrets (Local development defaults tracked for 1-click startup)

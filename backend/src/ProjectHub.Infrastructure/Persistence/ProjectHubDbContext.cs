@@ -167,7 +167,7 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
         foreach (var entry in ChangeTracker.Entries().ToList())
         {
             // 0. Audit Log Immutability Protection: Direct modification or deletion is strictly forbidden
-            if (entry.Entity is PlatformAuditLog or ExceptionAuditLog)
+            if (entry.Entity is PlatformAuditLog)
             {
                 if (entry.State is EntityState.Modified or EntityState.Deleted)
                 {
@@ -175,6 +175,29 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
                         $"Audit Log Immutability Violation: Audit log entities of type '{entry.Entity.GetType().Name}' are append-only and cannot be modified or deleted.");
                 }
                 continue;
+            }
+
+            if (entry.Entity is ExceptionAuditLog)
+            {
+                if (entry.State == EntityState.Deleted)
+                {
+                    throw new InvalidOperationException(
+                        $"Audit Log Immutability Violation: ExceptionAuditLog entities cannot be deleted.");
+                }
+            }
+
+            // In-Memory Database Guard: Mirror relational filtered unique index IX_VivaEvaluations_CollegeId_ProjectTeamId_CheckpointType
+            if (entry.Entity is VivaEvaluation vivaEval && entry.State == EntityState.Added && !vivaEval.IsDeleted)
+            {
+                if (Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+                {
+                    var hasConflict = VivaEvaluations.Local.Any(v => v != vivaEval && v.CollegeId == vivaEval.CollegeId && v.ProjectTeamId == vivaEval.ProjectTeamId && v.CheckpointType == vivaEval.CheckpointType && !v.IsDeleted) ||
+                                      VivaEvaluations.Any(v => v.Id != vivaEval.Id && v.CollegeId == vivaEval.CollegeId && v.ProjectTeamId == vivaEval.ProjectTeamId && v.CheckpointType == vivaEval.CheckpointType && !v.IsDeleted);
+                    if (hasConflict)
+                    {
+                        throw new DbUpdateException("Duplicate unique key violation: IX_VivaEvaluations_CollegeId_ProjectTeamId_CheckpointType");
+                    }
+                }
             }
 
             // 1. Audit Stamping on BaseEntity
@@ -243,7 +266,7 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
                         }
 
                         var collegeIdProp = entry.Property(nameof(ITenantEntity.CollegeId));
-                        if (collegeIdProp.IsModified)
+                        if (collegeIdProp.IsModified && !Equals(collegeIdProp.OriginalValue, collegeIdProp.CurrentValue))
                         {
                             throw new UnauthorizedAccessException("Tenant Isolation Violation: The CollegeId partition key is immutable.");
                         }

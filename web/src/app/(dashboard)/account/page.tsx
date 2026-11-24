@@ -74,7 +74,7 @@ export default function AccountPage() {
     currentPersona?.role === "SuperAdmin"
       ? "Central Platform Operations"
       : currentPersona?.role === "CollegeAdmin"
-      ? "Office of the Principal / Dean"
+      ? "Office of the Principal"
       : dept
       ? `${dept.name} (${dept.code})`
       : "Academic Affairs";
@@ -125,8 +125,8 @@ export default function AccountPage() {
       .toUpperCase() || "KC";
 
   useDashboardHeader({
-    title: "Account & Profile",
-    breadcrumb: "User Credentials, Security & Digital Signature",
+    title: "Account",
+    breadcrumb: "User credentials, security, and digital signature",
   });
 
   const showToast = (msg: string) => {

@@ -2288,11 +2288,17 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("DelegatedResponsibility")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("DepartmentId")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("Designation")
+                        .HasColumnType("integer");
 
                     b.Property<string>("DigitalSignatureUrl")
                         .HasColumnType("text");
@@ -2357,6 +2363,11 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<int>("PasswordResetOtpAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<DateTime?>("PasswordResetOtpExpiresAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -2523,7 +2534,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProjectTeamId");
 
-                    b.HasIndex("CollegeId", "ProjectTeamId", "CheckpointType");
+                    b.HasIndex("CollegeId", "ProjectTeamId", "CheckpointType")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("VivaEvaluations", (string)null);
                 });

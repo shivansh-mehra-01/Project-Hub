@@ -1,6 +1,5 @@
-import { FacultyView } from "@/features/faculty/FacultyView";
+import { FacultyEvaluationsView } from "@/features/faculty/views/FacultyEvaluationsView";
 
 export default function FacultyEvaluationsPage() {
-  return <FacultyView initialTab="grading" />;
+  return <FacultyEvaluationsView />;
 }
-
