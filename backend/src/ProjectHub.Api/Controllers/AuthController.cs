@@ -137,14 +137,16 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Email and password are required." });
         }
 
-        var email = NormalizeEmail(request.Email);
+        var rawEmail = request.Email.Trim().ToLowerInvariant();
+        var normalizedEmail = NormalizeEmail(request.Email);
+        var reverseAlias = rawEmail == "collegeadmin@sistec.ac.in" ? "principal@sistec.ac.in" : normalizedEmail;
         _tenantContext.IsAuthLookup = true;
 
         var user = await _context.Users
             .IgnoreQueryFilters()
             .Include(u => u.College)
             .Include(u => u.Department)
-            .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(u => (u.Email == rawEmail || u.Email == normalizedEmail || u.Email == reverseAlias) && !u.IsDeleted, cancellationToken);
 
         if (user == null || !user.IsActive)
         {

@@ -211,7 +211,7 @@ public class CollegeController : ControllerBase
             var codeUpper = prog.Code?.Trim().ToUpperInvariant() ?? "";
             var nameUpper = prog.Name?.Trim().ToUpperInvariant() ?? "";
 
-            bool isManagement = codeUpper.Contains("MBA") || codeUpper.Contains("PGDM") || nameUpper.Contains("MANAGEMENT");
+            bool isManagement = codeUpper.Contains("MBA") || codeUpper.Contains("BBA") || codeUpper.Contains("PGDM") || nameUpper.Contains("MANAGEMENT") || nameUpper.Contains("BUSINESS ADMINISTRATION");
             bool isMca = codeUpper.Contains("MCA") || nameUpper.Contains("COMPUTER APPLICATION");
             bool isPgEngineering = prog.Level == AcademicProgramLevel.PG && !isManagement && !isMca;
 
@@ -282,7 +282,7 @@ public class CollegeController : ControllerBase
 
             if (totalStrength == 0)
             {
-                cadreStatus = "Compliant";
+                cadreStatus = "No Intake";
                 statusMsg = "Zero sanctioned intake; no mandatory AICTE cadre requirement.";
             }
             else if (availableFaculty == 0)
@@ -335,7 +335,7 @@ public class CollegeController : ControllerBase
 
             string programLevelDisplay = isPgEngineering
                 ? "PG Engineering"
-                : (isManagement ? "MBA" : (isMca ? "MCA" : (prog.Level == AcademicProgramLevel.UG ? "UG Engineering" : prog.Level.ToString())));
+                : (isManagement ? (prog.Level == AcademicProgramLevel.UG ? "UG Management" : "MBA") : (isMca ? "MCA" : (prog.Level == AcademicProgramLevel.UG ? "UG Engineering" : prog.Level.ToString())));
 
             aicteComplianceList.Add(new AicteCadreComplianceDto
             {
@@ -416,7 +416,7 @@ public class CollegeController : ControllerBase
                 "UPDATE_COURSE" => "Degree program updated",
                 "CREATE_DEPARTMENT" => "New branch added",
                 "UPDATE_DEPARTMENT" => "Branch configuration updated",
-                "APPOINT_HOD" => $"HOD appointed for {log.TargetEntity}",
+                "APPOINT_HOD" => "Department Head Assigned",
                 "SIGN_OFF_COMPLIANCE" => "NBA Attainment Dossier Exported & Attested",
                 "UPDATE_SETTINGS" => "Campus institutional settings saved",
                 "CREATE_STAFF" => "New administrative account created",
@@ -1708,7 +1708,7 @@ public class CollegeController : ControllerBase
 
         var query = _context.Users
             .Include(u => u.Department)
-            .Where(u => u.CollegeId == collegeId && !u.IsDeleted && u.Role != UserRole.Student);
+            .Where(u => u.CollegeId == collegeId && !u.IsDeleted && u.Role != UserRole.Student && u.Role != UserRole.SuperAdmin);
 
         if (!string.IsNullOrWhiteSpace(role) && Enum.TryParse<UserRole>(role, true, out var roleEnum))
         {
@@ -2645,9 +2645,21 @@ public class CollegeController : ControllerBase
     {
         var span = DateTime.UtcNow - utcTime;
         if (span.TotalMinutes < 1) return "Just now";
-        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
-        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
-        if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
+        if (span.TotalMinutes < 60)
+        {
+            var m = (int)span.TotalMinutes;
+            return $"{m} {(m == 1 ? "minute" : "minutes")} ago";
+        }
+        if (span.TotalHours < 24)
+        {
+            var h = (int)span.TotalHours;
+            return $"{h} {(h == 1 ? "hour" : "hours")} ago";
+        }
+        if (span.TotalDays < 7)
+        {
+            var d = (int)span.TotalDays;
+            return $"{d} {(d == 1 ? "day" : "days")} ago";
+        }
         return utcTime.ToString("MMM dd, yyyy");
     }
 }

@@ -82,7 +82,6 @@ export const CollegeSettingsView: React.FC = () => {
 
   useDashboardHeader({
     title: "College Settings",
-    breadcrumb: "Institutional profile, official crest, digital seal, and security controls",
   });
 
   const showToast = (msg: string) => {

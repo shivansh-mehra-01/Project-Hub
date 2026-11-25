@@ -36,6 +36,7 @@ import { getAuthToken, hodApi } from "@/lib/api";
 import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
+import { initialPersonas } from "@/mocks/seed-data";
 import { getSidebarNav, getBreadcrumbs, RouteGuard, SidebarNavItem } from "@/navigation";
 import { LogoutConfirmationModal, PendingActionsDrawer } from "@/features/platform/shared/GlobalPlatformModals";
 
@@ -141,10 +142,32 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const activeSessionLabel =
     academicSessions?.find((s) => s.isActive)?.label || academicSessions?.[0]?.label || "2026–2027";
 
+  // Derive effective role from pathname for deterministic SSR hydration alignment
+  const effectiveRole = (() => {
+    if (pathname.startsWith("/admin") || pathname.startsWith("/platform")) return "SuperAdmin";
+    if (pathname.startsWith("/college")) return "CollegeAdmin";
+    if (pathname.startsWith("/hod")) return "HOD";
+    if (pathname.startsWith("/coordinator") || pathname.startsWith("/faculty")) return "Faculty";
+    return currentPersona.role;
+  })();
+
+  const displayPersonaName = (() => {
+    if (effectiveRole === "CollegeAdmin" && (!currentPersona || currentPersona.role !== "CollegeAdmin")) {
+      return initialPersonas.collegeAdmin.name;
+    }
+    if (effectiveRole === "SuperAdmin" && (!currentPersona || currentPersona.role !== "SuperAdmin")) {
+      return initialPersonas.superAdmin.name;
+    }
+    if (effectiveRole === "HOD" && (!currentPersona || currentPersona.role !== "HOD")) {
+      return initialPersonas.hod.name;
+    }
+    return currentPersona?.name || "User";
+  })();
+
   const [realHodPendingCount, setRealHodPendingCount] = useState<number | null>(null);
 
   useEffect(() => {
-    if (currentPersona.role === "HOD" && getAuthToken()) {
+    if (effectiveRole === "HOD" && getAuthToken()) {
       hodApi
         .getDashboard()
         .then((dash) => {
@@ -158,7 +181,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
         })
         .catch(() => {});
     }
-  }, [currentPersona.role, pathname]);
+  }, [effectiveRole, pathname]);
 
   const pendingHODCount =
     realHodPendingCount !== null
@@ -235,7 +258,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   // Role-scoped notifications (strictly isolated by role & team with deep-linking paths)
   const allNotifications = (() => {
-    if (currentPersona.role === "Student" || currentPersona.role === "TeamLead") {
+    if (effectiveRole === "Student" || effectiveRole === "TeamLead") {
       return [
         {
           id: "n-s1",
@@ -260,7 +283,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
         },
       ];
     }
-    if (currentPersona.role === "Faculty") {
+    if (effectiveRole === "Faculty") {
       return [
         {
           id: "n-f1",
@@ -278,7 +301,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
         },
       ];
     }
-    if (currentPersona.role === "HOD") {
+    if (effectiveRole === "HOD") {
       return [
         {
           id: "n-h1",
@@ -296,7 +319,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
         },
       ];
     }
-    if (currentPersona.role === "CollegeAdmin") {
+    if (effectiveRole === "CollegeAdmin") {
       return [
         {
           id: "n-c1",
@@ -362,12 +385,12 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   // Centralized Navigation Engine: pure selectors determine strictly authorized items
   const navItems = getSidebarNav(
-    currentPersona.role,
+    effectiveRole,
     liveBadgeCounts,
     currentPersona.isProjectCoordinator
   );
 
-  const breadcrumbsInfo = getBreadcrumbs(pathname, currentPersona.role);
+  const breadcrumbsInfo = getBreadcrumbs(pathname, effectiveRole);
   const displayTitle = pageTitle || breadcrumbsInfo.pageTitle;
   const displayBreadcrumb = breadcrumb || breadcrumbsInfo.breadcrumb;
   const currentActiveTab = activeTab;
@@ -547,7 +570,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
         <div className="h-14 flex items-center justify-between px-4 border-b border-white/[0.08] relative">
           <CollabexLogo variant="dark" size="sm" />
 
-          {currentPersona.role === "SuperAdmin" ? (
+          {effectiveRole === "SuperAdmin" ? (
             <span className="text-[10px] font-mono text-emerald-400/90 font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
               Platform
             </span>
@@ -596,8 +619,11 @@ const AppShellInner: React.FC<AppShellProps> = ({
               )}
             </div>
           ) : (
-            <span className="text-[10px] font-mono font-medium text-slate-400 px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
-              {currentPersona.role === "CollegeAdmin"
+            <span
+              suppressHydrationWarning
+              className="text-[10px] font-mono font-medium text-slate-400 px-1.5 py-0.5 rounded bg-white/5 border border-white/10"
+            >
+              {effectiveRole === "CollegeAdmin"
                 ? college?.code || "SISTEC"
                 : `${college?.code || "SISTEC"} • CSE`}
             </span>
@@ -607,7 +633,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
         {/* Navigation Tabs */}
         {/* Navigation Tabs */}
         <nav className="flex-1 px-3 py-2.5 space-y-1.5 overflow-y-auto">
-          {currentPersona.role === "SuperAdmin" ? (
+          {effectiveRole === "SuperAdmin" ? (
             <div className="space-y-0.5">
               <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
                 Platform Console
@@ -648,36 +674,33 @@ const AppShellInner: React.FC<AppShellProps> = ({
         <div className="p-3 border-t border-white/[0.08] bg-[#111827]">
           {/* User Profile Mini Block */}
           <Link
-            href={currentPersona.role === "SuperAdmin" ? "/platform/account/profile" : "/account"}
+            href={effectiveRole === "SuperAdmin" ? "/platform/account/profile" : "/account"}
             className={cn(
-              "px-3 py-2 mb-2 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center justify-between hover:bg-white/[0.08] transition-colors group cursor-pointer block",
+              "px-3 py-2.5 mb-2 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center gap-2.5 hover:bg-white/[0.08] transition-colors group cursor-pointer",
               (pathname === "/platform/account/profile" || pathname === "/account") && "border-brand-primary/50 bg-white/[0.08]"
             )}
             title="My Profile & Security Settings"
           >
-            <div className="min-w-0 pr-2">
-              <p className="text-xs font-semibold text-white truncate group-hover:text-emerald-400 transition-colors">
-                {currentPersona.name}
-              </p>
-              <p className="text-[10px] text-slate-400 font-mono truncate">
-                {getRoleSubtitle(currentPersona.role, currentPersona.isProjectCoordinator)}
-              </p>
+            <div
+              suppressHydrationWarning
+              className="w-8 h-8 rounded-full bg-brand-primary/20 border border-brand-primary/40 flex items-center justify-center text-emerald-400 font-bold text-xs shrink-0"
+            >
+              {getAvatarInitials(displayPersonaName)}
             </div>
-            <div className="w-7 h-7 rounded-full bg-brand-primary/20 border border-brand-primary/40 flex items-center justify-center text-emerald-400 font-bold text-xs font-mono shrink-0">
-              {getAvatarInitials(currentPersona.name)}
+            <div className="min-w-0 flex-1">
+              <p suppressHydrationWarning className="text-xs font-semibold text-white truncate group-hover:text-emerald-400 transition-colors">
+                {displayPersonaName}
+              </p>
+              <p suppressHydrationWarning className="text-[11px] text-slate-400 truncate">
+                {getRoleSubtitle(effectiveRole, currentPersona.isProjectCoordinator)}
+              </p>
             </div>
           </Link>
 
           {/* Minimal Log out Action */}
           <button
             type="button"
-            onClick={() => {
-              if (currentPersona.role === "SuperAdmin") {
-                setShowLogoutModal(true);
-              } else {
-                handleLogout();
-              }
-            }}
+            onClick={() => setShowLogoutModal(true)}
             className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-slate-400 hover:bg-white/[0.06] hover:text-white transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4 text-slate-400" strokeWidth={1.75} />
@@ -738,14 +761,14 @@ const AppShellInner: React.FC<AppShellProps> = ({
             </button>
 
             {/* Context-Aware Dark-Mode Status Pill */}
-            {currentPersona.role === "SuperAdmin" ? (
+            {effectiveRole === "SuperAdmin" ? (
               <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-slate-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                 <span className="font-mono text-[11px] tabular-nums text-slate-200">
                   Production • ap-south-1
                 </span>
               </div>
-            ) : currentPersona.role === "CollegeAdmin" ? (
+            ) : effectiveRole === "CollegeAdmin" ? (
               <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-slate-200">
                 <Calendar className="w-3 h-3 text-emerald-400 shrink-0" strokeWidth={1.75} />
                 <span className="font-mono text-[11px] tabular-nums text-slate-200">
@@ -762,7 +785,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
             )}
 
             {/* Super Admin Quick Actions / Pending Approvals Queue */}
-            {currentPersona.role === "SuperAdmin" && (
+            {effectiveRole === "SuperAdmin" && (
               <button
                 type="button"
                 onClick={() => setShowPendingDrawer(true)}
@@ -857,8 +880,11 @@ const AppShellInner: React.FC<AppShellProps> = ({
             </div>
 
             {/* Role Badge Indicator */}
-            <span className="inline-flex items-center text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
-              {formatRoleLabel(currentPersona.role)}
+            <span
+              suppressHydrationWarning
+              className="inline-flex items-center text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300"
+            >
+              {formatRoleLabel(effectiveRole)}
             </span>
           </div>
         </header>
@@ -904,19 +930,22 @@ const AppShellInner: React.FC<AppShellProps> = ({
             {/* Role & User Context Banner */}
             <div className="px-4 py-3 bg-white/[0.03] border-b border-white/[0.06] flex items-center justify-between">
               <div className="min-w-0 pr-2">
-                <p className="text-xs font-semibold text-white truncate">{currentPersona.name}</p>
-                <p className="text-[10px] text-slate-400 font-mono truncate">
-                  {getRoleSubtitle(currentPersona.role, currentPersona.isProjectCoordinator)}
+                <p suppressHydrationWarning className="text-xs font-semibold text-white truncate">{displayPersonaName}</p>
+                <p suppressHydrationWarning className="text-[10px] text-slate-400 font-mono truncate">
+                  {getRoleSubtitle(effectiveRole, currentPersona.isProjectCoordinator)}
                 </p>
               </div>
-              <div className="w-7 h-7 rounded-full bg-brand-primary/20 border border-brand-primary/40 flex items-center justify-center text-emerald-400 font-bold text-xs font-mono shrink-0">
-                {getAvatarInitials(currentPersona.name)}
+              <div
+                suppressHydrationWarning
+                className="w-7 h-7 rounded-full bg-brand-primary/20 border border-brand-primary/40 flex items-center justify-center text-emerald-400 font-bold text-xs font-mono shrink-0"
+              >
+                {getAvatarInitials(displayPersonaName)}
               </div>
             </div>
 
             {/* Navigation Tabs */}
             <nav className="flex-1 px-3 py-3 space-y-2 overflow-y-auto">
-              {currentPersona.role === "SuperAdmin" ? (
+              {effectiveRole === "SuperAdmin" ? (
                 <div className="space-y-0.5">
                   <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
                     Platform Console
@@ -959,11 +988,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 type="button"
                 onClick={() => {
                   setIsMobileDrawerOpen(false);
-                  if (currentPersona.role === "SuperAdmin") {
-                    setShowLogoutModal(true);
-                  } else {
-                    handleLogout();
-                  }
+                  setShowLogoutModal(true);
                 }}
                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 min-h-[44px] text-xs font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer"
               >
@@ -983,11 +1008,12 @@ const AppShellInner: React.FC<AppShellProps> = ({
         onClose={() => setShowCommandPalette(false)}
       />
 
-      {/* Global Modals for Super Admin Console */}
+      {/* Global Logout Confirmation Modal */}
       <LogoutConfirmationModal
         isOpen={showLogoutModal}
         onClose={() => setShowLogoutModal(false)}
-        onConfirm={(revokeAll) => {
+        isSuperAdmin={effectiveRole === "SuperAdmin"}
+        onConfirm={() => {
           setShowLogoutModal(false);
           logout();
           router.replace("/login");

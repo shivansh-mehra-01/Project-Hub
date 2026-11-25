@@ -223,7 +223,7 @@ export interface AicteCadreComplianceDto {
   requiredRatio: string;
   actualRatio: string;
   isCompliant: boolean;
-  cadreStatus: "Compliant" | "Compliant — subject to qualification verification" | "NonCompliant" | "Insufficient Data";
+  cadreStatus: "Compliant" | "Compliant — subject to qualification verification" | "NonCompliant" | "Insufficient Data" | "No Intake";
   requiredProfessors: number;
   actualProfessors: number;
   requiredAssociateProfessors: number;

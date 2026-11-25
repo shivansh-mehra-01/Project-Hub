@@ -11,42 +11,11 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "CampusAddress",
-                table: "CollegeTenants",
-                type: "character varying(500)",
-                maxLength: 500,
-                nullable: true,
-                defaultValue: "Airport Road, Gandhi Nagar, Bhopal, MP 462036");
-
-            migrationBuilder.AddColumn<string>(
-                name: "CampusesCsv",
-                table: "CollegeTenants",
-                type: "character varying(500)",
-                maxLength: 500,
-                nullable: true,
-                defaultValue: "Main Campus (Bhopal), Extension Center");
-
-            migrationBuilder.AddColumn<bool>(
-                name: "GithubIntegrationEnabled",
-                table: "CollegeTenants",
-                type: "boolean",
-                nullable: false,
-                defaultValue: true);
-
-            migrationBuilder.AddColumn<bool>(
-                name: "JiraIntegrationEnabled",
-                table: "CollegeTenants",
-                type: "boolean",
-                nullable: false,
-                defaultValue: true);
-
-            migrationBuilder.AddColumn<bool>(
-                name: "NbaModuleEnabled",
-                table: "CollegeTenants",
-                type: "boolean",
-                nullable: false,
-                defaultValue: true);
+            migrationBuilder.Sql("ALTER TABLE \"CollegeTenants\" ADD COLUMN IF NOT EXISTS \"CampusAddress\" character varying(500) DEFAULT 'Airport Road, Gandhi Nagar, Bhopal, MP 462036';");
+            migrationBuilder.Sql("ALTER TABLE \"CollegeTenants\" ADD COLUMN IF NOT EXISTS \"CampusesCsv\" character varying(500) DEFAULT 'Main Campus (Bhopal), Extension Center';");
+            migrationBuilder.Sql("ALTER TABLE \"CollegeTenants\" ADD COLUMN IF NOT EXISTS \"GithubIntegrationEnabled\" boolean NOT NULL DEFAULT TRUE;");
+            migrationBuilder.Sql("ALTER TABLE \"CollegeTenants\" ADD COLUMN IF NOT EXISTS \"JiraIntegrationEnabled\" boolean NOT NULL DEFAULT TRUE;");
+            migrationBuilder.Sql("ALTER TABLE \"CollegeTenants\" ADD COLUMN IF NOT EXISTS \"NbaModuleEnabled\" boolean NOT NULL DEFAULT TRUE;");
 
             migrationBuilder.CreateTable(
                 name: "AccreditationCycles",

@@ -92,8 +92,7 @@ export const AccreditationModule: React.FC<AccreditationModuleProps> = ({
   const [newCycleYear, setNewCycleYear] = useState("2026–2027");
 
   useDashboardHeader({
-    title: "Accreditation & Examination",
-    breadcrumb: "NBA SAR preparation, NAAC compliance, evidence verification, and examination results",
+    title: "Accreditation",
   });
 
   const currentUser = getUserProfile();

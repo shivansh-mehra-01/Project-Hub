@@ -62,8 +62,7 @@ export const HodManagementView: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useDashboardHeader({
-    title: "Department Leadership",
-    breadcrumb: "Department HOD appointments, vacancies, and leadership succession",
+    title: "Department Heads",
   });
 
   const showToast = (msg: string) => {

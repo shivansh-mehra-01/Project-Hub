@@ -51,7 +51,6 @@ export const CollegeOverviewView: React.FC = () => {
 
   useDashboardHeader({
     title: "Overview",
-    breadcrumb: "Institutional KPIs, intake quotas, and statutory compliance status",
   });
 
   const loadData = async () => {
@@ -93,6 +92,8 @@ export const CollegeOverviewView: React.FC = () => {
   };
 
   const aictePrograms: AicteCadreComplianceDto[] = overview?.programAicteCompliance || [];
+  const activeAictePrograms = aictePrograms.filter((p) => p.cadreStatus !== "No Intake");
+  const hasFacultyComplianceIssue = activeAictePrograms.some((p) => p.cadreStatus !== "Compliant");
 
   const activeSessionLabel = overview?.activeSession?.label || "2026–2027";
   const currentSemester = overview?.currentSemesterLabel || "Odd Semester";
@@ -134,204 +135,209 @@ export const CollegeOverviewView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* SECTION 1: ACADEMIC SESSION & CAMPUS STATUS STRIP                          */}
+      {/* SECTION 1: ACADEMIC YEAR & STATUS STRIP                                    */}
       {/* ========================================================================= */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-center shrink-0">
+          <div className="h-8 w-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-center shrink-0">
             <Calendar className="h-4 w-4" strokeWidth={1.75} />
           </div>
-          <div className="flex items-center gap-2 flex-wrap text-xs">
+          <div className="flex items-center gap-2.5 flex-wrap text-xs">
             <span className="font-semibold text-slate-900">
-              Academic Session {activeSessionLabel}
+              Academic Year {activeSessionLabel}
             </span>
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-              Active Term
+              Current Semester
             </span>
             <span className="text-slate-300">•</span>
             <span className="text-slate-600">
-              Term: <strong className="text-slate-900 font-semibold">{currentSemester}</strong>
-            </span>
-            <span className="text-slate-300">•</span>
-            <span className="text-slate-600 font-medium truncate max-w-sm">
-              {institutionName}
+              Semester: <strong className="text-slate-900 font-semibold">{currentSemester.replace(/ Semester/i, "")}</strong>
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono">
           <Clock className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
-          <span>Synced: {lastUpdatedFormatted}</span>
+          <span>Last Updated: {lastUpdatedFormatted.replace("Live Synced", "Recently")}</span>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* SECTION 2: STATUTORY EXECUTIVE KPI SURFACES                               */}
+      {/* SECTION 2: DASHBOARD SUMMARY CARDS                                        */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Cohort Intake Capacity & Utilization */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col justify-between space-y-3 shadow-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+        {/* Card 1: Total Students */}
+        <div className="h-full rounded-xl border border-slate-200 bg-white p-4 flex flex-col justify-between gap-3 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Student Intake</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Students</span>
             <div className="h-8 w-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-800 flex items-center justify-center">
               <Users className="h-4 w-4" strokeWidth={1.75} />
             </div>
           </div>
           <div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+              <span className="text-2xl font-bold text-slate-900 font-heading tabular-nums tracking-tight">
                 {cohortCap.totalEnrolledStudents.toLocaleString()}
               </span>
               <span className="text-xs font-semibold text-slate-500">
                 / {cohortCap.totalSanctionedMultiCohortCapacity.toLocaleString()} Seats
               </span>
             </div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1.5">
               <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
                 <div
-                  className="bg-sky-600 h-1.5 rounded-full transition-all duration-500"
+                  className={`bg-sky-600 h-1.5 rounded-full transition-all duration-500 ${
+                    cohortCap.utilizationPercentage > 0 && cohortCap.utilizationPercentage < 4 ? "min-w-[12px]" : ""
+                  }`}
                   style={{ width: `${Math.min(100, cohortCap.utilizationPercentage)}%` }}
                 />
               </div>
-              <span className="text-[11px] font-bold text-sky-800 font-mono">
+              <span className="text-[11px] font-bold text-sky-800 tabular-nums shrink-0">
                 {cohortCap.utilizationPercentage}% Enrolled
               </span>
             </div>
           </div>
-          <span className="text-[10px] text-slate-500 truncate" title={cohortCap.statusMessage}>
-            {cohortCap.statusMessage}
-          </span>
+          <Link
+            href="/college/courses"
+            className="text-[11px] font-semibold text-sky-800 hover:text-sky-900 inline-flex items-center gap-1 mt-auto"
+          >
+            View Programs & Intake <ArrowRight className="h-3 w-3" />
+          </Link>
         </div>
 
-        {/* KPI 2: AICTE Faculty Strength & Ratio */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col justify-between space-y-3 shadow-xs">
+        {/* Card 2: Total Faculty */}
+        <div className="h-full rounded-xl border border-slate-200 bg-white p-4 flex flex-col justify-between gap-3 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">AICTE Faculty Strength</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Faculty</span>
             <div className="h-8 w-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-center">
               <GraduationCap className="h-4 w-4" strokeWidth={1.75} />
             </div>
           </div>
           <div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+              <span className="text-2xl font-bold text-slate-900 font-heading tabular-nums tracking-tight">
                 {totalFaculty}
               </span>
               <span className="text-xs font-semibold text-slate-500">
                 Faculty Members
               </span>
             </div>
-            <div className="mt-1 flex items-center gap-1.5">
-              {aictePrograms.length > 0 ? (
+            <div className="mt-1.5 flex items-center gap-1.5">
+              {activeAictePrograms.length > 0 ? (
                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                  aictePrograms.every((p) => p.cadreStatus === "Compliant")
+                  activeAictePrograms.every((p) => p.cadreStatus === "Compliant")
                     ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                    : aictePrograms.some((p) => p.cadreStatus === "Compliant — subject to qualification verification")
+                    : activeAictePrograms.some((p) => p.cadreStatus === "Compliant — subject to qualification verification")
                     ? "bg-amber-50 text-amber-800 border border-amber-200"
-                    : aictePrograms.some((p) => p.cadreStatus === "Insufficient Data")
+                    : activeAictePrograms.some((p) => p.cadreStatus === "Insufficient Data")
                     ? "bg-amber-50 text-amber-800 border border-amber-200"
                     : "bg-rose-50 text-rose-800 border border-rose-200"
                 }`}>
-                  {aictePrograms.some((p) => p.cadreStatus === "Insufficient Data")
-                    ? "Cadres Unassigned in Directory"
-                    : aictePrograms.some((p) => p.cadreStatus === "Compliant — subject to qualification verification")
-                    ? "Compliant — Subject to Qualification Verification"
-                    : aictePrograms.every((p) => p.cadreStatus === "Compliant")
-                    ? "Cadre Compliant (1:2:6)"
-                    : "Cadre Shortfall Detected"}
+                  {activeAictePrograms.some((p) => p.cadreStatus === "Insufficient Data")
+                    ? "Faculty Roles Not Assigned"
+                    : activeAictePrograms.some((p) => p.cadreStatus === "Compliant — subject to qualification verification")
+                    ? "Meets Requirements (Check Needed)"
+                    : activeAictePrograms.every((p) => p.cadreStatus === "Compliant")
+                    ? "Meets Requirements"
+                    : "Faculty Shortage"}
                 </span>
               ) : (
-                <span className="text-[11px] text-slate-500">UG Engineering Norm 1:20</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                  No Active Intake
+                </span>
               )}
             </div>
           </div>
           <Link
             href="/college/users"
-            className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 inline-flex items-center gap-1"
+            className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 inline-flex items-center gap-1 mt-auto"
           >
-            Manage Staff & Cadres <ArrowRight className="h-3 w-3" />
+            Manage Faculty <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
 
-        {/* KPI 3: Department Leadership & HOD Status */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col justify-between space-y-3 shadow-xs">
+        {/* Card 3: Department Heads */}
+        <div className="h-full rounded-xl border border-slate-200 bg-white p-4 flex flex-col justify-between gap-3 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Department Leadership</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Department Heads</span>
             <div className="h-8 w-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 flex items-center justify-center">
               <UserCheck className="h-4 w-4" strokeWidth={1.75} />
             </div>
           </div>
           <div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+              <span className="text-2xl font-bold text-slate-900 font-heading tabular-nums tracking-tight">
                 {appointedDeptsCount} of {departments.length}
               </span>
               <span className="text-xs font-semibold text-slate-500">
-                Appointed
+                Assigned
               </span>
             </div>
-            <div className="mt-1">
+            <div className="mt-1.5">
               {vacantDepts.length > 0 ? (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700">
-                  <AlertTriangle className="h-3 w-3" />
-                  {vacantDepts.length} {vacantDepts.length === 1 ? "branch requires" : "branches require"} HOD
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  {vacantDepts.length} {vacantDepts.length === 1 ? "Dept" : "Depts"} Need HOD
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                  <CheckCircle2 className="h-3 w-3" />
-                  All departments have appointed leadership
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <CheckCircle2 className="h-3 w-3 shrink-0" />
+                  All Departments Assigned
                 </span>
               )}
             </div>
           </div>
           <Link
             href="/college/hods"
-            className="text-[11px] font-semibold text-indigo-700 hover:text-indigo-900 inline-flex items-center gap-1"
+            className="text-[11px] font-semibold text-indigo-700 hover:text-indigo-900 inline-flex items-center gap-1 mt-auto"
           >
-            View Leadership Roster <ArrowRight className="h-3 w-3" />
+            Department Head List <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
 
-        {/* KPI 4: Institutional SAR Readiness */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col justify-between space-y-3 shadow-xs">
+        {/* Card 4: SAR Approval */}
+        <div className="h-full rounded-xl border border-slate-200 bg-white p-4 flex flex-col justify-between gap-3 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">SAR Attestation</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">SAR Approval</span>
             <div className="h-8 w-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 flex items-center justify-center">
               <ShieldCheck className="h-4 w-4" strokeWidth={1.75} />
             </div>
           </div>
           <div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+              <span className="text-2xl font-bold text-slate-900 font-heading tabular-nums tracking-tight">
                 {sarAttestPct}%
               </span>
               <span className="text-xs font-semibold text-slate-500">
-                Attested
+                Approved
               </span>
             </div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1.5">
               <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
                 <div
-                  className="bg-amber-600 h-1.5 rounded-full transition-all duration-500"
+                  className={`bg-amber-600 h-1.5 rounded-full transition-all duration-500 ${
+                    sarAttestPct > 0 && sarAttestPct < 4 ? "min-w-[12px]" : ""
+                  }`}
                   style={{ width: `${sarAttestPct}%` }}
                 />
               </div>
-              <span className="text-[11px] font-bold text-amber-800 font-mono">
+              <span className="text-[11px] font-bold text-amber-800 tabular-nums shrink-0">
                 {attestedDeptsCount} of {totalDeptsForSar} Branches
               </span>
             </div>
           </div>
           <Link
             href="/college/accreditation"
-            className="text-[11px] font-semibold text-amber-800 hover:text-amber-900 inline-flex items-center gap-1"
+            className="text-[11px] font-semibold text-amber-800 hover:text-amber-900 inline-flex items-center gap-1 mt-auto"
           >
-            View Accreditation <ArrowRight className="h-3 w-3" />
+            View Accreditation Details <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* SECTION 3: AICTE CADRE COMPLIANCE & INSTITUTION PROFILE                   */}
+      {/* SECTION 3: FACULTY & STUDENT DETAILS / COLLEGE INFORMATION                */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         {/* Surface 1: AICTE Program Compliance Matrix (7 Cols) */}
@@ -339,7 +345,7 @@ export const CollegeOverviewView: React.FC = () => {
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <GraduationCap className="h-4 w-4 text-emerald-800" strokeWidth={1.75} />
-              <h2 className="text-sm font-bold text-slate-900">AICTE Cadre & Faculty-Student Ratio (FSR)</h2>
+              <h2 className="text-sm font-bold text-slate-900">Faculty and Student Details</h2>
             </div>
             <span className="text-[11px] font-semibold text-slate-500">
               AICTE APH 2024–2027
@@ -351,12 +357,12 @@ export const CollegeOverviewView: React.FC = () => {
               <table className="w-full text-left text-xs border border-slate-100 rounded-lg overflow-hidden">
                 <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
                   <tr>
-                    <th className="p-2.5">Program</th>
-                    <th className="p-2.5 text-center">Annual Intake</th>
-                    <th className="p-2.5 text-center">Sanctioned Seats</th>
-                    <th className="p-2.5 text-center">Faculty (Req / Avail)</th>
-                    <th className="p-2.5 text-center">FSR Ratio</th>
-                    <th className="p-2.5 text-right">Cadre Compliance</th>
+                    <th className="p-2.5">Course</th>
+                    <th className="p-2.5 text-center">Students Per Year</th>
+                    <th className="p-2.5 text-center">Approved Seats</th>
+                    <th className="p-2.5 text-center">Faculty (Required / Available)</th>
+                    <th className="p-2.5 text-center">Student-Faculty Ratio</th>
+                    <th className="p-2.5 text-right">Faculty Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -369,12 +375,25 @@ export const CollegeOverviewView: React.FC = () => {
                       <td className="p-2.5 text-center font-mono">{p.sanctionedIntake}</td>
                       <td className="p-2.5 text-center font-mono">{p.totalSanctionedStrength}</td>
                       <td className="p-2.5 text-center font-mono font-medium">
-                        {p.requiredFaculty} / <span className={p.availableFaculty < p.requiredFaculty ? "text-rose-600 font-bold" : "text-emerald-700 font-bold"}>{p.availableFaculty}</span>
+                        {p.requiredFaculty} /{" "}
+                        <span
+                          className={
+                            p.cadreStatus === "No Intake"
+                              ? "text-slate-400"
+                              : p.availableFaculty < p.requiredFaculty
+                              ? "text-rose-600 font-bold"
+                              : "text-emerald-700 font-bold"
+                          }
+                        >
+                          {p.availableFaculty}
+                        </span>
                       </td>
-                      <td className="p-2.5 text-center font-mono">{p.actualRatio}</td>
+                      <td className="p-2.5 text-center font-mono text-slate-600">{p.actualRatio}</td>
                       <td className="p-2.5 text-right">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                          p.cadreStatus === "Compliant"
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${
+                          p.cadreStatus === "No Intake"
+                            ? "bg-slate-100 text-slate-600 border border-slate-200"
+                            : p.cadreStatus === "Compliant"
                             ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                             : p.cadreStatus === "Compliant — subject to qualification verification"
                             ? "bg-amber-50 text-amber-800 border border-amber-200"
@@ -382,7 +401,15 @@ export const CollegeOverviewView: React.FC = () => {
                             ? "bg-amber-50 text-amber-800 border border-amber-200"
                             : "bg-rose-50 text-rose-800 border border-rose-200"
                         }`}>
-                          {p.cadreStatus}
+                          {p.cadreStatus === "No Intake"
+                            ? "No Intake"
+                            : p.cadreStatus === "Compliant"
+                            ? "Meets Requirements"
+                            : p.cadreStatus === "Insufficient Data"
+                            ? "Data Incomplete"
+                            : p.cadreStatus === "Compliant — subject to qualification verification"
+                            ? "Meets Requirements (Check Needed)"
+                            : "Faculty Shortage"}
                         </span>
                       </td>
                     </tr>
@@ -408,40 +435,40 @@ export const CollegeOverviewView: React.FC = () => {
             </div>
           ) : (
             <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-lg">
-              No statutory program data loaded. Ensure degree programs and branch quotas are configured in Programs & Branches.
+              No course data loaded. Ensure degree programs and branch quotas are configured in Programs & Branches.
             </div>
           )}
 
           <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
             <span className="text-[11px] text-slate-500">
-              Professors, Associate Professors, and Assistant Professors cadre distribution audited per AICTE norms.
+              Faculty details are checked according to AICTE rules.
             </span>
             <Link
               href="/college/users"
               className="font-semibold text-emerald-800 hover:text-emerald-900 inline-flex items-center gap-1"
             >
-              Assign Cadres in Staff Directory <ArrowRight className="h-3 w-3" />
+              Assign Faculty Roles <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
         </div>
 
         {/* Surface 2: Campus Profile & University Affiliation (5 Cols) */}
-        <div className="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-5 flex flex-col justify-between space-y-4 shadow-xs">
+        <div className="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-5 flex flex-col gap-4 shadow-xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-emerald-800" strokeWidth={1.75} />
-              <h2 className="text-sm font-bold text-slate-900">Institutional Identity</h2>
+              <h2 className="text-sm font-bold text-slate-900">College Information</h2>
             </div>
             <Link
               href="/college/settings"
               className="text-xs font-semibold text-emerald-800 hover:text-emerald-900 inline-flex items-center gap-1"
             >
-              Settings <ArrowRight className="h-3 w-3" />
+              Settings & Logo <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative h-12 w-12 rounded-lg border border-slate-200 bg-white flex items-center justify-center p-1 shrink-0">
+          <div className="flex items-center gap-3.5">
+            <div className="relative h-12 w-12 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center justify-center p-1.5 shrink-0">
               <Image
                 src={crestUrl}
                 alt="College Crest"
@@ -462,19 +489,19 @@ export const CollegeOverviewView: React.FC = () => {
             </div>
           </div>
 
-          <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 overflow-hidden bg-slate-50/40 text-xs">
+          <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 overflow-hidden bg-slate-50/40 text-xs flex-1 flex flex-col justify-center">
             <div className="grid grid-cols-2 divide-x divide-slate-100">
-              <div className="p-2.5 space-y-0.5">
+              <div className="p-3 space-y-0.5">
                 <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Affiliated University
+                  University
                 </span>
                 <span className="block font-semibold text-slate-900 text-xs truncate" title={affiliation}>
                   {affiliation}
                 </span>
               </div>
-              <div className="p-2.5 space-y-0.5">
+              <div className="p-3 space-y-0.5">
                 <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Institution Category
+                  College Type
                 </span>
                 <span className="block font-semibold text-slate-900 text-xs truncate">
                   {collegeType}
@@ -482,17 +509,17 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
             </div>
             <div className="grid grid-cols-2 divide-x divide-slate-100">
-              <div className="p-2.5 space-y-0.5">
+              <div className="p-3 space-y-0.5">
                 <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Established Year
+                  Year Established
                 </span>
-                <span className="block font-semibold text-slate-900 text-xs">
-                  Year {establishedYear}
+                <span className="block font-semibold text-slate-900 text-xs font-mono">
+                  {establishedYear}
                 </span>
               </div>
-              <div className="p-2.5 space-y-0.5">
+              <div className="p-3 space-y-0.5">
                 <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Campus Locations
+                  Number of Campuses
                 </span>
                 <span className="block font-semibold text-slate-900 text-xs truncate">
                   {campusesSummary}
@@ -500,70 +527,62 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
             </div>
           </div>
-
-          <Link
-            href="/college/settings"
-            className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold transition-colors duration-200 ease-out cursor-pointer"
-          >
-            <span>Institutional Settings & Seals</span>
-            <ArrowRight className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
-          </Link>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* SECTION 4: INSTITUTIONAL ACTION ITEMS & GOVERNANCE AUDIT TRAIL             */}
+      {/* SECTION 4: PENDING TASKS & ACTIVITY HISTORY                                */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-        {/* Surface 1: Immediate Action Items / Priority Exceptions (5 Cols) */}
-        <div className="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-5 flex flex-col justify-between space-y-4 shadow-xs">
+        {/* Surface 1: Pending Tasks (5 Cols) */}
+        <div className="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-5 flex flex-col gap-4 shadow-xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-emerald-800" strokeWidth={1.75} />
-              <h2 className="text-sm font-bold text-slate-900">Governance Action Items</h2>
+              <h2 className="text-sm font-bold text-slate-900">Pending Tasks</h2>
             </div>
-            <span className="text-[11px] font-semibold text-slate-500 font-mono">
-              {(vacantDepts.length > 0 ? 1 : 0) + (aictePrograms.some((p) => p.cadreStatus !== "Compliant") ? 1 : 0) + (sarAttestPct < 100 ? 1 : 0)} Pending
+            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-semibold font-mono">
+              {(vacantDepts.length > 0 ? 1 : 0) + (hasFacultyComplianceIssue ? 1 : 0) + (sarAttestPct < 100 ? 1 : 0)} Pending
             </span>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="space-y-2.5 flex-1">
             {vacantDepts.length > 0 && (
               <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/50 flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-rose-900">
                     <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                    <span>HOD Vacancies Requiring Appointment</span>
+                    <span>Department Heads Needed</span>
                   </div>
                   <p className="text-[11px] text-rose-700 leading-snug">
-                    {vacantDepts.length} {vacantDepts.length === 1 ? "branch is" : "branches are"} operating without appointed departmental leadership.
+                    {vacantDepts.length} {vacantDepts.length === 1 ? "department does" : "departments do"} not have a department head.
                   </p>
                 </div>
                 <Link
                   href="/college/hods"
                   className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold shrink-0 cursor-pointer"
                 >
-                  Appoint
+                  Assign
                 </Link>
               </div>
             )}
 
-            {aictePrograms.some((p) => p.cadreStatus !== "Compliant") && (
+            {hasFacultyComplianceIssue && (
               <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
                     <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                    <span>AICTE Faculty Cadre Shortfall</span>
+                    <span>Faculty Shortage</span>
                   </div>
                   <p className="text-[11px] text-amber-800 leading-snug">
-                    Teaching staff cadre distribution does not satisfy AICTE 1:2:6 cadre ratio or requires qualification verification.
+                    Faculty numbers do not meet AICTE requirements or need qualification checks.
                   </p>
                 </div>
                 <Link
                   href="/college/users"
                   className="px-2.5 py-1 rounded bg-amber-700 hover:bg-amber-800 text-white text-[11px] font-semibold shrink-0 cursor-pointer"
                 >
-                  Review
+                  Check
                 </Link>
               </div>
             )}
@@ -573,67 +592,80 @@ export const CollegeOverviewView: React.FC = () => {
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                     <ShieldCheck className="h-3.5 w-3.5 text-emerald-800 shrink-0" />
-                    <span>NBA SAR Department Sign-Off</span>
+                    <span>Department Approval</span>
                   </div>
                   <p className="text-[11px] text-slate-600 leading-snug">
-                    {totalDeptsForSar - attestedDeptsCount} {totalDeptsForSar - attestedDeptsCount === 1 ? "department has" : "departments have"} pending SAR self-assessment attestations.
+                    {totalDeptsForSar - attestedDeptsCount} {totalDeptsForSar - attestedDeptsCount === 1 ? "department has" : "departments have"} not completed their SAR approval.
                   </p>
                 </div>
                 <Link
                   href="/college/accreditation"
                   className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold shrink-0 cursor-pointer"
                 >
-                  Attest
+                  Approve
                 </Link>
               </div>
             )}
 
-            {vacantDepts.length === 0 && !aictePrograms.some((p) => p.cadreStatus !== "Compliant") && sarAttestPct === 100 && (
+            {vacantDepts.length === 0 && !hasFacultyComplianceIssue && sarAttestPct === 100 && (
               <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-center space-y-1">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600 mx-auto" />
-                <span className="text-xs font-bold text-emerald-900 block">All Governance Mandates Complete</span>
-                <p className="text-[11px] text-emerald-700">All leadership appointments, faculty cadres, and SAR dossiers are verified.</p>
+                <span className="text-xs font-bold text-emerald-900 block">All Tasks Complete</span>
+                <p className="text-[11px] text-emerald-700">All leadership appointments, faculty cadres, and department approvals are verified.</p>
               </div>
             )}
           </div>
 
-          <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-100 flex items-center justify-between">
-            <span>Action queue monitors regulatory deadlines and leadership vacancies.</span>
+          <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-100 flex items-center justify-between mt-auto">
+            <span>Tracks pending actions and department head vacancies.</span>
           </div>
         </div>
 
-        {/* Surface 2: Governance Audit Trail (7 Cols) */}
-        <div className="lg:col-span-7 rounded-xl border border-slate-200 bg-white p-5 flex flex-col justify-between space-y-4 shadow-xs">
+        {/* Surface 2: Activity History (7 Cols) */}
+        <div className="lg:col-span-7 rounded-xl border border-slate-200 bg-white p-5 flex flex-col gap-4 shadow-xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-emerald-800" strokeWidth={1.75} />
-              <h2 className="text-sm font-bold text-slate-900">Governance Audit Trail</h2>
+              <h2 className="text-sm font-bold text-slate-900">Activity History</h2>
             </div>
             <Link
               href="/college/accreditation?tab=activity"
               className="text-xs font-semibold text-emerald-800 hover:text-emerald-900 transition-colors"
             >
-              Full Audit Log →
+              View All Activities →
             </Link>
           </div>
 
-          <div className="relative pl-5 space-y-3.5 before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 text-xs">
+          <div className="flex-1 relative pl-5 space-y-3.5 before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 text-xs">
             {activities.length > 0 ? (
-              activities.map((act, idx) => (
-                <div key={idx} className="relative space-y-0.5">
-                  <div className="absolute -left-5 top-1.5 h-2 w-2 rounded-full bg-emerald-700 ring-2 ring-white" />
-                  <div className="font-semibold text-slate-900 leading-snug">{act.title}</div>
-                  <div className="text-[10px] text-slate-400 font-mono">{act.timeAgo}</div>
-                </div>
-              ))
+              activities.map((act, idx) => {
+                const formattedTitle = act.title
+                  .replace(/HOD appointed for Department/i, "Department Head Assigned")
+                  .replace(/HOD appointed for/i, "Department Head assigned for");
+                const formattedTime = act.timeAgo
+                  .replace(/(\d+)d ago/i, "$1 days ago")
+                  .replace(/1 days ago/i, "1 day ago")
+                  .replace(/(\d+)h ago/i, "$1 hours ago")
+                  .replace(/1 hours ago/i, "1 hour ago")
+                  .replace(/(\d+)m ago/i, "$1 minutes ago")
+                  .replace(/1 minutes ago/i, "1 minute ago");
+
+                return (
+                  <div key={idx} className="relative space-y-0.5">
+                    <div className="absolute -left-5 top-1.5 h-2 w-2 rounded-full bg-emerald-700 ring-2 ring-white" />
+                    <div className="font-semibold text-slate-900 leading-snug">{formattedTitle}</div>
+                    <div className="text-[10px] text-slate-400 font-mono">{formattedTime}</div>
+                  </div>
+                );
+              })
             ) : (
-              <div className="text-slate-400 text-xs italic py-4">No recent institutional activities recorded.</div>
+              <div className="text-slate-400 text-xs italic py-4">No recent activities recorded.</div>
             )}
           </div>
 
-          <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-100 flex items-center justify-between">
-            <span>Immutable institutional audit log capturing administrative actions.</span>
-            <span className="text-[10px] font-mono text-slate-400">Audit Ledger Active</span>
+          <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-100 flex items-center justify-between mt-auto">
+            <span>Keeps a record of recent institutional activities.</span>
+            <span className="text-[10px] font-mono text-slate-400">Activity Record Active</span>
           </div>
         </div>
       </div>

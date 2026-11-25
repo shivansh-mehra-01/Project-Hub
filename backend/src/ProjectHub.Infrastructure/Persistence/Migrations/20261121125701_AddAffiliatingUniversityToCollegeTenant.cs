@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -19,26 +19,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                 oldClrType: typeof(Guid),
                 oldType: "uuid");
 
-            migrationBuilder.AddColumn<string>(
-                name: "AffiliatingUniversity",
-                table: "CollegeTenants",
-                type: "character varying(150)",
-                maxLength: 150,
-                nullable: true,
-                defaultValue: "RGPV");
-
-            migrationBuilder.AddColumn<bool>(
-                name: "AllowInterdisciplinaryTeams",
-                table: "AcademicSessions",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "ExamCutoffDateUtc",
-                table: "AcademicSessions",
-                type: "timestamp with time zone",
-                nullable: true);
+            migrationBuilder.Sql("ALTER TABLE \"CollegeTenants\" ADD COLUMN IF NOT EXISTS \"AffiliatingUniversity\" character varying(150) DEFAULT 'RGPV';");
+            migrationBuilder.Sql("ALTER TABLE \"AcademicSessions\" ADD COLUMN IF NOT EXISTS \"AllowInterdisciplinaryTeams\" boolean NOT NULL DEFAULT FALSE;");
+            migrationBuilder.Sql("ALTER TABLE \"AcademicSessions\" ADD COLUMN IF NOT EXISTS \"ExamCutoffDateUtc\" timestamp with time zone NULL;");
         }
 
         /// <inheritdoc />
