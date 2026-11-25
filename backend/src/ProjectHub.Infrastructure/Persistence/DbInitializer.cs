@@ -66,6 +66,7 @@ public static class DbInitializer
     public static readonly Guid StudentAaravUserId = Guid.Parse("20000000-0000-0000-0000-000000000006");
     public static readonly Guid StudentDiyaUserId = Guid.Parse("20000000-0000-0000-0000-000000000007");
     public static readonly Guid StudentRohanUserId = Guid.Parse("20000000-0000-0000-0000-000000000008");
+    public static readonly Guid StudentVikramUserId = Guid.Parse("20000000-0000-0000-0000-000000000009");
 
     // Deterministic Track & Team IDs
     public static readonly Guid MinorTrackId = Guid.Parse("30000000-0000-0000-0000-000000000001");
@@ -79,7 +80,9 @@ public static class DbInitializer
     public static async Task SeedAsync(ProjectHubDbContext context, ITenantContext tenantContext, bool isDevelopment = false)
     {
         var originalSuperAdmin = tenantContext.IsSuperAdmin;
+        var originalTrustedSeeder = tenantContext.IsTrustedSystemSeeder;
         tenantContext.IsSuperAdmin = true;
+        tenantContext.IsTrustedSystemSeeder = true;
 
         try
         {
@@ -88,20 +91,19 @@ public static class DbInitializer
             await SeedRgpvMasterCatalogAsync(context);
             await SeedTenantsAsync(context);
             await SeedDepartmentsAsync(context);
-            await SeedPersonasAsync(context);
-            await SeedSistecAcademicHierarchyAsync(context);
-            await SeedAcademicTracksAsync(context);
-            await SeedTeamAndArtifactsAsync(context);
-            await SeedPlatformAuditLogsAsync(context);
-
             if (isDevelopment)
             {
-                PrintSeededAccountsTable();
+                await SeedPersonasAsync(context);
+                await SeedSistecAcademicHierarchyAsync(context);
+                await SeedAcademicTracksAsync(context);
+                await SeedTeamAndArtifactsAsync(context);
+                await SeedPlatformAuditLogsAsync(context);
             }
         }
         finally
         {
             tenantContext.IsSuperAdmin = originalSuperAdmin;
+            tenantContext.IsTrustedSystemSeeder = originalTrustedSeeder;
         }
     }
 
@@ -856,6 +858,20 @@ public static class DbInitializer
                 IsActivated = false,
                 IsProjectCoordinator = false,
                 IsActive = true
+            },
+            new()
+            {
+                Id = StudentVikramUserId,
+                CollegeId = SistecTenantId,
+                DepartmentId = CseDepartmentId,
+                FullName = "Vikram Aditya",
+                Email = "vikram.aditya@sistec.ac.in",
+                EnrollmentOrEmployeeCode = "0176CS221077",
+                Role = UserRole.Student,
+                PasswordHash = defaultHash,
+                IsActivated = true,
+                IsProjectCoordinator = false,
+                IsActive = true
             }
         };
 
@@ -1038,7 +1054,7 @@ public static class DbInitializer
         // 7. Student Academic Enrollments for seeded student personas
         if (!await context.StudentAcademicEnrollments.IgnoreQueryFilters().AnyAsync(e => e.CollegeId == SistecTenantId && e.StudentUserId == StudentShivanshUserId))
         {
-            var studentIds = new[] { StudentShivanshUserId, StudentAaravUserId, StudentDiyaUserId, StudentRohanUserId };
+            var studentIds = new[] { StudentShivanshUserId, StudentAaravUserId, StudentDiyaUserId, StudentRohanUserId, StudentVikramUserId };
             var enrollments = studentIds.Select(sid => new StudentAcademicEnrollment
             {
                 CollegeId = SistecTenantId,
@@ -1051,6 +1067,44 @@ public static class DbInitializer
             }).ToList();
 
             await context.StudentAcademicEnrollments.AddRangeAsync(enrollments);
+        }
+
+        var existingVikram = await context.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == StudentVikramUserId);
+        if (existingVikram != null)
+        {
+            if (existingVikram.EnrollmentOrEmployeeCode != "0176CS221077")
+            {
+                existingVikram.EnrollmentOrEmployeeCode = "0176CS221077";
+                await context.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            var defaultHash = Security.PasswordHelper.HashPassword("Pass@1234");
+            context.Users.Add(new UserAccount
+            {
+                Id = StudentVikramUserId,
+                CollegeId = SistecTenantId,
+                DepartmentId = CseDepartmentId,
+                FullName = "Vikram Aditya",
+                Email = "vikram.aditya@sistec.ac.in",
+                EnrollmentOrEmployeeCode = "0176CS221077",
+                Role = UserRole.Student,
+                PasswordHash = defaultHash,
+                IsActivated = true,
+                IsActive = true
+            });
+            context.StudentAcademicEnrollments.Add(new StudentAcademicEnrollment
+            {
+                CollegeId = SistecTenantId,
+                StudentUserId = StudentVikramUserId,
+                CourseProgramId = SistecBTechCourseProgramId,
+                DepartmentId = CseDepartmentId,
+                CurrentSemesterTermId = SistecCseSem6TermId,
+                AdmissionBatch = "2023-2027",
+                AcademicStatus = AcademicStatus.Active
+            });
+            await context.SaveChangesAsync();
         }
 
         await context.SaveChangesAsync();
@@ -1152,6 +1206,11 @@ public static class DbInitializer
             SdgCode = "SDG-7",
             Status = ProjectStatus.ActiveBuild,
             GuideUserId = FacultyVermaUserId,
+            PreferredGuideUserId = FacultyVermaUserId,
+            GuidePreferenceStatus = GuidePreferenceStatus.Allocated,
+            GuideAllocatedAtUtc = DateTime.UtcNow.AddMonths(-2),
+            GuideAllocatedByUserId = HodSharmaUserId,
+            GuideAllocationRemarks = "Formally allocated during departmental allocation session.",
             RepoUrl = "https://github.com/sistec-cse/iot-energy-monitor",
             JiraBoardKey = "IOT",
             IsRosterLocked = true,

@@ -6,4 +6,6 @@ namespace ProjectHub.Application.Interfaces;
 public interface IEmailSender
 {
     Task SendPasswordResetOtpAsync(string recipientEmail, string recipientName, string otp, CancellationToken cancellationToken = default);
+    Task SendAccountActivationAsync(string recipientEmail, string recipientName, string activationToken, CancellationToken cancellationToken = default);
+    Task SendEmailChangeVerificationAsync(string recipientEmail, string recipientName, string otp, CancellationToken cancellationToken = default);
 }

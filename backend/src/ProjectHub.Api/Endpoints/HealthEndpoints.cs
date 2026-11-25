@@ -9,7 +9,21 @@ public static class HealthEndpoints
 {
     public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/health", async (
+        endpoints.MapGet("/api/health", (HttpContext httpContext) =>
+        {
+            return Results.Ok(new
+            {
+                status = "Healthy",
+                timestampUtc = DateTime.UtcNow
+            });
+        })
+        .AllowAnonymous()
+        .WithName("GetSystemHealth")
+        .WithTags("System Health")
+        .WithSummary("Retrieves minimal public platform liveness status.")
+        .Produces(StatusCodes.Status200OK);
+
+        endpoints.MapGet("/api/health/details", async (
             AppDbContext dbContext,
             ITenantContext tenantContext,
             IHostEnvironment env,
@@ -18,15 +32,14 @@ public static class HealthEndpoints
             var dbStatus = "Operational";
             try
             {
-                // Non-blocking connection check with brief timeout
                 using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
                 var canConnect = await dbContext.Database.CanConnectAsync(linkedCts.Token);
-                dbStatus = canConnect ? "Connected" : "Standby (Database not yet initialized)";
+                dbStatus = canConnect ? "Connected" : "Standby";
             }
             catch (Exception)
             {
-                dbStatus = "Standby (Awaiting Docker service)";
+                dbStatus = "Standby";
             }
 
             var response = new HealthCheckDto
@@ -38,12 +51,12 @@ public static class HealthEndpoints
                 Database = new DatabaseHealthDto
                 {
                     Status = dbStatus,
-                    Provider = "PostgreSQL 17 (Npgsql EF Core 10)"
+                    Provider = "PostgreSQL (Npgsql EF Core 10)"
                 },
                 Redis = new RedisHealthDto
                 {
                     Status = "Configured",
-                    Engine = "Redis 7 Alpine"
+                    Engine = "Redis"
                 },
                 Tenant = new TenantStatusDto
                 {
@@ -55,12 +68,12 @@ public static class HealthEndpoints
 
             return Results.Ok(response);
         })
-        .WithName("GetSystemHealth")
+        .RequireAuthorization("SuperAdminOnly")
+        .WithName("GetDetailedSystemHealth")
         .WithTags("System Health")
-        .WithSummary("Retrieves platform health status, tenant context, and service readiness.")
+        .WithSummary("Retrieves detailed infrastructure health diagnostics (SuperAdmin only).")
         .Produces<HealthCheckDto>(StatusCodes.Status200OK);
 
         return endpoints;
     }
 }
-

@@ -47,6 +47,41 @@ public record UserProfileDto
 public record AuthResponse
 {
     public string Token { get; init; } = string.Empty;
+    public string RefreshToken { get; init; } = string.Empty;
+    public string SessionId { get; init; } = string.Empty;
     public DateTime ExpiresAtUtc { get; init; }
+    public bool MfaRequired { get; init; }
+    public string? MfaChallengeToken { get; init; }
     public UserProfileDto User { get; init; } = null!;
+}
+
+public record RefreshTokenRequest
+{
+    public string RefreshToken { get; init; } = string.Empty;
+}
+
+public record AuthChangePasswordRequest
+{
+    public string CurrentPassword { get; init; } = string.Empty;
+    public string NewPassword { get; init; } = string.Empty;
+    public string ConfirmPassword { get; init; } = string.Empty;
+    public bool RevokeOtherSessions { get; init; } = true;
+}
+
+public record ActivateAccountRequest
+{
+    public string Email { get; init; } = string.Empty;
+    public string Token { get; init; } = string.Empty;
+    public string NewPassword { get; init; } = string.Empty;
+}
+
+public record MfaConfirmRequest
+{
+    public string Code { get; init; } = string.Empty;
+}
+
+public record MfaVerifyChallengeRequest
+{
+    public string MfaChallengeToken { get; init; } = string.Empty;
+    public string Code { get; init; } = string.Empty;
 }

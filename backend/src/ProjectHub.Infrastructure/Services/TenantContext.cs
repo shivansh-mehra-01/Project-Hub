@@ -15,4 +15,6 @@ public class TenantContext : ITenantContext
     public UserRole Role { get; set; } = UserRole.Student;
     public bool IsSuperAdmin { get; set; }
     public bool IsProjectCoordinator { get; set; }
+    public bool IsTrustedSystemSeeder { get; set; }
+    public bool IsAuthLookup { get; set; }
 }

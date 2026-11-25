@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using ProjectHub.Domain.Enums;
 
 namespace ProjectHub.Application.Common.Models;
@@ -28,7 +29,11 @@ public record RosterImportResultDto
 
 public record AssignGuideRequest
 {
+    [Required]
     public Guid GuideUserId { get; init; }
+
+    [StringLength(500, ErrorMessage = "Allocation reason cannot exceed 500 characters.")]
+    public string? Reason { get; init; }
 }
 
 public record ScheduleVivaPanelRequest

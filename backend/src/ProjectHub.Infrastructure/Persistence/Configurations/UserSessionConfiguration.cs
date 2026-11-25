@@ -18,5 +18,9 @@ public class UserSessionConfiguration : IEntityTypeConfiguration<UserSession>
         builder.Property(s => s.Browser).HasMaxLength(100);
         builder.Property(s => s.IpAddress).HasMaxLength(50);
         builder.Property(s => s.Location).HasMaxLength(150);
+        builder.Property(s => s.TokenFamilyId).HasMaxLength(64);
+        builder.Property(s => s.RevocationReason).HasMaxLength(200);
+        builder.HasIndex(s => s.UserId);
+        builder.HasIndex(s => s.TokenFamilyId);
     }
 }

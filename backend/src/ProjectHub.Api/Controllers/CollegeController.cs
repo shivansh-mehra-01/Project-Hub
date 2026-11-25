@@ -1689,6 +1689,12 @@ public class CollegeController : ControllerBase
         if (user == null) return NotFound(new { message = "User not found." });
 
         user.IsActive = request.IsActive;
+        if (!request.IsActive)
+        {
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            var sessionSecurity = HttpContext.RequestServices.GetRequiredService<ISessionSecurityService>();
+            await sessionSecurity.RevokeAllUserSessionsAsync(user.Id, null, "AccountDeactivated");
+        }
         await _context.SaveChangesAsync();
         return Ok(new { success = true, isActive = user.IsActive });
     }
@@ -1754,7 +1760,10 @@ public class CollegeController : ControllerBase
         var exists = await _context.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == email && !u.IsDeleted);
         if (exists) return Conflict(new { message = $"User with email '{email}' already exists." });
 
-        var tempPassword = $"Collabex!{System.Security.Cryptography.RandomNumberGenerator.GetHexString(3).ToUpper()}@{System.Security.Cryptography.RandomNumberGenerator.GetInt32(100, 999)}";
+        var rawActivationToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+            .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+        var activationTokenHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawActivationToken)));
+
         var user = new UserAccount
         {
             CollegeId = collegeId,
@@ -1765,14 +1774,19 @@ public class CollegeController : ControllerBase
             Designation = request.Designation,
             DelegatedResponsibility = request.DelegatedResponsibility,
             EnrollmentOrEmployeeCode = string.IsNullOrWhiteSpace(request.EmployeeCode) ? $"STAFF-{Guid.NewGuid().ToString("N")[..6].ToUpper()}" : request.EmployeeCode.Trim(),
-            PasswordHash = PasswordHelper.HashPassword(tempPassword),
+            PasswordHash = null,
             PasswordChangedAtUtc = null,
+            ActivationTokenHashed = activationTokenHash,
+            ActivationTokenExpiresAtUtc = DateTime.UtcNow.AddHours(24),
             IsActive = true,
-            IsActivated = true
+            IsActivated = false
         };
 
         await _context.Users.AddAsync(user);
         await _context.SaveChangesAsync();
+
+        var emailSender = HttpContext.RequestServices.GetRequiredService<IEmailSender>();
+        await emailSender.SendAccountActivationAsync(user.Email, user.FullName, rawActivationToken);
 
         var dept = request.DepartmentId.HasValue 
             ? await _context.Departments.FirstOrDefaultAsync(d => d.Id == request.DepartmentId.Value) 
@@ -1816,6 +1830,12 @@ public class CollegeController : ControllerBase
         }
 
         user.IsActive = request.IsActive;
+        if (!request.IsActive)
+        {
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            var sessionSecurity = HttpContext.RequestServices.GetRequiredService<ISessionSecurityService>();
+            await sessionSecurity.RevokeAllUserSessionsAsync(user.Id, null, "AccountDeactivated");
+        }
         await _context.SaveChangesAsync();
         return Ok(new { success = true, isActive = user.IsActive });
     }

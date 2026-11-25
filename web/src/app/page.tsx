@@ -52,14 +52,8 @@ export default function MarketingHomePage() {
   const [pilotRole, setPilotRole] = useState("Dean / Principal");
   const [pilotIntake, setPilotIntake] = useState("1,000 - 2,500 Students");
 
-  const handleLaunchRole = (role: RoleType) => {
-    switchPersona(role);
-    if (role === "SuperAdmin") router.push("/admin");
-    else if (role === "CollegeAdmin") router.push("/college");
-    else if (role === "HOD") router.push("/hod");
-    else if (role === "Faculty") router.push("/faculty");
-    else if (role === "TeamLead") router.push("/student");
-    else router.push("/student/explore");
+  const handleLaunchRole = (_role: RoleType) => {
+    router.push("/login");
   };
 
   const handlePilotSubmit = (e: React.FormEvent) => {

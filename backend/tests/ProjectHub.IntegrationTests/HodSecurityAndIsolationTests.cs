@@ -68,9 +68,9 @@ public class HodSecurityAndIsolationTests : IClassFixture<CustomWebApplicationFa
     {
         var email = role switch
         {
-            "HOD" => "hod.cse@sistec.ac.in",
-            "Faculty" => "sk.verma@sistec.ac.in",
-            "CollegeAdmin" => "principal@sistec.ac.in",
+            "HOD" => "hod@sistec.ac.in",
+            "Faculty" => "faculty@sistec.ac.in",
+            "CollegeAdmin" => "collegeadmin@sistec.ac.in",
             _ => throw new ArgumentException($"Unknown persona role: {role}")
         };
 

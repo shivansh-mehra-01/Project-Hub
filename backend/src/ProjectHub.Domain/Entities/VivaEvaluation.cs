@@ -23,8 +23,20 @@ public class VivaEvaluation : BaseEntity, ITenantEntity
     public bool IsLocked { get; set; } = false;
     public DateTime? LockedAtUtc { get; set; }
 
+    // Phase 9: Evaluation Lifecycle, Moderation & Publication
+    public VivaOutcome Outcome { get; set; } = VivaOutcome.Pending;
+    public bool IsPublished { get; set; } = false;
+    public DateTime? PublishedAtUtc { get; set; }
+    public Guid? PublishedByUserId { get; set; }
+    public string? RubricSnapshotJson { get; set; }
+    public string? ModerationRemarks { get; set; }
+    public Guid? ModeratedByUserId { get; set; }
+    public DateTime? ModeratedAtUtc { get; set; }
+
     // Navigations
     public ProjectTeam? ProjectTeam { get; set; }
     public UserAccount? EvaluatorUser { get; set; }
+    public UserAccount? PublishedByUser { get; set; }
+    public UserAccount? ModeratedByUser { get; set; }
     public ICollection<IndividualStudentScore> IndividualScores { get; set; } = new List<IndividualStudentScore>();
 }

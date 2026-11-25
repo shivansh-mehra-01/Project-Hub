@@ -126,16 +126,50 @@ public class TenantRlsConnectionInterceptor : DbConnectionInterceptor, IDbTransa
         }
     }
 
+    public override void ConnectionClosed(DbConnection connection, ConnectionEndEventData eventData)
+    {
+        ResetRlsSessionVariables(connection);
+        base.ConnectionClosed(connection, eventData);
+    }
+
+    public override async Task ConnectionClosedAsync(DbConnection connection, ConnectionEndEventData eventData)
+    {
+        await ResetRlsSessionVariablesAsync(connection);
+        await base.ConnectionClosedAsync(connection, eventData);
+    }
+
+    private void ResetRlsSessionVariables(DbConnection connection)
+    {
+        if (!IsPostgreSqlConnection(connection)) return;
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "RESET app.current_tenant; RESET app.is_super_admin; RESET app.auth_lookup;";
+            command.ExecuteNonQuery();
+        }
+        catch { }
+    }
+
+    private async Task ResetRlsSessionVariablesAsync(DbConnection connection)
+    {
+        if (!IsPostgreSqlConnection(connection)) return;
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "RESET app.current_tenant; RESET app.is_super_admin; RESET app.auth_lookup;";
+            await command.ExecuteNonQueryAsync();
+        }
+        catch { }
+    }
+
     private string BuildSetRlsSql(bool isLocal)
     {
         var localKeyword = isLocal ? "LOCAL " : "";
-        var tenantId = _tenantContext.CollegeId?.ToString() ?? string.Empty;
+        var tenantId = _tenantContext.CollegeId?.ToString("D") ?? string.Empty;
         var isSuperAdmin = _tenantContext.IsSuperAdmin ? "true" : "false";
+        var isAuthLookup = _tenantContext.IsAuthLookup ? "true" : "false";
 
-        var safeTenantId = tenantId.Replace("'", "''");
-        var safeSuperAdmin = isSuperAdmin.Replace("'", "''");
-
-        return $"SET {localKeyword}app.current_tenant = '{safeTenantId}'; SET {localKeyword}app.is_super_admin = '{safeSuperAdmin}';";
+        return $"SET {localKeyword}app.current_tenant = '{tenantId}'; SET {localKeyword}app.is_super_admin = '{isSuperAdmin}'; SET {localKeyword}app.auth_lookup = '{isAuthLookup}';";
     }
 
     private static bool IsPostgreSqlConnection(DbConnection connection)

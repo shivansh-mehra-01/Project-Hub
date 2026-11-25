@@ -28,6 +28,12 @@ public class AcademicTrackConfiguration : IEntityTypeConfiguration<AcademicTrack
             .HasConversion<string>()
             .HasMaxLength(30);
 
+        builder.Property(t => t.MinTeamSize)
+            .HasDefaultValue(2);
+
+        builder.Property(t => t.MaxTeamSize)
+            .HasDefaultValue(4);
+
         builder.HasIndex(t => new { t.CollegeId, t.DepartmentId, t.AcademicYear, t.Name })
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");

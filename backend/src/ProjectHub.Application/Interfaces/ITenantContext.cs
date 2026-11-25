@@ -14,5 +14,7 @@ public interface ITenantContext
     UserRole Role { get; set; }
     bool IsSuperAdmin { get; set; }
     bool IsProjectCoordinator { get; set; }
+    bool IsTrustedSystemSeeder { get; set; }
+    bool IsAuthLookup { get; set; }
     bool HasTenant => CollegeId.HasValue && CollegeId.Value != Guid.Empty;
 }

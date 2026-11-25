@@ -10,7 +10,7 @@ using ProjectHub.Domain.Enums;
 namespace ProjectHub.Infrastructure.Security;
 
 /// <summary>
-/// Issues signed JWT Bearer tokens carrying tenant context and role claims.
+/// Issues signed short-lived JWT Bearer access tokens carrying tenant context, session ID, and security stamp.
 /// </summary>
 public class JwtTokenService : IJwtTokenService
 {
@@ -23,18 +23,36 @@ public class JwtTokenService : IJwtTokenService
 
     public string GenerateToken(UserAccount user, out DateTime expiresAtUtc)
     {
-        var secret = _configuration["Jwt:Secret"] ?? "ProjectHubSuperSecretDevKeyMinLength32CharactersRequired!";
-        var issuer = _configuration["Jwt:Issuer"] ?? "https://api.projecthub.local";
-        var audience = _configuration["Jwt:Audience"] ?? "https://app.projecthub.local";
+        return GenerateToken(user, Guid.NewGuid().ToString("N"), out expiresAtUtc);
+    }
+
+    public string GenerateToken(UserAccount user, string sessionId, out DateTime expiresAtUtc)
+    {
+        var secret = _configuration["Jwt:Secret"];
+        if (string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32)
+        {
+            throw new InvalidOperationException("Jwt:Secret is missing or shorter than 32 bytes.");
+        }
+
+        var issuer = _configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer is not configured.");
+        var audience = _configuration["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience is not configured.");
+        var expiryMinutes = _configuration.GetValue<int?>("Jwt:ExpiryMinutes") ?? 15;
+        if (expiryMinutes <= 0 || expiryMinutes > 60)
+        {
+            expiryMinutes = 15;
+        }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        expiresAtUtc = DateTime.UtcNow.AddDays(7);
+        expiresAtUtc = DateTime.UtcNow.AddMinutes(expiryMinutes);
 
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new("sid", sessionId),
+            new("security_stamp", user.SecurityStamp ?? string.Empty),
             new(JwtRegisteredClaimNames.Email, user.Email),
             new(JwtRegisteredClaimNames.Name, user.FullName),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),

@@ -476,6 +476,20 @@ public class CoordinatorController : ControllerBase
         var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
         if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
 
+        if (request.GuideUserId == Guid.Empty)
+        {
+            return BadRequest(new { message = "Selected user is not an eligible faculty mentor." });
+        }
+
+        // Phase 5.2 Concurrency Hardening: Wrap allocation in explicit transaction and acquire pessimistic row lock
+        await using var tx = await _context.Database.BeginTransactionAsync();
+
+        if (_context.Database.IsNpgsql())
+        {
+            await _context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT \"Id\" FROM \"UserAccounts\" WHERE \"Id\" = {request.GuideUserId} FOR UPDATE;");
+        }
+
         var team = await _context.ProjectTeams
             .Include(t => t.GuideUser)
             .FirstOrDefaultAsync(t => t.Id == teamId && t.CollegeId == collegeId && !t.IsDeleted);
@@ -508,16 +522,27 @@ public class CoordinatorController : ControllerBase
             return BadRequest(new { message = $"Faculty member '{guide.FullName}' has reached their maximum mentorship capacity of {guide.MaxMentorTeams} teams." });
         }
 
+        if (request.Reason != null && request.Reason.Trim().Length > 500)
+        {
+            return BadRequest(new { message = "Allocation reason cannot exceed 500 characters." });
+        }
+
         var previousGuideId = team.GuideUserId;
         var previousGuideName = team.GuideUser?.FullName;
+        var reason = !string.IsNullOrWhiteSpace(request.Reason)
+            ? request.Reason.Trim()
+            : (previousGuideId.HasValue ? "Guide reassigned by Coordinator" : "Guide allocated by Coordinator");
 
         team.GuideUserId = guide.Id;
+        team.GuidePreferenceStatus = GuidePreferenceStatus.Allocated;
+        team.GuideAllocatedAtUtc = DateTime.UtcNow;
+        team.GuideAllocatedByUserId = _tenantContext.UserId;
+        team.GuideAllocationRemarks = reason;
         if (team.Status == ProjectStatus.Draft)
         {
             team.Status = ProjectStatus.PendingGuide;
         }
 
-        var reason = previousGuideId.HasValue ? "Guide reassigned by Coordinator" : "Guide allocated by Coordinator";
         var excLog = new ExceptionAuditLog
         {
             CollegeId = collegeId,
@@ -553,7 +578,204 @@ public class CoordinatorController : ControllerBase
         await _context.PlatformAuditLogs.AddAsync(audit);
 
         await _context.SaveChangesAsync();
+        await tx.CommitAsync();
+
         return Ok(new { success = true, teamId = team.Id, guideId = guide.Id, guideName = guide.FullName });
+    }
+
+    [HttpPost("teams/{teamId}/reject-guide-request")]
+    public async Task<IActionResult> RejectGuideRequest(Guid teamId, [FromBody] RejectGuidePreferenceRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
+        var team = await _context.ProjectTeams
+            .Include(t => t.PreferredGuideUser)
+            .FirstOrDefaultAsync(t => t.Id == teamId && t.CollegeId == collegeId && !t.IsDeleted);
+
+        if (team == null) return NotFound(new { message = "Team not found." });
+
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue && team.DepartmentId != coordDeptId.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Coordinators can only manage teams within their appointed department." });
+        }
+
+        if (team.GuideUserId.HasValue)
+        {
+            return BadRequest(new { message = "An official faculty guide has already been allocated to this team. Guide changes must be processed via official guide reassignment." });
+        }
+
+        if (string.IsNullOrWhiteSpace(request?.Reason) || request.Reason.Trim().Length < 5)
+        {
+            return BadRequest(new { message = "A mandatory rejection or return reason (minimum 5 characters) is required." });
+        }
+
+        if (request.Reason.Trim().Length > 500)
+        {
+            return BadRequest(new { message = "Rejection reason cannot exceed 500 characters." });
+        }
+
+        if (team.GuidePreferenceStatus != GuidePreferenceStatus.Requested && !team.PreferredGuideUserId.HasValue)
+        {
+            return BadRequest(new { message = "This team does not currently have a pending guide preference request." });
+        }
+
+        var reason = request.Reason.Trim();
+        team.GuidePreferenceStatus = GuidePreferenceStatus.Rejected;
+        team.GuideAllocationRemarks = reason;
+        team.GuideUserId = null; // Explicitly ensure no official allocation
+
+        var caller = await _context.Users.FindAsync(_tenantContext.UserId);
+        var excLog = new ExceptionAuditLog
+        {
+            CollegeId = collegeId,
+            DepartmentId = team.DepartmentId,
+            ProjectTeamId = team.Id,
+            ActionType = ExceptionActionType.RejectProposal,
+            TargetUserId = team.PreferredGuideUserId,
+            Reason = $"[GUIDE_REQUEST_REJECTED] {reason}",
+            PreviousValueJson = System.Text.Json.JsonSerializer.Serialize(new { preferredGuideId = team.PreferredGuideUserId, preferredGuideName = team.PreferredGuideUser?.FullName }),
+            NewValueJson = System.Text.Json.JsonSerializer.Serialize(new { guidePreferenceStatus = GuidePreferenceStatus.Rejected.ToString(), remarks = reason }),
+            RequestedByUserId = _tenantContext.UserId ?? Guid.Empty,
+            ApprovedByUserId = _tenantContext.UserId ?? Guid.Empty,
+            ApprovedAtUtc = DateTime.UtcNow
+        };
+        await _context.ExceptionAuditLogs.AddAsync(excLog);
+
+        var audit = new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            ActorEmail = caller?.Email ?? string.Empty,
+            Action = "COORDINATOR_GUIDE_REQUEST_REJECTED",
+            TargetTenantId = collegeId,
+            TargetEntity = "ProjectTeam",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                teamId = team.Id,
+                teamCode = team.TeamCode,
+                preferredGuideId = team.PreferredGuideUserId,
+                reason
+            }),
+            OccurredAtUtc = DateTime.UtcNow
+        };
+        await _context.PlatformAuditLogs.AddAsync(audit);
+
+        await _context.SaveChangesAsync();
+        return Ok(new { success = true, teamId = team.Id, status = GuidePreferenceStatus.Rejected.ToString(), reason });
+    }
+
+    [HttpPost("proposals/{teamId}/verify")]
+    [HttpPost("proposals/{teamId}/endorse")]
+    public async Task<IActionResult> VerifyProposal(Guid teamId, [FromBody] SubmitProposalRequest? request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
+        var team = await _context.ProjectTeams
+            .FirstOrDefaultAsync(t => t.Id == teamId && t.CollegeId == collegeId && !t.IsDeleted);
+
+        if (team == null) return NotFound(new { message = "Team proposal not found." });
+
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue && team.DepartmentId != coordDeptId.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Project Coordinators are restricted to verifying proposals within their appointed department." });
+        }
+
+        if (team.Status != ProjectStatus.PendingCoordinator)
+        {
+            return BadRequest(new { message = $"Only proposals in PendingCoordinator status can be verified by the Coordinator. Current status is {team.Status}." });
+        }
+
+        var prevStatus = team.Status;
+        team.Status = ProjectStatus.PendingHOD;
+
+        var remarks = request?.Remarks ?? "Verified by Department Project Coordinator";
+        var audit = new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = "COORDINATOR_PROPOSAL_VERIFIED",
+            TargetTenantId = collegeId,
+            TargetEntity = "ProjectTeam",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                teamId = team.Id,
+                teamCode = team.TeamCode,
+                previousStatus = prevStatus.ToString(),
+                newStatus = team.Status.ToString(),
+                remarks
+            }),
+            OccurredAtUtc = DateTime.UtcNow
+        };
+        await _context.PlatformAuditLogs.AddAsync(audit);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { success = true, teamId = team.Id, status = team.Status.ToString(), message = "Proposal verified and forwarded to HOD for final sanction." });
+    }
+
+    [HttpPost("proposals/{teamId}/return")]
+    public async Task<IActionResult> ReturnProposal(Guid teamId, [FromBody] ReturnProposalRequest? request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
+        var team = await _context.ProjectTeams
+            .FirstOrDefaultAsync(t => t.Id == teamId && t.CollegeId == collegeId && !t.IsDeleted);
+
+        if (team == null) return NotFound(new { message = "Team proposal not found." });
+
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue && team.DepartmentId != coordDeptId.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Project Coordinators are restricted to returning proposals within their appointed department." });
+        }
+
+        if (team.Status != ProjectStatus.PendingCoordinator)
+        {
+            return BadRequest(new { message = $"Only proposals in PendingCoordinator status can be returned. Current status is {team.Status}." });
+        }
+
+        var remarks = request?.Remarks ?? request?.Reason ?? "Returned for revision by Project Coordinator";
+        var prevStatus = team.Status;
+        team.Status = ProjectStatus.Draft;
+        team.IsRosterLocked = false;
+
+        var excLog = new ExceptionAuditLog
+        {
+            CollegeId = collegeId,
+            DepartmentId = team.DepartmentId,
+            ProjectTeamId = team.Id,
+            ActionType = ExceptionActionType.ReturnProposal,
+            Reason = remarks.Trim(),
+            PreviousValueJson = System.Text.Json.JsonSerializer.Serialize(new { status = prevStatus.ToString() }),
+            NewValueJson = System.Text.Json.JsonSerializer.Serialize(new { status = ProjectStatus.Draft.ToString(), isRosterLocked = false }),
+            RequestedByUserId = _tenantContext.UserId ?? team.GuideUserId ?? Guid.Empty,
+            ApprovedByUserId = _tenantContext.UserId,
+            ApprovedAtUtc = DateTime.UtcNow
+        };
+        await _context.ExceptionAuditLogs.AddAsync(excLog);
+
+        var audit = new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = "COORDINATOR_PROPOSAL_RETURNED",
+            TargetTenantId = collegeId,
+            TargetEntity = "ProjectTeam",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                teamId = team.Id,
+                teamCode = team.TeamCode,
+                previousStatus = prevStatus.ToString(),
+                newStatus = team.Status.ToString(),
+                remarks = remarks.Trim()
+            }),
+            OccurredAtUtc = DateTime.UtcNow
+        };
+        await _context.PlatformAuditLogs.AddAsync(audit);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { success = true, teamId = team.Id, status = team.Status.ToString(), message = "Proposal returned to student for technical revision." });
     }
 
     [HttpGet("panels")]

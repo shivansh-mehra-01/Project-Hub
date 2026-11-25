@@ -26,11 +26,11 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         var email = role switch
         {
             "SuperAdmin" => "admin@projecthub.in",
-            "CollegeAdmin" => "principal@sistec.ac.in",
-            "HOD" => "hod.cse@sistec.ac.in",
-            "Faculty" => "sk.verma@sistec.ac.in",
-            "Coordinator" => "priya.nair@sistec.ac.in",
-            "Student" => "0176cs221045@sistec.ac.in",
+            "CollegeAdmin" => "collegeadmin@sistec.ac.in",
+            "HOD" => "hod@sistec.ac.in",
+            "Faculty" => "faculty@sistec.ac.in",
+            "Coordinator" => "coordinator@sistec.ac.in",
+            "Student" => "student@sistec.ac.in",
             _ => throw new ArgumentException($"Unknown persona role: {role}")
         };
 
@@ -232,7 +232,7 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         // Login as CollegeAdmin (Principal)
         var loginRes = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Email = "principal@sistec.ac.in",
+            Email = "collegeadmin@sistec.ac.in",
             Password = "Pass@1234"
         });
         Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
@@ -271,7 +271,7 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         // Login as CollegeAdmin
         var loginRes = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Email = "principal@sistec.ac.in",
+            Email = "collegeadmin@sistec.ac.in",
             Password = "Pass@1234"
         });
         Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
