@@ -38,6 +38,13 @@ public class ProjectTeam : BaseEntity, ITenantEntity
     public string SdgCode { get; set; } = string.Empty;
     public ProjectStatus Status { get; set; } = ProjectStatus.Draft;
     public Guid? GuideUserId { get; set; }
+    public Guid? PreferredGuideUserId { get; set; }
+    public GuidePreferenceStatus GuidePreferenceStatus { get; set; } = GuidePreferenceStatus.None;
+    public DateTime? GuidePreferenceSubmittedAtUtc { get; set; }
+    public string? GuidePreferenceRemarks { get; set; }
+    public DateTime? GuideAllocatedAtUtc { get; set; }
+    public Guid? GuideAllocatedByUserId { get; set; }
+    public string? GuideAllocationRemarks { get; set; }
     public string? RepoUrl { get; set; }
     public string? JiraBoardKey { get; set; }
     public int MissedLogStreak { get; set; } = 0;
@@ -50,14 +57,21 @@ public class ProjectTeam : BaseEntity, ITenantEntity
     public Department? Department { get; set; }
     public AcademicTrack? AcademicTrack { get; set; }
     public UserAccount? GuideUser { get; set; }
+    public UserAccount? PreferredGuideUser { get; set; }
+    public UserAccount? GuideAllocatedByUser { get; set; }
     public ProjectTeam? ParentProjectTeam { get; set; }
     public ICollection<ProjectTeam> ChildProjects { get; set; } = new List<ProjectTeam>();
 
     public ICollection<TeamMember> Members { get; set; } = new List<TeamMember>();
+    public ICollection<TeamInvitation> Invitations { get; set; } = new List<TeamInvitation>();
     public ICollection<SprintTask> Tasks { get; set; } = new List<SprintTask>();
+    public ICollection<ProjectMilestone> Milestones { get; set; } = new List<ProjectMilestone>();
+    public ICollection<ProjectReportSubmission> ReportSubmissions { get; set; } = new List<ProjectReportSubmission>();
     public ICollection<TeamArtifact> Artifacts { get; set; } = new List<TeamArtifact>();
     public ICollection<WeeklyLogbook> WeeklyLogs { get; set; } = new List<WeeklyLogbook>();
     public ICollection<VivaEvaluation> Evaluations { get; set; } = new List<VivaEvaluation>();
     public ICollection<CourseExitSurvey> ExitSurveys { get; set; } = new List<CourseExitSurvey>();
     public ICollection<ExceptionAuditLog> ExceptionLogs { get; set; } = new List<ExceptionAuditLog>();
+    public ProjectClosureRecord? ClosureRecord { get; set; }
+    public ICollection<StudentAcademicRecord> AcademicRecords { get; set; } = new List<StudentAcademicRecord>();
 }

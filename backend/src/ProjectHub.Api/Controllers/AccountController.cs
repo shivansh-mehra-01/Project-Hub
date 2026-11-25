@@ -21,26 +21,33 @@ public class AccountController : ControllerBase
 {
     private readonly ProjectHubDbContext _context;
     private readonly IEmailSender _emailSender;
+    private readonly ISessionSecurityService _sessionSecurity;
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         ProjectHubDbContext context,
         IEmailSender emailSender,
+        ISessionSecurityService sessionSecurity,
         IWebHostEnvironment environment,
         ILogger<AccountController> logger)
     {
         _context = context;
         _emailSender = emailSender;
+        _sessionSecurity = sessionSecurity;
         _environment = environment;
         _logger = logger;
     }
 
-    private string GetCurrentEmail()
+    private string? GetCurrentEmail()
     {
         return User.FindFirst(ClaimTypes.Email)?.Value
-            ?? User.FindFirst("email")?.Value
-            ?? "admin@collabex.in";
+            ?? User.FindFirst("email")?.Value;
+    }
+
+    private string? GetCurrentSessionId()
+    {
+        return User.FindFirst("sid")?.Value;
     }
 
     private Guid? GetCurrentUserId()
@@ -190,11 +197,13 @@ public class AccountController : ControllerBase
         var otpNumber = RandomNumberGenerator.GetInt32(100000, 1000000);
         var otp = otpNumber.ToString("D6");
 
-        user.PasswordResetOtpHashed = PasswordHelper.HashPassword(otp);
-        user.PasswordResetOtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(10);
+        user.PendingEmail = newEmail;
+        user.EmailChangeOtpHashed = PasswordHelper.HashPassword(otp);
+        user.EmailChangeOtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(10);
+        user.EmailChangeOtpAttempts = 0;
         await _context.SaveChangesAsync();
 
-        await _emailSender.SendPasswordResetOtpAsync(newEmail, user.FullName, otp);
+        await _emailSender.SendEmailChangeVerificationAsync(newEmail, user.FullName, otp);
 
         string? devOtp = _environment.IsDevelopment() ? otp : null;
 
@@ -224,21 +233,48 @@ public class AccountController : ControllerBase
 
         if (user == null) return NotFound(new { message = "User not found." });
 
-        if (!user.PasswordResetOtpExpiresAtUtc.HasValue || user.PasswordResetOtpExpiresAtUtc.Value < DateTime.UtcNow)
+        if (!string.Equals(user.PendingEmail, newEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Verification code was not issued for this target email address." });
+        }
+
+        if (user.EmailChangeOtpAttempts >= 5)
+        {
+            user.PendingEmail = null;
+            user.EmailChangeOtpHashed = null;
+            user.EmailChangeOtpExpiresAtUtc = null;
+            user.EmailChangeOtpAttempts = 0;
+            await _context.SaveChangesAsync();
+            return BadRequest(new { message = "Maximum verification attempts exceeded. Please request a new code." });
+        }
+
+        if (!user.EmailChangeOtpExpiresAtUtc.HasValue || user.EmailChangeOtpExpiresAtUtc.Value < DateTime.UtcNow || string.IsNullOrEmpty(user.EmailChangeOtpHashed))
         {
             return BadRequest(new { message = "Verification code has expired. Please request a new code." });
         }
 
-        if (!PasswordHelper.VerifyPassword(otp, user.PasswordResetOtpHashed ?? ""))
+        if (!PasswordHelper.VerifyPassword(otp, user.EmailChangeOtpHashed))
         {
+            user.EmailChangeOtpAttempts++;
+            if (user.EmailChangeOtpAttempts >= 5)
+            {
+                user.PendingEmail = null;
+                user.EmailChangeOtpHashed = null;
+                user.EmailChangeOtpExpiresAtUtc = null;
+                user.EmailChangeOtpAttempts = 0;
+            }
+            await _context.SaveChangesAsync();
             return BadRequest(new { message = "Invalid verification code. Please check and try again." });
         }
 
         var oldEmail = user.Email;
         user.Email = newEmail;
         user.IsEmailVerified = true;
-        user.PasswordResetOtpHashed = null;
-        user.PasswordResetOtpExpiresAtUtc = null;
+        user.PendingEmail = null;
+        user.EmailChangeOtpHashed = null;
+        user.EmailChangeOtpExpiresAtUtc = null;
+        user.EmailChangeOtpAttempts = 0;
+        user.SecurityStamp = Guid.NewGuid().ToString("N");
         user.UpdatedAtUtc = DateTime.UtcNow;
 
         _context.PlatformAuditLogs.Add(new PlatformAuditLog
@@ -309,21 +345,19 @@ public class AccountController : ControllerBase
 
         user.PasswordHash = PasswordHelper.HashPassword(request.NewPassword);
         user.PasswordChangedAtUtc = DateTime.UtcNow;
+        user.SecurityStamp = Guid.NewGuid().ToString("N");
         user.UpdatedAtUtc = DateTime.UtcNow;
 
         int revokedSessionsCount = 0;
+        var currentSid = GetCurrentSessionId();
         if (request.RevokeOtherSessions)
         {
             var otherSessions = await _context.UserSessions
-                .Where(s => s.AccountEmail == email && !s.IsRevoked && s.Id != "sess-cur-01")
+                .Where(s => s.UserId == user.Id && !s.IsRevoked && (currentSid == null || s.Id != currentSid))
                 .ToListAsync();
 
-            foreach (var session in otherSessions)
-            {
-                session.IsRevoked = true;
-                session.RevokedAtUtc = DateTime.UtcNow;
-            }
             revokedSessionsCount = otherSessions.Count;
+            await _sessionSecurity.RevokeAllUserSessionsAsync(user.Id, currentSid, "AdminPasswordChanged");
         }
 
         _context.PlatformAuditLogs.Add(new PlatformAuditLog
@@ -359,11 +393,19 @@ public class AccountController : ControllerBase
     // =========================================================================
 
     [HttpGet("mfa/status")]
-    public ActionResult<MfaStatusDto> GetMfaStatus()
+    public async Task<ActionResult<MfaStatusDto>> GetMfaStatus()
     {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+        var user = await _context.Users.IgnoreQueryFilters().AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value && !u.IsDeleted);
+        if (user == null) return NotFound();
+
+        var isTotpConfigured = !string.IsNullOrWhiteSpace(user.MfaSecret) && user.MfaEnabled;
+        var hasRecoveryCodes = !string.IsNullOrWhiteSpace(user.MfaRecoveryCodesJson);
+
         return Ok(new MfaStatusDto
         {
-            MfaStatus = "Enabled",
+            MfaStatus = isTotpConfigured ? "Enabled" : "EnrollmentRequired",
             IsMandatory = true,
             Explanation = "Multi-Factor Authentication (MFA) is strictly required for Super Admin accounts to safeguard platform infrastructure and multi-tenant security.",
             Methods = new List<MfaMethodDto>
@@ -373,7 +415,7 @@ public class AccountController : ControllerBase
                     Id = "mfa-totp",
                     Name = "Authenticator App (TOTP)",
                     Type = "TOTP",
-                    IsConfigured = true,
+                    IsConfigured = isTotpConfigured,
                     IsPrimary = true,
                     Description = "Compatible with Google Authenticator, Microsoft Authenticator, 1Password, and Bitwarden."
                 },
@@ -384,10 +426,10 @@ public class AccountController : ControllerBase
                     Type = "FIDO2",
                     IsConfigured = false,
                     IsPrimary = false,
-                    Description = "Hardware-backed WebAuthn passkey or physical USB/NFC security key (YubiKey, Titan)."
+                    Description = "Hardware-backed WebAuthn passkey or physical USB/NFC security key."
                 }
             },
-            RecoveryCodesConfigured = true
+            RecoveryCodesConfigured = hasRecoveryCodes
         });
     }
 
@@ -412,14 +454,20 @@ public class AccountController : ControllerBase
             return Unauthorized(new { message = "Re-authentication failed. Incorrect password." });
         }
 
-        // Generate 10 cryptographically random 8-character single-use recovery codes
+        // Generate 10 cryptographically random 8-character single-use recovery codes and store only their hashes
         var codes = new List<string>();
+        var hashedCodes = new List<string>();
         for (int i = 0; i < 10; i++)
         {
             var randomBytes = RandomNumberGenerator.GetBytes(6);
             var code = Convert.ToHexString(randomBytes).Substring(0, 8);
-            codes.Add($"{code.Substring(0, 4)}-{code.Substring(4, 4)}");
+            var formatted = $"{code.Substring(0, 4)}-{code.Substring(4, 4)}";
+            codes.Add(formatted);
+            hashedCodes.Add(PasswordHelper.HashPassword(formatted));
         }
+
+        user.MfaRecoveryCodesJson = JsonSerializer.Serialize(hashedCodes);
+        user.UpdatedAtUtc = DateTime.UtcNow;
 
         _context.PlatformAuditLogs.Add(new PlatformAuditLog
         {
@@ -456,10 +504,12 @@ public class AccountController : ControllerBase
     [HttpGet("sessions")]
     public async Task<ActionResult<List<AccountSessionDto>>> GetMySessions()
     {
-        var email = GetCurrentEmail();
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+        var currentSid = GetCurrentSessionId();
 
         var sessions = await _context.UserSessions
-            .Where(s => s.AccountEmail == email && !s.IsRevoked)
+            .Where(s => s.UserId == userId.Value && !s.IsRevoked && s.ExpiresAtUtc > DateTime.UtcNow)
             .OrderByDescending(s => s.LastActiveTimeUtc)
             .Select(s => new AccountSessionDto
             {
@@ -470,25 +520,9 @@ public class AccountController : ControllerBase
                 Location = s.Location,
                 LoginTimeUtc = s.LoginTimeUtc,
                 LastActiveTimeUtc = s.LastActiveTimeUtc,
-                IsCurrentSession = s.Id == "sess-cur-01"
+                IsCurrentSession = s.Id == currentSid
             })
             .ToListAsync();
-
-        // Fallback: If table is empty for this user, provide current session record
-        if (sessions.Count == 0)
-        {
-            sessions.Add(new AccountSessionDto
-            {
-                Id = "sess-cur-01",
-                Device = "Desktop (Windows 11)",
-                Browser = "Chrome 131.0",
-                IpAddress = GetClientIpAddress(),
-                Location = "Bhopal, MP, India",
-                LoginTimeUtc = DateTime.UtcNow.AddMinutes(-45),
-                LastActiveTimeUtc = DateTime.UtcNow.AddSeconds(-10),
-                IsCurrentSession = true
-            });
-        }
 
         return Ok(sessions);
     }
@@ -496,20 +530,25 @@ public class AccountController : ControllerBase
     [HttpPost("sessions/{id}/revoke")]
     public async Task<IActionResult> RevokeSession(string id)
     {
-        if (id == "sess-cur-01")
-        {
-            return BadRequest(new { message = "Cannot revoke your current active session. Use the Sign Out button at the bottom of the page instead." });
-        }
-
+        var userId = GetCurrentUserId();
         var email = GetCurrentEmail();
-        var session = await _context.UserSessions
-            .FirstOrDefaultAsync(s => s.Id == id && s.AccountEmail == email);
+        if (userId == null || string.IsNullOrWhiteSpace(email)) return Unauthorized();
 
-        if (session != null)
+        var currentSid = GetCurrentSessionId();
+        if (id == currentSid)
         {
-            session.IsRevoked = true;
-            session.RevokedAtUtc = DateTime.UtcNow;
+            return BadRequest(new { message = "Cannot revoke your current active session. Use the Sign Out button instead." });
         }
+
+        var session = await _context.UserSessions
+            .FirstOrDefaultAsync(s => s.Id == id && s.UserId == userId.Value);
+
+        if (session == null)
+        {
+            return NotFound(new { message = "Session not found." });
+        }
+
+        await _sessionSecurity.RevokeSessionAsync(id, "AdminRevokedSession");
 
         _context.PlatformAuditLogs.Add(new PlatformAuditLog
         {
@@ -535,16 +574,16 @@ public class AccountController : ControllerBase
     [HttpPost("sessions/revoke-others")]
     public async Task<IActionResult> RevokeOtherSessions()
     {
+        var userId = GetCurrentUserId();
         var email = GetCurrentEmail();
+        if (userId == null || string.IsNullOrWhiteSpace(email)) return Unauthorized();
+
+        var currentSid = GetCurrentSessionId();
         var otherSessions = await _context.UserSessions
-            .Where(s => s.AccountEmail == email && !s.IsRevoked && s.Id != "sess-cur-01")
+            .Where(s => s.UserId == userId.Value && !s.IsRevoked && (currentSid == null || s.Id != currentSid))
             .ToListAsync();
 
-        foreach (var s in otherSessions)
-        {
-            s.IsRevoked = true;
-            s.RevokedAtUtc = DateTime.UtcNow;
-        }
+        await _sessionSecurity.RevokeAllUserSessionsAsync(userId.Value, currentSid, "AdminRevokedOtherSessions");
 
         _context.PlatformAuditLogs.Add(new PlatformAuditLog
         {
@@ -658,14 +697,11 @@ public class AccountController : ControllerBase
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
-        var email = GetCurrentEmail();
-        var currentSession = await _context.UserSessions
-            .FirstOrDefaultAsync(s => s.Id == "sess-cur-01" && s.AccountEmail == email);
-
-        if (currentSession != null)
+        var email = GetCurrentEmail() ?? string.Empty;
+        var currentSid = GetCurrentSessionId();
+        if (!string.IsNullOrWhiteSpace(currentSid))
         {
-            currentSession.IsRevoked = true;
-            currentSession.RevokedAtUtc = DateTime.UtcNow;
+            await _sessionSecurity.RevokeSessionAsync(currentSid, "AdminLogout");
         }
 
         _context.PlatformAuditLogs.Add(new PlatformAuditLog

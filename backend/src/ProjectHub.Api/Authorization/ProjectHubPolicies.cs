@@ -6,7 +6,7 @@ namespace ProjectHub.Api.Authorization;
 
 /// <summary>
 /// Centralized authorization policy definitions for Project Hub.
-/// Strictly enforces the 6-role hierarchy and permission boundaries.
+/// Enforces strict least-privilege role boundaries without implicit SuperAdmin academic overrides.
 /// </summary>
 public static class ProjectHubPolicies
 {
@@ -21,21 +21,18 @@ public static class ProjectHubPolicies
     {
         services.AddAuthorization(options =>
         {
-            // SuperAdmin Platform Authority
+            // SuperAdmin Platform Authority (platform governance only)
             options.AddPolicy(SuperAdminOnly, policy =>
                 policy.RequireAssertion(ctx =>
                     ctx.User.IsInRole(UserRole.SuperAdmin.ToString()) ||
                     ctx.User.HasClaim("is_super_admin", "true") ||
                     ctx.User.HasClaim("role", UserRole.SuperAdmin.ToString())));
 
-            // CollegeAdmin Institutional Authority (and SuperAdmin override)
+            // CollegeAdmin Institutional Authority
             options.AddPolicy(CollegeAdminOnly, policy =>
                 policy.RequireAssertion(ctx =>
                     ctx.User.IsInRole(UserRole.CollegeAdmin.ToString()) ||
-                    ctx.User.HasClaim("role", UserRole.CollegeAdmin.ToString()) ||
-                    ctx.User.IsInRole(UserRole.SuperAdmin.ToString()) ||
-                    ctx.User.HasClaim("is_super_admin", "true") ||
-                    ctx.User.HasClaim("role", UserRole.SuperAdmin.ToString())));
+                    ctx.User.HasClaim("role", UserRole.CollegeAdmin.ToString())));
 
             // HOD Department Authority
             options.AddPolicy(HodOnly, policy =>
@@ -46,9 +43,7 @@ public static class ProjectHubPolicies
             // Coordinator or HOD Batch Ops Authority
             options.AddPolicy(CoordinatorOrHod, policy =>
                 policy.RequireAssertion(ctx =>
-                    ctx.User.IsInRole(UserRole.SuperAdmin.ToString()) ||
                     ctx.User.IsInRole(UserRole.HOD.ToString()) ||
-                    ctx.User.HasClaim("role", UserRole.SuperAdmin.ToString()) ||
                     ctx.User.HasClaim("role", UserRole.HOD.ToString()) ||
                     ((ctx.User.IsInRole(UserRole.Faculty.ToString()) || ctx.User.HasClaim("role", UserRole.Faculty.ToString())) &&
                      ctx.User.HasClaim("is_coordinator", "true"))));
@@ -56,10 +51,8 @@ public static class ProjectHubPolicies
             // Faculty or Above (Faculty, HOD)
             options.AddPolicy(FacultyOrAbove, policy =>
                 policy.RequireAssertion(ctx =>
-                    ctx.User.IsInRole(UserRole.SuperAdmin.ToString()) ||
                     ctx.User.IsInRole(UserRole.Faculty.ToString()) ||
                     ctx.User.IsInRole(UserRole.HOD.ToString()) ||
-                    ctx.User.HasClaim("role", UserRole.SuperAdmin.ToString()) ||
                     ctx.User.HasClaim("role", UserRole.Faculty.ToString()) ||
                     ctx.User.HasClaim("role", UserRole.HOD.ToString())));
 

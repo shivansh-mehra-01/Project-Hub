@@ -23,20 +23,31 @@ public interface IAppDbContext
     // Campus Tenant Entities
     DbSet<Department> Departments { get; }
     DbSet<UserAccount> Users { get; }
+    DbSet<UserSession> UserSessions { get; }
+    DbSet<RefreshTokenRecord> RefreshTokenRecords { get; }
     DbSet<AcademicTrack> AcademicTracks { get; }
     DbSet<CourseOutcomeDefinition> CourseOutcomeDefinitions { get; }
     DbSet<ProblemBankStatement> ProblemBankStatements { get; }
     DbSet<ProjectTeam> ProjectTeams { get; }
     DbSet<TeamMember> TeamMembers { get; }
     DbSet<SprintTask> SprintTasks { get; }
+    DbSet<ProjectMilestone> ProjectMilestones { get; }
+    DbSet<MilestoneReviewHistory> MilestoneReviewHistories { get; }
+    DbSet<ProjectReportSubmission> ProjectReportSubmissions { get; }
+    DbSet<SubmissionReviewHistory> SubmissionReviewHistories { get; }
     DbSet<TeamArtifact> TeamArtifacts { get; }
     DbSet<WeeklyLogbook> WeeklyLogbooks { get; }
     DbSet<VivaPanel> VivaPanels { get; }
     DbSet<VivaPanelEvaluator> VivaPanelEvaluators { get; }
     DbSet<VivaEvaluation> VivaEvaluations { get; }
     DbSet<IndividualStudentScore> IndividualStudentScores { get; }
+    DbSet<TeamVivaDefenseSchedule> TeamVivaDefenseSchedules { get; }
+    DbSet<EvaluationRubric> EvaluationRubrics { get; }
+    DbSet<EvaluationRubricCriterion> EvaluationRubricCriteria { get; }
     DbSet<CourseExitSurvey> CourseExitSurveys { get; }
     DbSet<ExceptionAuditLog> ExceptionAuditLogs { get; }
+    DbSet<ProjectClosureRecord> ProjectClosureRecords { get; }
+    DbSet<StudentAcademicRecord> StudentAcademicRecords { get; }
 
     // Dynamic Multi-Level Academic Hierarchy Entities
     DbSet<AcademicSession> AcademicSessions { get; }

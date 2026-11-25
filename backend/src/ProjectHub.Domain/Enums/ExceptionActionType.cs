@@ -11,5 +11,6 @@ public enum ExceptionActionType
     IndividualReVivaUnlock = 4,
     SingleStudentProvisioned = 5,
     ReturnProposal = 6,
-    RejectProposal = 7
+    RejectProposal = 7,
+    ReopenProject = 8
 }

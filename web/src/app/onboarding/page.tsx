@@ -17,8 +17,7 @@ export default function OnboardingPage() {
         onClose={() => router.replace("/login")}
         onComplete={() => {
           setIsOpen(false);
-          switchPersona("TeamLead");
-          router.replace("/student");
+          router.replace("/login");
         }}
       />
     </div>

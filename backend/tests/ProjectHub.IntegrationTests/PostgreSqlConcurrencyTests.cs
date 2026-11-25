@@ -16,6 +16,8 @@ public class PostgreSqlConcurrencyTests : IDisposable
     private readonly bool _isPostgreSqlAvailable;
     private readonly List<Guid> _cleanupEvaluationIds = new();
     private readonly List<Guid> _cleanupTeamIds = new();
+    private readonly List<Guid> _cleanupUserIds = new();
+    private readonly List<Guid> _cleanupTrackIds = new();
 
     private static readonly Guid SistecTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid CseDeptId = Guid.Parse("10000000-0000-0000-0000-000000000001");
@@ -30,6 +32,7 @@ public class PostgreSqlConcurrencyTests : IDisposable
         var tenantContext = new TenantContext
         {
             CollegeId = SistecTenantId,
+            Role = UserRole.HOD,
             IsSuperAdmin = true
         };
 
@@ -258,6 +261,682 @@ public class PostgreSqlConcurrencyTests : IDisposable
         Assert.Equal(1, activeCount);
     }
 
+    [Fact]
+    public async Task PostgreSql_ConcurrentInvitationAcceptance_EnforcesMaxCapacity_WithoutOverAllocation()
+    {
+        if (!_isPostgreSqlAvailable) return;
+
+        // 1. Setup an academic track with MaxTeamSize = 3
+        var track = new AcademicTrack
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            Name = $"CT-{Guid.NewGuid():N}"[..20],
+            AcademicYear = "2026-2027",
+            MinTeamSize = 2,
+            MaxTeamSize = 3,
+            IsActive = true
+        };
+        _context.AcademicTracks.Add(track);
+        await _context.SaveChangesAsync();
+
+        // 2. Setup team with 2 existing members (exactly 1 remaining slot out of 3)
+        var team = new ProjectTeam
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            AcademicTrackId = track.Id,
+            TeamCode = $"CONC-{Guid.NewGuid():N}"[..12].ToUpperInvariant(),
+            Title = "PostgreSQL Concurrent Invitation Test Team",
+            Abstract = "Testing row-level lock and capacity serialization",
+            DomainTag = "Concurrency Testing",
+            Status = ProjectStatus.Draft,
+            IsRosterLocked = false,
+            IsDeleted = false
+        };
+        _context.ProjectTeams.Add(team);
+
+        var m1UserId = Guid.NewGuid();
+        var m2UserId = Guid.NewGuid();
+        var inviteeAId = Guid.NewGuid();
+        var inviteeBId = Guid.NewGuid();
+
+        var users = new List<UserAccount>
+        {
+            new() { Id = m1UserId, CollegeId = SistecTenantId, DepartmentId = CseDeptId, FullName = "Member 1", Email = $"m1.{Guid.NewGuid():N}@sistec.ac.in", EnrollmentOrEmployeeCode = $"0176CS{Random.Shared.Next(100000, 999999)}", Role = UserRole.Student, IsActivated = true, IsActive = true },
+            new() { Id = m2UserId, CollegeId = SistecTenantId, DepartmentId = CseDeptId, FullName = "Member 2", Email = $"m2.{Guid.NewGuid():N}@sistec.ac.in", EnrollmentOrEmployeeCode = $"0176CS{Random.Shared.Next(100000, 999999)}", Role = UserRole.Student, IsActivated = true, IsActive = true },
+            new() { Id = inviteeAId, CollegeId = SistecTenantId, DepartmentId = CseDeptId, FullName = "Invitee A", Email = $"ia.{Guid.NewGuid():N}@sistec.ac.in", EnrollmentOrEmployeeCode = $"0176CS{Random.Shared.Next(100000, 999999)}", Role = UserRole.Student, IsActivated = true, IsActive = true },
+            new() { Id = inviteeBId, CollegeId = SistecTenantId, DepartmentId = CseDeptId, FullName = "Invitee B", Email = $"ib.{Guid.NewGuid():N}@sistec.ac.in", EnrollmentOrEmployeeCode = $"0176CS{Random.Shared.Next(100000, 999999)}", Role = UserRole.Student, IsActivated = true, IsActive = true }
+        };
+        _context.Users.AddRange(users);
+        _cleanupUserIds.AddRange(users.Select(u => u.Id));
+        _cleanupTrackIds.Add(track.Id);
+
+        var member1 = new TeamMember
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            ProjectTeamId = team.Id,
+            UserId = m1UserId,
+            IsTeamLead = true,
+            IsActive = true
+        };
+        var member2 = new TeamMember
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            ProjectTeamId = team.Id,
+            UserId = m2UserId,
+            IsTeamLead = false,
+            IsActive = true
+        };
+        _context.TeamMembers.AddRange(member1, member2);
+
+        // 3. Setup 2 invitees with valid pending invitations
+        var inviteA = new TeamInvitation
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            ProjectTeamId = team.Id,
+            InviterStudentId = member1.UserId,
+            InviteeStudentId = inviteeAId,
+            Status = InvitationStatus.Pending,
+            InvitedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = DateTime.UtcNow.AddDays(7)
+        };
+        var inviteB = new TeamInvitation
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            ProjectTeamId = team.Id,
+            InviterStudentId = member1.UserId,
+            InviteeStudentId = inviteeBId,
+            Status = InvitationStatus.Pending,
+            InvitedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = DateTime.UtcNow.AddDays(7)
+        };
+        _context.TeamInvitations.AddRange(inviteA, inviteB);
+        await _context.SaveChangesAsync();
+        _cleanupTeamIds.Add(team.Id);
+
+        // 4. Simulate two simultaneous acceptance requests racing for the 1 remaining slot
+        async Task<(bool Success, string Reason)> AttemptAcceptAsync(Guid inviteId, Guid studentId)
+        {
+            var options = new DbContextOptionsBuilder<ProjectHubDbContext>().UseNpgsql(ConnectionString).Options;
+            var tenant = new TenantContext { CollegeId = SistecTenantId, IsSuperAdmin = true };
+            using var db = new ProjectHubDbContext(options, tenant);
+
+            await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
+            try
+            {
+                // Exclusive row lock on ProjectTeam
+                await db.Database.ExecuteSqlRawAsync(
+                    "SELECT \"Id\" FROM \"ProjectTeams\" WHERE \"Id\" = {0} FOR UPDATE",
+                    team.Id);
+
+                var inv = await db.TeamInvitations.FirstOrDefaultAsync(i => i.Id == inviteId);
+                if (inv == null || inv.Status != InvitationStatus.Pending)
+                {
+                    await tx.RollbackAsync();
+                    return (false, "InvalidInvitation");
+                }
+
+                var currentMembers = await db.TeamMembers
+                    .CountAsync(m => m.ProjectTeamId == team.Id && m.IsActive && !m.IsDeleted);
+
+                var trk = await db.AcademicTracks.FirstOrDefaultAsync(t => t.Id == track.Id);
+                var maxCap = trk?.MaxTeamSize ?? 4;
+
+                if (currentMembers >= maxCap)
+                {
+                    await tx.RollbackAsync();
+                    return (false, "CapacityReached");
+                }
+
+                db.TeamMembers.Add(new TeamMember
+                {
+                    CollegeId = SistecTenantId,
+                    ProjectTeamId = team.Id,
+                    UserId = studentId,
+                    IsTeamLead = false,
+                    IsActive = true
+                });
+
+                inv.Status = InvitationStatus.Accepted;
+                inv.RespondedAtUtc = DateTime.UtcNow;
+
+                await db.SaveChangesAsync();
+                await tx.CommitAsync();
+                return (true, "Accepted");
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return (false, ex.Message);
+            }
+        }
+
+        var taskA = Task.Run(() => AttemptAcceptAsync(inviteA.Id, inviteeAId));
+        var taskB = Task.Run(() => AttemptAcceptAsync(inviteB.Id, inviteeBId));
+
+        var results = await Task.WhenAll(taskA, taskB);
+
+        // Exactly one must succeed, and exactly one must be rejected due to capacity limit
+        var successCount = results.Count(r => r.Success);
+        var conflictCount = results.Count(r => !r.Success && r.Reason == "CapacityReached");
+
+        Assert.Equal(1, successCount);
+        Assert.Equal(1, conflictCount);
+
+        // Verify PostgreSQL final count is strictly 3 (never 4)
+        var finalMemberCount = await _context.TeamMembers
+            .CountAsync(m => m.ProjectTeamId == team.Id && m.IsActive && !m.IsDeleted);
+        Assert.Equal(3, finalMemberCount);
+
+        // Verify invitation statuses in DB freshly
+        using var verifyContext = new ProjectHubDbContext(
+            new DbContextOptionsBuilder<ProjectHubDbContext>().UseNpgsql(ConnectionString).Options,
+            new TenantContext { CollegeId = SistecTenantId, IsSuperAdmin = true });
+
+        var updatedA = await verifyContext.TeamInvitations.AsNoTracking().FirstOrDefaultAsync(i => i.Id == inviteA.Id);
+        var updatedB = await verifyContext.TeamInvitations.AsNoTracking().FirstOrDefaultAsync(i => i.Id == inviteB.Id);
+        Assert.NotNull(updatedA);
+        Assert.NotNull(updatedB);
+
+        // Exactly one invitation accepted
+        Assert.True(
+            (updatedA.Status == InvitationStatus.Accepted && updatedB.Status == InvitationStatus.Pending) ||
+            (updatedB.Status == InvitationStatus.Accepted && updatedA.Status == InvitationStatus.Pending),
+            $"A status: {updatedA.Status}, B status: {updatedB.Status}");
+    }
+
+    [Fact]
+    public async Task PostgreSql_OfficialGuideAllocation_PersistsAcrossFreshDbContext()
+    {
+        if (!_isPostgreSqlAvailable) return;
+
+        var team = await CreateTestProjectTeamAsync();
+        var faculty = new UserAccount
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            FullName = "Dr. Postgres Mentor",
+            Email = $"pgmentor.{Guid.NewGuid():N}@sistec.ac.in",
+            EnrollmentOrEmployeeCode = $"0176CS{Random.Shared.Next(100000, 999999)}",
+            Role = UserRole.Faculty,
+            IsActivated = true,
+            IsActive = true
+        };
+        _context.Users.Add(faculty);
+        await _context.SaveChangesAsync();
+        _cleanupUserIds.Add(faculty.Id);
+
+        // 1. Mutate team in PostgreSQL with Phase 5 fields
+        team.PreferredGuideUserId = faculty.Id;
+        team.GuidePreferenceStatus = GuidePreferenceStatus.Requested;
+        team.GuidePreferenceSubmittedAtUtc = DateTime.UtcNow;
+        team.GuidePreferenceRemarks = "Real PostgreSQL transaction test";
+        await _context.SaveChangesAsync();
+
+        // 2. Open brand new DbContext instance to verify physical PostgreSQL persistence
+        var optionsBuilder = new DbContextOptionsBuilder<ProjectHubDbContext>();
+        optionsBuilder.UseNpgsql(ConnectionString);
+        var tenantContext = new TenantContext { CollegeId = SistecTenantId, IsSuperAdmin = true };
+        using var freshContext = new ProjectHubDbContext(optionsBuilder.Options, tenantContext);
+
+        var loaded = await freshContext.ProjectTeams
+            .Include(t => t.PreferredGuideUser)
+            .FirstOrDefaultAsync(t => t.Id == team.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(faculty.Id, loaded.PreferredGuideUserId);
+        Assert.Equal(GuidePreferenceStatus.Requested, loaded.GuidePreferenceStatus);
+        Assert.Equal("Real PostgreSQL transaction test", loaded.GuidePreferenceRemarks);
+        Assert.Null(loaded.GuideUserId); // GuideUserId remains null
+        Assert.NotNull(loaded.PreferredGuideUser);
+        Assert.Equal("Dr. Postgres Mentor", loaded.PreferredGuideUser.FullName);
+    }
+
+    [Fact]
+    public async Task PostgreSql_HodOfficialGuideAllocation_PersistsAndSynchronizesParityAcrossFreshDbContext()
+    {
+        if (!_isPostgreSqlAvailable) return;
+
+        // 1. Arrange: Team in Draft with requested preferred guide
+        var team = await CreateTestProjectTeamAsync();
+        var facultyA = new UserAccount
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            FullName = "Dr. Student Preference",
+            Email = $"pref.{Guid.NewGuid():N}@sistec.ac.in",
+            EnrollmentOrEmployeeCode = $"EMP-A-{Guid.NewGuid():N}"[..12],
+            Role = UserRole.Faculty,
+            IsActive = true
+        };
+        var facultyB = new UserAccount
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            FullName = "Dr. HOD Assigned Guide",
+            Email = $"assigned.{Guid.NewGuid():N}@sistec.ac.in",
+            EnrollmentOrEmployeeCode = $"EMP-B-{Guid.NewGuid():N}"[..12],
+            Role = UserRole.Faculty,
+            IsActive = true
+        };
+        _context.Users.AddRange(facultyA, facultyB);
+        _cleanupUserIds.Add(facultyA.Id);
+        _cleanupUserIds.Add(facultyB.Id);
+
+        team.PreferredGuideUserId = facultyA.Id;
+        team.GuidePreferenceStatus = GuidePreferenceStatus.Requested;
+        team.GuidePreferenceSubmittedAtUtc = DateTime.UtcNow;
+        team.GuidePreferenceRemarks = "Student nomination prior to HOD review";
+        await _context.SaveChangesAsync();
+
+        // 2. Act: Simulate HOD assigning official guide via DbContext (same as HodController)
+        team.GuideUserId = facultyB.Id;
+        var excAudit = new ExceptionAuditLog
+        {
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            ProjectTeamId = team.Id,
+            ActionType = ExceptionActionType.ReassignGuide,
+            TargetUserId = facultyB.Id,
+            Reason = "Allocated officially by HOD committee",
+            RequestedByUserId = EvaluatorVermaId,
+            ApprovedByUserId = EvaluatorVermaId,
+            ApprovedAtUtc = DateTime.UtcNow
+        };
+        _context.ExceptionAuditLogs.Add(excAudit);
+        await _context.SaveChangesAsync();
+
+        // 3. Assert in fresh DbContext connecting to PostgreSQL
+        var optionsBuilder = new DbContextOptionsBuilder<ProjectHubDbContext>();
+        optionsBuilder.UseNpgsql(ConnectionString);
+        var tenantContext = new TenantContext { CollegeId = SistecTenantId, IsSuperAdmin = true };
+        using var freshContext = new ProjectHubDbContext(optionsBuilder.Options, tenantContext);
+
+        var loaded = await freshContext.ProjectTeams
+            .Include(t => t.GuideUser)
+            .Include(t => t.PreferredGuideUser)
+            .FirstOrDefaultAsync(t => t.Id == team.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(facultyB.Id, loaded.GuideUserId); // Official guide assigned
+        Assert.Equal(facultyA.Id, loaded.PreferredGuideUserId); // Preferred guide preserved
+        Assert.Equal(GuidePreferenceStatus.Allocated, loaded.GuidePreferenceStatus); // Automatically synchronized!
+        Assert.NotNull(loaded.GuideAllocatedAtUtc);
+        Assert.Equal("Allocated officially by HOD committee", loaded.GuideAllocationRemarks);
+
+        // Verify ExceptionAuditLog in PostgreSQL
+        var savedLog = await freshContext.ExceptionAuditLogs
+            .FirstOrDefaultAsync(l => l.ProjectTeamId == team.Id && l.ActionType == ExceptionActionType.ReassignGuide);
+        Assert.NotNull(savedLog);
+        Assert.Equal("Allocated officially by HOD committee", savedLog.Reason);
+    }
+
+    [Fact]
+    public async Task PostgreSql_ConcurrentGuideAllocation_EnforcesMaxCapacity_WithoutOverAllocation()
+    {
+        if (!_isPostgreSqlAvailable) return;
+
+        // 1. Arrange: Faculty member with known MaxMentorTeams = 2
+        var faculty = new UserAccount
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            FullName = "Dr. Concurrency Guide",
+            Email = $"guide.conc.{Guid.NewGuid():N}@sistec.ac.in",
+            EnrollmentOrEmployeeCode = $"EMP-G-{Guid.NewGuid():N}"[..12],
+            Role = UserRole.Faculty,
+            Designation = FacultyDesignation.Professor,
+            MaxMentorTeams = 2,
+            IsActivated = true,
+            IsActive = true
+        };
+        _context.Users.Add(faculty);
+        _cleanupUserIds.Add(faculty.Id);
+
+        // 2. Pre-fill all but one available slot: Allocate 1 team (1 of 2 occupied)
+        var preAllocatedTeam = new ProjectTeam
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            AcademicTrackId = MinorTrackId,
+            TeamCode = $"OCC-{Guid.NewGuid():N}"[..12].ToUpperInvariant(),
+            Title = "Occupied Slot Team",
+            Abstract = "Pre-allocated team occupying 1 of 2 mentor slots",
+            DomainTag = "Concurrency Verification",
+            Status = ProjectStatus.Draft,
+            GuideUserId = faculty.Id,
+            GuidePreferenceStatus = GuidePreferenceStatus.Allocated,
+            GuideAllocatedAtUtc = DateTime.UtcNow,
+            IsDeleted = false
+        };
+        _context.ProjectTeams.Add(preAllocatedTeam);
+        _cleanupTeamIds.Add(preAllocatedTeam.Id);
+
+        // 3. Create two competing candidate teams racing for the single remaining slot
+        var candidateTeam1 = new ProjectTeam
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            AcademicTrackId = MinorTrackId,
+            TeamCode = $"RACE1-{Guid.NewGuid():N}"[..12].ToUpperInvariant(),
+            Title = "Racing Candidate Team 1",
+            Abstract = "Candidate team 1 competing for last mentorship slot",
+            DomainTag = "Concurrency Verification",
+            Status = ProjectStatus.Draft,
+            PreferredGuideUserId = faculty.Id,
+            GuidePreferenceStatus = GuidePreferenceStatus.Requested,
+            GuideUserId = null,
+            IsDeleted = false
+        };
+        var candidateTeam2 = new ProjectTeam
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            AcademicTrackId = MinorTrackId,
+            TeamCode = $"RACE2-{Guid.NewGuid():N}"[..12].ToUpperInvariant(),
+            Title = "Racing Candidate Team 2",
+            Abstract = "Candidate team 2 competing for last mentorship slot",
+            DomainTag = "Concurrency Verification",
+            Status = ProjectStatus.Draft,
+            PreferredGuideUserId = faculty.Id,
+            GuidePreferenceStatus = GuidePreferenceStatus.Requested,
+            GuideUserId = null,
+            IsDeleted = false
+        };
+        _context.ProjectTeams.AddRange(candidateTeam1, candidateTeam2);
+        _cleanupTeamIds.Add(candidateTeam1.Id);
+        _cleanupTeamIds.Add(candidateTeam2.Id);
+        await _context.SaveChangesAsync();
+
+        // 4. Concurrency worker simulating Coordinator allocation with PostgreSQL row locking
+        async Task<(bool Success, string Reason)> AttemptAllocationAsync(Guid targetTeamId)
+        {
+            var options = new DbContextOptionsBuilder<ProjectHubDbContext>().UseNpgsql(ConnectionString).Options;
+            var tenant = new TenantContext
+            {
+                CollegeId = SistecTenantId,
+                UserId = faculty.Id,
+                Role = UserRole.Faculty,
+                IsProjectCoordinator = true
+            };
+            using var db = new ProjectHubDbContext(options, tenant);
+
+            await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
+            try
+            {
+                // Exclusive row lock on UserAccounts for the guide: serializes concurrent allocation attempts
+                await db.Database.ExecuteSqlRawAsync(
+                    "SELECT \"Id\" FROM \"UserAccounts\" WHERE \"Id\" = {0} FOR UPDATE",
+                    faculty.Id);
+
+                var guideUser = await db.Users.FirstOrDefaultAsync(u => u.Id == faculty.Id && !u.IsDeleted);
+                if (guideUser == null)
+                {
+                    await tx.RollbackAsync();
+                    return (false, "GuideNotFound");
+                }
+
+                var currentLoad = await db.ProjectTeams
+                    .CountAsync(t => t.GuideUserId == faculty.Id && t.CollegeId == SistecTenantId && !t.IsDeleted && t.Status != ProjectStatus.Archived && t.Id != targetTeamId);
+
+                if (currentLoad >= guideUser.MaxMentorTeams)
+                {
+                    await tx.RollbackAsync();
+                    return (false, "CapacityExceeded");
+                }
+
+                var teamToAssign = await db.ProjectTeams.FirstOrDefaultAsync(t => t.Id == targetTeamId && !t.IsDeleted);
+                if (teamToAssign == null)
+                {
+                    await tx.RollbackAsync();
+                    return (false, "TeamNotFound");
+                }
+
+                teamToAssign.GuideUserId = faculty.Id;
+                teamToAssign.GuidePreferenceStatus = GuidePreferenceStatus.Allocated;
+                teamToAssign.GuideAllocatedAtUtc = DateTime.UtcNow;
+                teamToAssign.GuideAllocatedByUserId = tenant.UserId;
+                teamToAssign.GuideAllocationRemarks = "Allocated concurrently under row-lock test";
+
+                var auditLog = new ExceptionAuditLog
+                {
+                    CollegeId = SistecTenantId,
+                    DepartmentId = CseDeptId,
+                    ProjectTeamId = targetTeamId,
+                    ActionType = ExceptionActionType.ReassignGuide,
+                    TargetUserId = faculty.Id,
+                    Reason = "Allocated concurrently under row-lock test",
+                    PreviousValueJson = "{}",
+                    NewValueJson = System.Text.Json.JsonSerializer.Serialize(new { guideUserId = faculty.Id }),
+                    RequestedByUserId = tenant.UserId!.Value,
+                    ApprovedByUserId = tenant.UserId,
+                    ApprovedAtUtc = DateTime.UtcNow
+                };
+                await db.ExceptionAuditLogs.AddAsync(auditLog);
+
+                await db.SaveChangesAsync();
+                await tx.CommitAsync();
+                return (true, "Allocated");
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return (false, ex.Message);
+            }
+        }
+
+        // 5. Act: Launch simultaneous allocation requests racing for the single available slot
+        var task1 = Task.Run(() => AttemptAllocationAsync(candidateTeam1.Id));
+        var task2 = Task.Run(() => AttemptAllocationAsync(candidateTeam2.Id));
+
+        var results = await Task.WhenAll(task1, task2);
+
+        // 6. Assert: Exactly one must succeed, exactly one must be rejected due to capacity limit
+        var successCount = results.Count(r => r.Success);
+        var conflictCount = results.Count(r => !r.Success && r.Reason == "CapacityExceeded");
+
+        Assert.Equal(1, successCount);
+        Assert.Equal(1, conflictCount);
+
+        // 7. Verify physical persistence in fresh DbContext: exactly 2 teams allocated, capacity never exceeded
+        var verifyOptions = new DbContextOptionsBuilder<ProjectHubDbContext>().UseNpgsql(ConnectionString).Options;
+        var verifyTenant = new TenantContext { CollegeId = SistecTenantId, IsSuperAdmin = true };
+        using var verifyDb = new ProjectHubDbContext(verifyOptions, verifyTenant);
+
+        var finalAllocatedCount = await verifyDb.ProjectTeams
+            .CountAsync(t => t.GuideUserId == faculty.Id && !t.IsDeleted);
+        Assert.Equal(2, finalAllocatedCount); // Exactly MaxMentorTeams = 2, NEVER 3!
+
+        // 8. Verify correct rollback: rejected team retained GuideUserId = null and Requested preference
+        var team1Fresh = await verifyDb.ProjectTeams.FindAsync(candidateTeam1.Id);
+        var team2Fresh = await verifyDb.ProjectTeams.FindAsync(candidateTeam2.Id);
+        Assert.NotNull(team1Fresh);
+        Assert.NotNull(team2Fresh);
+
+        var allocatedTeam = team1Fresh.GuideUserId == faculty.Id ? team1Fresh : team2Fresh;
+        var rejectedTeam = team1Fresh.GuideUserId == null ? team1Fresh : team2Fresh;
+
+        Assert.Equal(GuidePreferenceStatus.Allocated, allocatedTeam.GuidePreferenceStatus);
+        Assert.NotNull(allocatedTeam.GuideAllocatedAtUtc);
+        Assert.NotNull(allocatedTeam.GuideAllocatedByUserId);
+
+        Assert.Null(rejectedTeam.GuideUserId);
+        Assert.Equal(GuidePreferenceStatus.Requested, rejectedTeam.GuidePreferenceStatus);
+        Assert.Null(rejectedTeam.GuideAllocatedAtUtc);
+        Assert.Null(rejectedTeam.GuideAllocatedByUserId);
+    }
+
+    [Fact]
+    public async Task PostgreSql_HodAndCoordinator_ShareCapacityLock_PreventingOverAllocation()
+    {
+        if (!_isPostgreSqlAvailable) return;
+
+        // 1. Arrange: Faculty member with known MaxMentorTeams = 2
+        var faculty = new UserAccount
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            FullName = "Dr. CrossPath Mentor",
+            Email = $"crosspath.mentor.{Guid.NewGuid():N}@sistec.ac.in",
+            EnrollmentOrEmployeeCode = $"EMP-CP-{Guid.NewGuid():N}"[..12],
+            Role = UserRole.Faculty,
+            Designation = FacultyDesignation.AssociateProfessor,
+            MaxMentorTeams = 2,
+            IsActivated = true,
+            IsActive = true
+        };
+        _context.Users.Add(faculty);
+        _cleanupUserIds.Add(faculty.Id);
+
+        // Pre-fill 1 slot: 1 of 2 occupied
+        var preAllocatedTeam = new ProjectTeam
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            AcademicTrackId = MinorTrackId,
+            TeamCode = $"CP-OCC-{Guid.NewGuid():N}"[..12].ToUpperInvariant(),
+            Title = "CrossPath Pre-allocated Team",
+            Abstract = "Pre-allocated team occupying 1 of 2 slots",
+            DomainTag = "Concurrency Verification",
+            Status = ProjectStatus.Draft,
+            GuideUserId = faculty.Id,
+            GuidePreferenceStatus = GuidePreferenceStatus.Allocated,
+            GuideAllocatedAtUtc = DateTime.UtcNow,
+            IsDeleted = false
+        };
+        _context.ProjectTeams.Add(preAllocatedTeam);
+        _cleanupTeamIds.Add(preAllocatedTeam.Id);
+
+        // Two racing candidate teams
+        var hodTeam = new ProjectTeam
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            AcademicTrackId = MinorTrackId,
+            TeamCode = $"HOD-{Guid.NewGuid():N}"[..16].ToUpperInvariant(),
+            Title = "HOD Race Candidate Team",
+            Abstract = "HOD allocating this team",
+            DomainTag = "Concurrency Verification",
+            Status = ProjectStatus.Draft,
+            PreferredGuideUserId = faculty.Id,
+            GuidePreferenceStatus = GuidePreferenceStatus.Requested,
+            GuideUserId = null,
+            IsDeleted = false
+        };
+        var coordTeam = new ProjectTeam
+        {
+            Id = Guid.NewGuid(),
+            CollegeId = SistecTenantId,
+            DepartmentId = CseDeptId,
+            AcademicTrackId = MinorTrackId,
+            TeamCode = $"CRD-{Guid.NewGuid():N}"[..16].ToUpperInvariant(),
+            Title = "Coordinator Race Candidate Team",
+            Abstract = "Coordinator allocating this team",
+            DomainTag = "Concurrency Verification",
+            Status = ProjectStatus.Draft,
+            PreferredGuideUserId = faculty.Id,
+            GuidePreferenceStatus = GuidePreferenceStatus.Requested,
+            GuideUserId = null,
+            IsDeleted = false
+        };
+        _context.ProjectTeams.AddRange(hodTeam, coordTeam);
+        _cleanupTeamIds.Add(hodTeam.Id);
+        _cleanupTeamIds.Add(coordTeam.Id);
+
+        await _context.SaveChangesAsync();
+
+        // 2. Define concurrent allocation actions for HOD and Coordinator
+        async Task<(bool Success, string Reason)> AttemptHodAllocationAsync()
+        {
+            var options = new DbContextOptionsBuilder<ProjectHubDbContext>().UseNpgsql(ConnectionString).Options;
+            var tenant = new TenantContext
+            {
+                CollegeId = SistecTenantId,
+                DepartmentId = CseDeptId,
+                UserId = EvaluatorVermaId,
+                Role = UserRole.HOD
+            };
+            using var db = new ProjectHubDbContext(options, tenant);
+
+            try
+            {
+                var target = await db.ProjectTeams.FirstAsync(t => t.Id == hodTeam.Id);
+                target.GuideUserId = faculty.Id;
+                await db.SaveChangesAsync();
+                return (true, "HodSuccess");
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.InnerException?.Message ?? ex.Message);
+            }
+        }
+
+        async Task<(bool Success, string Reason)> AttemptCoordAllocationAsync()
+        {
+            var options = new DbContextOptionsBuilder<ProjectHubDbContext>().UseNpgsql(ConnectionString).Options;
+            var tenant = new TenantContext
+            {
+                CollegeId = SistecTenantId,
+                DepartmentId = CseDeptId,
+                UserId = EvaluatorVermaId,
+                Role = UserRole.Faculty,
+                IsProjectCoordinator = true
+            };
+            using var db = new ProjectHubDbContext(options, tenant);
+
+            try
+            {
+                var target = await db.ProjectTeams.FirstAsync(t => t.Id == coordTeam.Id);
+                target.GuideUserId = faculty.Id;
+                await db.SaveChangesAsync();
+                return (true, "CoordSuccess");
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.InnerException?.Message ?? ex.Message);
+            }
+        }
+
+        // 3. Act: Race HOD vs Coordinator for the single remaining slot
+        var taskHod = Task.Run(AttemptHodAllocationAsync);
+        var taskCoord = Task.Run(AttemptCoordAllocationAsync);
+
+        var results = await Task.WhenAll(taskHod, taskCoord);
+
+        // 4. Assert: Exactly one path succeeds, exactly one is rejected with capacity limit
+        var successCount = results.Count(r => r.Success);
+        var failureCount = results.Count(r => !r.Success);
+
+        Assert.Equal(1, successCount);
+        Assert.Equal(1, failureCount);
+        Assert.Contains(results, r => !r.Success && r.Reason.Contains("maximum mentorship capacity"));
+
+        // 5. Verify database integrity
+        var verifyOptions = new DbContextOptionsBuilder<ProjectHubDbContext>().UseNpgsql(ConnectionString).Options;
+        var verifyTenant = new TenantContext { CollegeId = SistecTenantId, IsSuperAdmin = true };
+        using var verifyDb = new ProjectHubDbContext(verifyOptions, verifyTenant);
+
+        var totalAllocated = await verifyDb.ProjectTeams.CountAsync(t => t.GuideUserId == faculty.Id && !t.IsDeleted);
+        Assert.Equal(2, totalAllocated); // MaxMentorTeams was 2, exactly 2 allocated, NEVER 3!
+    }
+
     public void Dispose()
     {
         if (_isPostgreSqlAvailable)
@@ -281,6 +960,26 @@ public class PostgreSqlConcurrencyTests : IDisposable
                         .Where(t => _cleanupTeamIds.Contains(t.Id))
                         .ToList();
                     _context.ProjectTeams.RemoveRange(teams);
+                    _context.SaveChanges();
+                }
+
+                if (_cleanupTrackIds.Count > 0)
+                {
+                    var tracks = _context.AcademicTracks
+                        .IgnoreQueryFilters()
+                        .Where(t => _cleanupTrackIds.Contains(t.Id))
+                        .ToList();
+                    _context.AcademicTracks.RemoveRange(tracks);
+                    _context.SaveChanges();
+                }
+
+                if (_cleanupUserIds.Count > 0)
+                {
+                    var users = _context.Users
+                        .IgnoreQueryFilters()
+                        .Where(u => _cleanupUserIds.Contains(u.Id))
+                        .ToList();
+                    _context.Users.RemoveRange(users);
                     _context.SaveChanges();
                 }
             }

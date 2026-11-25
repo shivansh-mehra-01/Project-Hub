@@ -86,7 +86,6 @@ export default function LoginPage() {
     } else if (user.role === "Faculty") {
       switchPersona("Faculty");
       if (user.isProjectCoordinator) {
-        toggleFacultyCoordinator("usr-fac-verma");
         router.replace("/coordinator");
       } else {
         router.replace("/faculty");
@@ -97,16 +96,29 @@ export default function LoginPage() {
     }
   };
 
-  // Guard: Redirect immediately if already authenticated with active session
+  // Guard: Redirect immediately if already authenticated with active HttpOnly session
   useEffect(() => {
-    const token = getAuthToken();
-    const profile = getUserProfile();
-    if (token && profile) {
-      navigateToWorkspace(profile);
-    } else {
-      resetAuthFormState();
-      setIsCheckingSession(false);
-    }
+    let active = true;
+    authApi
+      .session()
+      .then((res) => {
+        if (!active) return;
+        if (res.authenticated && res.user) {
+          setAuthSession(null, res.user);
+          navigateToWorkspace(res.user);
+        } else {
+          resetAuthFormState();
+          setIsCheckingSession(false);
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        resetAuthFormState();
+        setIsCheckingSession(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // 30-Second Resend OTP Cooldown Timer
@@ -141,7 +153,7 @@ export default function LoginPage() {
         password: password,
       });
 
-      setAuthSession(auth.token, auth.user, true);
+      setAuthSession(null, auth.user);
       showToast(`Welcome back, ${auth.user.fullName}!`, "success");
       resetAuthFormState();
       navigateToWorkspace(auth.user);
@@ -215,8 +227,8 @@ export default function LoginPage() {
       setOtpError("Please enter a valid 6-digit numeric verification code.");
       return;
     }
-    if (!newPassword || newPassword.length < 8) {
-      setOtpError("Password must be at least 8 characters in length.");
+    if (!newPassword || newPassword.length < 12) {
+      setOtpError("Password must be at least 12 characters with uppercase, lowercase, digit, and symbol.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -234,7 +246,7 @@ export default function LoginPage() {
         newPassword: newPassword,
       });
 
-      setAuthSession(auth.token, auth.user, true);
+      setAuthSession(null, auth.user);
       showToast("Password set successfully! Entering your workspace...", "success");
       resetAuthFormState();
       navigateToWorkspace(auth.user);

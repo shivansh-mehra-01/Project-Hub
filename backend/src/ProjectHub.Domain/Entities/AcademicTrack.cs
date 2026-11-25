@@ -36,6 +36,9 @@ public class AcademicTrack : BaseEntity, ITenantEntity
     public DateTime? ProposalDeadlineUtc { get; set; }
     public DateTime? FinalSubmissionDeadlineUtc { get; set; }
 
+    public int MinTeamSize { get; set; } = 2;
+    public int MaxTeamSize { get; set; } = 4;
+
     // Continuous Evaluation Weights (must sum to 100)
     public int GuideWeightPct { get; set; } = 30;
     public int MidTermWeightPct { get; set; } = 30;

@@ -42,16 +42,50 @@ builder.Services.AddControllers()
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// 4. JWT Authentication
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "ProjectHubSuperSecretDevKeyMinLength32CharactersRequired!";
-var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "https://api.projecthub.local";
-var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "https://app.projecthub.local";
+// 4. Fail-Fast Production Configuration Validation & JWT Authentication
+var isDev = builder.Environment.IsDevelopment();
+var jwtSecret = builder.Configuration["Jwt:Secret"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtAudience = builder.Configuration["Jwt:Audience"];
+
+if (!isDev)
+{
+    const string devPlaceholder = "ProjectHubSuperSecretDevKeyMinLength32CharactersRequired!";
+    if (string.IsNullOrWhiteSpace(jwtSecret) || Encoding.UTF8.GetByteCount(jwtSecret) < 32 || jwtSecret == devPlaceholder)
+    {
+        throw new InvalidOperationException("Production configuration error: Jwt:Secret must be configured with at least 32 bytes and cannot use the development placeholder.");
+    }
+    if (string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience))
+    {
+        throw new InvalidOperationException("Production configuration error: Jwt:Issuer and Jwt:Audience must be configured.");
+    }
+    var connStr = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(connStr) || connStr.Contains("Password=postgres;", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Production configuration error: ConnectionStrings:DefaultConnection must use production credentials.");
+    }
+    if (!string.Equals(builder.Configuration["Email:Provider"], "Smtp", StringComparison.OrdinalIgnoreCase) ||
+        string.IsNullOrWhiteSpace(builder.Configuration["Email:SmtpHost"]) ||
+        string.IsNullOrWhiteSpace(builder.Configuration["Email:FromAddress"]))
+    {
+        throw new InvalidOperationException("Production configuration error: Email:Provider must be 'Smtp' with Email:SmtpHost and Email:FromAddress configured.");
+    }
+}
+else
+{
+    if (string.IsNullOrWhiteSpace(jwtSecret) || Encoding.UTF8.GetByteCount(jwtSecret) < 32)
+    {
+        throw new InvalidOperationException("Development configuration error: Jwt:Secret must be configured in appsettings.Development.json or user-secrets.");
+    }
+    jwtIssuer ??= "https://api.projecthub.local";
+    jwtAudience ??= "https://app.projecthub.local";
+}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.RequireHttpsMetadata = false; // Dev environment
-        options.SaveToken = true;
+        options.RequireHttpsMetadata = !isDev;
+        options.SaveToken = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
@@ -61,7 +95,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidAudience = jwtAudience,
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(1)
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                if (context.Principal == null)
+                {
+                    context.Fail("Missing principal.");
+                    return;
+                }
+                var sessionSecurity = context.HttpContext.RequestServices.GetRequiredService<ISessionSecurityService>();
+                var (isValid, reason) = await sessionSecurity.ValidateAccessTokenAsync(context.Principal, context.HttpContext.RequestAborted);
+                if (!isValid)
+                {
+                    context.Fail(reason ?? "Session is invalid or revoked.");
+                }
+            }
         };
     });
 
@@ -71,10 +122,20 @@ builder.Services.AddProjectHubAuthorization();
 // 6. OpenAPI & Documentation
 builder.Services.AddOpenApi("v1");
 
-// 7. Rate Limiting for Security Endpoints (Password Reset OTP brute-force protection)
+// 7. Rate Limiting for Security Endpoints (Login & Password Reset brute-force protection)
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("LoginLimit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = builder.Environment.IsDevelopment() ? 200 : 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
     options.AddPolicy("PasswordResetLimit", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -181,6 +242,12 @@ app.Use(async (context, next) =>
 });
 
 // 8. Middleware Pipeline
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
+
 app.UseSerilogRequestLogging();
 
 app.UseCors("AllowFrontend");

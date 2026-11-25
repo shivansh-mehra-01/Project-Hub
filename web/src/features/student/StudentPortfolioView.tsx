@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   GraduationCap,
@@ -15,9 +15,11 @@ import {
   Sparkles,
   ClipboardList,
   Lock,
+  Globe,
   Check,
   AlertCircle,
   HelpCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Button } from "@/design-system/components/Button";
@@ -26,6 +28,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/des
 import { Modal } from "@/design-system/components/Modal";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { initialTeams } from "@/mocks/seed-data";
+import { studentApi } from "@/lib/api/studentApi";
+import { VerifiedStudentPortfolioDto, StudentAcademicRecordDto } from "@/lib/api/types";
 
 export const StudentPortfolioView: React.FC = () => {
   useDashboardHeader({
@@ -41,11 +45,56 @@ export const StudentPortfolioView: React.FC = () => {
     continueProjectToNextTrack,
   } = useProjectHubStore();
 
+  const [verifiedPortfolio, setVerifiedPortfolio] = useState<VerifiedStudentPortfolioDto | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioVisibility, setPortfolioVisibility] = useState(false);
+  const [updatingVisibility, setUpdatingVisibility] = useState(false);
+  const [selectedRecordForModal, setSelectedRecordForModal] = useState<StudentAcademicRecordDto | null>(null);
+
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showContinuityModal, setShowContinuityModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setPortfolioLoading(true);
+    studentApi
+      .getVerifiedPortfolio()
+      .then((data) => {
+        if (active && data) {
+          setVerifiedPortfolio(data);
+          setPortfolioVisibility(data.allowPublicPortfolio);
+        }
+      })
+      .catch(() => {
+        // Fallback to store
+      })
+      .finally(() => {
+        if (active) setPortfolioLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleToggleVisibility = async () => {
+    try {
+      setUpdatingVisibility(true);
+      const newVisibility = !portfolioVisibility;
+      const res = await studentApi.updatePortfolioVisibility({ allowPublicPortfolio: newVisibility });
+      setPortfolioVisibility(res.allowPublicPortfolio);
+      setToastMessage(res.message || (newVisibility ? "Public portfolio enabled." : "Portfolio set to private."));
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: unknown) {
+      setToastMessage(err instanceof Error ? err.message : "Failed to update portfolio visibility.");
+      setTimeout(() => setToastMessage(null), 4000);
+    } finally {
+      setUpdatingVisibility(false);
+    }
+  };
 
   // Survey Form State
   const [surveyRatings, setSurveyRatings] = useState({
@@ -59,7 +108,7 @@ export const StudentPortfolioView: React.FC = () => {
     "The capstone provided authentic experience in IoT firmware architecture, cloud broker integration, and team collaboration."
   );
 
-  const studentUsn = currentPersona.enrollmentNumber || "0176CS221045";
+  const studentUsn = verifiedPortfolio?.enrollmentNumber || currentPersona.enrollmentNumber || "0176CS221045";
   const hasCompletedSurvey = courseExitSurveys.some((s) => s.enrollmentNumber === studentUsn);
 
   const isTeamLead =
@@ -89,8 +138,13 @@ export const StudentPortfolioView: React.FC = () => {
 
   const handleCopyLink = () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://collabex.io";
-    navigator.clipboard?.writeText(`${origin}/verify/${studentUsn}`);
+    const shareUrl = verifiedPortfolio?.publicPortfolioShareUrl
+      ? `${origin}${verifiedPortfolio.publicPortfolioShareUrl}`
+      : `${origin}/verify/${studentUsn}`;
+    navigator.clipboard?.writeText(shareUrl);
     setCopied(true);
+    setToastMessage(`Transcript link copied! ${portfolioVisibility ? "Public sharing is active." : "Note: Public consent is currently private."}`);
+    setTimeout(() => setToastMessage(null), 4000);
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -175,6 +229,15 @@ export const StudentPortfolioView: React.FC = () => {
           <div className="flex items-center gap-2 shrink-0">
             <Button
               size="sm"
+              variant={portfolioVisibility ? "primary" : "secondary"}
+              onClick={handleToggleVisibility}
+              disabled={updatingVisibility}
+              leftIcon={portfolioVisibility ? <Globe className="h-3.5 w-3.5 text-white" /> : <Lock className="h-3.5 w-3.5 text-slate-500" />}
+            >
+              {updatingVisibility ? "Updating..." : portfolioVisibility ? "Public Consent: ON" : "Public Consent: OFF"}
+            </Button>
+            <Button
+              size="sm"
               variant="secondary"
               onClick={handleCopyLink}
               leftIcon={<Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />}
@@ -248,6 +311,105 @@ export const StudentPortfolioView: React.FC = () => {
             <h3 className="text-sm font-bold text-[#0F172A] font-heading">Degree Capstone Projects</h3>
             <span className="text-xs text-[#64748B]">Multi-Track Continuous Engineering</span>
           </div>
+
+          {/* Phase 10: Authoritative Verified Institutional Records from Database */}
+          {verifiedPortfolio?.projects && verifiedPortfolio.projects.length > 0 && (
+            <div className="space-y-4">
+              {verifiedPortfolio.projects.map((proj) => (
+                <Card key={proj.id} className="border border-emerald-300 bg-white shadow-xs">
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
+                          {proj.academicYear} • {proj.trackName}
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-500">
+                          Team: {proj.teamCode}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={proj.finalOutcome === "Pass" ? "success" : "danger"} size="sm" dot>
+                          {proj.finalOutcome}: {proj.finalComputedMark.toFixed(1)} / 100
+                        </Badge>
+                        <Badge variant="success" size="sm">
+                          Institutional Sealed Record
+                        </Badge>
+                      </div>
+                    </div>
+                    <CardTitle className="pt-2 text-sm">{proj.projectTitle}</CardTitle>
+                    <CardDescription>{proj.projectAbstract}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
+                      <div>
+                        <span className="text-[#64748B]">Role:</span>
+                        <div className="font-bold text-[#0F172A]">
+                          {proj.roleDescription} {proj.isTeamLead ? "(Team Lead)" : ""}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[#64748B]">Individual Score:</span>
+                        <div className="font-bold text-[#0F172A] font-mono tabular-nums">
+                          {proj.individualContributionScore.toFixed(1)} pts
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[#64748B]">Faculty Guide:</span>
+                        <div className="font-bold text-[#0F172A]">{proj.guideName}</div>
+                      </div>
+                      <div>
+                        <span className="text-[#64748B]">Verified Date:</span>
+                        <div className="font-bold text-slate-700">
+                          {new Date(proj.verifiedAtUtc).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Verified Artifacts & Credentials */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {proj.verifiedRepositoryUrl && (
+                          <a
+                            href={proj.verifiedRepositoryUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-colors"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            <span>Institutional Codebase</span>
+                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                          </a>
+                        )}
+                        {proj.verifiedDemoUrl && (
+                          <a
+                            href={proj.verifiedDemoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-colors"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            <span>Live Deployment</span>
+                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                          </a>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => {
+                          setSelectedRecordForModal(proj);
+                          setShowCertificateModal(true);
+                        }}
+                        leftIcon={<QrCode className="h-3.5 w-3.5" strokeWidth={1.75} />}
+                      >
+                        View Verified Certificate
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
 
           {/* Project 1: Minor Project Sem 6 */}
           <Card className="border border-[#E2E8F0] shadow-xs">
@@ -584,12 +746,22 @@ export const StudentPortfolioView: React.FC = () => {
       {/* Verified Certificate Modal with QR */}
       <Modal
         isOpen={showCertificateModal}
-        onClose={() => setShowCertificateModal(false)}
+        onClose={() => {
+          setShowCertificateModal(false);
+          setSelectedRecordForModal(null);
+        }}
         title="Institutional Academic Credential"
         description="Tamper-proof verifiable digital transcript issued by SISTec Department of CSE."
         footer={
           <div className="flex items-center justify-end w-full">
-            <Button variant="secondary" size="sm" onClick={() => setShowCertificateModal(false)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setShowCertificateModal(false);
+                setSelectedRecordForModal(null);
+              }}
+            >
               Close
             </Button>
           </div>
@@ -600,14 +772,25 @@ export const StudentPortfolioView: React.FC = () => {
             <span className="text-[10px] font-bold tracking-widest text-brand-primary uppercase font-mono">
               Official University Transcript Record
             </span>
-            <h4 className="text-base font-bold text-[#0F172A]">Minor Project Engineering Certificate</h4>
+            <h4 className="text-base font-bold text-[#0F172A]">
+              {selectedRecordForModal
+                ? `${selectedRecordForModal.trackName} Engineering Certificate`
+                : "Minor Project Engineering Certificate"}
+            </h4>
             <p className="text-xs text-[#64748B]">
-              This certifies that <strong>Shivansh Mehra</strong> (USN: {studentUsn}) has successfully
-              defended Minor Project Phase-1 with a score of <strong>44.5/50 (89%)</strong>.
+              This certifies that <strong>{selectedRecordForModal?.studentName || "Shivansh Mehra"}</strong> (USN:{" "}
+              {selectedRecordForModal?.enrollmentNumber || studentUsn}) has successfully defended{" "}
+              {selectedRecordForModal?.projectTitle || "Minor Project Phase-1"} with a score of{" "}
+              <strong>
+                {selectedRecordForModal
+                  ? `${selectedRecordForModal.finalComputedMark.toFixed(1)}/100 (${selectedRecordForModal.finalOutcome})`
+                  : "44.5/50 (89%)"}
+              </strong>
+              .
             </p>
           </div>
 
-          <div className="p-4 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] inline-block mx-auto">
+          <div className="p-4 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] inline-block mx-auto max-w-sm">
             <div className="h-32 w-32 bg-white border border-[#CBD5E1] p-2 flex items-center justify-center mx-auto">
               <div className="grid grid-cols-6 gap-1 w-full h-full p-1 bg-white">
                 {Array.from({ length: 36 }).map((_, i) => (
@@ -620,14 +803,15 @@ export const StudentPortfolioView: React.FC = () => {
                 ))}
               </div>
             </div>
-            <div className="font-mono text-[10px] text-[#64748B] mt-2">
-              Verification Hash: 0x047857...sistec • Attainment Attested
+            <div className="font-mono text-[10px] text-[#64748B] mt-2 break-all">
+              Verification Hash:{" "}
+              {selectedRecordForModal?.verificationHash || "0x047857...sistec"} • Attainment Attested
             </div>
           </div>
 
           <div className="text-[11px] text-[#64748B] flex items-center justify-center gap-1.5">
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Digitally signed by HOD Dr. Ravindra Kumar Sharma</span>
+            <span>Digitally signed and sealed by Department Leadership • {selectedRecordForModal?.departmentName || "CSE"}</span>
           </div>
         </div>
       </Modal>

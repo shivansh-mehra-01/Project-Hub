@@ -1319,7 +1319,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ initialTab = "te
               setNewCollegePrincipalEmail(e.target.value);
               setIsPrincipalEmailCustomized(true);
             }}
-            helperText="Auto-fills from SSO domain. An activation OTP and temporary credentials (Pass@1234) are automatically dispatched to this institutional inbox upon provisioning."
+            helperText="Auto-fills from SSO domain. An activation link is automatically dispatched to this institutional inbox upon provisioning."
           />
           <div className="grid grid-cols-2 gap-3">
             <Select

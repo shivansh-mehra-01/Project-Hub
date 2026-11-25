@@ -50,8 +50,18 @@ public class UserAccount : BaseEntity, ITenantEntity
     public bool IsPhoneVerified { get; set; } = false;
     public bool IsEmailVerified { get; set; } = true;
     public DateTime? PasswordChangedAtUtc { get; set; }
-    public bool MfaEnabled { get; set; } = true;
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
+    public int AccessFailedCount { get; set; } = 0;
+    public DateTime? LockoutEndUtc { get; set; }
+    public string? PendingEmail { get; set; }
+    public string? EmailChangeOtpHashed { get; set; }
+    public DateTime? EmailChangeOtpExpiresAtUtc { get; set; }
+    public int EmailChangeOtpAttempts { get; set; } = 0;
+    public string? ActivationTokenHashed { get; set; }
+    public DateTime? ActivationTokenExpiresAtUtc { get; set; }
+    public bool MfaEnabled { get; set; } = false;
     public string? MfaSecret { get; set; }
+    public string? MfaRecoveryCodesJson { get; set; }
     public string? NotificationPreferencesJson { get; set; }
     public string? ConsolePreferencesJson { get; set; }
 
@@ -61,4 +71,6 @@ public class UserAccount : BaseEntity, ITenantEntity
     public ICollection<TeamMember> TeamMemberships { get; set; } = new List<TeamMember>();
     public ICollection<ProjectTeam> GuidedTeams { get; set; } = new List<ProjectTeam>();
     public ICollection<StudentAcademicEnrollment> AcademicEnrollments { get; set; } = new List<StudentAcademicEnrollment>();
+    public ICollection<TeamInvitation> SentInvitations { get; set; } = new List<TeamInvitation>();
+    public ICollection<TeamInvitation> ReceivedInvitations { get; set; } = new List<TeamInvitation>();
 }

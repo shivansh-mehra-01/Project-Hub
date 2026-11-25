@@ -5,6 +5,7 @@ using ProjectHub.Application.Interfaces;
 using ProjectHub.Domain.Common;
 using ProjectHub.Domain.Entities;
 using ProjectHub.Domain.Entities.Master;
+using ProjectHub.Domain.Enums;
 using ProjectHub.Infrastructure.Persistence.Extensions;
 
 namespace ProjectHub.Infrastructure.Persistence;
@@ -50,16 +51,27 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
     public DbSet<ProblemBankStatement> ProblemBankStatements => Set<ProblemBankStatement>();
     public DbSet<ProjectTeam> ProjectTeams => Set<ProjectTeam>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<TeamInvitation> TeamInvitations => Set<TeamInvitation>();
     public DbSet<SprintTask> SprintTasks => Set<SprintTask>();
+    public DbSet<ProjectMilestone> ProjectMilestones => Set<ProjectMilestone>();
+    public DbSet<MilestoneReviewHistory> MilestoneReviewHistories => Set<MilestoneReviewHistory>();
+    public DbSet<ProjectReportSubmission> ProjectReportSubmissions => Set<ProjectReportSubmission>();
+    public DbSet<SubmissionReviewHistory> SubmissionReviewHistories => Set<SubmissionReviewHistory>();
     public DbSet<TeamArtifact> TeamArtifacts => Set<TeamArtifact>();
     public DbSet<WeeklyLogbook> WeeklyLogbooks => Set<WeeklyLogbook>();
     public DbSet<VivaPanel> VivaPanels => Set<VivaPanel>();
     public DbSet<VivaPanelEvaluator> VivaPanelEvaluators => Set<VivaPanelEvaluator>();
     public DbSet<VivaEvaluation> VivaEvaluations => Set<VivaEvaluation>();
     public DbSet<IndividualStudentScore> IndividualStudentScores => Set<IndividualStudentScore>();
+    public DbSet<TeamVivaDefenseSchedule> TeamVivaDefenseSchedules => Set<TeamVivaDefenseSchedule>();
+    public DbSet<EvaluationRubric> EvaluationRubrics => Set<EvaluationRubric>();
+    public DbSet<EvaluationRubricCriterion> EvaluationRubricCriteria => Set<EvaluationRubricCriterion>();
     public DbSet<CourseExitSurvey> CourseExitSurveys => Set<CourseExitSurvey>();
     public DbSet<ExceptionAuditLog> ExceptionAuditLogs => Set<ExceptionAuditLog>();
+    public DbSet<ProjectClosureRecord> ProjectClosureRecords => Set<ProjectClosureRecord>();
+    public DbSet<StudentAcademicRecord> StudentAcademicRecords => Set<StudentAcademicRecord>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
+    public DbSet<RefreshTokenRecord> RefreshTokenRecords => Set<RefreshTokenRecord>();
 
     // Dynamic Multi-Level Academic Hierarchy Entities
     public DbSet<AcademicSession> AcademicSessions => Set<AcademicSession>();
@@ -112,9 +124,15 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
         if (Database.IsNpgsql())
         {
             modelBuilder.Entity<ProjectTeam>().UseXminAsConcurrencyToken();
+            modelBuilder.Entity<ProjectMilestone>().UseXminAsConcurrencyToken();
+            modelBuilder.Entity<ProjectReportSubmission>().UseXminAsConcurrencyToken();
+            modelBuilder.Entity<TeamInvitation>().UseXminAsConcurrencyToken();
             modelBuilder.Entity<VivaEvaluation>().UseXminAsConcurrencyToken();
+            modelBuilder.Entity<TeamVivaDefenseSchedule>().UseXminAsConcurrencyToken();
             modelBuilder.Entity<AcademicTrack>().UseXminAsConcurrencyToken();
             modelBuilder.Entity<Department>().UseXminAsConcurrencyToken();
+            modelBuilder.Entity<ProjectClosureRecord>().UseXminAsConcurrencyToken();
+            modelBuilder.Entity<StudentAcademicRecord>().UseXminAsConcurrencyToken();
         }
     }
 
@@ -144,16 +162,79 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ApplyAuditAndTenantStamping();
-        return base.SaveChangesAsync(cancellationToken);
+        return await SaveChangesInternalAsync(() => base.SaveChangesAsync(cancellationToken), cancellationToken);
     }
 
-    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ApplyAuditAndTenantStamping();
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        return await SaveChangesInternalAsync(() => base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken), cancellationToken);
+    }
+
+    private async Task<int> SaveChangesInternalAsync(Func<Task<int>> saveFunc, CancellationToken cancellationToken)
+    {
+        if (!Database.IsNpgsql())
+        {
+            return await saveFunc();
+        }
+
+        var teamsWithGuideAssigned = ChangeTracker.Entries<ProjectTeam>()
+            .Where(e => (e.State == EntityState.Added || e.Property(t => t.GuideUserId).IsModified) && e.Entity.GuideUserId.HasValue)
+            .ToList();
+
+        if (teamsWithGuideAssigned.Count == 0)
+        {
+            return await saveFunc();
+        }
+
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (Database.CurrentTransaction == null)
+        {
+            localTx = await Database.BeginTransactionAsync(cancellationToken);
+        }
+
+        try
+        {
+            foreach (var entry in teamsWithGuideAssigned)
+            {
+                var gId = entry.Entity.GuideUserId!.Value;
+                await Database.ExecuteSqlInterpolatedAsync($"SELECT \"Id\" FROM \"UserAccounts\" WHERE \"Id\" = {gId} FOR UPDATE;", cancellationToken);
+                var gUser = await Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == gId, cancellationToken);
+                if (gUser != null)
+                {
+                    var count = await ProjectTeams.CountAsync(t => t.GuideUserId == gId && t.CollegeId == gUser.CollegeId && !t.IsDeleted && t.Status != ProjectStatus.Archived && t.Id != entry.Entity.Id, cancellationToken);
+                    if (count >= gUser.MaxMentorTeams)
+                    {
+                        throw new InvalidOperationException($"Faculty member '{gUser.FullName}' has reached maximum mentorship capacity of {gUser.MaxMentorTeams} teams.");
+                    }
+                }
+            }
+
+            var result = await saveFunc();
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(cancellationToken);
+            }
+            return result;
+        }
+        catch
+        {
+            if (localTx != null)
+            {
+                await localTx.RollbackAsync(cancellationToken);
+            }
+            throw;
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     /// <summary>
@@ -183,6 +264,76 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
                 {
                     throw new InvalidOperationException(
                         $"Audit Log Immutability Violation: ExceptionAuditLog entities cannot be deleted.");
+                }
+            }
+
+            // Phase 5 / 5.1 / 5.2 Parity Hook: Maintain lifecycle synchronization for ProjectTeam.GuideUserId across ALL authorized write paths (including frozen HOD operations)
+            if (entry.Entity is ProjectTeam projectTeam)
+            {
+                var guideProp = entry.Property(nameof(ProjectTeam.GuideUserId));
+                var guideModified = entry.State == EntityState.Added || guideProp.IsModified;
+
+                if (guideModified && projectTeam.GuideUserId.HasValue)
+                {
+                    // Strict Authorization Gate (Phase 5.2 / Preflight): Only authorized institutional authorities (HOD, Coordinator) or explicit system seeder can trigger official allocation
+                    var isAuthorizedAuthority = _tenantContext.IsTrustedSystemSeeder ||
+                                                _tenantContext.Role == UserRole.HOD ||
+                                                (_tenantContext.Role == UserRole.Faculty && _tenantContext.IsProjectCoordinator);
+
+                    if (isAuthorizedAuthority)
+                    {
+                        // 1. Maintain lifecycle parity: An authorized official guide assignment always implies Allocated status
+                        projectTeam.GuidePreferenceStatus = GuidePreferenceStatus.Allocated;
+
+                        // 2. Populate allocation timestamp if not already set
+                        if (!projectTeam.GuideAllocatedAtUtc.HasValue)
+                        {
+                            projectTeam.GuideAllocatedAtUtc = utcNow;
+                        }
+
+                        // 3. Populate allocating authority if not already set
+                        if (!projectTeam.GuideAllocatedByUserId.HasValue && currentUserId.HasValue)
+                        {
+                            projectTeam.GuideAllocatedByUserId = currentUserId;
+                        }
+
+                        // 4. Populate allocation remarks if not already set
+                        if (string.IsNullOrWhiteSpace(projectTeam.GuideAllocationRemarks))
+                        {
+                            var relatedLog = ChangeTracker.Entries<ExceptionAuditLog>()
+                                .FirstOrDefault(e => e.Entity.ProjectTeamId == projectTeam.Id && e.Entity.ActionType == ExceptionActionType.ReassignGuide)?.Entity;
+
+                            projectTeam.GuideAllocationRemarks = !string.IsNullOrWhiteSpace(relatedLog?.Reason)
+                                ? relatedLog.Reason
+                                : "Officially allocated by Department Authority";
+                        }
+                    }
+                    else
+                    {
+                        // Unauthorized caller (e.g. Student write): Cannot trigger official allocation or stamp student as allocating authority!
+                        if (projectTeam.GuidePreferenceStatus == GuidePreferenceStatus.Allocated)
+                        {
+                            projectTeam.GuidePreferenceStatus = projectTeam.PreferredGuideUserId.HasValue
+                                ? GuidePreferenceStatus.Requested
+                                : GuidePreferenceStatus.None;
+                        }
+                        projectTeam.GuideAllocatedAtUtc = null;
+                        projectTeam.GuideAllocatedByUserId = null;
+                        projectTeam.GuideAllocationRemarks = null;
+                    }
+                }
+                else if (guideModified && !projectTeam.GuideUserId.HasValue && entry.State == EntityState.Modified)
+                {
+                    // Guide deallocated or proposal rejected by faculty
+                    if (projectTeam.GuidePreferenceStatus == GuidePreferenceStatus.Allocated)
+                    {
+                        projectTeam.GuidePreferenceStatus = projectTeam.PreferredGuideUserId.HasValue
+                            ? GuidePreferenceStatus.Requested
+                            : GuidePreferenceStatus.None;
+                    }
+                    projectTeam.GuideAllocatedAtUtc = null;
+                    projectTeam.GuideAllocatedByUserId = null;
+                    projectTeam.GuideAllocationRemarks = null;
                 }
             }
 

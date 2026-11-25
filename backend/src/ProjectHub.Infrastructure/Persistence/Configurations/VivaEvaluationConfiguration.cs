@@ -25,6 +25,16 @@ public class VivaEvaluationConfiguration : IEntityTypeConfiguration<VivaEvaluati
         builder.Property(ve => ve.GeneralRemarks)
             .HasMaxLength(2000);
 
+        builder.Property(ve => ve.Outcome)
+            .HasConversion<string>()
+            .HasMaxLength(30);
+
+        builder.Property(ve => ve.RubricSnapshotJson)
+            .HasColumnType("jsonb");
+
+        builder.Property(ve => ve.ModerationRemarks)
+            .HasMaxLength(2000);
+
         builder.HasIndex(ve => new { ve.CollegeId, ve.ProjectTeamId, ve.CheckpointType })
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");

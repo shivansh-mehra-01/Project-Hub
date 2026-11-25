@@ -36,6 +36,16 @@ public class ProjectTeamConfiguration : IEntityTypeConfiguration<ProjectTeam>
             .HasConversion<string>()
             .HasMaxLength(50);
 
+        builder.Property(t => t.GuidePreferenceStatus)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(t => t.GuidePreferenceRemarks)
+            .HasMaxLength(1000);
+
+        builder.Property(t => t.GuideAllocationRemarks)
+            .HasMaxLength(1000);
+
         builder.Property(t => t.SimilarityScorePct)
             .HasPrecision(5, 2);
 
@@ -68,6 +78,16 @@ public class ProjectTeamConfiguration : IEntityTypeConfiguration<ProjectTeam>
         builder.HasOne(t => t.GuideUser)
             .WithMany(u => u.GuidedTeams)
             .HasForeignKey(t => t.GuideUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(t => t.PreferredGuideUser)
+            .WithMany()
+            .HasForeignKey(t => t.PreferredGuideUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(t => t.GuideAllocatedByUser)
+            .WithMany()
+            .HasForeignKey(t => t.GuideAllocatedByUserId)
             .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(t => t.ParentProjectTeam)

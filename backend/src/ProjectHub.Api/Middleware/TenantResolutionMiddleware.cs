@@ -85,12 +85,12 @@ public class TenantResolutionMiddleware
         }
         else
         {
-            // Unauthenticated pre-login endpoint: Allow X-College-Id header fallback
-            if (context.Request.Headers.TryGetValue("X-College-Id", out var headerValue) &&
-                Guid.TryParse(headerValue.ToString(), out var headerCollegeId))
-            {
-                tenantContext.CollegeId = headerCollegeId;
-            }
+            // Fail closed for unauthenticated requests: never trust client-supplied X-College-Id headers
+            tenantContext.CollegeId = null;
+            tenantContext.DepartmentId = null;
+            tenantContext.UserId = null;
+            tenantContext.IsSuperAdmin = false;
+            tenantContext.IsProjectCoordinator = false;
         }
 
         await _next(context);

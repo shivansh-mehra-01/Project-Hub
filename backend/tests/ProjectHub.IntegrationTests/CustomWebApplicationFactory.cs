@@ -60,7 +60,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
             var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
             db.Database.EnsureCreated();
-            DbInitializer.SeedAsync(db, tenantContext).GetAwaiter().GetResult();
+            DbInitializer.SeedAsync(db, tenantContext, isDevelopment: true).GetAwaiter().GetResult();
         }
 
         return host;

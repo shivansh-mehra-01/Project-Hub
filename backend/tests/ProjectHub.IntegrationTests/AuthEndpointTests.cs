@@ -27,7 +27,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         // Act
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Email = "0176cs221045@sistec.ac.in",
+            Email = "student@sistec.ac.in",
             Password = "Pass@1234"
         });
 
@@ -48,7 +48,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         // Act
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Email = "priya.nair@sistec.ac.in",
+            Email = "coordinator@sistec.ac.in",
             Password = "Pass@1234"
         });
 
@@ -67,7 +67,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         // Act: Login with seeded HOD credentials
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Email = "hod.cse@sistec.ac.in",
+            Email = "hod@sistec.ac.in",
             Password = "Pass@1234"
         });
 
@@ -85,7 +85,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         // Act: Login with wrong password
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Email = "hod.cse@sistec.ac.in",
+            Email = "hod@sistec.ac.in",
             Password = "WrongPassword123!"
         });
 
@@ -150,14 +150,14 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
         // 1. Initial request for student Aarav
         var firstResponse = await _client.PostAsJsonAsync("/api/auth/request-password-otp", new RequestPasswordOtpRequest
         {
-            Email = "0176cs221002@sistec.ac.in"
+            Email = "student2@sistec.ac.in"
         });
         Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
 
         // 2. Rapid duplicate request immediately afterwards
         var secondResponse = await _client.PostAsJsonAsync("/api/auth/request-password-otp", new RequestPasswordOtpRequest
         {
-            Email = "0176cs221002@sistec.ac.in"
+            Email = "student2@sistec.ac.in"
         });
 
         // Assert: Throttled with 400 Bad Request

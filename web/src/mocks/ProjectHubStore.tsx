@@ -232,17 +232,18 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   const [academicSessions, setAcademicSessions] = useState<AcademicSession[]>(initialAcademicSessions);
   const [semesterTerms, setSemesterTerms] = useState<SemesterTerm[]>(initialSemesterTerms);
   const [subjectOfferings, setSubjectOfferings] = useState<SubjectOffering[]>(initialSubjectOfferings);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return !!getAuthToken();
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLiveSession, setIsLiveSession] = useState<boolean>(false);
   const [isHydrating, setIsHydrating] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Clean legacy demo/prototype localStorage keys on startup and sync authenticated persona
+  // Clean legacy demo/prototype localStorage keys and hydrate HttpOnly BFF session on startup
   useEffect(() => {
+    let active = true;
     try {
       const legacyKeys = [
+        "projecthub_jwt_token",
+        "projecthub_user_profile",
         "projecthub_campus_store_v3",
         "projecthub_campus_store_v2",
         "projecthub_campus_store_v1",
@@ -251,45 +252,61 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         "projecthub_theme",
         "projecthub_active_persona",
       ];
-      legacyKeys.forEach((k) => localStorage.removeItem(k));
-      for (let i = 0; i < localStorage.length; i++) {
+      legacyKeys.forEach((k) => {
+        localStorage.removeItem(k);
+        sessionStorage.removeItem(k);
+      });
+      for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
         if (key && (key.startsWith("projecthub_campus_") || key.startsWith("projecthub_mock_"))) {
           localStorage.removeItem(key);
         }
       }
-
-      const userProfile = getUserProfile();
-      if (userProfile) {
-        setCurrentPersona({
-          id: userProfile.id,
-          name: userProfile.fullName,
-          email: userProfile.email,
-          role: userProfile.role as RoleType,
-          collegeId: userProfile.collegeId,
-          departmentId: userProfile.departmentId || undefined,
-          isProjectCoordinator: userProfile.isProjectCoordinator,
-          enrollmentNumber: userProfile.enrollmentOrEmployeeCode,
-          employeeId: userProfile.enrollmentOrEmployeeCode,
-        });
-        setIsAuthenticated(true);
-      } else {
-        const token = getAuthToken();
-        setIsAuthenticated(!!token);
-      }
-    } catch (e) {
-      console.warn("Storage cleanup completed.", e);
-    } finally {
-      setIsLoaded(true);
+    } catch {
+      // Ignore storage cleanup errors
     }
+
+    authApi
+      .session()
+      .then((res) => {
+        if (!active) return;
+        if (res.authenticated && res.user) {
+          const userProfile = res.user;
+          setCurrentPersona({
+            id: userProfile.id,
+            name: userProfile.fullName,
+            email: userProfile.email,
+            role: userProfile.role as RoleType,
+            collegeId: userProfile.collegeId,
+            departmentId: userProfile.departmentId || undefined,
+            isProjectCoordinator: userProfile.isProjectCoordinator,
+            enrollmentNumber: userProfile.enrollmentOrEmployeeCode,
+            employeeId: userProfile.enrollmentOrEmployeeCode,
+          });
+          setIsAuthenticated(true);
+          setIsLiveSession(true);
+        } else {
+          setIsAuthenticated(false);
+          setIsLiveSession(false);
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        setIsAuthenticated(false);
+        setIsLiveSession(false);
+      })
+      .finally(() => {
+        if (active) setIsLoaded(true);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  // Hydrate from live .NET 10 API when a JWT session exists
+  // Hydrate from live .NET 10 API when a BFF session is active
   useEffect(() => {
-    const token = getAuthToken();
-    setIsLiveSession(!!token);
-
-    if (!token) return;
+    if (!isLiveSession || !isAuthenticated) return;
 
     let isMounted = true;
     const hydrate = async () => {
@@ -622,6 +639,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
 
   // Actions
   const logout = React.useCallback(() => {
+    authApi.logout().catch(() => null);
     clearAuthSession();
     setIsLiveSession(false);
     setIsAuthenticated(false);

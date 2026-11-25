@@ -2,18 +2,13 @@ import { showToast } from "@/lib/toast";
 import { UserProfileDto } from "./types";
 
 export const getApiBaseUrl = (): string => {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  if (typeof window !== "undefined" && window.location.hostname && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
-    const protocol = window.location.protocol || "http:";
-    return `${protocol}//${window.location.hostname}:5000`;
-  }
-  return "http://localhost:5000";
+  return "/api/proxy";
 };
 
-export const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = "/api/proxy";
 
-const TOKEN_KEY = "projecthub_jwt_token";
-const USER_KEY = "projecthub_user_profile";
+// In-memory profile cache only — JWT and refresh tokens are stored exclusively in HttpOnly cookies.
+let inMemoryUserProfile: UserProfileDto | null = null;
 
 export class ApiError extends Error {
   status: number;
@@ -28,42 +23,26 @@ export class ApiError extends Error {
 }
 
 export function getAuthToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  // Tokens are HttpOnly and never exposed to browser JavaScript.
+  return null;
 }
 
 export function getUserProfile(): UserProfileDto | null {
-  if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as UserProfileDto;
-  } catch {
-    return null;
-  }
+  return inMemoryUserProfile;
 }
 
-export function setAuthSession(token: string, user: UserProfileDto, persistLocal = false): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.setItem(TOKEN_KEY, token);
-  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
-  if (persistLocal) {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
-  }
+export function setAuthSession(_token: string | null | undefined, user: UserProfileDto, _persistLocal = false): void {
+  inMemoryUserProfile = user;
 }
 
 export function clearAuthSession(): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(USER_KEY);
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  try {
-    // Notify all open tabs of logout via localStorage event
-    localStorage.setItem("collabex_logout_event", Date.now().toString());
-  } catch {
-    // Quota or private browsing mode
+  inMemoryUserProfile = null;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("collabex_logout_event", Date.now().toString());
+    } catch {
+      // Ignore storage quota errors
+    }
   }
 }
 
@@ -73,11 +52,12 @@ interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined | null>;
   skipAuth?: boolean;
   suppressToast?: boolean;
+  directBff?: boolean;
 }
 
 export async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const baseUrl = getApiBaseUrl();
-  let url = `${baseUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  let url = options.directBff ? cleanEndpoint : `${API_BASE_URL}${cleanEndpoint}`;
 
   if (options.params) {
     const searchParams = new URLSearchParams();
@@ -95,13 +75,6 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
   const headers = new Headers(options.headers || {});
   headers.set("Accept", "application/json");
 
-  if (!options.skipAuth) {
-    const token = getAuthToken();
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
-  }
-
   if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -110,10 +83,11 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
   try {
     response = await fetch(url, {
       ...options,
+      credentials: "same-origin",
       headers,
     });
   } catch (networkError: any) {
-    const msg = `Unable to reach Collabex API at ${API_BASE_URL}. Ensure the backend service is running.`;
+    const msg = "Unable to reach Collabex API. Ensure the backend service is running.";
     if (!options.suppressToast) {
       showToast(msg, "warning");
     }
@@ -124,7 +98,9 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
     const isAuthAttempt =
       endpoint.includes("/auth/login") ||
       endpoint.includes("/auth/reset-password") ||
-      endpoint.includes("/auth/request-password-otp");
+      endpoint.includes("/auth/request-password-otp") ||
+      endpoint.includes("/auth/session") ||
+      endpoint.includes("/auth/mfa/verify");
 
     if (!isAuthAttempt) {
       clearAuthSession();
@@ -133,7 +109,6 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
         if (!isHandlingSessionExpiry && window.location.pathname !== "/login") {
           isHandlingSessionExpiry = true;
           showToast("Your session has expired. Please sign in again.", "warning");
-          // Use location.replace so expired session is removed from browser history
           window.location.replace("/login");
           setTimeout(() => {
             isHandlingSessionExpiry = false;
@@ -198,7 +173,6 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
       errorMessage = "An unexpected server error occurred. Please try again.";
     }
 
-    // Cap message length to prevent UI deformation
     if (errorMessage.length > 180) {
       errorMessage = errorMessage.substring(0, 177) + "...";
     }
@@ -249,7 +223,8 @@ export const apiClient = {
     }),
 
   getBlob: async (endpoint: string, options?: RequestOptions): Promise<Blob> => {
-    let url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+    const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    let url = `${API_BASE_URL}${cleanEndpoint}`;
     if (options?.params) {
       const searchParams = new URLSearchParams();
       Object.entries(options.params).forEach(([key, val]) => {
@@ -263,11 +238,12 @@ export const apiClient = {
       }
     }
     const headers = new Headers(options?.headers || {});
-    const token = getAuthToken();
-    if (token && !options?.skipAuth) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
-    const response = await fetch(url, { ...options, headers, method: "GET" });
+    const response = await fetch(url, {
+      ...options,
+      credentials: "same-origin",
+      headers,
+      method: "GET",
+    });
     if (!response.ok) {
       throw new ApiError(`Download failed with status ${response.status}`, response.status);
     }

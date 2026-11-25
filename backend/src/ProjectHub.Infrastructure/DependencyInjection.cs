@@ -20,7 +20,25 @@ public static class DependencyInjection
         services.AddScoped<ITenantContext, TenantContext>();
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
-        services.AddScoped<IEmailSender, LoggingEmailSender>();
+        services.AddScoped<ISessionSecurityService, SessionSecurityService>();
+
+        var redisConn = configuration["Redis:ConnectionString"];
+        if (!string.IsNullOrWhiteSpace(redisConn))
+        {
+            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ =>
+                StackExchange.Redis.ConnectionMultiplexer.Connect(redisConn));
+        }
+
+        var emailProvider = configuration["Email:Provider"];
+        if (string.Equals(emailProvider, "Smtp", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddScoped<IEmailSender, SmtpEmailSender>();
+        }
+        else
+        {
+            services.AddScoped<IEmailSender, LoggingEmailSender>();
+        }
+
         services.AddScoped<IFileStorageService, LocalDiskStorageService>();
 
         // Register EF Core Interceptors
