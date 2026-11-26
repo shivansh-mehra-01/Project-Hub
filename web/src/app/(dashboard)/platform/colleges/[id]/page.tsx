@@ -16,14 +16,21 @@ export const metadata = {
   description: "Institutional profile, subscription tier, administrator details, and audit history.",
 };
 
-export default async function CollegeDetailsPage(props: {
+async function CollegeDetailsContent({
+  params,
+}: {
   params: Promise<{ id: string }>;
 }) {
-  const params = await props.params;
+  const { id } = await params;
+  return <CollegeDetailsView id={id} />;
+}
 
+export default function CollegeDetailsPage(props: {
+  params: Promise<{ id: string }>;
+}) {
   return (
     <Suspense fallback={<div className="p-6 text-xs text-slate-500">Loading college profile...</div>}>
-      <CollegeDetailsView id={params.id} />
+      <CollegeDetailsContent params={props.params} />
     </Suspense>
   );
 }

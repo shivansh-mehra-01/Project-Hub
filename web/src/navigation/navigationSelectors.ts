@@ -19,8 +19,8 @@ export interface SidebarNavItem {
 
 export interface BreadcrumbInfo {
   pageTitle: string;
-  breadcrumb: string;
-  group: string;
+  breadcrumb?: string;
+  group?: string;
 }
 
 export interface CommandPaletteEntity {
@@ -88,7 +88,7 @@ export const getBreadcrumbs = (pathname: string, role?: RoleType): BreadcrumbInf
     if (route) {
       return {
         pageTitle: route.breadcrumbGroup || "Platform Console",
-        breadcrumb: route.breadcrumbTitle || route.description,
+        breadcrumb: route.breadcrumbTitle,
         group: route.breadcrumbGroup || "Platform Console",
       };
     }
@@ -98,14 +98,14 @@ export const getBreadcrumbs = (pathname: string, role?: RoleType): BreadcrumbInf
   if (!route) {
     return {
       pageTitle: "Project Hub",
-      breadcrumb: "Institutional Governance",
+      breadcrumb: undefined,
       group: "Project Hub",
     };
   }
 
   return {
     pageTitle: route.breadcrumbGroup || route.label,
-    breadcrumb: route.breadcrumbTitle || route.description,
+    breadcrumb: route.breadcrumbTitle,
     group: route.breadcrumbGroup,
   };
 };

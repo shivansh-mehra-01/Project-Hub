@@ -141,7 +141,6 @@ export const StaffDirectoryView: React.FC = () => {
 
   useDashboardHeader({
     title: "Faculty & Staff",
-    breadcrumb: "User accounts, AICTE designations, department affiliations, and credentials",
   });
 
   const showToast = (msg: string) => {
@@ -159,7 +158,8 @@ export const StaffDirectoryView: React.FC = () => {
         collegeApi.getCoursePrograms(),
       ]);
 
-      setUsers(userRes || []);
+      const collegeStaff = (userRes || []).filter((u) => u.role !== "SuperAdmin");
+      setUsers(collegeStaff);
       setDepartments(deptRes || []);
       setPrograms(progRes || []);
     } catch (err: any) {
@@ -214,7 +214,7 @@ export const StaffDirectoryView: React.FC = () => {
     setEditingUser(user);
     setEditName(user.fullName);
     setEditRole(user.role);
-    setEditDesignation(user.designation);
+    setEditDesignation(user.designation || undefined);
     setEditDeptId(user.departmentId || "");
     setEditEmpCode(user.employeeCode || "");
     setShowEditUserModal(true);
@@ -228,7 +228,7 @@ export const StaffDirectoryView: React.FC = () => {
       const payload: UpdateCollegeStaffRequest = {
         fullName: editName.trim(),
         role: editRole,
-        designation: editRole === "Faculty" || editRole === "HOD" ? editDesignation : undefined,
+        designation: (editRole === "Faculty" || editRole === "HOD") && editDesignation ? editDesignation : undefined,
         departmentId: editRole === "CollegeAdmin" ? undefined : editDeptId || undefined,
         employeeCode: editEmpCode.trim() || undefined,
       };
@@ -442,8 +442,9 @@ export const StaffDirectoryView: React.FC = () => {
   const facultyCount = users.filter((u) => u.role === "Faculty" || u.role === "HOD").length;
   const adminCount = users.filter((u) => u.role === "CollegeAdmin").length;
 
-  // Filtered List
+  // Filtered List (College staff only; platform SuperAdmin is excluded from institutional directory)
   const filteredUsers = users.filter((u) => {
+    if (u.role === "SuperAdmin") return false;
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
       !q ||
@@ -775,10 +776,13 @@ export const StaffDirectoryView: React.FC = () => {
               label="Academic Department"
               value={newDeptId}
               onChange={(e) => setNewDeptId(e.target.value)}
-              options={departments.map((d) => ({
-                label: `${d.name} (${d.code})`,
-                value: d.id,
-              }))}
+              options={[
+                { label: "-- Select Department --", value: "" },
+                ...departments.map((d) => ({
+                  label: `${d.name} (${d.code})`,
+                  value: d.id,
+                })),
+              ]}
             />
           )}
 
@@ -841,9 +845,10 @@ export const StaffDirectoryView: React.FC = () => {
           {(editRole === "Faculty" || editRole === "HOD") && (
             <Select
               label="AICTE Cadre / Designation"
-              value={editDesignation || "AssistantProfessor"}
-              onChange={(e: any) => setEditDesignation(e.target.value)}
+              value={editDesignation || ""}
+              onChange={(e: any) => setEditDesignation(e.target.value as FacultyDesignation)}
               options={[
+                { label: "-- Select Cadre / Designation --", value: "" },
                 { label: "Professor", value: "Professor" },
                 { label: "Associate Professor", value: "AssociateProfessor" },
                 { label: "Assistant Professor", value: "AssistantProfessor" },
@@ -855,12 +860,15 @@ export const StaffDirectoryView: React.FC = () => {
           {editRole !== "CollegeAdmin" && (
             <Select
               label="Academic Department"
-              value={editDeptId}
+              value={editDeptId || ""}
               onChange={(e) => setEditDeptId(e.target.value)}
-              options={departments.map((d) => ({
-                label: `${d.name} (${d.code})`,
-                value: d.id,
-              }))}
+              options={[
+                { label: "-- Select Department --", value: "" },
+                ...departments.map((d) => ({
+                  label: `${d.name} (${d.code})`,
+                  value: d.id,
+                })),
+              ]}
             />
           )}
 

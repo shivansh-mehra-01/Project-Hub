@@ -132,7 +132,6 @@ export const CoursesAndBranchesView: React.FC = () => {
 
   useDashboardHeader({
     title: "Programs & Branches",
-    breadcrumb: "Degree programs, department branches, and sanctioned student intake quotas",
   });
 
   const showToast = (msg: string) => {

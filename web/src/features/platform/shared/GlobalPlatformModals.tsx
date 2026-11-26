@@ -31,12 +31,14 @@ interface LogoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (signOutAllSessions: boolean) => void;
+  isSuperAdmin?: boolean;
 }
 
 export const LogoutConfirmationModal: React.FC<LogoutModalProps> = ({
   isOpen,
   onClose,
   onConfirm,
+  isSuperAdmin = false,
 }) => {
   const [revokeAllSessions, setRevokeAllSessions] = useState(false);
 
@@ -44,48 +46,62 @@ export const LogoutConfirmationModal: React.FC<LogoutModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Sign Out of Colabex Platform Console"
-      description="Confirm termination of your active administrative session."
+      title={isSuperAdmin ? "Sign Out of Collabex Platform Console" : "Log out of Collabex?"}
+      description={
+        isSuperAdmin
+          ? "Confirm termination of your active administrative session."
+          : "Are you sure you want to end your current session?"
+      }
       maxWidth="sm"
       footer={
-        <div className="flex items-center justify-end gap-2 w-full">
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
+        <div className="flex items-center justify-end gap-2.5 w-full">
           <Button
-            variant="danger"
+            variant="secondary"
             size="sm"
             onClick={() => onConfirm(revokeAllSessions)}
             leftIcon={<LogOut className="h-3.5 w-3.5" />}
+            className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 hover:border-rose-200"
           >
-            {revokeAllSessions ? "Sign Out All Sessions" : "Sign Out"}
+            {isSuperAdmin && revokeAllSessions ? "Sign Out All" : "Log Out"}
+          </Button>
+          <Button variant="primary" size="sm" onClick={onClose} autoFocus>
+            Cancel
           </Button>
         </div>
       }
     >
-      <div className="space-y-4 text-xs">
-        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2.5">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+      {isSuperAdmin ? (
+        <div className="space-y-4 text-xs">
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              You are signed in as <strong>Platform Super Admin</strong> with elevated privileges across all tenant schemas. Any uncommitted configuration changes will be lost.
+            </p>
+          </div>
+
+          <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={revokeAllSessions}
+              onChange={(e) => setRevokeAllSessions(e.target.checked)}
+              className="rounded text-brand-primary focus:ring-0 accent-brand-primary h-4 w-4 mt-0.5 cursor-pointer"
+            />
+            <div className="space-y-0.5 text-xs">
+              <span className="font-semibold text-slate-900 block">Sign out from all active sessions</span>
+              <span className="text-[11px] text-slate-500 block leading-tight">
+                Revokes JWT tokens across all desktop browsers, mobile devices and active sessions immediately.
+              </span>
+            </div>
+          </label>
+        </div>
+      ) : (
+        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 flex items-start gap-2.5 text-xs">
+          <LogOut className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
           <p className="leading-relaxed">
-            You are signed in as <strong>Platform Super Admin</strong> with elevated privileges across all tenant schemas. Any uncommitted configuration changes will be lost.
+            You will be returned to the sign-in screen. Please ensure any unsaved changes are saved before continuing.
           </p>
         </div>
-
-        <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={revokeAllSessions}
-            onChange={(e) => setRevokeAllSessions(e.target.checked)}
-            className="rounded text-brand-primary focus:ring-0 accent-brand-primary h-4 w-4 mt-0.5 cursor-pointer"
-          />
-          <div className="space-y-0.5 text-xs">
-            <span className="font-semibold text-slate-900 block">Sign out from all active sessions</span>
-            <span className="text-[11px] text-slate-500 block leading-tight">
-              Revokes JWT tokens across all desktop browsers, mobile devices and active sessions immediately.
-            </span>
-          </div>
-        </label>
-      </div>
+      )}
     </Modal>
   );
 };
