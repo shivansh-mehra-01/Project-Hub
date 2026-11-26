@@ -812,9 +812,16 @@ public class SupervisionController : ControllerBase
             return NotFound(new { message = "No attached report deliverable file found for this submission." });
         }
 
-        var (stream, contentType) = await _fileStorageService.OpenReadAsync(storageKey, cancellationToken);
-        Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{fileName}\"");
-        return File(stream, contentType, fileName);
+        try
+        {
+            var (stream, contentType) = await _fileStorageService.OpenReadAsync(storageKey, cancellationToken);
+            Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{fileName}\"");
+            return File(stream, contentType, fileName);
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound(new { message = "Report deliverable file not found in storage." });
+        }
     }
 
     private static SubmissionReadinessDto BuildSubmissionReadiness(ProjectTeam team, ProjectReportSubmission? submission, List<ProjectMilestone> milestones)

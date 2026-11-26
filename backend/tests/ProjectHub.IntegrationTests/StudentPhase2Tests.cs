@@ -299,8 +299,11 @@ public class StudentPhase2Tests : IClassFixture<CustomWebApplicationFactory>
         var updateReq = new UpdateStudentProfileRequest
         {
             Skills = new List<string> { "TypeScript", "React", "ASP.NET Core", "PostgreSQL" },
-            GitHubHandle = "student-coder-2026",
-            JiraKey = "CAPSTONE-777",
+            SocialLinks = new List<StudentSocialLinkDto>
+            {
+                new() { Platform = "GitHub", Url = "https://github.com/student-coder-2026" },
+                new() { Platform = "LinkedIn", Url = "https://linkedin.com/in/student-coder-2026" }
+            },
             PhoneNumber = "+91 98260 99887",
             Bio = "Passionate about IoT and distributed backend architecture."
         };
@@ -319,12 +322,12 @@ public class StudentPhase2Tests : IClassFixture<CustomWebApplicationFactory>
         var updated = await response.Content.ReadFromJsonAsync<StudentProfileDto>();
         Assert.NotNull(updated);
         Assert.Equal("student-coder-2026", updated.GitHubHandle);
-        Assert.Equal("CAPSTONE-777", updated.JiraKey);
+        Assert.Equal(2, updated.SocialLinks.Count);
         Assert.Equal("+91 98260 99887", updated.PhoneNumber);
         Assert.Equal("Passionate about IoT and distributed backend architecture.", updated.Bio);
         Assert.Contains("TypeScript", updated.Skills);
         Assert.Contains("PostgreSQL", updated.Skills);
-        Assert.Equal(100, updated.ProfileCompletionPercentage);
+        Assert.Equal(80, updated.ProfileCompletionPercentage);
 
         // Assert direct database persistence
         using (var scope = _factory.Services.CreateScope())
@@ -337,10 +340,10 @@ public class StudentPhase2Tests : IClassFixture<CustomWebApplicationFactory>
             var persisted = await db.Users.FindAsync(studentId);
             Assert.NotNull(persisted);
             Assert.Equal("student-coder-2026", persisted.GitHubHandle);
-            Assert.Equal("CAPSTONE-777", persisted.JiraKey);
             Assert.Equal("+91 98260 99887", persisted.PhoneNumber);
             Assert.Contains("TypeScript,React", persisted.SkillsCsv);
             Assert.Contains("distributed backend architecture", persisted.ConsolePreferencesJson);
+            Assert.Contains("linkedin.com/in/student-coder-2026", persisted.ConsolePreferencesJson);
         }
     }
 

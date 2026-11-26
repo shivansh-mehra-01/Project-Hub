@@ -12,7 +12,7 @@ const steps = [
   { step: 2, label: "Team & Idea", sub: "Roster Lock & Proposal" },
   { step: 3, label: "Approvals", sub: "Guide & HOD Sign-off" },
   { step: 4, label: "Build & Logs", sub: "Sprints & Friday Checks" },
-  { step: 5, label: "Viva & Archive", sub: "Defense & NBA Dossier" },
+  { step: 5, label: "Viva & Archive", sub: "Defense & Final Archive" },
 ];
 
 export const StepperGPS: React.FC<StepperGPSProps> = ({ currentStep, className }) => {

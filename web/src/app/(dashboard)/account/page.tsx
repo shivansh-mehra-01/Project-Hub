@@ -17,12 +17,10 @@ import {
   Loader2,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
-import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { authApi, UserProfileDto } from "@/lib/api";
 import { formatRoleLabel } from "@/design-system/components/CommandPalette";
 
 export default function AccountPage() {
-  const { currentPersona } = useProjectHubStore();
 
   const [activeTab, setActiveTab] = useState<"profile" | "security">("profile");
   const [profile, setProfile] = useState<UserProfileDto | null>(null);
@@ -80,9 +78,9 @@ export default function AccountPage() {
     };
   }, []);
 
-  const displayName = profile?.fullName || currentPersona?.name || "User";
-  const displayEmail = profile?.email || currentPersona?.email || "";
-  const displayRole = profile?.role || currentPersona?.role || "";
+  const displayName = profile?.fullName || "User";
+  const displayEmail = profile?.email || "";
+  const displayRole = profile?.role || "";
   const displayCollege =
     displayRole === "SuperAdmin"
       ? "Colabex Platform Administration"

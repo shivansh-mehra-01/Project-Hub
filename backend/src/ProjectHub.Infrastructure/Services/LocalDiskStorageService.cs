@@ -142,14 +142,11 @@ public class LocalDiskStorageService : IFileStorageService
         if (File.Exists(physicalPath))
         {
             var fileStream = new FileStream(physicalPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
-            return (fileStream, contentType);
+            return await Task.FromResult<(Stream, string)>((fileStream, contentType));
         }
 
-        // Dynamic fallback stream if file is not yet on physical disk (e.g. initial demo/seed records)
-        _logger.LogWarning("Vault deliverable not found on disk at {PhysicalPath}. Generating valid fallback PDF summary sheet.", physicalPath);
-        var fallbackContent = $"%PDF-1.4\n% Collabex Capstone Vault Deliverable\n% Deliverable: {fileName}\n% StorageKey: {storageKey}\n% Verified: true\n%%EOF\n";
-        var memStream = new MemoryStream(Encoding.UTF8.GetBytes(fallbackContent));
-        return await Task.FromResult<(Stream, string)>((memStream, "application/pdf"));
+        _logger.LogWarning("Vault deliverable not found on disk at {PhysicalPath} for key {StorageKey}.", physicalPath, storageKey);
+        throw new FileNotFoundException($"Stored artifact file not found for key '{storageKey}'.", physicalPath);
     }
 
     public async Task<StoredFileResult> SaveFileAsync(

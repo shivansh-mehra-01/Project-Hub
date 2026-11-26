@@ -1112,7 +1112,7 @@ export const StudentExploreView: React.FC = () => {
         subtitle={`${inspectingProject?.academicYear} • Guided by ${inspectingProject?.guideName}`}
         footer={
           <div className="flex items-center justify-between w-full">
-            <span className="text-xs text-[#64748B] font-mono">NBA / SAR Accredited Project Archive</span>
+            <span className="text-xs text-[#64748B] font-mono">Verified Institutional Project Archive</span>
             <Button size="sm" variant="secondary" onClick={() => setInspectingProject(null)}>
               Close Inspection
             </Button>

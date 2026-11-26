@@ -34,13 +34,11 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/des
 import { Modal } from "@/design-system/components/Modal";
 import { Input } from "@/design-system/components/Input";
 import { Select } from "@/design-system/components/Select";
-import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
 import { CollabexLogo } from "@/components/brand/CollabexLogo";
 
 export default function MarketingHomePage() {
   const router = useRouter();
-  const { switchPersona } = useProjectHubStore();
 
   const [isPilotModalOpen, setIsPilotModalOpen] = useState(false);
   const [pilotSubmitted, setPilotSubmitted] = useState(false);
@@ -630,10 +628,7 @@ export default function MarketingHomePage() {
                   size="sm"
                   variant="secondary"
                   className="w-full justify-between"
-                  onClick={() => {
-                    switchPersona("Faculty");
-                    router.push("/coordinator");
-                  }}
+                  onClick={() => handleLaunchRole("Faculty")}
                   rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
                 >
                   Launch Batch Ops View

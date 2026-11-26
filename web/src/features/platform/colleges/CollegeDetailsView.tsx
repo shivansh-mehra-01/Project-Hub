@@ -100,7 +100,7 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
   const [showReplaceAdminModal, setShowReplaceAdminModal] = useState(false);
   const [replaceForm, setReplaceForm] = useState({ name: "", email: "", reason: "" });
 
-  const resolvedTenantId = liveTenant?.id || storeCollege?.id || id;
+  const resolvedTenantId = liveTenant?.id || id;
 
   const loadTenantDetails = useCallback(async () => {
     if (!id) return;
@@ -110,13 +110,12 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
       const dto = await platformApi.getTenant(id);
       setLiveTenant(dto);
     } catch (err: any) {
-      if (!storeCollege) {
-        setDetailsError(err?.message || "College tenant not found.");
-      }
+      setLiveTenant(null);
+      setDetailsError(err?.message || "College tenant not found.");
     } finally {
       setIsLoadingDetails(false);
     }
-  }, [id, storeCollege]);
+  }, [id]);
 
   const loadTenantLogs = useCallback(async (tenantUuid: string) => {
     setIsLoadingLogs(true);

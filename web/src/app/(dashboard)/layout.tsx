@@ -4,7 +4,7 @@ import { PlatformDataProvider } from "@/features/platform/data/platformDataStore
 
 export const metadata = {
   title: "Colabex — Enterprise Platform & Institutional Governance",
-  description: "Enterprise Academic Project Governance, Multi-Tenant SaaS and NBA Accreditation Management",
+  description: "Enterprise Academic Project Governance and Multi-Tenant Institutional Platform",
 };
 
 export const instant = false;

@@ -69,7 +69,7 @@ test.describe("Student Module Phase 3 — Project Discovery, Problem Bank & Idea
       await inspectBtn.click();
 
       // Drawer opens with project details
-      await expect(page.locator("body")).toContainText("NBA / SAR Accredited Project Archive");
+      await expect(page.locator("body")).toContainText("Verified Institutional Project Archive");
       await expect(page.locator("body")).toContainText("Project Abstract:");
 
       // Close drawer

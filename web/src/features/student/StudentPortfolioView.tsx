@@ -13,7 +13,6 @@ import {
   ArrowRight,
   GitBranch,
   Sparkles,
-  ClipboardList,
   Lock,
   Globe,
   Check,
@@ -27,7 +26,6 @@ import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
 import { Modal } from "@/design-system/components/Modal";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
-import { initialTeams } from "@/mocks/seed-data";
 import { studentApi } from "@/lib/api/studentApi";
 import { VerifiedStudentPortfolioDto, StudentAcademicRecordDto } from "@/lib/api/types";
 
@@ -40,8 +38,6 @@ export const StudentPortfolioView: React.FC = () => {
   const {
     currentPersona,
     teams,
-    courseExitSurveys,
-    submitCourseExitSurvey,
     continueProjectToNextTrack,
   } = useProjectHubStore();
 
@@ -52,7 +48,6 @@ export const StudentPortfolioView: React.FC = () => {
   const [selectedRecordForModal, setSelectedRecordForModal] = useState<StudentAcademicRecordDto | null>(null);
 
   const [showCertificateModal, setShowCertificateModal] = useState(false);
-  const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showContinuityModal, setShowContinuityModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -96,38 +91,20 @@ export const StudentPortfolioView: React.FC = () => {
     }
   };
 
-  // Survey Form State
-  const [surveyRatings, setSurveyRatings] = useState({
-    po2: 3,
-    po3: 3,
-    po5: 3,
-    po9: 3,
-    po10: 3,
-  });
-  const [surveyFeedback, setSurveyFeedback] = useState(
-    "The capstone provided authentic experience in IoT firmware architecture, cloud broker integration, and team collaboration."
-  );
-
-  const studentUsn = verifiedPortfolio?.enrollmentNumber || currentPersona.enrollmentNumber || "0176CS221045";
-  const hasCompletedSurvey = courseExitSurveys.some((s) => s.enrollmentNumber === studentUsn);
+  const studentUsn = verifiedPortfolio?.enrollmentNumber || currentPersona.enrollmentNumber || "";
 
   const isTeamLead =
     currentPersona.role === "TeamLead" ||
-    currentPersona.name === "Shivansh Mehra" ||
     teams.some((t) => t.members?.some((m) => m.isLead && m.name === currentPersona.name));
 
-  // Find Minor Project team with robust fallback to mock seed data if unallocated
+  // Find Minor Project team from live store only (never fabricate mock seed teams)
   const minorTeam =
     teams.find(
       (t) =>
-        t.teamCode === "2026-CS-MIN-01" ||
         t.trackName === "Minor Project" ||
-        t.id === "tm-01" ||
-        t.id === "team-01" ||
-        t.members?.some((m) => m.name === currentPersona.name || m.enrollmentNumber === studentUsn)
+        t.members?.some((m) => m.name === currentPersona.name || (studentUsn && m.enrollmentNumber === studentUsn))
     ) ||
-    teams[0] ||
-    initialTeams[0];
+    teams[0];
 
   // Find linked Major Project team if continued
   const majorTeam = teams.find(
@@ -149,26 +126,6 @@ export const StudentPortfolioView: React.FC = () => {
   };
 
   const handleOpenCredential = () => {
-    if (!hasCompletedSurvey) {
-      setShowSurveyModal(true);
-    } else {
-      setShowCertificateModal(true);
-    }
-  };
-
-  const handleSurveySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    submitCourseExitSurvey({
-      studentId: currentPersona.id,
-      studentName: currentPersona.name,
-      enrollmentNumber: studentUsn,
-      teamId: minorTeam?.id || "tm-01",
-      ratings: surveyRatings,
-      feedback: surveyFeedback,
-    });
-    setShowSurveyModal(false);
-    setToastMessage("Course exit survey submitted! Official QR credential is now unlocked.");
-    setTimeout(() => setToastMessage(null), 4000);
     setShowCertificateModal(true);
   };
 
@@ -250,60 +207,10 @@ export const StudentPortfolioView: React.FC = () => {
               onClick={handleOpenCredential}
               leftIcon={<QrCode className="h-3.5 w-3.5" strokeWidth={1.75} />}
             >
-              {hasCompletedSurvey ? "View QR Credential" : "Unlock Credential (Survey)"}
+              View QR Credential
             </Button>
           </div>
         </div>
-
-        {/* 60-Second Course Exit Survey Banner */}
-        {!hasCompletedSurvey ? (
-          <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/70 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="h-9 w-9 rounded-lg bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
-                <ClipboardList className="h-5 w-5" strokeWidth={1.75} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="text-xs font-bold text-amber-900 font-heading">
-                    Action Required: 60-Second NBA Course Exit Survey
-                  </h4>
-                  <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded">
-                    NBA Criterion 3 Attainment
-                  </span>
-                </div>
-                <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                  Evaluate your learning attainment across 5 Program Outcomes (PO2, PO3, PO5, PO9, PO10).
-                  Your feedback directly feeds the department&apos;s 20% indirect attainment calculation and unlocks
-                  official verifiable credentials.
-                </p>
-              </div>
-            </div>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => setShowSurveyModal(true)}
-              className="shrink-0 bg-amber-800 hover:bg-amber-900 border-amber-800 text-white"
-            >
-              Complete Exit Survey (60s)
-            </Button>
-          </div>
-        ) : (
-          <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/70 flex items-center justify-between text-xs text-emerald-900">
-            <div className="flex items-center gap-2.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span>
-                <strong>NBA Course Exit Survey Completed</strong> • Attested for SAR Criterion 3 Indirect Attainment Matrix (20% Weight).
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowSurveyModal(true)}
-              className="text-[11px] font-semibold text-emerald-700 hover:underline cursor-pointer"
-            >
-              Review Responses &rarr;
-            </button>
-          </div>
-        )}
 
         {/* Longitudinal Projects Timeline */}
         <div className="space-y-4">
@@ -447,24 +354,6 @@ export const StudentPortfolioView: React.FC = () => {
                 <div>
                   <span className="text-[#64748B]">Target SDG:</span>
                   <div className="font-bold text-emerald-700">SDG {minorTeam?.sdgNumber || 7} (Clean Energy)</div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="font-semibold text-[#0F172A]">Demonstrated NBA Program Outcomes (POs):</span>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="px-2 py-0.5 rounded bg-white text-[#475569] border border-[#CBD5E1] text-[11px] font-mono">
-                    PO2: Problem Analysis (High - 3)
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-white text-[#475569] border border-[#CBD5E1] text-[11px] font-mono">
-                    PO3: Design/Development (High - 3)
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-white text-[#475569] border border-[#CBD5E1] text-[11px] font-mono">
-                    PO5: Modern Tool Usage (Git, AWS, Next.js)
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-white text-[#475569] border border-[#CBD5E1] text-[11px] font-mono">
-                    PO9: Individual &amp; Team Work
-                  </span>
                 </div>
               </div>
 
@@ -633,114 +522,6 @@ export const StudentPortfolioView: React.FC = () => {
             <strong className="font-mono text-slate-800">2026-CS-MAJ-1-01</strong>, enabling your team to immediately define Phase-I architecture benchmarks without re-registering.
           </p>
         </div>
-      </Modal>
-
-      {/* 60-Second NBA Course Exit Survey Modal */}
-      <Modal
-        isOpen={showSurveyModal}
-        onClose={() => setShowSurveyModal(false)}
-        title="NBA Course Exit Survey (60 Seconds)"
-        description="Completing this 5-question survey computes mandatory NBA Criterion 3.3 indirect attainment metrics and unlocks your tamper-proof verified institutional credential."
-        footer={
-          <div className="flex items-center justify-between w-full">
-            <span className="text-[11px] text-[#64748B]">1 = Low • 2 = Moderate • 3 = High Attainment</span>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setShowSurveyModal(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" size="sm" onClick={handleSurveySubmit}>
-                Submit Survey &amp; Unlock Credential
-              </Button>
-            </div>
-          </div>
-        }
-      >
-        <form onSubmit={handleSurveySubmit} className="space-y-4 text-xs">
-          <div className="space-y-3">
-            {[
-              {
-                id: "po2",
-                code: "PO2",
-                title: "Problem Analysis",
-                desc: "Identify, formulate, review research literature and analyze complex IoT engineering problems.",
-              },
-              {
-                id: "po3",
-                code: "PO3",
-                title: "Design & System Development",
-                desc: "Design system components and processes meeting safety and environmental considerations.",
-              },
-              {
-                id: "po5",
-                code: "PO5",
-                title: "Modern Engineering Tool Usage",
-                desc: "Proficiency in modern IT tools (Git, AWS EC2, MQTT brokers, Next.js).",
-              },
-              {
-                id: "po9",
-                code: "PO9",
-                title: "Individual & Team Work",
-                desc: "Function effectively as an individual contributor and in multidisciplinary engineering teams.",
-              },
-              {
-                id: "po10",
-                code: "PO10",
-                title: "Technical Communication & Defense",
-                desc: "Communicate complex technical concepts, write documentation, and defend project decisions.",
-              },
-            ].map((po) => (
-              <div
-                key={po.id}
-                className="p-3 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
-              >
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-brand-primary bg-brand-primary-tint px-1.5 py-0.2 rounded border border-brand-primary-border">
-                      {po.code}
-                    </span>
-                    <span className="font-semibold text-slate-900">{po.title}</span>
-                  </div>
-                  <p className="text-[11px] text-[#64748B]">{po.desc}</p>
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {[1, 2, 3].map((val) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() =>
-                        setSurveyRatings({
-                          ...surveyRatings,
-                          [po.id]: val,
-                        })
-                      }
-                      className={`h-8 w-10 text-xs font-bold font-mono rounded-md border transition-all cursor-pointer ${
-                        surveyRatings[po.id as keyof typeof surveyRatings] === val
-                          ? "bg-brand-primary text-white border-brand-primary shadow-xs"
-                          : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
-                      }`}
-                    >
-                      {val}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-1">
-            <label className="font-semibold text-slate-800 text-xs">
-              Qualitative Feedback &amp; Suggestions (Optional)
-            </label>
-            <textarea
-              rows={2}
-              value={surveyFeedback}
-              onChange={(e) => setSurveyFeedback(e.target.value)}
-              placeholder="Comments on lab resources, mentorship quality, or tool support..."
-              className="w-full rounded-lg border border-[#CBD5E1] p-2.5 text-xs text-slate-900 focus:border-brand-primary focus:outline-hidden"
-            />
-          </div>
-        </form>
       </Modal>
 
       {/* Verified Certificate Modal with QR */}

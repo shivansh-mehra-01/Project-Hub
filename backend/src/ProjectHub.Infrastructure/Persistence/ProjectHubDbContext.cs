@@ -186,13 +186,7 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
             return await saveFunc();
         }
 
-        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
-        if (Database.CurrentTransaction == null)
-        {
-            localTx = await Database.BeginTransactionAsync(cancellationToken);
-        }
-
-        try
+        async Task<int> ExecuteGuideCheckAndSaveAsync()
         {
             foreach (var entry in teamsWithGuideAssigned)
             {
@@ -209,28 +203,22 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
                 }
             }
 
-            var result = await saveFunc();
-            if (localTx != null)
-            {
-                await localTx.CommitAsync(cancellationToken);
-            }
+            return await saveFunc();
+        }
+
+        if (Database.CurrentTransaction != null)
+        {
+            return await ExecuteGuideCheckAndSaveAsync();
+        }
+
+        var strategy = Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var localTx = await Database.BeginTransactionAsync(cancellationToken);
+            var result = await ExecuteGuideCheckAndSaveAsync();
+            await localTx.CommitAsync(cancellationToken);
             return result;
-        }
-        catch
-        {
-            if (localTx != null)
-            {
-                await localTx.RollbackAsync(cancellationToken);
-            }
-            throw;
-        }
-        finally
-        {
-            if (localTx != null)
-            {
-                await localTx.DisposeAsync();
-            }
-        }
+        });
     }
 
     /// <summary>

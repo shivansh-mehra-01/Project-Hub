@@ -95,11 +95,18 @@ public class ArtifactsController : ControllerBase
             }
         }
 
-        var (stream, contentType) = await _fileStorageService.OpenReadAsync(artifact.StorageKey, cancellationToken);
-        var downloadName = !string.IsNullOrWhiteSpace(artifact.FileName) ? artifact.FileName : $"{artifact.SlotType}.pdf";
+        try
+        {
+            var (stream, contentType) = await _fileStorageService.OpenReadAsync(artifact.StorageKey, cancellationToken);
+            var downloadName = !string.IsNullOrWhiteSpace(artifact.FileName) ? artifact.FileName : $"{artifact.SlotType}.pdf";
 
-        Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{downloadName}\"");
-        return File(stream, contentType, downloadName);
+            Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{downloadName}\"");
+            return File(stream, contentType, downloadName);
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound(new { message = "Artifact file not found in storage." });
+        }
     }
 
     [HttpGet("team/{teamId}/slot/{slot}/download")]
@@ -132,11 +139,18 @@ public class ArtifactsController : ControllerBase
             }
         }
 
-        var (stream, contentType) = await _fileStorageService.OpenReadAsync(artifact.StorageKey, cancellationToken);
-        var downloadName = !string.IsNullOrWhiteSpace(artifact.FileName) ? artifact.FileName : $"{artifact.SlotType}.pdf";
+        try
+        {
+            var (stream, contentType) = await _fileStorageService.OpenReadAsync(artifact.StorageKey, cancellationToken);
+            var downloadName = !string.IsNullOrWhiteSpace(artifact.FileName) ? artifact.FileName : $"{artifact.SlotType}.pdf";
 
-        Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{downloadName}\"");
-        return File(stream, contentType, downloadName);
+            Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{downloadName}\"");
+            return File(stream, contentType, downloadName);
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound(new { message = "Artifact file not found in storage." });
+        }
     }
 
     [HttpPost("{artifactId}/review")]

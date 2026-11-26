@@ -2880,6 +2880,92 @@ public class StudentController : ControllerBase
         return Ok(dashboard);
     }
 
+    private static readonly HashSet<string> AllowedSocialPlatforms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "GitHub",
+        "LinkedIn",
+        "Portfolio",
+        "GitLab",
+        "LeetCode",
+        "HackerRank",
+        "Behance",
+        "Personal Website",
+        "Other"
+    };
+
+    private static string? GetJsonStringIgnoreCase(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return null;
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (string.Equals(prop.Name, propertyName, StringComparison.OrdinalIgnoreCase) &&
+                prop.Value.ValueKind == JsonValueKind.String)
+            {
+                return prop.Value.GetString();
+            }
+        }
+        return null;
+    }
+
+    private static (string? Bio, List<StudentSocialLinkDto> SocialLinks) ParseConsoleProfileData(string? json, string? legacyGitHubHandle)
+    {
+        string? bio = null;
+        var links = new List<StudentSocialLinkDto>();
+
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("bio", out var bioProp))
+                {
+                    var parsedBio = bioProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(parsedBio))
+                    {
+                        bio = parsedBio;
+                    }
+                }
+                if (doc.RootElement.TryGetProperty("socialLinks", out var linksProp) && linksProp.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in linksProp.EnumerateArray())
+                    {
+                        var id = GetJsonStringIgnoreCase(el, "id");
+                        var platform = GetJsonStringIgnoreCase(el, "platform");
+                        var label = GetJsonStringIgnoreCase(el, "label");
+                        var url = GetJsonStringIgnoreCase(el, "url");
+
+                        if (!string.IsNullOrWhiteSpace(platform) && !string.IsNullOrWhiteSpace(url))
+                        {
+                            links.Add(new StudentSocialLinkDto
+                            {
+                                Id = string.IsNullOrWhiteSpace(id) ? Guid.NewGuid().ToString("N")[..12] : id,
+                                Platform = platform,
+                                Label = label,
+                                Url = url
+                            });
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // Preserve legacy GitHubHandle if no structured GitHub link exists yet
+        if (!string.IsNullOrWhiteSpace(legacyGitHubHandle) &&
+            !links.Any(l => string.Equals(l.Platform, "GitHub", StringComparison.OrdinalIgnoreCase)))
+        {
+            links.Insert(0, new StudentSocialLinkDto
+            {
+                Id = "legacy-github",
+                Platform = "GitHub",
+                Label = "GitHub",
+                Url = $"https://github.com/{legacyGitHubHandle.Trim().TrimStart('@')}"
+            });
+        }
+
+        return (bio, links);
+    }
+
     [HttpGet("profile")]
     public async Task<ActionResult<StudentProfileDto>> GetProfile(CancellationToken cancellationToken)
     {
@@ -2895,35 +2981,41 @@ public class StudentController : ControllerBase
             return Unauthorized(new { message = "Student account not found or is inactive." });
         }
 
-        var enrollment = await _context.StudentAcademicEnrollments
+        var enrollments = await _context.StudentAcademicEnrollments
             .Include(e => e.CourseProgram)
             .Include(e => e.Department)
             .Include(e => e.CurrentSemesterTerm)
-            .FirstOrDefaultAsync(e => e.StudentUserId == studentId && e.AcademicStatus == AcademicStatus.Active && !e.IsDeleted, cancellationToken);
+                .ThenInclude(st => st!.AcademicSession)
+            .Where(e => e.StudentUserId == studentId && !e.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        var enrollment = enrollments
+            .OrderBy(e => e.AcademicStatus == AcademicStatus.Active ? 0 : 1)
+            .ThenByDescending(e => e.UpdatedAtUtc)
+            .FirstOrDefault();
+
+        var activeSessionLabel = enrollment?.CurrentSemesterTerm?.AcademicSession?.Label;
+        if (string.IsNullOrWhiteSpace(activeSessionLabel))
+        {
+            activeSessionLabel = await _context.AcademicSessions
+                .Where(s => s.CollegeId == user.CollegeId && s.IsActive && !s.IsDeleted)
+                .OrderByDescending(s => s.StartDate)
+                .Select(s => s.Label)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
 
         var skillsList = string.IsNullOrWhiteSpace(user.SkillsCsv)
             ? new List<string>()
             : user.SkillsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
-        string? bio = null;
-        if (!string.IsNullOrWhiteSpace(user.ConsolePreferencesJson))
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(user.ConsolePreferencesJson);
-                if (doc.RootElement.TryGetProperty("bio", out var bioProp))
-                {
-                    bio = bioProp.GetString();
-                }
-            }
-            catch { }
-        }
+        var (bio, socialLinks) = ParseConsoleProfileData(user.ConsolePreferencesJson, user.GitHubHandle);
 
-        int completion = 20; // FullName & USN verified
-        if (!string.IsNullOrWhiteSpace(user.PhoneNumber)) completion += 20;
+        int completion = 0;
+        if (!string.IsNullOrWhiteSpace(user.FullName) && !string.IsNullOrWhiteSpace(user.EnrollmentOrEmployeeCode)) completion += 20;
+        if (enrollment != null && enrollment.AcademicStatus == AcademicStatus.Active) completion += 20;
         if (skillsList.Count > 0) completion += 20;
-        if (!string.IsNullOrWhiteSpace(user.GitHubHandle)) completion += 20;
-        if (!string.IsNullOrWhiteSpace(bio) || !string.IsNullOrWhiteSpace(user.JiraKey)) completion += 20;
+        if (!string.IsNullOrWhiteSpace(bio)) completion += 20;
+        if (!string.IsNullOrWhiteSpace(user.PhoneNumber) || socialLinks.Count > 0) completion += 20;
 
         var profile = new StudentProfileDto
         {
@@ -2931,16 +3023,19 @@ public class StudentController : ControllerBase
             FullName = user.FullName,
             EnrollmentCode = user.EnrollmentOrEmployeeCode,
             Email = user.Email,
-            CollegeName = user.College?.Name ?? "Institutional Campus",
-            DepartmentName = user.Department?.Name ?? (enrollment?.Department?.Name ?? "Engineering Department"),
-            ProgramName = enrollment?.CourseProgram?.Name ?? "Bachelor of Technology",
-            AdmissionBatch = enrollment?.AdmissionBatch ?? "2023-2027",
-            CurrentSemester = enrollment?.CurrentSemesterTerm?.SemesterNumber ?? 6,
-            SemesterName = enrollment?.CurrentSemesterTerm?.SemesterName ?? "Semester 6",
-            AcademicStatus = enrollment?.AcademicStatus.ToString() ?? "Active",
+            CollegeName = user.College?.Name ?? string.Empty,
+            CollegeCode = user.College?.TenantCode ?? string.Empty,
+            DepartmentName = user.Department?.Name ?? enrollment?.Department?.Name ?? string.Empty,
+            DepartmentCode = user.Department?.Code ?? enrollment?.Department?.Code ?? string.Empty,
+            ProgramName = enrollment?.CourseProgram?.Name ?? string.Empty,
+            AdmissionBatch = enrollment?.AdmissionBatch ?? string.Empty,
+            CurrentSemester = enrollment?.CurrentSemesterTerm?.SemesterNumber ?? 0,
+            SemesterName = enrollment?.CurrentSemesterTerm?.SemesterName ?? string.Empty,
+            AcademicStatus = enrollment?.AcademicStatus.ToString() ?? "Not Enrolled",
+            AcademicSessionName = activeSessionLabel,
             Skills = skillsList,
+            SocialLinks = socialLinks,
             GitHubHandle = user.GitHubHandle,
-            JiraKey = user.JiraKey,
             PhoneNumber = user.PhoneNumber,
             Bio = bio,
             ProfileCompletionPercentage = completion
@@ -2964,9 +3059,110 @@ public class StudentController : ControllerBase
             return Unauthorized(new { message = "Student account not found or is inactive." });
         }
 
-        if (request.GitHubHandle != null)
+        if (request.SocialLinks != null)
+        {
+            if (request.SocialLinks.Count > 10)
+            {
+                return BadRequest(new { message = "You can add at most 10 social or developer links." });
+            }
+
+            var normalizedLinks = new List<StudentSocialLinkDto>();
+            var seenUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var rawLink in request.SocialLinks)
+            {
+                var platformInput = rawLink.Platform?.Trim() ?? string.Empty;
+                var matchedPlatform = AllowedSocialPlatforms.FirstOrDefault(p => string.Equals(p, platformInput, StringComparison.OrdinalIgnoreCase));
+                if (matchedPlatform == null)
+                {
+                    return BadRequest(new { message = $"Unsupported link platform '{platformInput}'." });
+                }
+
+                var rawUrl = rawLink.Url?.Trim() ?? string.Empty;
+                if (rawUrl.Length > 300 ||
+                    !Uri.TryCreate(rawUrl, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) ||
+                    string.IsNullOrWhiteSpace(uri.Host))
+                {
+                    return BadRequest(new { message = $"Invalid or unsafe URL '{rawUrl}'. Only http:// and https:// URLs are allowed." });
+                }
+
+                var normalizedUrl = uri.AbsoluteUri.TrimEnd('/');
+                if (!seenUrls.Add(normalizedUrl))
+                {
+                    return BadRequest(new { message = $"Duplicate link URL '{normalizedUrl}'." });
+                }
+
+                var label = rawLink.Label?.Trim();
+                if (matchedPlatform == "Other" && string.IsNullOrWhiteSpace(label))
+                {
+                    return BadRequest(new { message = "A label is required when platform is 'Other'." });
+                }
+                if (label != null && label.Length > 40)
+                {
+                    return BadRequest(new { message = "Link label cannot exceed 40 characters." });
+                }
+
+                var cleanId = !string.IsNullOrWhiteSpace(rawLink.Id) && rawLink.Id.Trim().Length <= 32
+                    ? rawLink.Id.Trim()
+                    : Guid.NewGuid().ToString("N")[..12];
+
+                normalizedLinks.Add(new StudentSocialLinkDto
+                {
+                    Id = cleanId,
+                    Platform = matchedPlatform,
+                    Label = string.IsNullOrWhiteSpace(label) ? matchedPlatform : label,
+                    Url = normalizedUrl
+                });
+            }
+
+            Dictionary<string, object> prefs = new();
+            if (!string.IsNullOrWhiteSpace(user.ConsolePreferencesJson))
+            {
+                try
+                {
+                    prefs = JsonSerializer.Deserialize<Dictionary<string, object>>(user.ConsolePreferencesJson) ?? new();
+                }
+                catch { }
+            }
+
+            if (normalizedLinks.Count == 0)
+            {
+                prefs.Remove("socialLinks");
+                user.GitHubHandle = null;
+            }
+            else
+            {
+                prefs["socialLinks"] = normalizedLinks;
+                var githubLink = normalizedLinks.FirstOrDefault(l => string.Equals(l.Platform, "GitHub", StringComparison.OrdinalIgnoreCase));
+                if (githubLink != null && Uri.TryCreate(githubLink.Url, UriKind.Absolute, out var ghUri))
+                {
+                    var handle = ghUri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                    user.GitHubHandle = !string.IsNullOrWhiteSpace(handle) && handle.Length <= 50 ? handle : null;
+                }
+                else
+                {
+                    user.GitHubHandle = null;
+                }
+            }
+
+            user.ConsolePreferencesJson = prefs.Count > 0 ? JsonSerializer.Serialize(prefs) : null;
+        }
+        else if (request.GitHubHandle != null)
         {
             var cleanGit = request.GitHubHandle.Trim();
+            if (cleanGit.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanGit = cleanGit["https://github.com/".Length..].Trim('/');
+            }
+            else if (cleanGit.StartsWith("http://github.com/", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanGit = cleanGit["http://github.com/".Length..].Trim('/');
+            }
+            if (cleanGit.StartsWith('@'))
+            {
+                cleanGit = cleanGit[1..].Trim();
+            }
             if (cleanGit.Length > 50)
             {
                 return BadRequest(new { message = "GitHub handle cannot exceed 50 characters." });
@@ -2975,21 +3171,7 @@ public class StudentController : ControllerBase
             {
                 return BadRequest(new { message = "GitHub handle can only contain alphanumeric characters, underscores, and hyphens." });
             }
-            user.GitHubHandle = cleanGit;
-        }
-
-        if (request.JiraKey != null)
-        {
-            var cleanJira = request.JiraKey.Trim().ToUpperInvariant();
-            if (cleanJira.Length > 50)
-            {
-                return BadRequest(new { message = "Jira key cannot exceed 50 characters." });
-            }
-            if (!string.IsNullOrEmpty(cleanJira) && !Regex.IsMatch(cleanJira, @"^[A-Z0-9\-_]+$"))
-            {
-                return BadRequest(new { message = "Jira key can only contain uppercase letters, numbers, and hyphens." });
-            }
-            user.JiraKey = cleanJira;
+            user.GitHubHandle = string.IsNullOrEmpty(cleanGit) ? null : cleanGit;
         }
 
         if (request.PhoneNumber != null)
@@ -3003,9 +3185,10 @@ public class StudentController : ControllerBase
             {
                 return BadRequest(new { message = "Invalid phone number format." });
             }
-            if (cleanPhone != user.PhoneNumber)
+            var normalizedPhone = string.IsNullOrEmpty(cleanPhone) ? null : cleanPhone;
+            if (normalizedPhone != user.PhoneNumber)
             {
-                user.PhoneNumber = cleanPhone;
+                user.PhoneNumber = normalizedPhone;
                 user.IsPhoneVerified = false;
             }
         }
@@ -3016,17 +3199,25 @@ public class StudentController : ControllerBase
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Select(s => s.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(25)
                 .ToList();
+
+            if (cleanSkills.Count > 25)
+            {
+                return BadRequest(new { message = "You can select at most 25 technical skills." });
+            }
 
             foreach (var s in cleanSkills)
             {
+                if (s.Contains(','))
+                {
+                    return BadRequest(new { message = $"Skill tag '{s}' cannot contain commas." });
+                }
                 if (s.Length > 50)
                 {
                     return BadRequest(new { message = $"Skill tag '{s}' exceeds maximum length of 50 characters." });
                 }
             }
-            user.SkillsCsv = string.Join(",", cleanSkills);
+            user.SkillsCsv = cleanSkills.Count > 0 ? string.Join(",", cleanSkills) : null;
         }
 
         if (request.Bio != null)
@@ -3046,8 +3237,15 @@ public class StudentController : ControllerBase
                 }
                 catch { }
             }
-            prefs["bio"] = cleanBio;
-            user.ConsolePreferencesJson = JsonSerializer.Serialize(prefs);
+            if (string.IsNullOrEmpty(cleanBio))
+            {
+                prefs.Remove("bio");
+            }
+            else
+            {
+                prefs["bio"] = cleanBio;
+            }
+            user.ConsolePreferencesJson = prefs.Count > 0 ? JsonSerializer.Serialize(prefs) : null;
         }
 
         user.UpdatedAtUtc = DateTime.UtcNow;
@@ -3230,24 +3428,36 @@ public class StudentController : ControllerBase
             ? "SDG-9"
             : (request.SdgCode.Trim().Length > 20 ? request.SdgCode.Trim()[..20] : request.SdgCode.Trim());
 
-        // 4. Resolve track
+        if (!student.DepartmentId.HasValue || student.Department == null)
+        {
+            return BadRequest(new { message = "Your student profile is not assigned to an academic department. Contact your College Admin or Coordinator." });
+        }
+
+        // 4. Resolve track within the student's department
         Guid trackId = request.AcademicTrackId ?? Guid.Empty;
-        if (trackId == Guid.Empty && student.DepartmentId.HasValue)
+        if (trackId == Guid.Empty)
         {
             var defaultTrack = await _context.AcademicTracks
                 .FirstOrDefaultAsync(t => t.CollegeId == collegeId && t.DepartmentId == student.DepartmentId.Value && t.IsActive && !t.IsDeleted, cancellationToken);
             if (defaultTrack != null) trackId = defaultTrack.Id;
         }
+        else
+        {
+            var trackExists = await _context.AcademicTracks
+                .AnyAsync(t => t.Id == trackId && t.CollegeId == collegeId && t.DepartmentId == student.DepartmentId.Value && t.IsActive && !t.IsDeleted, cancellationToken);
+            if (!trackExists)
+            {
+                return BadRequest(new { message = "The selected academic track is invalid or does not belong to your department." });
+            }
+        }
 
         if (trackId == Guid.Empty)
         {
-            var fallbackTrack = await _context.AcademicTracks
-                .FirstOrDefaultAsync(t => t.CollegeId == collegeId && t.IsActive && !t.IsDeleted, cancellationToken);
-            if (fallbackTrack != null) trackId = fallbackTrack.Id;
+            return BadRequest(new { message = "No active academic project track is configured for your department." });
         }
 
         // 5. Generate team code
-        var deptCode = student.Department?.Code ?? "CSE";
+        var deptCode = student.Department.Code;
         var year = DateTime.UtcNow.Year;
         var count = await _context.ProjectTeams.CountAsync(t => t.CollegeId == collegeId && t.DepartmentId == student.DepartmentId, cancellationToken);
         var teamCode = $"{year}-{deptCode}-PRJ-{(count + 1):D2}";
@@ -3735,19 +3945,24 @@ public class StudentController : ControllerBase
         }
 
         // 5. Concurrency protection: in-process semaphore lock + PostgreSQL row-level exclusive lock
-        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? transaction = null;
         var teamLock = _teamLocks.GetOrAdd(team.Id, _ => new SemaphoreSlim(1, 1));
         await teamLock.WaitAsync(cancellationToken);
         try
         {
-            if (_context.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true)
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync<IActionResult>(async () =>
             {
-                transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
-                await _context.Database.ExecuteSqlRawAsync(
-                    "SELECT \"Id\" FROM \"ProjectTeams\" WHERE \"Id\" = {0} FOR UPDATE",
-                    new object[] { team.Id },
-                    cancellationToken);
-            }
+                Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? transaction = null;
+                try
+                {
+                    if (_context.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+                        await _context.Database.ExecuteSqlRawAsync(
+                            "SELECT \"Id\" FROM \"ProjectTeams\" WHERE \"Id\" = {0} FOR UPDATE",
+                            new object[] { team.Id },
+                            cancellationToken);
+                    }
 
             // Recount active members directly from database under the exclusive lock
             var activeMemberCount = await _context.TeamMembers
@@ -3829,21 +4044,23 @@ public class StudentController : ControllerBase
                 await transaction.DisposeAsync();
             }
 
-            return Ok(new
-            {
-                message = "Team invitation accepted successfully. You are now an enrolled team member.",
-                teamId = team.Id,
-                teamCode = team.TeamCode
+                    return Ok(new
+                    {
+                        message = "Team invitation accepted successfully. You are now an enrolled team member.",
+                        teamId = team.Id,
+                        teamCode = team.TeamCode
+                    });
+                }
+                catch (Exception)
+                {
+                    if (transaction != null)
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        await transaction.DisposeAsync();
+                    }
+                    return StatusCode(500, new { message = "An unexpected error occurred while accepting the team invitation." });
+                }
             });
-        }
-        catch (Exception ex)
-        {
-            if (transaction != null)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                await transaction.DisposeAsync();
-            }
-            return StatusCode(500, new { message = "An unexpected error occurred while accepting the team invitation." });
         }
         finally
         {

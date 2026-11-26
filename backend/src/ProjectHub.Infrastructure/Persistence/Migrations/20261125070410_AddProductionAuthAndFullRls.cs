@@ -153,10 +153,7 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                 table: "UserSessions",
                 column: "TokenFamilyId");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_UserSessions_UserId",
-                table: "UserSessions",
-                column: "UserId");
+            migrationBuilder.Sql(@"CREATE INDEX IF NOT EXISTS ""IX_UserSessions_UserId"" ON ""UserSessions"" (""UserId"");");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RefreshTokenRecords_SessionId",

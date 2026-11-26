@@ -88,7 +88,6 @@ public record RubricCriterionDto
     public decimal MaxMarks { get; init; }
     public decimal WeightPercentage { get; init; }
     public int DisplayOrder { get; init; }
-    public string? NbaPoMapping { get; init; }
     public string? BloomTaxonomyLevel { get; init; }
 }
 

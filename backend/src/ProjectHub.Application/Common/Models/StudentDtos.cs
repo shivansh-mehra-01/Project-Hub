@@ -167,6 +167,14 @@ public record StudentPortfolioDto
     public List<ArtifactSlotDto> VerifiedArtifacts { get; init; } = new();
 }
 
+public record StudentSocialLinkDto
+{
+    public string Id { get; init; } = string.Empty;
+    public string Platform { get; init; } = string.Empty;
+    public string? Label { get; init; }
+    public string Url { get; init; } = string.Empty;
+}
+
 public record StudentProfileDto
 {
     public Guid StudentId { get; init; }
@@ -174,15 +182,18 @@ public record StudentProfileDto
     public string EnrollmentCode { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string CollegeName { get; init; } = string.Empty;
+    public string CollegeCode { get; init; } = string.Empty;
     public string DepartmentName { get; init; } = string.Empty;
+    public string DepartmentCode { get; init; } = string.Empty;
     public string ProgramName { get; init; } = string.Empty;
     public string AdmissionBatch { get; init; } = string.Empty;
     public int CurrentSemester { get; init; }
     public string SemesterName { get; init; } = string.Empty;
     public string AcademicStatus { get; init; } = string.Empty;
+    public string? AcademicSessionName { get; init; }
     public List<string> Skills { get; init; } = new();
+    public List<StudentSocialLinkDto> SocialLinks { get; init; } = new();
     public string? GitHubHandle { get; init; }
-    public string? JiraKey { get; init; }
     public string? PhoneNumber { get; init; }
     public string? Bio { get; init; }
     public int ProfileCompletionPercentage { get; init; }
@@ -191,8 +202,8 @@ public record StudentProfileDto
 public record UpdateStudentProfileRequest
 {
     public List<string>? Skills { get; init; }
+    public List<StudentSocialLinkDto>? SocialLinks { get; init; }
     public string? GitHubHandle { get; init; }
-    public string? JiraKey { get; init; }
     public string? PhoneNumber { get; init; }
     public string? Bio { get; init; }
 }

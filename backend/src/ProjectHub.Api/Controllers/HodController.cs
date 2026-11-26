@@ -1355,8 +1355,6 @@ public class HodController : ControllerBase
                     : totalMarks >= 50 ? "C"
                     : "F";
 
-                string attainment = totalMarks >= 70 ? "Target Exceeded" : "Remedial";
-
                 results.Add(new DepartmentStudentResultDto
                 {
                     Usn = string.IsNullOrWhiteSpace(student.EnrollmentOrEmployeeCode) ? "N/A" : student.EnrollmentOrEmployeeCode,

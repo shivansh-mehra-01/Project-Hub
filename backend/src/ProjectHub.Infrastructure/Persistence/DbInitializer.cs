@@ -1182,7 +1182,7 @@ public static class DbInitializer
             ProjectLineageId = Guid.NewGuid(),
             TeamCode = "2026-CS-MIN-01",
             Title = "IoT-Based Campus Energy Management and Machine Predictive Maintenance System",
-            Abstract = "An edge-computing ESP32 telemetry pipeline streaming current, voltage, and power metrics via MQTT into an anomaly detection inference engine, driving Criterion 3 NBA-compliant sustainable facility management.",
+            Abstract = "An edge-computing ESP32 telemetry pipeline streaming current, voltage, and power metrics via MQTT into an anomaly detection inference engine for sustainable facility management.",
             DomainTag = "IoT & Embedded Systems",
             SdgCode = "SDG-7",
             Status = ProjectStatus.ActiveBuild,
@@ -1237,7 +1237,7 @@ public static class DbInitializer
                 Status = ArtifactStatus.Verified,
                 UploadedByUserId = StudentShivanshUserId,
                 VerifiedByUserId = FacultyVermaUserId,
-                ReviewerNote = "Comprehensive problem statement and well-defined PO3/PO7 NBA mapping."
+                ReviewerNote = "Comprehensive problem statement and well-defined technical architecture."
             },
             new()
             {

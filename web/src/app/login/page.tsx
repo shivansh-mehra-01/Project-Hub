@@ -27,7 +27,7 @@ import { CollabexLogo } from "@/components/brand/CollabexLogo";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { switchPersona, toggleFacultyCoordinator } = useProjectHubStore();
+  const { hydrateSessionUser } = useProjectHubStore();
 
   // Mode: "login" | "otp"
   const [viewMode, setViewMode] = useState<"login" | "otp">("login");
@@ -74,24 +74,20 @@ export default function LoginPage() {
   };
 
   const navigateToWorkspace = (user: UserProfileDto) => {
+    hydrateSessionUser(user);
     if (user.role === "SuperAdmin") {
-      switchPersona("SuperAdmin");
       router.replace("/admin");
     } else if (user.role === "CollegeAdmin") {
-      switchPersona("CollegeAdmin");
       router.replace("/college");
     } else if (user.role === "HOD") {
-      switchPersona("HOD");
       router.replace("/hod");
     } else if (user.role === "Faculty") {
-      switchPersona("Faculty");
       if (user.isProjectCoordinator) {
         router.replace("/coordinator");
       } else {
         router.replace("/faculty");
       }
     } else {
-      switchPersona("Student");
       router.replace("/student");
     }
   };
@@ -296,7 +292,7 @@ export default function LoginPage() {
               Plan. Track. Achieve.
             </h1>
             <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md">
-              The complete workspace for college projects and NBA compliance.
+              The complete workspace for college projects and structured evaluation.
             </p>
           </div>
 
@@ -309,7 +305,7 @@ export default function LoginPage() {
             <span className="hidden lg:inline-block h-3.5 w-px bg-slate-300" />
             <span className="inline-flex items-center gap-1.5 whitespace-normal sm:whitespace-nowrap">
               <ShieldCheck className="w-3.5 h-3.5 text-[#047857] shrink-0" strokeWidth={2} />
-              <span>Ensure NBA Compliance</span>
+              <span>Ensure Evaluation Integrity</span>
             </span>
             <span className="hidden lg:inline-block h-3.5 w-px bg-slate-300" />
             <span className="inline-flex items-center gap-1.5 whitespace-normal sm:whitespace-nowrap">

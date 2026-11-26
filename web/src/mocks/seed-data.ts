@@ -1,7 +1,6 @@
 import {
   AcademicSession,
   College,
-  CourseExitSurvey,
   CourseProgram,
   Department,
   Evaluation,
@@ -683,7 +682,6 @@ export const initialRubrics: Rubric[] = [
         name: "Problem Formulation & Literature Review",
         description: "Clarity of problem statement and analysis of recent IEEE/ACM publications.",
         maxScore: 10,
-        nbaCriterionCode: "PO2",
         bloomsTaxonomy: "L2_Understand",
       },
       {
@@ -692,7 +690,6 @@ export const initialRubrics: Rubric[] = [
         name: "System Architecture & High-Level Design",
         description: "Component design, database schema, and interface contracts.",
         maxScore: 15,
-        nbaCriterionCode: "PO3",
         bloomsTaxonomy: "L3_Apply",
       },
       {
@@ -701,7 +698,6 @@ export const initialRubrics: Rubric[] = [
         name: "Implementation Milestone & Hardware/Software Demo",
         description: "Execution of prototype code, edge sensor readings, or working MVP screens.",
         maxScore: 15,
-        nbaCriterionCode: "PO5",
         bloomsTaxonomy: "L5_Evaluate",
       },
       {
@@ -710,7 +706,6 @@ export const initialRubrics: Rubric[] = [
         name: "Viva Defense & Individual Technical Understanding",
         description: "Quality of answers, individual contribution clarity, and team coordination.",
         maxScore: 10,
-        nbaCriterionCode: "PO10",
         bloomsTaxonomy: "L4_Analyze",
       },
     ],
@@ -1006,25 +1001,6 @@ export const initialExceptionAuditLogs: ExceptionAuditLog[] = [
     reviewedAt: "2026-02-15T09:30:00Z",
     newGuideId: "usr-fac-nair",
     newGuideName: "Prof. Priya Nair",
-  },
-];
-
-export const initialCourseExitSurveys: CourseExitSurvey[] = [
-  {
-    id: "surv-01",
-    studentId: "usr-stu-shivansh",
-    studentName: "Shivansh Mehra",
-    enrollmentNumber: "0176CS221045",
-    teamId: "tm-01",
-    ratings: {
-      po2: 3,
-      po3: 3,
-      po5: 3,
-      po9: 3,
-      po10: 3,
-    },
-    feedback: "The capstone project gave deep practical experience in IoT edge architecture, team collaboration, and real-time anomaly detection.",
-    submittedAt: "2026-03-08T16:00:00Z",
   },
 ];
 

@@ -260,19 +260,6 @@ export interface EvaluationSchemeRecord {
   }[];
 }
 
-export interface NbaProgramOutcomeRecord {
-  code: string;
-  title: string;
-  bloomsTaxonomy: string;
-  description: string;
-  levels: {
-    l0: string;
-    l1: string;
-    l2: string;
-    l3: string;
-  };
-}
-
 export interface UnSdgRecord {
   num: number;
   name: string;
@@ -654,7 +641,7 @@ export interface PlatformBackupStatusRecord {
 export interface BackgroundJobRecord {
   id: string;
   jobName: string;
-  queue: "default" | "nba-exports" | "scheduled-reports" | "notifications" | "dead-letter";
+  queue: "default" | "scheduled-reports" | "notifications" | "dead-letter";
   status: "Completed" | "Processing" | "Pending" | "Failed" | "Retrying";
   targetTenant: string;
   executionDurationMs: number;
@@ -1512,21 +1499,6 @@ const INITIAL_EXAM_SCHEMES: EvaluationSchemeRecord[] = [
   },
 ];
 
-const INITIAL_NBA_POS: NbaProgramOutcomeRecord[] = [
-  { code: "PO1", title: "Engineering Knowledge", bloomsTaxonomy: "L3_Apply", description: "Apply knowledge of mathematics, science, engineering fundamentals to computational models.", levels: { l0: "Inability to apply foundational concepts.", l1: "Applies basic models with frequent mentor intervention.", l2: "Accurately applies engineering principles to solution architecture.", l3: "Demonstrates advanced mastery with optimization proofs." } },
-  { code: "PO2", title: "Problem Analysis", bloomsTaxonomy: "L4_Analyze", description: "Identify, formulate, review literature, and analyze complex problems reaching substantiated conclusions.", levels: { l0: "Vague problem formulation without empirical basis.", l1: "Basic literature review citing standard textbooks.", l2: "Thorough survey of IEEE/ACM literature with formal bounds.", l3: "State-of-the-art benchmarking with ablation study." } },
-  { code: "PO3", title: "Design/Development of Solutions", bloomsTaxonomy: "L5_Evaluate", description: "Design solutions for complex problems meeting specified public health, safety, and societal needs.", levels: { l0: "Trivial design lacking modularity and error resilience.", l1: "Standard monolithic architecture with basic CRUD.", l2: "High-cohesion, low-coupling microservice or layered architecture.", l3: "Production-grade fault-tolerant distributed system." } },
-  { code: "PO4", title: "Conduct Investigations of Complex Problems", bloomsTaxonomy: "L4_Analyze", description: "Use research methods including design of experiments, analysis and synthesis of information.", levels: { l0: "No systematic experimental protocol.", l1: "Preliminary tests on synthetic local data.", l2: "Controlled experiments with quantitative statistical analysis.", l3: "Multi-factor ANOVA validation on live testbeds." } },
-  { code: "PO5", title: "Modern Tool Usage", bloomsTaxonomy: "L3_Apply", description: "Create, select, and apply modern IT tools including modeling and containerization.", levels: { l0: "Manual scripts without version control.", l1: "Git repository with sporadic commits.", l2: "Standard CI/CD pipeline, Docker, automated testing.", l3: "Full GitOps workflow with IaC and distributed tracing." } },
-  { code: "PO6", title: "The Engineer and Society", bloomsTaxonomy: "L3_Apply", description: "Assess societal, health, safety, legal and cultural issues and consequent responsibilities.", levels: { l0: "No consideration of societal impact.", l1: "Surface-level recognition in introductory chapter.", l2: "Concrete risk mitigation for end-user safety & accessibility.", l3: "Validated deployment with measurable public benefit." } },
-  { code: "PO7", title: "Environment and Sustainability", bloomsTaxonomy: "L2_Understand", description: "Understand the impact of engineering solutions in societal and environmental contexts (UN SDGs). levels", levels: { l0: "Energy-wasteful compute loops without justification.", l1: "Mentions SDGs as abstract appendix item.", l2: "Directly maps architecture to explicit UN SDG targets.", l3: "Green software engineering with provable watt-hour savings." } },
-  { code: "PO8", title: "Ethics", bloomsTaxonomy: "L3_Apply", description: "Apply ethical principles and commit to professional ethics and responsibilities of engineering practice.", levels: { l0: "Plagiarism > 30% or unauthorized data scraping.", l1: "Plagiarism < 15% with basic attribution.", l2: "Strict DPDP Act / GDPR privacy compliance and signed consent.", l3: "Exemplary ethical rigor, algorithmic bias mitigation." } },
-  { code: "PO9", title: "Individual and Team Work", bloomsTaxonomy: "L3_Apply", description: "Function effectively as an individual, and as a member or leader in diverse multidisciplinary teams.", levels: { l0: "Single member commits 90%+ with severe discord.", l1: "Uneven task distribution with delayed guide reviews.", l2: "Equitable task allocations tracked via Kanban boards.", l3: "Exemplary collaborative velocity and peer code reviews." } },
-  { code: "PO10", title: "Communication", bloomsTaxonomy: "L3_Apply", description: "Communicate effectively on complex engineering activities with engineering community and society.", levels: { l0: "Unstructured defense; unable to articulate architecture.", l1: "Standard slide deck with generic diagrams.", l2: "Crisp technical presentation and IEEE-formatted report.", l3: "Publishable manuscript prepared; articulate defense." } },
-  { code: "PO11", title: "Project Management and Finance", bloomsTaxonomy: "L3_Apply", description: "Demonstrate knowledge and understanding of engineering and management principles (Gantt, budgets).", levels: { l0: "No sprint schedule; major deadlines missed.", l1: "Basic Gantt chart created with reactive adjustments.", l2: "Agile sprint cadence, cloud budget forecasting.", l3: "Commercialization roadmap with ROI and burn-rate modeling." } },
-  { code: "PO12", title: "Life-long Learning", bloomsTaxonomy: "L2_Understand", description: "Recognize the need for, and have the preparation to engage in independent and lifelong learning.", levels: { l0: "Refuses to adapt when libraries deprecate.", l1: "Learns API docs when instructed directly by guide.", l2: "Independently masters unfamiliar modern cloud SDKs.", l3: "Synthesizes preprint literature and contributes to OSS." } },
-];
-
 const INITIAL_UN_SDGS: UnSdgRecord[] = [
   { num: 1, name: "No Poverty", description: "End poverty in all its forms everywhere.", officialReference: "UN SDG Target 1.4", color: "bg-red-600", isActive: true },
   { num: 2, name: "Zero Hunger", description: "End hunger, achieve food security and improved nutrition.", officialReference: "UN SDG Target 2.1", color: "bg-amber-600", isActive: true },
@@ -2157,7 +2129,6 @@ const INITIAL_ROLES: RolePermissionRecord[] = [
 const INITIAL_MODULES: PlatformModuleRecord[] = [
   { key: "mod-tracks", name: "Capstone & Minor Project Tracks", description: "Phase-I and Phase-II project cycles, semester term bindings, and registration workflows.", category: "Academic Core", version: "v2.4.0", isEnabled: true, dependencies: [] },
   { key: "mod-rubrics", name: "Blended 60/40 Rubric Viva Scoring", description: "Synchronous viva defense scoring matrix with individual vs shared grade distribution.", category: "Evaluations", version: "v2.1.2", isEnabled: true, dependencies: ["mod-tracks"] },
-  { key: "mod-nba-sar", name: "NBA Criterion 2 & 3 Attainment Engine", description: "Direct + Indirect 80/20 CO-PO attainment calculation and automated SAR documentation.", category: "Compliance", version: "v3.0.1", isEnabled: true, dependencies: ["mod-rubrics"] },
   { key: "mod-logbooks", name: "Friday Weekly Logbook Sweeper", description: "Enforces weekly engineering diaries, milestone check-ins, and guide sign-off queues.", category: "Academic Core", version: "v1.8.0", isEnabled: true, dependencies: ["mod-tracks"] },
   { key: "mod-git-sync", name: "VCS Git Repository Telemetry", description: "Tracks GitHub / GitLab commit frequency, branch hygiene, and engineering contributions.", category: "Integrations", version: "v1.2.0", isEnabled: true, dependencies: ["mod-tracks"] },
   { key: "mod-scim-directory", name: "Automated SCIM Directory Provisioning", description: "Syncs student enrollments and faculty rosters directly from institutional IdP.", category: "Integrations", version: "v1.0.4", isEnabled: true, dependencies: [] },
@@ -2337,7 +2308,6 @@ const INITIAL_BACKUP_STATUS: PlatformBackupStatusRecord = {
 };
 
 const INITIAL_BACKGROUND_JOBS: BackgroundJobRecord[] = [
-  { id: "job-zip-901", jobName: "NBA Criterion 2 & 3 Dossier ZIP Exporter", queue: "nba-exports", status: "Completed", targetTenant: "SISTEC (Dept CSE)", executionDurationMs: 3200, startedAt: "2026-11-21 14:30:10", retryCount: 0 },
   { id: "job-rls-scan-88", jobName: "Nightly Cross-Tenant RLS Boundary Scan", queue: "default", status: "Completed", targetTenant: "All Active Schemas", executionDurationMs: 1400, startedAt: "2026-11-21 02:00:00", retryCount: 0 },
   { id: "job-log-sweep-42", jobName: "Friday Logbook Weekly Deadline Enforcer", queue: "notifications", status: "Completed", targetTenant: "LNCT (Dept CSE)", executionDurationMs: 820, startedAt: "2026-11-20 23:59:59", retryCount: 0 },
   { id: "job-backup-snap-01", jobName: "Automated PostgreSQL Snapshot & Integrity Verification", queue: "default", status: "Completed", targetTenant: "Primary RDS Cluster", executionDurationMs: 8400, startedAt: "2026-11-21 04:00:00", retryCount: 0 },
@@ -2853,7 +2823,6 @@ interface PlatformDataContextType {
   subjects: SubjectMasterRecord[];
   academicYears: AcademicYearRecord[];
   examSchemes: EvaluationSchemeRecord[];
-  nbaPos: NbaProgramOutcomeRecord[];
   unSdgs: UnSdgRecord[];
   templateVersions: TemplateVersionRecord[];
   addUniversity: (univ: Partial<UniversityRecord>) => void;
@@ -2868,7 +2837,6 @@ interface PlatformDataContextType {
   updateRegulation: (id: string, updates: Partial<AcademicRegulationRecord>) => void;
   updateProgram: (id: string, updates: Partial<AcademicProgramRecord>) => void;
   updateBranch: (id: string, updates: Partial<AcademicBranchRecord>) => void;
-  updateNbaPo: (code: string, updates: Partial<NbaProgramOutcomeRecord>) => void;
   updateUnSdg: (num: number, updates: Partial<UnSdgRecord>) => void;
   // Subscriptions & Plans
   plans: SubscriptionPlanRecord[];
@@ -2974,7 +2942,6 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [subjects, setSubjects] = useState<SubjectMasterRecord[]>(INITIAL_SUBJECTS);
   const [academicYears] = useState<AcademicYearRecord[]>(INITIAL_ACADEMIC_YEARS);
   const [examSchemes] = useState<EvaluationSchemeRecord[]>(INITIAL_EXAM_SCHEMES);
-  const [nbaPos, setNbaPos] = useState<NbaProgramOutcomeRecord[]>(INITIAL_NBA_POS);
   const [unSdgs, setUnSdgs] = useState<UnSdgRecord[]>(INITIAL_UN_SDGS);
   const [templateVersions, setTemplateVersions] = useState<TemplateVersionRecord[]>(INITIAL_TEMPLATE_VERSIONS);
   const [plans, setPlans] = useState<SubscriptionPlanRecord[]>(INITIAL_PLANS);
@@ -3369,136 +3336,80 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [applyHealthDetails]);
 
   const onboardCollege = async (data: Partial<CollegeTenantRecord>): Promise<CollegeTenantRecord> => {
-    const code = (data.code || "NEW").toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-    const domain = (data.domain || "college.ac.in").toLowerCase().replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0];
-    const newCollege: CollegeTenantRecord = {
-      id: `col-${code.toLowerCase()}-${Date.now().toString().slice(-4)}`,
-      name: data.name || "New Engineering College",
-      shortName: data.shortName || code,
-      code,
-      university: data.university || "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV)",
-      tenantId: `tenant_${code.toLowerCase()}_prod`,
-      domain,
-      subscriptionPlan: data.subscriptionPlan || "Standard",
-      totalStudents: data.totalStudents || 1500,
-      totalFaculty: data.totalFaculty || 75,
-      departmentsCount: data.departmentsCount || 4,
-      status: "Active",
-      registrationDate: new Date().toISOString().split("T")[0],
-      renewalDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-      databaseAllocation: "Dedicated Schema (RLS Enforced)",
-      storageQuotaGb: data.storageQuotaGb || 50,
-      storageUsedGb: 0.1,
-      region: "AWS ap-south-1 (Mumbai)",
-      isolationStatus: "RLS Enforced",
-      tenantHealth: "Healthy",
-      principalName: data.principalName || "College Principal",
-      principalEmail: data.principalEmail || `principal@${domain}`,
-      contactPhone: data.contactPhone || "+91 755 000 0000",
-      address: data.address || "Campus Address",
-      city: data.city || "Bhopal",
-      state: data.state || "Madhya Pradesh",
-      pinCode: data.pinCode || "462001",
-      affiliationNumber: data.affiliationNumber || `RGPV/AFF/${code}/2026`,
-      establishmentYear: data.establishmentYear || 2010,
-      website: data.website || `https://${domain}`,
-      enabledModules: data.enabledModules || ["Project Tracks", "Rubric Evaluation", "NBA Attainment (SAR)"],
-      strictSsoEnforced: data.strictSsoEnforced ?? true,
-      provisioningHistory: [
-        { stage: "Schema Creation", timestamp: new Date().toISOString(), status: "Completed", details: `PostgreSQL 17 schema tenant_${code.toLowerCase()}_prod created.` },
-        { stage: "S3 Storage Allocation", timestamp: new Date().toISOString(), status: "Completed", details: `Allocated ${data.storageQuotaGb || 50} GB storage vault.` },
-        { stage: "Admin Account Setup", timestamp: new Date().toISOString(), status: "Completed", details: `Invitation & activation OTP dispatched to ${data.principalEmail || `principal@${domain}`}.` },
-      ],
-    };
+    const code = data.code?.trim() ? data.code.toUpperCase().replace(/[^A-Z0-9_-]/g, "") : undefined;
+    const domain = data.domain?.trim()
+      ? data.domain.toLowerCase().replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0]
+      : undefined;
 
-    let finalCollege = newCollege;
-    setColleges((prev) => {
-      const existingIdx = prev.findIndex(
-        (c) =>
-          (data.id && c.id === data.id) ||
-          c.code.toUpperCase() === code ||
-          c.name.toLowerCase() === (data.name || "").toLowerCase()
-      );
-      if (existingIdx !== -1) {
-        finalCollege = {
-          ...prev[existingIdx],
-          ...newCollege,
-          id: prev[existingIdx].id,
-          status: "Active",
-        };
-        const updated = [...prev];
-        updated[existingIdx] = finalCollege;
-        return updated;
-      }
-      return [newCollege, ...prev];
-    });
-
-    // Also update or add to active subscriptions
-    setCollegeSubscriptions((prev) => {
-      const existingIdx = prev.findIndex((s) => s.collegeCode === finalCollege.code || s.institutionId === finalCollege.id);
-      const subItem = {
-        id: `sub-${finalCollege.id}`,
-        institutionId: finalCollege.id,
-        institutionName: finalCollege.name,
-        collegeCode: finalCollege.code,
-        planName: `${finalCollege.subscriptionPlan} Academic`,
-        startDate: finalCollege.registrationDate,
-        renewalDate: finalCollege.renewalDate,
-        amountINR: finalCollege.subscriptionPlan === "Enterprise" ? 480000 : finalCollege.subscriptionPlan === "Pilot" ? 0 : 240000,
-        billingCycle: finalCollege.subscriptionPlan === "Pilot" ? ("90-Day Pilot" as const) : ("Annual" as const),
-        status: finalCollege.subscriptionPlan === "Pilot" ? ("Trial" as const) : ("Active" as const),
-        autoRenew: true,
-        seatUtilization: { used: finalCollege.totalStudents, allocated: finalCollege.totalStudents + 500 },
-      };
-      if (existingIdx !== -1) {
-        const updated = [...prev];
-        updated[existingIdx] = { ...updated[existingIdx], ...subItem, id: updated[existingIdx].id };
-        return updated;
-      }
-      return [subItem, ...prev];
-    });
-
-    // Persist to backend API
+    // Persist to backend API first — never fabricate local records before server confirmation
     const res = await platformApi.createTenant({
-      name: newCollege.name,
-      tenantCode: data.code?.trim() ? newCollege.code : undefined,
-      ssoDomain: data.domain?.trim() ? newCollege.domain : undefined,
-      licenseTier: newCollege.subscriptionPlan,
-      maxStudentSeats: newCollege.totalStudents,
-      storageQuotaGb: newCollege.storageQuotaGb,
-      enforceStrictSso: newCollege.strictSsoEnforced,
-      principalName: newCollege.principalName,
-      principalEmail: newCollege.principalEmail,
+      name: (data.name || "").trim(),
+      tenantCode: code,
+      ssoDomain: domain,
+      licenseTier: data.subscriptionPlan || "Standard",
+      maxStudentSeats: data.totalStudents || 1500,
+      storageQuotaGb: data.storageQuotaGb || 50,
+      enforceStrictSso: data.strictSsoEnforced ?? true,
+      principalName: data.principalName || "",
+      principalEmail: data.principalEmail || "",
       collegeType: data.collegeType,
-      affiliatingUniversity: newCollege.university,
+      affiliatingUniversity: data.university,
       country: data.country,
-      state: newCollege.state,
-      city: newCollege.city,
+      state: data.state,
+      city: data.city,
       campusAddress: data.address,
     });
 
     const createdDto = res.tenant;
     const syncedCollege: CollegeTenantRecord = {
-      ...newCollege,
       id: createdDto.id,
       tenantId: createdDto.id,
       code: createdDto.tenantCode,
+      shortName: createdDto.name.split(" ")[0] || createdDto.name,
       name: createdDto.name,
       domain: createdDto.ssoDomain,
-      collegeType: createdDto.collegeType || data.collegeType,
-      university: createdDto.affiliatingUniversity || newCollege.university,
-      country: createdDto.country || data.country,
-      state: createdDto.state || newCollege.state,
-      city: createdDto.city || newCollege.city,
-      address: createdDto.campusAddress || newCollege.address,
+      subscriptionPlan: (createdDto.licenseTier as any) || data.subscriptionPlan || "Standard",
+      collegeType: createdDto.collegeType || data.collegeType || "Engineering College",
+      university: createdDto.affiliatingUniversity || data.university || "",
+      country: createdDto.country || data.country || "",
+      state: createdDto.state || data.state || "",
+      city: createdDto.city || data.city || "",
+      address: createdDto.campusAddress || data.address || "",
+      pinCode: data.pinCode || "",
+      affiliationNumber: data.affiliationNumber || "",
+      establishmentYear: data.establishmentYear || new Date().getFullYear(),
+      website: createdDto.ssoDomain ? `https://${createdDto.ssoDomain}` : "",
+      contactPhone: data.contactPhone || "",
+      principalName: createdDto.principalName || data.principalName || "",
+      principalEmail: createdDto.principalEmail || data.principalEmail || "",
       status: createdDto.isActive ? "Active" : "Suspended",
+      registrationDate: createdDto.createdAtUtc ? createdDto.createdAtUtc.split("T")[0] : new Date().toISOString().split("T")[0],
+      renewalDate: createdDto.subscriptionExpiresAtUtc?.split("T")[0] || "",
+      databaseAllocation: "RLS Enforced",
+      storageQuotaGb: createdDto.storageQuotaGb || 50,
+      storageUsedGb: 0,
+      region: "ap-south-1",
+      isolationStatus: "RLS Enforced",
+      tenantHealth: createdDto.isActive ? "Healthy" : "Degraded",
+      enabledModules: ["Project Tracks", "Rubric Evaluation"],
+      strictSsoEnforced: createdDto.enforceStrictSso,
+      maxStudentSeats: createdDto.maxStudentSeats,
       totalStudents: createdDto.studentCount || 0,
       totalFaculty: createdDto.facultyCount || 0,
       departmentsCount: createdDto.departmentCount || 0,
       activeProjectsCount: createdDto.activeProjectsCount || 0,
+      lastActivity: createdDto.lastActivityAtUtc || undefined,
+      provisioningHistory: [
+        {
+          stage: "Provisioning",
+          timestamp: createdDto.createdAtUtc || new Date().toISOString(),
+          status: "Completed",
+          details: `Provisioned with tenant UUID ${createdDto.id}.`,
+        },
+      ],
     };
 
-    setColleges((prev) => [syncedCollege, ...prev.filter((c) => c.id !== newCollege.id && c.id !== syncedCollege.id)]);
+    setColleges((prev) => [syncedCollege, ...prev.filter((c) => c.id !== syncedCollege.id)]);
     return syncedCollege;
   };
 
@@ -3981,11 +3892,6 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
       })
     );
     showToast("Branch status updated.", "success");
-  };
-
-  const updateNbaPo = (code: string, updates: Partial<NbaProgramOutcomeRecord>) => {
-    setNbaPos((prev) => prev.map((p) => (p.code === code ? { ...p, ...updates } : p)));
-    showToast(`NBA Program Outcome ${code} updated.`, "success");
   };
 
   const updateUnSdg = (num: number, updates: Partial<UnSdgRecord>) => {
@@ -4892,7 +4798,6 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         subjects,
         academicYears,
         examSchemes,
-        nbaPos,
         unSdgs,
         templateVersions,
         addUniversity,
@@ -4907,7 +4812,6 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         updateRegulation,
         updateProgram,
         updateBranch,
-        updateNbaPo,
         updateUnSdg,
         plans,
         collegeSubscriptions,

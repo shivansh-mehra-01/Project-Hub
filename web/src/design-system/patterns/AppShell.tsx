@@ -36,7 +36,6 @@ import { getAuthToken, hodApi } from "@/lib/api";
 import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
-import { initialPersonas } from "@/mocks/seed-data";
 import { getSidebarNav, getBreadcrumbs, PUBLIC_ROUTES, RouteGuard, SidebarNavItem } from "@/navigation";
 import { LogoutConfirmationModal, PendingActionsDrawer } from "@/features/platform/shared/GlobalPlatformModals";
 
@@ -136,7 +135,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentPersona, isAuthenticated, isLoaded, college, cycle, academicSessions, switchPersona, tenants, pilotRequests, teams, logout } =
+  const { currentPersona, isAuthenticated, isLoaded, college, cycle, academicSessions, tenants, pilotRequests, teams, logout } =
     useProjectHubStore();
 
   const activeSessionLabel =
@@ -151,18 +150,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
     return currentPersona.role;
   })();
 
-  const displayPersonaName = (() => {
-    if (effectiveRole === "CollegeAdmin" && (!currentPersona || currentPersona.role !== "CollegeAdmin")) {
-      return initialPersonas.collegeAdmin.name;
-    }
-    if (effectiveRole === "SuperAdmin" && (!currentPersona || currentPersona.role !== "SuperAdmin")) {
-      return initialPersonas.superAdmin.name;
-    }
-    if (effectiveRole === "HOD" && (!currentPersona || currentPersona.role !== "HOD")) {
-      return initialPersonas.hod.name;
-    }
-    return currentPersona?.name || "User";
-  })();
+  const displayPersonaName = currentPersona?.name || "User";
 
   const [realHodPendingCount, setRealHodPendingCount] = useState<number | null>(null);
 
@@ -183,10 +171,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
     }
   }, [effectiveRole, pathname]);
 
-  const pendingHODCount =
-    realHodPendingCount !== null
-      ? realHodPendingCount
-      : teams.filter((t) => t.state === "PendingHOD").length;
+  const pendingHODCount = realHodPendingCount ?? 0;
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCampusMenu, setShowCampusMenu] = useState(false);
@@ -240,21 +225,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-
-  // Auto-sync persona with route if accessed directly via URL
-  useEffect(() => {
-    if ((pathname.startsWith("/admin") || pathname.startsWith("/platform")) && currentPersona.role !== "SuperAdmin") {
-      switchPersona("SuperAdmin");
-    } else if (pathname.startsWith("/college") && currentPersona.role !== "CollegeAdmin") {
-      switchPersona("CollegeAdmin");
-    } else if (pathname.startsWith("/hod") && currentPersona.role !== "HOD") {
-      switchPersona("HOD");
-    } else if (pathname.startsWith("/coordinator") && currentPersona.role !== "Faculty") {
-      switchPersona("Faculty");
-    } else if (pathname.startsWith("/faculty") && currentPersona.role !== "Faculty") {
-      switchPersona("Faculty");
-    }
-  }, [pathname, currentPersona.role, switchPersona]);
 
   // Role-scoped notifications (strictly isolated by role & team with deep-linking paths)
   const allNotifications = (() => {
@@ -312,10 +282,10 @@ const AppShellInner: React.FC<AppShellProps> = ({
         },
         {
           id: "n-h2",
-          title: "NBA Attainment Updated",
+          title: "Department Evaluation Summary Ready",
           time: "Yesterday",
-          desc: "PO3 attainment reached 81.4% (Exceeds Target).",
-          path: "/hod/nba",
+          desc: "Semester project evaluations and grade summaries are ready for review.",
+          path: "/hod/reports",
         },
       ];
     }
@@ -323,10 +293,10 @@ const AppShellInner: React.FC<AppShellProps> = ({
       return [
         {
           id: "n-c1",
-          title: "Department SAR Sign-Off",
+          title: "Department Tracks Active",
           time: "2 hours ago",
-          desc: "CSE & ECE departments completed SAR Criterion 3 attestation.",
-          path: "/college/compliance",
+          desc: "CSE & ECE departments have active project tracks and guide allocations.",
+          path: "/college/departments",
         },
         {
           id: "n-c2",
@@ -646,7 +616,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
             >
               {effectiveRole === "CollegeAdmin"
                 ? college?.code || "SISTEC"
-                : `${college?.code || "SISTEC"} • CSE`}
+                : effectiveRole === "Student" || effectiveRole === "TeamLead"
+                  ? [college?.code, currentPersona?.departmentCode].filter(Boolean).join(" • ") || "Student"
+                  : `${college?.code || "SISTEC"} • CSE`}
             </span>
           )}
         </div>
@@ -794,6 +766,17 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 <Calendar className="w-3 h-3 text-emerald-400 shrink-0" strokeWidth={1.75} />
                 <span className="font-mono text-[11px] tabular-nums text-slate-200">
                   AY {activeSessionLabel}
+                </span>
+              </div>
+            ) : effectiveRole === "Student" || effectiveRole === "TeamLead" ? (
+              <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-slate-200">
+                <Calendar className="w-3 h-3 text-emerald-400 shrink-0" strokeWidth={1.75} />
+                <span className="font-mono text-[11px] tabular-nums text-slate-200">
+                  {cycle.semester > 0
+                    ? `${cycle.academicYear || activeSessionLabel} • Sem ${cycle.semester}`
+                    : cycle.academicYear
+                      ? `AY ${cycle.academicYear} • ${currentPersona.academicStatus || "Not Enrolled"}`
+                      : currentPersona.academicStatus || "Session Not Configured"}
                 </span>
               </div>
             ) : (

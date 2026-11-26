@@ -1063,34 +1063,40 @@ export interface ContinueLineageRequest {
 
 // --- Phase 2: Student Identity, Profile & Dashboard DTOs ---
 
+export interface StudentSocialLinkDto {
+  id: string;
+  platform: string;
+  label?: string | null;
+  url: string;
+}
+
 export interface StudentProfileDto {
-  userId: string;
+  studentId: string;
   fullName: string;
-  enrollmentOrEmployeeCode: string;
+  enrollmentCode: string;
   email: string;
-  collegeId: string;
   collegeName: string;
   collegeCode: string;
-  departmentId: string;
   departmentName: string;
   departmentCode: string;
-  academicProgram: string;
+  programName: string;
+  admissionBatch: string;
   currentSemester: number;
-  enrollmentStatus: string;
-  academicSessionName: string;
+  semesterName: string;
+  academicStatus: string;
+  academicSessionName?: string | null;
   skills: string[];
-  gitHubHandle?: string;
-  jiraKey?: string;
-  phoneNumber?: string;
-  bio?: string;
+  socialLinks: StudentSocialLinkDto[];
+  gitHubHandle?: string | null;
+  phoneNumber?: string | null;
+  bio?: string | null;
   profileCompletionPercentage: number;
-  isActive: boolean;
 }
 
 export interface UpdateStudentProfileRequest {
   skills?: string[];
+  socialLinks?: StudentSocialLinkDto[];
   gitHubHandle?: string;
-  jiraKey?: string;
   phoneNumber?: string;
   bio?: string;
 }

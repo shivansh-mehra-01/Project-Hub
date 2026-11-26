@@ -28,6 +28,8 @@ export interface UserPersona {
   email: string;
   role: RoleType;
   departmentId?: string;
+  departmentCode?: string;
+  academicStatus?: string;
   collegeId: string;
   isProjectCoordinator?: boolean;
   enrollmentNumber?: string;
@@ -223,7 +225,6 @@ export interface RubricCriterion {
   name: string;
   description: string;
   maxScore: number;
-  nbaCriterionCode: string; // PO3, PO4, PSO1
   bloomsTaxonomy: string; // L3_Apply, L5_Evaluate, L6_Create
 }
 
@@ -349,23 +350,6 @@ export interface ExceptionAuditLog {
   targetMemberName?: string;
   newGuideId?: string;
   newGuideName?: string;
-}
-
-export interface CourseExitSurvey {
-  id: string;
-  studentId: string;
-  studentName: string;
-  enrollmentNumber: string;
-  teamId: string;
-  ratings: {
-    po2: number; // 1-3 Problem Analysis
-    po3: number; // 1-3 Design & Development
-    po5: number; // 1-3 Modern Tools Usage
-    po9: number; // 1-3 Individual & Team Work
-    po10: number; // 1-3 Communication & Defense
-  };
-  feedback?: string;
-  submittedAt: string;
 }
 
 

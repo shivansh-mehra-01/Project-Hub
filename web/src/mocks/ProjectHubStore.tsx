@@ -8,7 +8,6 @@ import {
   SubjectOffering,
   ArtifactSlot,
   College,
-  CourseExitSurvey,
   Department,
   Evaluation,
   ExceptionAuditLog,
@@ -30,26 +29,6 @@ import {
   UserPersona,
   WeeklyLog,
 } from "./store-types";
-import {
-  initialAcademicSessions,
-  initialAuditLogs,
-  initialCollege,
-  initialCourseExitSurveys,
-  initialCoursePrograms,
-  initialCycle,
-  initialDepartments,
-  initialEvaluations,
-  initialExceptionAuditLogs,
-  initialIndividualEvaluations,
-  initialPersonas,
-  initialPilotRequests,
-  initialProblemBank,
-  initialRubrics,
-  initialSemesterTerms,
-  initialSubjectOfferings,
-  initialTeams,
-  initialTenants,
-} from "./seed-data";
 import {
   apiClient,
   authApi,
@@ -129,7 +108,6 @@ interface ProjectHubStoreContextType {
   auditLogs: PlatformAuditLog[];
   individualEvaluations: IndividualEvaluation[];
   exceptionAuditLogs: ExceptionAuditLog[];
-  courseExitSurveys: CourseExitSurvey[];
   coursePrograms: CourseProgram[];
   academicSessions: AcademicSession[];
   semesterTerms: SemesterTerm[];
@@ -141,6 +119,16 @@ interface ProjectHubStoreContextType {
   // Actions
   logout: () => void;
   login: (persona?: UserPersona) => void;
+  hydrateSessionUser: (user: {
+    id: string;
+    fullName: string;
+    email: string;
+    role: string;
+    collegeId: string;
+    departmentId?: string | null;
+    isProjectCoordinator?: boolean;
+    enrollmentOrEmployeeCode?: string;
+  }) => void;
   switchPersona: (role: RoleType) => void;
   toggleFacultyCoordinator: (facultyId: string) => void;
   approveProposal: (teamId: string, role: RoleType) => void;
@@ -164,7 +152,6 @@ interface ProjectHubStoreContextType {
   rejectGradeUnlock: (evalId: string) => void;
   addDepartment: (name: string, code: string, hodName?: string, studentCount?: number, facultyCount?: number, courseProgramId?: string) => void;
   reassignHOD: (deptId: string, newHodName: string) => void;
-  lockDepartmentSAR: (deptCode: string) => void;
   updateFacultyCapacity: (facultyId: string, delta: number) => void;
   addFaculty: (faculty: Omit<FacultyRosterItem, "id" | "guidedCount">) => void;
   onboardCollege: (collegeData: Partial<College>) => void;
@@ -180,11 +167,10 @@ interface ProjectHubStoreContextType {
   uploadArtifact: (teamId: string, slot: ArtifactSlot, fileName: string, fileSize: string, similarityScore?: number) => void;
   uploadArtifactBinary: (teamId: string, slot: ArtifactSlot, file: File, customName?: string, similarityScore?: number) => Promise<void>;
   reviewArtifact: (teamId: string, slot: ArtifactSlot, isApproved: boolean, reviewerNote?: string) => Promise<void>;
-  continueProjectToNextTrack: (teamId: string, nextTrack?: "Major Phase-I" | "Major Phase-II") => Team;
+  continueProjectToNextTrack: (teamId: string, nextTrack?: "Major Phase-I" | "Major Phase-II") => Team | undefined;
   saveIndividualEvaluations: (teamId: string, evaluations: IndividualEvaluation[]) => void;
   submitExceptionOverride: (override: Omit<ExceptionAuditLog, "id" | "requestedAt" | "status">) => void;
   reviewExceptionOverride: (overrideId: string, decision: "Approved" | "Rejected", remarks?: string) => void;
-  submitCourseExitSurvey: (survey: Omit<CourseExitSurvey, "id" | "submittedAt">) => void;
   importRgpvCatalog: (universityCode?: string, programCodes?: string[], branchCodes?: string[]) => Promise<{ programsImported: number; departmentsCreated: number; semesterTermsCreated: number; subjectOfferingsCreated: number; message: string }>;
   configureAcademicSession: (data: { academicYear: string; examCutoffDateUtc?: string; allowInterdisciplinaryTeams?: boolean }) => Promise<void>;
   addCourseProgram: (prog: Omit<CourseProgram, "id" | "collegeId">) => void;
@@ -195,6 +181,14 @@ interface ProjectHubStoreContextType {
 }
 
 const ProjectHubStoreContext = createContext<ProjectHubStoreContextType | null>(null);
+
+const EMPTY_PERSONA: UserPersona = {
+  id: "",
+  name: "",
+  email: "",
+  role: "Student",
+  collegeId: "",
+};
 
 export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentPersona, setCurrentPersona] = useState<UserPersona>(() => {
@@ -212,7 +206,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         employeeId: userProfile.enrollmentOrEmployeeCode,
       };
     }
-    return initialPersonas.studentLead;
+    return EMPTY_PERSONA;
   });
   const [college, setCollege] = useState<College>({
     id: "",
@@ -247,7 +241,6 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   const [auditLogs, setAuditLogs] = useState<PlatformAuditLog[]>([]);
   const [individualEvaluations, setIndividualEvaluations] = useState<IndividualEvaluation[]>([]);
   const [exceptionAuditLogs, setExceptionAuditLogs] = useState<ExceptionAuditLog[]>([]);
-  const [courseExitSurveys, setCourseExitSurveys] = useState<CourseExitSurvey[]>([]);
   const [coursePrograms, setCoursePrograms] = useState<CourseProgram[]>([]);
   const [academicSessions, setAcademicSessions] = useState<AcademicSession[]>([]);
   const [semesterTerms, setSemesterTerms] = useState<SemesterTerm[]>([]);
@@ -566,8 +559,29 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
             }
           }
         } else if (role === "Student" || role === "TeamLead") {
-          const wsRes = await studentApi.getWorkspace().catch(() => null);
+          const [wsRes, profRes] = await Promise.all([
+            studentApi.getWorkspace().catch(() => null),
+            studentApi.getProfile().catch(() => null),
+          ]);
           if (isMounted) {
+            if (profRes) {
+              setCollege((prev) => ({
+                ...prev,
+                id: profRes.collegeCode || prev.id,
+                name: profRes.collegeName || prev.name,
+                code: profRes.collegeCode || prev.code,
+              }));
+              setCycle((prev) => ({
+                ...prev,
+                academicYear: profRes.academicSessionName || "",
+                semester: profRes.currentSemester || 0,
+              }));
+              setCurrentPersona((prev) => ({
+                ...prev,
+                departmentCode: profRes.departmentCode || prev.departmentCode,
+                academicStatus: profRes.academicStatus || prev.academicStatus,
+              }));
+            }
             if (wsRes) {
               const sdgNum = parseInt(wsRes.sdgCode?.replace(/\D/g, "") || "9", 10) || 9;
               const mappedTeam: Team = {
@@ -656,12 +670,11 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     clearAuthSession();
     setIsLiveSession(false);
     setIsAuthenticated(false);
-    setCurrentPersona(initialPersonas.studentLead);
+    setCurrentPersona(EMPTY_PERSONA);
     setTeams([]);
     setEvaluations([]);
     setIndividualEvaluations([]);
     setExceptionAuditLogs([]);
-    setCourseExitSurveys([]);
     setAuditLogs([]);
   }, []);
 
@@ -701,23 +714,36 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     setIsAuthenticated(true);
   };
 
-  const switchPersona = (role: RoleType) => {
-    setIsAuthenticated(true);
-    let target = initialPersonas.studentLead;
-    if (role === "SuperAdmin") target = initialPersonas.superAdmin;
-    else if (role === "CollegeAdmin") target = initialPersonas.collegeAdmin;
-    else if (role === "HOD") target = initialPersonas.hod;
-    else if (role === "Faculty") {
-      // Check if current faculty has coordinator flag from facultyRoster
-      const verma = facultyRoster.find((f) => f.id === "usr-fac-verma");
-      target = {
-        ...initialPersonas.facultyGuide,
-        isProjectCoordinator: verma?.isProjectCoordinator ?? false,
-      };
-    } else if (role === "Student") target = initialPersonas.studentMember;
-    else if (role === "TeamLead") target = initialPersonas.studentLead;
+  const hydrateSessionUser = React.useCallback(
+    (userProfile: {
+      id: string;
+      fullName: string;
+      email: string;
+      role: string;
+      collegeId: string;
+      departmentId?: string | null;
+      isProjectCoordinator?: boolean;
+      enrollmentOrEmployeeCode?: string;
+    }) => {
+      setCurrentPersona({
+        id: userProfile.id,
+        name: userProfile.fullName,
+        email: userProfile.email,
+        role: userProfile.role as RoleType,
+        collegeId: userProfile.collegeId,
+        departmentId: userProfile.departmentId || undefined,
+        isProjectCoordinator: userProfile.isProjectCoordinator,
+        enrollmentNumber: userProfile.enrollmentOrEmployeeCode,
+        employeeId: userProfile.enrollmentOrEmployeeCode,
+      });
+      setIsAuthenticated(true);
+      setIsLiveSession(true);
+    },
+    []
+  );
 
-    setCurrentPersona(target);
+  const switchPersona = (_role: RoleType) => {
+    // Persona switching is disabled in production mode; role is strictly server-authoritative via HttpOnly BFF session.
   };
 
   const toggleFacultyCoordinator = (facultyId: string) => {
@@ -1300,13 +1326,6 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     showToast(`HOD reassigned to ${newHodName}.`, "info");
   };
 
-  const lockDepartmentSAR = (deptCode: string) => {
-    setDepartments((prev) =>
-      prev.map((d) => (d.code === deptCode ? { ...d, hodSignOffStatus: "Attested & Locked" } : d))
-    );
-    showToast(`Department status updated for ${deptCode}.`, "success");
-  };
-
   const updateFacultyCapacity = (facultyId: string, delta: number) => {
     setFacultyRoster((prev) =>
       prev.map((f) => {
@@ -1659,7 +1678,11 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     teamId: string,
     nextTrack: "Major Phase-I" | "Major Phase-II" = "Major Phase-I"
   ) => {
-    const existingTeam = teams.find((t) => t.id === teamId) || teams[0] || initialTeams[0];
+    const existingTeam = teams.find((t) => t.id === teamId) || teams[0];
+    if (!existingTeam) {
+      showToast("No active team found to continue.", "error");
+      return;
+    }
     const lineageId = existingTeam?.projectLineageId || (existingTeam?.teamCode ? `lin-${existingTeam.teamCode.toLowerCase()}` : "lin-2026-cs-01");
     const newTeamCode = existingTeam?.teamCode ? existingTeam.teamCode.replace("MIN", nextTrack === "Major Phase-I" ? "MAJ-1" : "MAJ-2") : "2026-CS-MAJ-1-01";
     const newTeam: Team = {
@@ -1827,35 +1850,19 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     showToast(`Exception override ${decision.toLowerCase()}.`, "success");
   };
 
-  const submitCourseExitSurvey = (survey: Omit<CourseExitSurvey, "id" | "submittedAt">) => {
-    const newSurvey: CourseExitSurvey = {
-      ...survey,
-      id: `surv-${Date.now()}`,
-      submittedAt: new Date().toISOString(),
-    };
-    setCourseExitSurveys((prev) => [
-      newSurvey,
-      ...prev.filter((s) => s.enrollmentNumber !== survey.enrollmentNumber),
-    ]);
-    showToast("Feedback recorded.", "success");
-  };
-
   const resetToDefaults = () => {
-    setCurrentPersona(initialPersonas.studentLead);
-    setCollege(initialCollege);
-    setDepartments(initialDepartments);
-    setCycle(initialCycle);
-    setTeams(initialTeams);
-    setEvaluations(initialEvaluations);
-    setRubrics(initialRubrics);
-    setProblemBank(initialProblemBank);
-    setFacultyRoster(initialFacultyRoster);
-    setTenants(initialTenants);
-    setPilotRequests(initialPilotRequests);
-    setAuditLogs(initialAuditLogs);
-    setIndividualEvaluations(initialIndividualEvaluations);
-    setExceptionAuditLogs(initialExceptionAuditLogs);
-    setCourseExitSurveys(initialCourseExitSurveys);
+    setCurrentPersona(EMPTY_PERSONA);
+    setDepartments([]);
+    setTeams([]);
+    setEvaluations([]);
+    setRubrics([]);
+    setProblemBank([]);
+    setFacultyRoster([]);
+    setTenants([]);
+    setPilotRequests([]);
+    setAuditLogs([]);
+    setIndividualEvaluations([]);
+    setExceptionAuditLogs([]);
   };
 
   return (
@@ -1875,7 +1882,6 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         auditLogs,
         individualEvaluations,
         exceptionAuditLogs,
-        courseExitSurveys,
         coursePrograms,
         academicSessions,
         semesterTerms,
@@ -1886,6 +1892,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         isLoaded,
         logout,
         login,
+        hydrateSessionUser,
         switchPersona,
         toggleFacultyCoordinator,
         approveProposal,
@@ -1903,7 +1910,6 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         rejectGradeUnlock,
         addDepartment,
         reassignHOD,
-        lockDepartmentSAR,
         updateFacultyCapacity,
         addFaculty,
         onboardCollege,
@@ -1923,7 +1929,6 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         saveIndividualEvaluations,
         submitExceptionOverride,
         reviewExceptionOverride,
-        submitCourseExitSurvey,
         importRgpvCatalog,
         configureAcademicSession,
         addCourseProgram,

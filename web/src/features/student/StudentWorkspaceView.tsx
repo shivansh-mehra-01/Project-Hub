@@ -252,18 +252,18 @@ export const StudentWorkspaceView: React.FC = () => {
   useDashboardHeader({
     title: "Project Workspace",
     breadcrumb: dashboardData
-      ? `${dashboardData.identity.collegeCode} ${dashboardData.identity.departmentCode} • ${subTabBreadcrumbs[subTab] || "Minor Project"}`
-      : `SISTec CSE • ${subTabBreadcrumbs[subTab] || "Minor Project"}`,
+      ? `${dashboardData.identity.collegeCode} ${dashboardData.identity.departmentCode} • ${subTabBreadcrumbs[subTab] || "Project"}`
+      : subTabBreadcrumbs[subTab] || "Project Workspace",
   });
 
   // New Task Modal & Selected Task for Details
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedTaskForDetails, setSelectedTaskForDetails] = useState<Team["tasks"][0] | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
-  const [taskAssignee, setTaskAssignee] = useState("Shivansh Mehra");
+  const [taskAssignee, setTaskAssignee] = useState("");
   const [taskAssigneeId, setTaskAssigneeId] = useState("");
   const [taskTag, setTaskTag] = useState("Hardware");
-  const [taskDueDate, setTaskDueDate] = useState("2026-03-25");
+  const [taskDueDate, setTaskDueDate] = useState("");
   const [taskCreatedToast, setTaskCreatedToast] = useState(false);
   const [taskCreating, setTaskCreating] = useState(false);
 
@@ -279,8 +279,8 @@ export const StudentWorkspaceView: React.FC = () => {
       ]);
       if (tasksData) setLiveTasks(tasksData);
       if (progressData) setLiveProgress(progressData);
-    } catch {
-      // Mock store fallback
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Failed to refresh tasks", "error");
     }
   };
 
@@ -438,63 +438,49 @@ export const StudentWorkspaceView: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDownloadArtifact = async (art?: ProjectArtifact) => {
-    if (!art?.fileName && !art?.id) return;
+    if (!art?.id) {
+      showToast("Deliverable file is not available for download.", "error");
+      return;
+    }
     try {
-      if (art.id && getAuthToken()) {
-        const blob = await studentApi.downloadArtifactBlob(art.id);
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = art.fileName || "deliverable.pdf";
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        showToast(`Downloaded ${art.fileName || "deliverable.pdf"}`);
-      } else {
-        const sampleText = `%PDF-1.4\n% Collabex Capstone Vault Deliverable\n% Team: ${myTeam.teamCode} (${myTeam.title})\n% Milestone: ${art.name || art.slot}\n% File: ${art.fileName}\n% Timestamp: ${new Date().toISOString()}\n%%EOF\n`;
-        const blob = new Blob([sampleText], { type: "application/pdf" });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = art.fileName || `${art.slot}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        showToast(`Downloaded ${art.fileName || `${art.slot}.pdf`}`);
-      }
+      const blob = await studentApi.downloadArtifactBlob(art.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = art.fileName || "deliverable.pdf";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showToast(`Downloaded ${art.fileName || "deliverable.pdf"}`);
     } catch (err) {
       console.error("Artifact download failed:", err);
-      showToast("Download failed. Please try again.", "error");
+      showToast(err instanceof Error ? err.message : "Download failed. Please try again.", "error");
     }
   };
 
-  // Active student team
-  const fallbackTeam =
-    teams.find(
-      (t) =>
-        t.teamCode === "2026-CS-MIN-01" ||
-        t.id === "team-01" ||
-        t.members.some((m) => m.name === currentPersona.name)
-    ) ||
-    teams[0] || {
-      id: "team-default",
-      teamCode: "2026-CS-MIN-01",
-      title: "Smart IoT Energy Monitoring & Anomaly Detection for Campus Labs",
-      abstract: "Edge telemetric hardware monitoring energy dissipation across university labs with LSTM anomaly prediction.",
-      domain: "IoT & Smart Systems",
-      sdgNumber: 7,
-      guideName: "Prof. S. K. Verma",
-      state: "Active",
-      githubUrl: "https://github.com/sistec-cse/iot-energy-monitor",
-      jiraUrl: "https://sistec-cse.atlassian.net/jira/projects/IOT",
-      isRosterLocked: true,
-      members: [],
-      tasks: [],
-      weeklyLogs: [],
-      health: "Healthy",
-    };
+  // Empty placeholder shape used only when no live active project exists
+  const emptyTeamPlaceholder: Team = {
+    id: "",
+    collegeId: "",
+    departmentId: "",
+    cycleId: "",
+    teamCode: "",
+    title: "",
+    abstract: "",
+    domain: "",
+    sdgNumber: 0,
+    guideName: "",
+    state: "Draft",
+    githubUrl: "",
+    jiraUrl: "",
+    isRosterLocked: false,
+    members: [],
+    tasks: [],
+    weeklyLogs: [],
+    artifacts: [],
+    health: "Healthy",
+  };
 
   const liveTeam = useMemo(() => {
     if (dashboardData?.activeProject) {
@@ -568,7 +554,7 @@ export const StudentWorkspaceView: React.FC = () => {
     return null;
   }, [dashboardData]);
 
-  const myTeam = liveTeam || fallbackTeam;
+  const myTeam = liveTeam || emptyTeamPlaceholder;
 
   // Derive live lifecycle state directly from active team state, dashboardData, and academic cycle
   const lifecycleState: "offseason" | "preapproval" | "active" =
@@ -672,16 +658,7 @@ export const StudentWorkspaceView: React.FC = () => {
       showToast("Task created successfully", "success");
       await fetchTasks();
     } catch (err: unknown) {
-      if (!getAuthToken()) {
-        // Fallback for offline mock environment only
-        createTask(myTeam.id, taskTitle.trim(), taskTag, taskAssignee, taskDueDate);
-        setShowTaskModal(false);
-        setTaskTitle("");
-        setTaskCreatedToast(true);
-        setTimeout(() => setTaskCreatedToast(false), 3500);
-      } else {
-        showToast(err instanceof Error ? err.message : "Failed to create task", "error");
-      }
+      showToast(err instanceof Error ? err.message : "Failed to create task", "error");
     } finally {
       setTaskCreating(false);
     }
@@ -692,15 +669,7 @@ export const StudentWorkspaceView: React.FC = () => {
       await studentApi.updateTaskStatus(taskId, { status: newStatus });
       await fetchTasks();
     } catch (err: unknown) {
-      if (!getAuthToken()) {
-        // Fallback for offline mock environment only
-        updateTaskStatus(taskId, newStatus as TaskStatusType);
-      } else {
-        showToast(err instanceof Error ? err.message : "Failed to update task status", "error");
-      }
-    }
-    if (!getAuthToken()) {
-      updateTaskStatus(taskId, newStatus as TaskStatusType);
+      showToast(err instanceof Error ? err.message : "Failed to update task status", "error");
     }
   };
 
@@ -1631,7 +1600,7 @@ export const StudentWorkspaceView: React.FC = () => {
                       </div>
                       <p className="text-[11px] text-amber-800 leading-relaxed">
                         Similar to: <strong className="font-semibold">&ldquo;{titleSimilarityMatch.title}&rdquo;</strong>.
-                        This advisory is non-blocking, but your Faculty Guide recommends highlighting novel edge LSTM regression to avoid duplication in SAR audits.
+                        This advisory is non-blocking, but your Faculty Guide recommends highlighting novel edge LSTM regression to distinguish your implementation from archived projects.
                       </p>
                     </div>
                   )}
@@ -2277,7 +2246,7 @@ export const StudentWorkspaceView: React.FC = () => {
                     <CardHeader>
                       <CardTitle>Verified Logbook History</CardTitle>
                       <CardDescription>
-                        Guide-stamped weekly engineering diary feeding NBA Criterion 2 student tracking.
+                        Guide-stamped weekly engineering diary for continuous student progress tracking.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -2345,7 +2314,7 @@ export const StudentWorkspaceView: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <CardTitle>4-Slot Official Capstone Document Vault</CardTitle>
                       <Badge variant="neutral" size="sm">
-                        NBA Criterion 2 &amp; 3
+                        Verified Archive
                       </Badge>
                     </div>
                     <CardDescription>
@@ -2354,8 +2323,12 @@ export const StudentWorkspaceView: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-500 font-mono">Vault Status:</span>
-                    <Badge variant="success" size="sm" dot>
-                      {(myTeam.artifacts || []).filter((a) => a.status === "Approved").length || 3} of 4 Approved
+                    <Badge
+                      variant={(myTeam.artifacts || []).filter((a) => a.status === "Approved").length === 4 ? "success" : "info"}
+                      size="sm"
+                      dot
+                    >
+                      {(myTeam.artifacts || []).filter((a) => a.status === "Approved").length} of 4 Approved
                     </Badge>
                   </div>
                 </CardHeader>
@@ -2365,43 +2338,30 @@ export const StudentWorkspaceView: React.FC = () => {
                       {
                         slot: "Synopsis" as ArtifactSlot,
                         title: "1. Approved Synopsis PDF",
-                        fallbackFile: "2026-CS-MIN-01-Synopsis-Approved.pdf",
-                        fallbackSize: "1.8 MB",
-                        defaultStatus: "Approved",
                         reqText: "Signed Guide Proposal Synopsis",
                       },
                       {
                         slot: "MidTermPPT" as ArtifactSlot,
                         title: "2. Mid-Term Review PPT",
-                        fallbackFile: "2026-CS-MIN-01-MidTerm-Deck.pptx",
-                        fallbackSize: "14.2 MB",
-                        defaultStatus: "Approved",
                         reqText: "Defense Presentation Slide Deck",
                       },
                       {
                         slot: "PlagiarismReport" as ArtifactSlot,
                         title: "3. Plagiarism Report (<15%)",
-                        fallbackFile: "Turnitin-Originality-8pct.pdf",
-                        fallbackSize: "620 KB",
-                        defaultStatus: "Approved",
-                        similarity: 8,
                         reqText: "Turnitin / DrillBit Report (< 15%)",
                       },
                       {
                         slot: "FinalThesis" as ArtifactSlot,
                         title: "4. Final Thesis PDF",
-                        fallbackFile: undefined,
-                        fallbackSize: undefined,
-                        defaultStatus: "Pending",
                         reqText: "Complete B.Tech Dissertation",
                       },
                     ].map((item) => {
                       const artifact = (myTeam.artifacts || []).find((a) => a.slot === item.slot);
-                      const isUploaded = Boolean(artifact?.fileName || item.fallbackFile);
-                      const fileName = artifact?.fileName || item.fallbackFile;
-                      const fileSize = artifact?.fileSize || item.fallbackSize;
-                      const status = artifact?.status || item.defaultStatus;
-                      const similarity = artifact?.similarityScore ?? item.similarity;
+                      const isUploaded = Boolean(artifact?.fileName);
+                      const fileName = artifact?.fileName;
+                      const fileSize = artifact?.fileSize;
+                      const status = artifact?.status || "Pending";
+                      const similarity = artifact?.similarityScore;
 
                       return (
                         <div
@@ -2450,9 +2410,9 @@ export const StudentWorkspaceView: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  {(artifact?.sha256Checksum || item.defaultStatus === "Approved") && (
+                                  {artifact?.sha256Checksum && (
                                     <div className="flex items-center gap-1 text-[9px] text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                                      <span>SHA: {(artifact?.sha256Checksum || "9f86d081").slice(0, 8)}...</span>
+                                      <span>SHA: {artifact.sha256Checksum.slice(0, 8)}...</span>
                                     </div>
                                   )}
                                   {similarity !== undefined && (
@@ -3138,7 +3098,7 @@ export const StudentWorkspaceView: React.FC = () => {
                         <span>Academic Evaluation Scorecard (Sealed)</span>
                       </CardTitle>
                       <CardDescription>
-                        Official viva defense rubric marks and Course Outcome (CO) attainments.
+                        Official viva defense rubric marks and evaluation breakdown.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -3192,7 +3152,7 @@ export const StudentWorkspaceView: React.FC = () => {
                               size="md"
                               dot
                             >
-                              Attainment:{" "}
+                              Score:{" "}
                               {Math.round(((evaluationData.sharedTotalScore ?? 0) / evaluationData.sharedMaxScore) * 100)}%
                             </Badge>
                           )}
@@ -3573,31 +3533,25 @@ export const StudentWorkspaceView: React.FC = () => {
             <Button
               variant="primary"
               size="sm"
-              disabled={isUploadingArtifact}
+              disabled={isUploadingArtifact || !selectedFile}
               onClick={async () => {
-                if (!uploadModalSlot) return;
+                if (!uploadModalSlot || !selectedFile) {
+                  showToast("Please select a file to upload.", "error");
+                  return;
+                }
                 setIsUploadingArtifact(true);
                 const slot = uploadModalSlot;
-                const name = customFileName.trim() || selectedFile?.name || `${myTeam.teamCode}-${slot}.pdf`;
-                const sim = slot === "PlagiarismReport" ? 8 : undefined;
+                const name = customFileName.trim() || selectedFile.name;
 
                 try {
-                  if (selectedFile) {
-                    await uploadArtifactBinary(myTeam.id, slot, selectedFile, name, sim);
-                  } else {
-                    const fallbackBlob = new File(
-                      [`%PDF-1.4\n% Collabex Capstone Vault Deliverable\n% Team: ${myTeam.teamCode}\n% Slot: ${slot}\n% File: ${name}\n%%EOF\n`],
-                      name,
-                      { type: slot === "MidTermPPT" ? "application/vnd.ms-powerpoint" : "application/pdf" }
-                    );
-                    await uploadArtifactBinary(myTeam.id, slot, fallbackBlob, name, sim);
-                  }
+                  await uploadArtifactBinary(myTeam.id, slot, selectedFile, name);
                   setUploadModalSlot(null);
                   setSelectedFile(null);
                   setUploadToast(`Deliverable "${name}" successfully archived in Document Vault.`);
                   setTimeout(() => setUploadToast(null), 3500);
-                } catch (err) {
+                } catch (err: unknown) {
                   console.error("Upload failed:", err);
+                  showToast(err instanceof Error ? err.message : "Upload failed. Please try again.", "error");
                 } finally {
                   setIsUploadingArtifact(false);
                 }

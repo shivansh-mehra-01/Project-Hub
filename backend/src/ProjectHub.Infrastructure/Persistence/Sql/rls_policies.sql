@@ -227,21 +227,6 @@ CREATE POLICY tenant_isolation_policy ON "IndividualStudentScores"
         OR "CollegeId" = NULLIF(current_setting('app.current_tenant', true), '')::uuid
     );
 
--- 2.15 CourseExitSurveys
-ALTER TABLE "CourseExitSurveys" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "CourseExitSurveys" FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON "CourseExitSurveys";
-CREATE POLICY tenant_isolation_policy ON "CourseExitSurveys"
-    AS PERMISSIVE FOR ALL TO PUBLIC
-    USING (
-        current_setting('app.is_super_admin', true) = 'true'
-        OR "CollegeId" = NULLIF(current_setting('app.current_tenant', true), '')::uuid
-    )
-    WITH CHECK (
-        current_setting('app.is_super_admin', true) = 'true'
-        OR "CollegeId" = NULLIF(current_setting('app.current_tenant', true), '')::uuid
-    );
-
 -- 2.16 ExceptionAuditLogs
 ALTER TABLE "ExceptionAuditLogs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ExceptionAuditLogs" FORCE ROW LEVEL SECURITY;

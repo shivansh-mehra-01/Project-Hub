@@ -68,7 +68,7 @@ export const CoordinatorView: React.FC = () => {
       }
     }
   }, []);
-  const [isCsvUploaded, setIsCsvUploaded] = useState(true);
+  const [isCsvUploaded, setIsCsvUploaded] = useState(false);
   const [isAutoMatching, setIsAutoMatching] = useState(false);
   const [matchSuccess, setMatchSuccess] = useState(false);
   const [submittedToHOD, setSubmittedToHOD] = useState(false);
@@ -92,34 +92,40 @@ export const CoordinatorView: React.FC = () => {
   const [downloadingMarksheet, setDownloadingMarksheet] = useState(false);
   const [downloadingDossier, setDownloadingDossier] = useState(false);
 
-  // Panel Scheduling State
-  const [panels, setPanels] = useState<VivaPanel[]>([
-    {
-      panelId: "PANEL-A",
-      venue: "Seminar Hall 1",
-      time: "March 18, 2026 • 10:00 AM - 01:00 PM",
-      evaluators: ["Prof. Priya Nair (Chair)", "Dr. Amit Rawat", "Dr. Manisha Sharma"],
-      teams: ["2026-CS-MIN-01", "2026-CS-MIN-03"],
-      conflictCheck: "Prof. S. K. Verma excluded from Team 01 scoring (Conflict Free)",
-    },
-    {
-      panelId: "PANEL-B",
-      venue: "IoT Lab 2",
-      time: "March 18, 2026 • 02:00 PM - 05:00 PM",
-      evaluators: ["Prof. S. K. Verma (Chair)", "Dr. Manisha Sharma", "Prof. Priya Nair"],
-      teams: ["2026-CS-MIN-02", "2026-CS-MIN-04"],
-      conflictCheck: "Prof. Priya Nair excluded from Team 02 scoring (Conflict Free)",
-    },
-  ]);
+  // Panel Scheduling State (loaded from backend API)
+  const [panels, setPanels] = useState<VivaPanel[]>([]);
+
+  React.useEffect(() => {
+    if (!getAuthToken()) return;
+    coordinatorApi
+      .getPanels()
+      .then((apiPanels) => {
+        if (Array.isArray(apiPanels)) {
+          setPanels(
+            apiPanels.map((p) => ({
+              panelId: p.panelName,
+              venue: p.roomOrLink || "TBD",
+              time: p.scheduledAtUtc ? new Date(p.scheduledAtUtc).toLocaleString() : "TBD",
+              evaluators: p.evaluatorNames || [],
+              teams: [],
+              conflictCheck: "Conflict-of-interest guard enforced",
+            }))
+          );
+        }
+      })
+      .catch(() => {
+        // Keep empty on error; user sees empty state
+      });
+  }, []);
 
   const [isNewPanelModalOpen, setIsNewPanelModalOpen] = useState(false);
-  const [newPanelId, setNewPanelId] = useState("PANEL-C");
-  const [newPanelVenue, setNewPanelVenue] = useState("Seminar Hall 2");
-  const [newPanelDate, setNewPanelDate] = useState("March 19, 2026 • 10:00 AM - 01:00 PM");
-  const [newChairId, setNewChairId] = useState("usr-fac-rawat");
-  const [newEval2Id, setNewEval2Id] = useState("usr-fac-msharma");
-  const [newEval3Id, setNewEval3Id] = useState("usr-fac-verma");
-  const [newSelectedTeam, setNewSelectedTeam] = useState("2026-CS-MIN-01");
+  const [newPanelId, setNewPanelId] = useState("");
+  const [newPanelVenue, setNewPanelVenue] = useState("");
+  const [newPanelDate, setNewPanelDate] = useState("");
+  const [newChairId, setNewChairId] = useState("");
+  const [newEval2Id, setNewEval2Id] = useState("");
+  const [newEval3Id, setNewEval3Id] = useState("");
+  const [newSelectedTeam, setNewSelectedTeam] = useState("");
   const [panelSuccessMessage, setPanelSuccessMessage] = useState("");
 
   // Single Student Onboarding Modal State
@@ -129,22 +135,27 @@ export const CoordinatorView: React.FC = () => {
   const [studentUsn, setStudentUsn] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
   const [studentSemester, setStudentSemester] = useState(6);
-  const [studentBatch, setStudentBatch] = useState("2023-2027");
+  const [studentBatch, setStudentBatch] = useState("");
   const [studentError, setStudentError] = useState<string | null>(null);
 
-  // Active Cohort Student Roster State
-  const [rosterRecords, setRosterRecords] = useState([
-    { row: 1, name: "Shivansh Mehra", usn: "0176CS221045", email: "0176cs221045@sistec.ac.in", semester: 6, batch: "2023-2027", isActivated: true, status: "Active & Enrolled" },
-    { row: 2, name: "Aarav Sharma", usn: "0176CS221002", email: "0176cs221002@sistec.ac.in", semester: 6, batch: "2023-2027", isActivated: true, status: "Active & Enrolled" },
-    { row: 3, name: "Diya Patel", usn: "0176CS221021", email: "0176cs221021@sistec.ac.in", semester: 6, batch: "2023-2027", isActivated: true, status: "Active & Enrolled" },
-    { row: 4, name: "Rohan Gupta", usn: "0176CS221038", email: "0176cs221038@sistec.ac.in", semester: 6, batch: "2023-2027", isActivated: true, status: "Active & Enrolled" },
-    { row: 5, name: "Devansh Patel", usn: "0176CS221019", email: "0176cs221019@sistec.ac.in", semester: 6, batch: "2023-2027", isActivated: true, status: "Active & Enrolled" },
-  ]);
+  // Active Cohort Student Roster State (populated from live roster additions/imports)
+  const [rosterRecords, setRosterRecords] = useState<
+    Array<{
+      row: number;
+      name: string;
+      usn: string;
+      email: string;
+      semester: number;
+      batch: string;
+      isActivated: boolean;
+      status: string;
+    }>
+  >([]);
 
-  const coordinatorDept = (departments && departments.find((d) => d.code === "CSE")) || (departments && departments[0]) || {
-    id: "10000000-0000-0000-0000-000000000001",
-    name: "Computer Science & Engineering",
-    code: "CSE",
+  const coordinatorDept = (departments && departments[0]) || {
+    id: "",
+    name: "Department",
+    code: "",
   };
 
   const handleAddSingleStudent = async (e: React.FormEvent) => {
@@ -350,14 +361,12 @@ export const CoordinatorView: React.FC = () => {
   };
 
   const handleAssignGuide = async (teamId: string, guideId: string) => {
-    assignGuide(teamId, guideId);
-    if (getAuthToken()) {
-      try {
-        await coordinatorApi.assignGuide(teamId, { guideUserId: guideId });
-        showToast("Faculty guide assigned successfully.", "success");
-      } catch (err: any) {
-        console.warn("Backend assignGuide warning:", err);
-      }
+    try {
+      await coordinatorApi.assignGuide(teamId, { guideUserId: guideId });
+      assignGuide(teamId, guideId);
+      showToast("Faculty guide assigned successfully.", "success");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Failed to assign faculty guide.", "error");
     }
   };
 
@@ -391,29 +400,19 @@ export const CoordinatorView: React.FC = () => {
   const handleExportMarksheet = async () => {
     setDownloadingMarksheet(true);
     try {
-      if (getAuthToken()) {
-        const blob = await coordinatorApi.exportMarksheetCsvBlob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `RGPV_Project_Marks_CSE_${new Date().toISOString().split("T")[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      } else {
-        const header = "Enrollment_USN,Student_Name,Branch,Semester,Subject_Code,Team_Code,Project_Title,Guide_Name,Shared_Rubric_60,Individual_Score_40,Total_Marks_100,Attainment_Status\n";
-        const rows =
-          "0176CS221045,Shivansh Mehra,CSE,6,CS-606,2026-CS-MIN-01,\"Smart IoT Energy Monitoring & Anomaly Detection\",Prof. S. K. Verma,54,36,90,Target Met\n" +
-          "0176CS221002,Aarav Sharma,CSE,6,CS-606,2026-CS-MIN-01,\"Smart IoT Energy Monitoring & Anomaly Detection\",Prof. S. K. Verma,54,34,88,Target Met\n" +
-          "0176CS221021,Diya Patel,CSE,6,CS-606,2026-CS-MIN-01,\"Smart IoT Energy Monitoring & Anomaly Detection\",Prof. S. K. Verma,54,32,86,Target Met\n" +
-          "0176CS221038,Rohan Gupta,CSE,6,CS-606,2026-CS-MIN-02,\"Predictive Equipment Maintenance via LSTM\",Prof. Priya Nair,48,30,78,Target Met\n";
-        triggerDownload("RGPV_Project_Marks_CSE.csv", header + rows, "text/csv;charset=utf-8;");
-      }
-      showToast("RGPV University Examination Marksheet CSV exported successfully.", "success");
-    } catch (err) {
+      const blob = await coordinatorApi.exportMarksheetCsvBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `University_Project_Marks_${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast("Examination Marksheet CSV exported successfully.", "success");
+    } catch (err: unknown) {
       console.error("Export marksheet failed:", err);
-      showToast("Failed to export marksheet CSV.", "error");
+      showToast(err instanceof Error ? err.message : "Failed to export marksheet CSV.", "error");
     } finally {
       setDownloadingMarksheet(false);
     }
@@ -424,14 +423,12 @@ export const CoordinatorView: React.FC = () => {
     setTimeout(() => {
       const dossierSummary =
         "SISTec Department of Computer Science & Engineering\n" +
-        "NBA Accreditation SAR Criterion 2 & 3 Dossier (Academic Year 2025-2026)\n\n" +
+        "Departmental Project Evaluation & Archive Dossier\n\n" +
         "Contents:\n" +
-        "- Formatted CO-PO & PSO Attainment Calculations (84.2% CO1, 81.4% CO2, 79.6% CO3, 85.0% CO4)\n" +
-        "- 3 Best Samples (2026-CS-MIN-01, 2025-CS-MAJ-04, 2025-CS-MAJ-11)\n" +
-        "- 3 Average Samples (2026-CS-MIN-02, 2024-CS-MAJ-08, 2024-CS-MAJ-19)\n" +
-        "- 3 Weak Remedial Samples with Faculty Mentoring Action Plans\n" +
-        "- Weekly Sprint Logbooks with Guide Bi-weekly Signatures\n";
-      triggerDownload("NBA_Criterion_2_3_Dossier_SISTec_CSE_2026.txt", dossierSummary, "text/plain;charset=utf-8;");
+        "- Verified Project Evaluation Summaries & Grade Sheets\n" +
+        "- Sample Capstone Project Reports (Top, Mid, and Guided Teams)\n" +
+        "- Weekly Sprint Logbooks with Guide Review Signatures\n";
+      triggerDownload("Department_Project_Archive_Dossier_SISTec_CSE.txt", dossierSummary, "text/plain;charset=utf-8;");
       setDownloadingDossier(false);
     }, 700);
   };
@@ -459,30 +456,27 @@ export const CoordinatorView: React.FC = () => {
       conflictCheck: `${targetTeam?.guideName || "Guide"} excluded from ${newSelectedTeam} scoring (Conflict Free)`,
     };
 
-    if (getAuthToken()) {
-      try {
-        await coordinatorApi.schedulePanel({
-          departmentId: coordinatorDept.id,
-          academicTrackId: "00000000-0000-0000-0000-000000000000",
-          panelName: newPanel.panelId,
-          scheduledAtUtc: new Date().toISOString(),
-          roomOrLink: newPanelVenue,
-          evaluatorUserIds: [newChairId, newEval2Id, newEval3Id].filter(Boolean),
-        });
-      } catch (err: any) {
-        console.warn("Backend schedulePanel warning:", err);
-      }
+    try {
+      await coordinatorApi.schedulePanel({
+        departmentId: coordinatorDept.id,
+        academicTrackId: "00000000-0000-0000-0000-000000000000",
+        panelName: newPanel.panelId,
+        scheduledAtUtc: new Date().toISOString(),
+        roomOrLink: newPanelVenue,
+        evaluatorUserIds: [newChairId, newEval2Id, newEval3Id].filter(Boolean),
+      });
+      setPanels([...panels, newPanel]);
+      setIsNewPanelModalOpen(false);
+      setPanelSuccessMessage(`Viva ${newPanel.panelId} scheduled successfully for ${newPanel.venue}.`);
+      setTimeout(() => setPanelSuccessMessage(""), 4000);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Failed to schedule Viva panel.", "error");
     }
-
-    setPanels([...panels, newPanel]);
-    setIsNewPanelModalOpen(false);
-    setPanelSuccessMessage(`Viva ${newPanel.panelId} scheduled successfully for ${newPanel.venue}.`);
-    setTimeout(() => setPanelSuccessMessage(""), 4000);
   };
 
   useDashboardHeader({
     title: "Coordinator Console",
-    breadcrumb: "CSE Minor Project — Semester 6 (2026)",
+    breadcrumb: coordinatorDept.code ? `${coordinatorDept.code} Project Coordination` : "Project Coordination",
   });
 
   return (
@@ -1025,9 +1019,9 @@ export const CoordinatorView: React.FC = () => {
               <div className="h-9 w-9 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center mb-2">
                 <FileArchive className="h-5 w-5" />
               </div>
-              <CardTitle>NBA Criterion 2 &amp; 3 Audit Dossier (.zip)</CardTitle>
+              <CardTitle>Departmental Project Archive Dossier (.zip)</CardTitle>
               <CardDescription>
-                Complete package containing CO-PO attainment matrices, 3 Best/Avg/Weak reports, and logbooks.
+                Complete package containing verified project evaluations, sample reports, and weekly logbooks.
               </CardDescription>
             </CardHeader>
             <CardContent>
