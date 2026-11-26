@@ -70,7 +70,6 @@ public class ProjectTeam : BaseEntity, ITenantEntity
     public ICollection<TeamArtifact> Artifacts { get; set; } = new List<TeamArtifact>();
     public ICollection<WeeklyLogbook> WeeklyLogs { get; set; } = new List<WeeklyLogbook>();
     public ICollection<VivaEvaluation> Evaluations { get; set; } = new List<VivaEvaluation>();
-    public ICollection<CourseExitSurvey> ExitSurveys { get; set; } = new List<CourseExitSurvey>();
     public ICollection<ExceptionAuditLog> ExceptionLogs { get; set; } = new List<ExceptionAuditLog>();
     public ProjectClosureRecord? ClosureRecord { get; set; }
     public ICollection<StudentAcademicRecord> AcademicRecords { get; set; } = new List<StudentAcademicRecord>();

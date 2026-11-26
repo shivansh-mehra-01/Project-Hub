@@ -2599,40 +2599,6 @@ public class StudentController : ControllerBase
         });
     }
 
-    [HttpPost("exit-survey")]
-    public async Task<IActionResult> SubmitExitSurvey([FromBody] SubmitExitSurveyRequest request)
-    {
-        var studentId = _tenantContext.UserId!.Value;
-        var team = await GetCurrentStudentTeamAsync(studentId);
-        if (team == null) return NotFound(new { message = "Active project team not found." });
-
-        var existing = await _context.CourseExitSurveys
-            .FirstOrDefaultAsync(s => s.ProjectTeamId == team.Id && s.StudentUserId == studentId && !s.IsDeleted);
-
-        var json = JsonSerializer.Serialize(request.PoRatings);
-
-        if (existing != null)
-        {
-            existing.PoRatingsJson = json;
-            existing.SubmittedAtUtc = DateTime.UtcNow;
-        }
-        else
-        {
-            var survey = new CourseExitSurvey
-            {
-                CollegeId = team.CollegeId,
-                ProjectTeamId = team.Id,
-                StudentUserId = studentId,
-                PoRatingsJson = json,
-                SubmittedAtUtc = DateTime.UtcNow
-            };
-            await _context.CourseExitSurveys.AddAsync(survey);
-        }
-
-        await _context.SaveChangesAsync();
-        return Ok(new { success = true, submittedAtUtc = DateTime.UtcNow });
-    }
-
     [HttpGet("portfolio")]
     public async Task<ActionResult<StudentPortfolioDto>> GetPortfolio()
     {

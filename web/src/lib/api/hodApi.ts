@@ -11,7 +11,6 @@ import {
   HodDashboardDto,
   HodProjectDto,
   HodReportsSummaryDto,
-  NbaAttainmentReportDto,
   ProjectProposalDto,
   ToggleCoordinatorRequest,
   UpdateMentorCapRequest,
@@ -19,6 +18,11 @@ import {
 
 export const hodApi = {
   getDashboard: () => apiClient.get<HodDashboardDto>("/api/hod/dashboard"),
+
+  updateEvaluationCutoff: (evaluationCutoffDateUtc: string | null) =>
+    apiClient.put<HodDashboardDto>("/api/hod/department-settings/evaluation-cutoff", {
+      evaluationCutoffDateUtc,
+    }),
 
   getAcademicContext: () => apiClient.get<HodAcademicContextDto>("/api/hod/academic-context"),
 
@@ -92,19 +96,6 @@ export const hodApi = {
       `/api/hod/faculty/${facultyId}/mentor-cap`,
       data
     ),
-
-  getNbaAttainment: () => apiClient.get<NbaAttainmentReportDto>("/api/hod/nba-attainment"),
-
-  exportNbaDossierZip: () => apiClient.getBlob("/api/hod/nba/export-zip"),
-
-  attestSar: () =>
-    apiClient.post<{
-      success: boolean;
-      attestedAtUtc: string;
-      attestedByName: string;
-      status: string;
-      message: string;
-    }>("/api/hod/sar/attest"),
 
   getExceptions: () => apiClient.get<ExceptionAuditLogDto[]>("/api/hod/exceptions"),
 

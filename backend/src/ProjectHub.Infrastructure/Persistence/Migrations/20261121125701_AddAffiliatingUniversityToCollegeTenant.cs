@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -27,18 +27,26 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                 nullable: true,
                 defaultValue: "RGPV");
 
-            migrationBuilder.AddColumn<bool>(
-                name: "AllowInterdisciplinaryTeams",
-                table: "AcademicSessions",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
+            if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                migrationBuilder.Sql(@"ALTER TABLE ""AcademicSessions"" ADD COLUMN IF NOT EXISTS ""AllowInterdisciplinaryTeams"" boolean NOT NULL DEFAULT false;");
+                migrationBuilder.Sql(@"ALTER TABLE ""AcademicSessions"" ADD COLUMN IF NOT EXISTS ""ExamCutoffDateUtc"" timestamp with time zone;");
+            }
+            else
+            {
+                migrationBuilder.AddColumn<bool>(
+                    name: "AllowInterdisciplinaryTeams",
+                    table: "AcademicSessions",
+                    type: "boolean",
+                    nullable: false,
+                    defaultValue: false);
 
-            migrationBuilder.AddColumn<DateTime>(
-                name: "ExamCutoffDateUtc",
-                table: "AcademicSessions",
-                type: "timestamp with time zone",
-                nullable: true);
+                migrationBuilder.AddColumn<DateTime>(
+                    name: "ExamCutoffDateUtc",
+                    table: "AcademicSessions",
+                    type: "timestamp with time zone",
+                    nullable: true);
+            }
         }
 
         /// <inheritdoc />

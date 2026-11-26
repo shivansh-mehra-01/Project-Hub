@@ -424,8 +424,14 @@ export default function LoginPage() {
                   )}
                 </button>
 
-                {/* Right-aligned Forgot Password Link */}
-                <div className="flex justify-end pt-1">
+                {/* Onboarding & Forgot Password Links */}
+                <div className="flex items-center justify-between pt-1 gap-2">
+                  <a
+                    href="/onboarding"
+                    className="text-sm font-medium text-slate-600 hover:text-[#047857] hover:underline min-h-[36px] flex items-center"
+                  >
+                    Activate via college roster
+                  </a>
                   <button
                     type="button"
                     onClick={() => switchToOtp()}

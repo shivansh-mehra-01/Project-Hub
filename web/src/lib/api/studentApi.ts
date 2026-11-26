@@ -15,7 +15,6 @@ import {
   StudentPortfolioDto,
   StudentProfileDto,
   StudentWorkspaceDto,
-  SubmitExitSurveyRequest,
   SubmitLogbookRequest,
   SubmitProposalRequest,
   UpdateProjectIdeaRequest,
@@ -115,13 +114,6 @@ export const studentApi = {
       newTeamId: string;
       newTeamCode: string;
     }>("/api/student/continue-lineage", data),
-
-  submitExitSurvey: (data: SubmitExitSurveyRequest) =>
-    apiClient.post<{
-      success: boolean;
-      surveyId: string;
-      submittedAtUtc: string;
-    }>("/api/student/exit-survey", data),
 
   getPortfolio: () => apiClient.get<StudentPortfolioDto>("/api/student/portfolio"),
 

@@ -73,7 +73,11 @@ async function handleProxy(
   const contentDisposition = backendRes.headers.get("content-disposition");
   if (contentDisposition) resHeaders.set("Content-Disposition", contentDisposition);
 
-  const resBody = await backendRes.arrayBuffer();
+  const isNullBodyStatus =
+    backendRes.status === 204 ||
+    backendRes.status === 205 ||
+    backendRes.status === 304;
+  const resBody = isNullBodyStatus ? null : await backendRes.arrayBuffer();
   const res = new NextResponse(resBody, {
     status: backendRes.status,
     headers: resHeaders,

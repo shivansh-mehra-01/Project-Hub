@@ -116,7 +116,8 @@ export const HodReportsView: React.FC = () => {
   const filteredResults = useMemo(() => {
     return results.filter((r) => {
       if (gradeFilter !== "ALL" && r.letterGrade !== gradeFilter) return false;
-      if (statusFilter !== "ALL" && !r.nbaAttainmentStatus.includes(statusFilter)) return false;
+      const resultLabel = r.letterGrade === "F" ? "Fail" : "Pass";
+      if (statusFilter !== "ALL" && resultLabel !== statusFilter) return false;
 
       if (debouncedSearch) {
         const q = debouncedSearch.toLowerCase();
@@ -192,7 +193,7 @@ export const HodReportsView: React.FC = () => {
       "External Viva Score (/40)",
       "Total Marks (/100)",
       "Letter Grade",
-      "Attainment Status",
+      "Result",
     ];
 
     const rows = results.map((r) => [
@@ -205,7 +206,7 @@ export const HodReportsView: React.FC = () => {
       r.externalVivaScore,
       r.totalMarks,
       `"${r.letterGrade}"`,
-      `"${r.nbaAttainmentStatus}"`,
+      `"${r.letterGrade === "F" ? "Fail" : "Pass"}"`,
     ]);
 
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
@@ -328,7 +329,7 @@ export const HodReportsView: React.FC = () => {
               <option value="F">Grade F (&lt; 50)</option>
             </select>
 
-            {/* Attainment Status Filter */}
+            {/* Result Status Filter */}
             <select
               value={statusFilter}
               onChange={(e) => {
@@ -337,9 +338,9 @@ export const HodReportsView: React.FC = () => {
               }}
               className="h-8.5 text-xs rounded-lg border border-slate-300 bg-white px-2.5 text-slate-800 focus:outline-none focus:border-brand-primary cursor-pointer"
             >
-              <option value="ALL">All Attainment Statuses</option>
-              <option value="Target Exceeded">Target Exceeded (≥ 70)</option>
-              <option value="Remedial">Remedial (&lt; 70)</option>
+              <option value="ALL">All Results</option>
+              <option value="Pass">Pass</option>
+              <option value="Fail">Fail</option>
             </select>
           </div>
 
@@ -406,7 +407,7 @@ export const HodReportsView: React.FC = () => {
                   Grade
                 </th>
                 <th className="py-3 px-4 text-right font-semibold text-[11px] uppercase tracking-[0.06em]">
-                  Attainment Status
+                  Result
                 </th>
               </tr>
             </thead>
@@ -432,11 +433,11 @@ export const HodReportsView: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 text-right font-sans">
                     <Badge
-                      variant={r.nbaAttainmentStatus.includes("Target") ? "success" : "neutral"}
+                      variant={r.letterGrade === "F" ? "danger" : "success"}
                       size="sm"
-                      dot={r.nbaAttainmentStatus.includes("Target")}
+                      dot={r.letterGrade !== "F"}
                     >
-                      {r.nbaAttainmentStatus}
+                      {r.letterGrade === "F" ? "Fail" : "Pass"}
                     </Badge>
                   </td>
                 </tr>

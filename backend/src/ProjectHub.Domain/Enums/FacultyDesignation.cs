@@ -12,5 +12,6 @@ public enum FacultyDesignation
     Professor = 1,
     AssociateProfessor = 2,
     AssistantProfessor = 3,
-    AdjunctFaculty = 4
+    AdjunctFaculty = 4,
+    Lecturer = 5
 }

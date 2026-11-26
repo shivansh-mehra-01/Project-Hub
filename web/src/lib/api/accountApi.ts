@@ -30,6 +30,17 @@ export const accountApi = {
       data
     ),
 
+  requestPhoneVerification: () =>
+    apiClient.post<{ success: boolean; message: string; devOtp?: string }>(
+      "/api/account/request-phone-verification"
+    ),
+
+  verifyPhone: (data: { otp: string }) =>
+    apiClient.post<{ success: boolean; phoneNumber: string; isPhoneVerified: boolean; message: string }>(
+      "/api/account/verify-phone",
+      data
+    ),
+
   changePassword: (data: ChangePasswordRequest) =>
     apiClient.post<{ success: boolean; passwordChangedAtUtc: string; revokedOtherSessions: boolean; message: string }>(
       "/api/account/change-password",

@@ -990,4 +990,340 @@ public class PostgreSqlConcurrencyTests : IDisposable
         }
         _context.Dispose();
     }
+
+    [Fact]
+    public async Task PostgreSql_DepartmentXminConcurrencyToken_BlocksStaleConcurrentHodUpdate()
+    {
+        if (!_isPostgreSqlAvailable) return;
+
+        var deptId = Guid.NewGuid();
+        var fac1Id = Guid.NewGuid();
+        var fac2Id = Guid.NewGuid();
+
+        var optionsBuilder = new DbContextOptionsBuilder<ProjectHubDbContext>();
+        optionsBuilder.UseNpgsql(ConnectionString);
+        var adminTenant = new TenantContext
+        {
+            CollegeId = SistecTenantId,
+            Role = UserRole.CollegeAdmin,
+            IsSuperAdmin = true
+        };
+
+        try
+        {
+            await using (var setupCtx = new ProjectHubDbContext(optionsBuilder.Options, adminTenant))
+            {
+                setupCtx.Departments.Add(new Department
+                {
+                    Id = deptId,
+                    CollegeId = SistecTenantId,
+                    Code = $"PG{Guid.NewGuid():N}"[..8].ToUpperInvariant(),
+                    Name = "PG Concurrency Test Dept",
+                    IntakeQuota = 60,
+                    IsDeleted = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+                setupCtx.Users.AddRange(
+                    new UserAccount
+                    {
+                        Id = fac1Id,
+                        CollegeId = SistecTenantId,
+                        DepartmentId = deptId,
+                        FullName = "PG Faculty 1",
+                        Email = $"pg.fac1.{Guid.NewGuid():N}@sistec.ac.in",
+                        EnrollmentOrEmployeeCode = $"PG1-{Guid.NewGuid():N}"[..12],
+                        Role = UserRole.Faculty,
+                        IsActive = true,
+                        CreatedAtUtc = DateTime.UtcNow
+                    },
+                    new UserAccount
+                    {
+                        Id = fac2Id,
+                        CollegeId = SistecTenantId,
+                        DepartmentId = deptId,
+                        FullName = "PG Faculty 2",
+                        Email = $"pg.fac2.{Guid.NewGuid():N}@sistec.ac.in",
+                        EnrollmentOrEmployeeCode = $"PG2-{Guid.NewGuid():N}"[..12],
+                        Role = UserRole.Faculty,
+                        IsActive = true,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                await setupCtx.SaveChangesAsync();
+            }
+
+            await using var ctx1 = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+            await using var ctx2 = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+
+            var dept1 = await ctx1.Departments.FirstAsync(d => d.Id == deptId);
+            var dept2 = await ctx2.Departments.FirstAsync(d => d.Id == deptId);
+
+            dept1.HodUserId = fac1Id;
+            await ctx1.SaveChangesAsync();
+
+            dept2.HodUserId = fac2Id;
+            await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => ctx2.SaveChangesAsync());
+        }
+        finally
+        {
+            await using var cleanupCtx = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+            var dept = await cleanupCtx.Departments.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.Id == deptId);
+            if (dept != null) cleanupCtx.Departments.Remove(dept);
+            var users = await cleanupCtx.Users.IgnoreQueryFilters().Where(u => u.Id == fac1Id || u.Id == fac2Id).ToListAsync();
+            if (users.Count > 0) cleanupCtx.Users.RemoveRange(users);
+            await cleanupCtx.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task PostgreSql_DepartmentXminConcurrencyToken_BlocksStaleConcurrentHodRelief()
+    {
+        if (!_isPostgreSqlAvailable) return;
+
+        var deptId = Guid.NewGuid();
+        var hodId = Guid.NewGuid();
+
+        var optionsBuilder = new DbContextOptionsBuilder<ProjectHubDbContext>();
+        optionsBuilder.UseNpgsql(ConnectionString);
+        var adminTenant = new TenantContext
+        {
+            CollegeId = SistecTenantId,
+            Role = UserRole.CollegeAdmin,
+            IsSuperAdmin = true
+        };
+
+        try
+        {
+            await using (var setupCtx = new ProjectHubDbContext(optionsBuilder.Options, adminTenant))
+            {
+                setupCtx.Departments.Add(new Department
+                {
+                    Id = deptId,
+                    CollegeId = SistecTenantId,
+                    Code = $"PG{Guid.NewGuid():N}"[..8].ToUpperInvariant(),
+                    Name = "PG Concurrent Relief Dept",
+                    IntakeQuota = 60,
+                    IsDeleted = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+                setupCtx.Users.Add(new UserAccount
+                {
+                    Id = hodId,
+                    CollegeId = SistecTenantId,
+                    DepartmentId = deptId,
+                    FullName = "PG Concurrent HOD",
+                    Email = $"pg.hod.{Guid.NewGuid():N}@sistec.ac.in",
+                    EnrollmentOrEmployeeCode = $"PGH-{Guid.NewGuid():N}"[..12],
+                    Role = UserRole.HOD,
+                    IsActive = true,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+                await setupCtx.SaveChangesAsync();
+
+                var seededDept = await setupCtx.Departments.FirstAsync(d => d.Id == deptId);
+                seededDept.HodUserId = hodId;
+                await setupCtx.SaveChangesAsync();
+            }
+
+            await using var ctx1 = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+            await using var ctx2 = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+
+            var dept1 = await ctx1.Departments.FirstAsync(d => d.Id == deptId);
+            var dept2 = await ctx2.Departments.FirstAsync(d => d.Id == deptId);
+
+            dept1.HodUserId = null;
+            await ctx1.SaveChangesAsync();
+
+            dept2.HodUserId = null;
+            await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => ctx2.SaveChangesAsync());
+        }
+        finally
+        {
+            await using var cleanupCtx = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+            var dept = await cleanupCtx.Departments.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.Id == deptId);
+            if (dept != null) cleanupCtx.Departments.Remove(dept);
+            var users = await cleanupCtx.Users.IgnoreQueryFilters().Where(u => u.Id == hodId).ToListAsync();
+            if (users.Count > 0) cleanupCtx.Users.RemoveRange(users);
+            await cleanupCtx.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task PostgreSql_UniqueIndex_BlocksDuplicateActiveStudentNumber()
+    {
+        if (!_isPostgreSqlAvailable) return;
+
+        var student1Id = Guid.NewGuid();
+        var student2Id = Guid.NewGuid();
+        var studentNumber = $"STU{Guid.NewGuid():N}"[..12].ToUpperInvariant();
+
+        var optionsBuilder = new DbContextOptionsBuilder<ProjectHubDbContext>();
+        optionsBuilder.UseNpgsql(ConnectionString);
+        var adminTenant = new TenantContext
+        {
+            CollegeId = SistecTenantId,
+            Role = UserRole.CollegeAdmin,
+            IsSuperAdmin = true
+        };
+
+        try
+        {
+            await using var setupCtx = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+            setupCtx.Users.Add(new UserAccount
+            {
+                Id = student1Id,
+                CollegeId = SistecTenantId,
+                DepartmentId = CseDeptId,
+                FullName = "PG Student One",
+                Email = $"pg.student1.{Guid.NewGuid():N}@sistec.ac.in",
+                EnrollmentOrEmployeeCode = studentNumber,
+                Role = UserRole.Student,
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            await setupCtx.SaveChangesAsync();
+
+            setupCtx.Users.Add(new UserAccount
+            {
+                Id = student2Id,
+                CollegeId = SistecTenantId,
+                DepartmentId = CseDeptId,
+                FullName = "PG Student Two",
+                Email = $"pg.student2.{Guid.NewGuid():N}@sistec.ac.in",
+                EnrollmentOrEmployeeCode = studentNumber,
+                Role = UserRole.Student,
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            var ex = await Assert.ThrowsAsync<DbUpdateException>(() => setupCtx.SaveChangesAsync());
+            var pgEx = Assert.IsType<PostgresException>(ex.InnerException);
+            Assert.Equal("23505", pgEx.SqlState);
+        }
+        finally
+        {
+            await using var cleanupCtx = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+            var users = await cleanupCtx.Users.IgnoreQueryFilters().Where(u => u.Id == student1Id || u.Id == student2Id).ToListAsync();
+            if (users.Count > 0) cleanupCtx.Users.RemoveRange(users);
+            await cleanupCtx.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task PostgreSql_SerializableTransaction_PreventsConcurrentDeactivationOfLastTwoCollegeAdmins()
+    {
+        if (!_isPostgreSqlAvailable) return;
+
+        var collegeId = Guid.NewGuid();
+        var admin1Id = Guid.NewGuid();
+        var admin2Id = Guid.NewGuid();
+
+        var optionsBuilder = new DbContextOptionsBuilder<ProjectHubDbContext>();
+        optionsBuilder.UseNpgsql(ConnectionString);
+        var adminTenant = new TenantContext
+        {
+            CollegeId = collegeId,
+            Role = UserRole.CollegeAdmin,
+            IsSuperAdmin = true
+        };
+
+        try
+        {
+            await using (var setupCtx = new ProjectHubDbContext(optionsBuilder.Options, adminTenant))
+            {
+                setupCtx.CollegeTenants.Add(new CollegeTenant
+                {
+                    Id = collegeId,
+                    Name = "PG Last Admin Concurrency",
+                    TenantCode = $"PGLA_{Guid.NewGuid():N}"[..12].ToUpperInvariant(),
+                    SsoDomain = $"pgla-{Guid.NewGuid():N}.ac.in",
+                    IsActive = true,
+                    MaxStudentSeats = 500,
+                    StorageQuotaGb = 20,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+                setupCtx.Users.AddRange(
+                    new UserAccount
+                    {
+                        Id = admin1Id,
+                        CollegeId = collegeId,
+                        FullName = "PG Admin 1",
+                        Email = $"pg.admin1.{Guid.NewGuid():N}@pgla.ac.in",
+                        EnrollmentOrEmployeeCode = $"PGA1-{Guid.NewGuid():N}"[..12],
+                        Role = UserRole.CollegeAdmin,
+                        IsActive = true,
+                        CreatedAtUtc = DateTime.UtcNow
+                    },
+                    new UserAccount
+                    {
+                        Id = admin2Id,
+                        CollegeId = collegeId,
+                        FullName = "PG Admin 2",
+                        Email = $"pg.admin2.{Guid.NewGuid():N}@pgla.ac.in",
+                        EnrollmentOrEmployeeCode = $"PGA2-{Guid.NewGuid():N}"[..12],
+                        Role = UserRole.CollegeAdmin,
+                        IsActive = true,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                await setupCtx.SaveChangesAsync();
+            }
+
+            async Task<bool> TryDeactivateAdminAsync(Guid targetAdminId)
+            {
+                await using var ctx = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+                await using var tx = await ctx.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                try
+                {
+                    var hasOtherActiveAdmin = await ctx.Users.AnyAsync(u =>
+                        u.CollegeId == collegeId &&
+                        !u.IsDeleted &&
+                        u.IsActive &&
+                        u.Role == UserRole.CollegeAdmin &&
+                        u.Id != targetAdminId);
+                    if (!hasOtherActiveAdmin)
+                    {
+                        await tx.RollbackAsync();
+                        return false;
+                    }
+
+                    var target = await ctx.Users.FirstAsync(u => u.Id == targetAdminId);
+                    target.IsActive = false;
+                    await ctx.SaveChangesAsync();
+                    await tx.CommitAsync();
+                    return true;
+                }
+                catch (PostgresException ex) when (ex.SqlState == "40001")
+                {
+                    return false;
+                }
+                catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg && pg.SqlState == "40001")
+                {
+                    return false;
+                }
+            }
+
+            var results = await Task.WhenAll(
+                TryDeactivateAdminAsync(admin1Id),
+                TryDeactivateAdminAsync(admin2Id));
+
+            // At least one must be blocked or rolled back; never both deactivated
+            Assert.True(results.Count(r => r) <= 1);
+
+            await using var verifyCtx = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+            var remainingActiveAdmins = await verifyCtx.Users.CountAsync(u =>
+                u.CollegeId == collegeId &&
+                !u.IsDeleted &&
+                u.IsActive &&
+                u.Role == UserRole.CollegeAdmin);
+            Assert.True(remainingActiveAdmins >= 1);
+        }
+        finally
+        {
+            await using var cleanupCtx = new ProjectHubDbContext(optionsBuilder.Options, adminTenant);
+            var users = await cleanupCtx.Users.IgnoreQueryFilters().Where(u => u.CollegeId == collegeId).ToListAsync();
+            if (users.Count > 0) cleanupCtx.Users.RemoveRange(users);
+            var college = await cleanupCtx.CollegeTenants.IgnoreQueryFilters().FirstOrDefaultAsync(c => c.Id == collegeId);
+            if (college != null) cleanupCtx.CollegeTenants.Remove(college);
+            await cleanupCtx.SaveChangesAsync();
+        }
+    }
 }

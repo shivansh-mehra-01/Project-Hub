@@ -19,11 +19,12 @@ public record HodDashboardDto
     public int PendingExceptions { get; init; }
     public int TotalStudentsEnrolled { get; init; }
     public int AvailableMentors { get; init; }
-    public decimal? NbaDirectAttainmentPct { get; init; }
-    public decimal? NbaIndirectAttainmentPct { get; init; }
-    public decimal? NbaBlendedCriterion3Pct { get; init; }
-    public bool IsSarAttested { get; init; }
-    public DateTime? SarAttestedAtUtc { get; init; }
+    public DateTime? EvaluationCutoffDateUtc { get; init; }
+}
+
+public record UpdateDepartmentEvaluationCutoffRequest
+{
+    public DateTime? EvaluationCutoffDateUtc { get; init; }
 }
 
 public record CreateDepartmentTrackRequest
@@ -141,26 +142,6 @@ public record UpdateMentorCapRequest
     public int MaxMentorTeams { get; init; } = 4;
 }
 
-public record PoAttainmentScoreDto
-{
-    public string PoCode { get; init; } = string.Empty;
-    public string Title { get; init; } = string.Empty;
-    public decimal? DirectAttainmentPct { get; init; }
-    public decimal? IndirectAttainmentPct { get; init; }
-    public decimal? BlendedAttainmentPct { get; init; } // 80% Direct + 20% Indirect
-    public bool TargetMet { get; init; }
-}
-
-public record NbaAttainmentReportDto
-{
-    public Guid DepartmentId { get; init; }
-    public string AcademicYear { get; init; } = string.Empty;
-    public decimal? OverallDirectPct { get; init; }
-    public decimal? OverallIndirectPct { get; init; }
-    public decimal? OverallBlendedPct { get; init; } // 80% direct + 20% indirect
-    public List<PoAttainmentScoreDto> PoBreakdown { get; init; } = new();
-}
-
 public record ExceptionAuditLogDto
 {
     public Guid Id { get; init; }
@@ -245,16 +226,6 @@ public record DepartmentStudentResultDto
     public decimal ExternalVivaScore { get; init; }
     public decimal TotalMarks { get; init; }
     public string LetterGrade { get; init; } = string.Empty;
-    public string NbaAttainmentStatus { get; init; } = string.Empty;
-}
-
-public record AttestSarResponse
-{
-    public bool Success { get; init; }
-    public DateTime AttestedAtUtc { get; init; }
-    public string AttestedByName { get; init; } = string.Empty;
-    public string Status { get; init; } = string.Empty;
-    public string Message { get; init; } = string.Empty;
 }
 
 public record HodReportsSummaryDto

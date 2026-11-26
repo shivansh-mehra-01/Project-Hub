@@ -36,7 +36,7 @@ import { getAuthToken, hodApi } from "@/lib/api";
 import { CommandPalette, formatRoleLabel } from "../components/CommandPalette";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { RoleType } from "@/mocks/store-types";
-import { getSidebarNav, getBreadcrumbs, RouteGuard, SidebarNavItem } from "@/navigation";
+import { getSidebarNav, getBreadcrumbs, PUBLIC_ROUTES, RouteGuard, SidebarNavItem } from "@/navigation";
 import { LogoutConfirmationModal, PendingActionsDrawer } from "@/features/platform/shared/GlobalPlatformModals";
 
 export const getAvatarInitials = (name: string): string => {
@@ -135,7 +135,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentPersona, college, cycle, academicSessions, switchPersona, tenants, pilotRequests, teams, logout } =
+  const { currentPersona, isAuthenticated, isLoaded, college, cycle, academicSessions, switchPersona, tenants, pilotRequests, teams, logout } =
     useProjectHubStore();
 
   const activeSessionLabel =
@@ -535,6 +535,27 @@ const AppShellInner: React.FC<AppShellProps> = ({
       window.removeEventListener("pageshow", handlePageShow);
     };
   }, [logout]);
+
+  const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
+
+  useEffect(() => {
+    if (!isPublicRoute && isLoaded && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isPublicRoute, isLoaded, isAuthenticated, router]);
+
+  if (!isPublicRoute && (!isLoaded || !isAuthenticated)) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 text-slate-600 select-none">
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-5 rounded-full border-2 border-emerald-700 border-t-transparent animate-spin text-emerald-700" />
+          <span className="text-xs text-slate-600 font-mono">
+            Restoring authenticated workspace...
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-canvas-bg">

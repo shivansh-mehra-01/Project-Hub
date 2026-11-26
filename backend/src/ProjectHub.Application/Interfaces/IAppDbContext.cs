@@ -11,9 +11,12 @@ public interface IAppDbContext
 {
     // Platform Root & Master Catalog Entities
     DbSet<CollegeTenant> CollegeTenants { get; }
-    DbSet<MasterNbaOutcome> MasterNbaOutcomes { get; }
     DbSet<MasterSdgCatalog> MasterSdgCatalogs { get; }
     DbSet<PlatformAuditLog> PlatformAuditLogs { get; }
+    DbSet<PlatformAnnouncement> PlatformAnnouncements { get; }
+    DbSet<EmailOutboxMessage> EmailOutboxMessages { get; }
+    DbSet<SupportTicket> SupportTickets { get; }
+    DbSet<SupportTicketMessage> SupportTicketMessages { get; }
     DbSet<MasterUniversity> MasterUniversities { get; }
     DbSet<MasterCurriculumScheme> MasterCurriculumSchemes { get; }
     DbSet<MasterProgram> MasterPrograms { get; }
@@ -26,7 +29,6 @@ public interface IAppDbContext
     DbSet<UserSession> UserSessions { get; }
     DbSet<RefreshTokenRecord> RefreshTokenRecords { get; }
     DbSet<AcademicTrack> AcademicTracks { get; }
-    DbSet<CourseOutcomeDefinition> CourseOutcomeDefinitions { get; }
     DbSet<ProblemBankStatement> ProblemBankStatements { get; }
     DbSet<ProjectTeam> ProjectTeams { get; }
     DbSet<TeamMember> TeamMembers { get; }
@@ -44,7 +46,6 @@ public interface IAppDbContext
     DbSet<TeamVivaDefenseSchedule> TeamVivaDefenseSchedules { get; }
     DbSet<EvaluationRubric> EvaluationRubrics { get; }
     DbSet<EvaluationRubricCriterion> EvaluationRubricCriteria { get; }
-    DbSet<CourseExitSurvey> CourseExitSurveys { get; }
     DbSet<ExceptionAuditLog> ExceptionAuditLogs { get; }
     DbSet<ProjectClosureRecord> ProjectClosureRecords { get; }
     DbSet<StudentAcademicRecord> StudentAcademicRecords { get; }

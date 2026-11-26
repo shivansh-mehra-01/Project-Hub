@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -39,6 +40,15 @@ builder.Services.AddControllers()
     });
 
 // 3. Application & Infrastructure Layers
+builder.Services.AddMemoryCache();
+var configuredDpPath = builder.Configuration["DataProtection:KeysPath"];
+var effectiveDpPath = !string.IsNullOrWhiteSpace(configuredDpPath)
+    ? configuredDpPath
+    : Path.Combine(builder.Environment.ContentRootPath, ".dpkeys");
+Directory.CreateDirectory(effectiveDpPath);
+builder.Services.AddDataProtection()
+    .SetApplicationName("Colabex.ProjectHub")
+    .PersistKeysToFileSystem(new DirectoryInfo(effectiveDpPath));
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -69,6 +79,23 @@ if (!isDev)
         string.IsNullOrWhiteSpace(builder.Configuration["Email:FromAddress"]))
     {
         throw new InvalidOperationException("Production configuration error: Email:Provider must be 'Smtp' with Email:SmtpHost and Email:FromAddress configured.");
+    }
+    var prodFrontendUrl = builder.Configuration["Frontend:BaseUrl"]?.Trim();
+    if (string.IsNullOrWhiteSpace(prodFrontendUrl) ||
+        !Uri.TryCreate(prodFrontendUrl, UriKind.Absolute, out var parsedFrontendUri) ||
+        parsedFrontendUri.Scheme != Uri.UriSchemeHttps)
+    {
+        throw new InvalidOperationException("Production configuration error: Frontend:BaseUrl must be a valid absolute HTTPS URL.");
+    }
+    var smtpPort = builder.Configuration.GetValue<int?>("Email:SmtpPort") ?? 0;
+    if (smtpPort <= 0 || smtpPort > 65535)
+    {
+        throw new InvalidOperationException("Production configuration error: Email:SmtpPort must be between 1 and 65535.");
+    }
+    var dpKeysPath = builder.Configuration["DataProtection:KeysPath"];
+    if (string.IsNullOrWhiteSpace(dpKeysPath))
+    {
+        throw new InvalidOperationException("Production configuration error: DataProtection:KeysPath must be configured for persistent encryption keys.");
     }
 }
 else
@@ -142,6 +169,28 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+    options.AddPolicy("RosterSignupLimit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+    options.AddPolicy("EmailChangeLimit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User?.FindFirst("user_id")?.Value
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                          ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
                 Window = TimeSpan.FromMinutes(1),
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
@@ -274,12 +323,36 @@ app.MapControllers();
 app.MapGet("/", () => Results.Redirect("/scalar/v1"))
    .ExcludeFromDescription();
 
-// Database Initialization & Seed in Development
-if (app.Environment.IsDevelopment())
+// CLI Mode: One-Time SuperAdmin Bootstrap (`dotnet run -- bootstrap-superadmin`)
+if (args.Contains("bootstrap-superadmin", StringComparer.OrdinalIgnoreCase) ||
+    args.Contains("--bootstrap-superadmin", StringComparer.OrdinalIgnoreCase))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
     var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+    if (db.Database.IsRelational())
+    {
+        await db.Database.MigrateAsync();
+    }
+    await DbInitializer.SeedMasterCatalogsAsync(db);
+
+    var email = Environment.GetEnvironmentVariable("COLABEX_BOOTSTRAP_EMAIL");
+    var password = Environment.GetEnvironmentVariable("COLABEX_BOOTSTRAP_PASSWORD");
+    var fullName = Environment.GetEnvironmentVariable("COLABEX_BOOTSTRAP_NAME");
+
+    var (success, message) = await ProjectHub.Infrastructure.Security.SuperAdminBootstrapper.BootstrapAsync(
+        db, tenantContext, email, password, fullName);
+
+    Console.WriteLine(message);
+    Environment.ExitCode = success ? 0 : 1;
+    return;
+}
+
+// Database Migration & Master Reference Catalog Initialization (zero demo tenants/users)
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
     try
     {
         if (db.Database.IsRelational())
@@ -290,11 +363,11 @@ if (app.Environment.IsDevelopment())
         {
             await db.Database.EnsureCreatedAsync();
         }
-        await DbInitializer.SeedAsync(db, tenantContext, isDevelopment: true);
+        await DbInitializer.SeedMasterCatalogsAsync(db);
     }
     catch (Exception ex)
     {
-        Log.Warning(ex, "Database migration/seed skipped or encountered an issue during startup.");
+        Log.Warning(ex, "Database migration/catalog initialization encountered an issue during startup.");
     }
 }
 

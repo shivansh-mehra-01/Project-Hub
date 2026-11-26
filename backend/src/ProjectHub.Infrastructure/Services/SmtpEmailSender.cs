@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Mail;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ProjectHub.Application.Interfaces;
 
@@ -13,11 +14,16 @@ namespace ProjectHub.Infrastructure.Services;
 public class SmtpEmailSender : IEmailSender
 {
     private readonly IConfiguration _configuration;
+    private readonly IHostEnvironment _environment;
     private readonly ILogger<SmtpEmailSender> _logger;
 
-    public SmtpEmailSender(IConfiguration configuration, ILogger<SmtpEmailSender> logger)
+    public SmtpEmailSender(
+        IConfiguration configuration,
+        IHostEnvironment environment,
+        ILogger<SmtpEmailSender> logger)
     {
         _configuration = configuration;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -36,9 +42,32 @@ public class SmtpEmailSender : IEmailSender
         return SendAsync(recipientEmail, subject, body, cancellationToken);
     }
 
+    public static string ResolveValidatedFrontendBaseUrl(IConfiguration configuration, bool requireHttps)
+    {
+        var raw = configuration["Frontend:BaseUrl"]?.Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            throw new InvalidOperationException("Frontend:BaseUrl configuration is missing or empty.");
+        }
+
+        if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
+            string.IsNullOrWhiteSpace(uri.Host) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new InvalidOperationException("Frontend:BaseUrl must be a valid absolute HTTP/HTTPS URL.");
+        }
+
+        if (requireHttps && uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException("Production configuration error: Frontend:BaseUrl must use HTTPS.");
+        }
+
+        return raw.TrimEnd('/');
+    }
+
     public Task SendAccountActivationAsync(string recipientEmail, string recipientName, string activationToken, CancellationToken cancellationToken = default)
     {
-        var frontendBaseUrl = (_configuration["Frontend:BaseUrl"] ?? "https://app.colabex.in").TrimEnd('/');
+        var frontendBaseUrl = ResolveValidatedFrontendBaseUrl(_configuration, requireHttps: !_environment.IsDevelopment());
         var activationUrl = $"{frontendBaseUrl}/activate?email={Uri.EscapeDataString(recipientEmail)}&token={Uri.EscapeDataString(activationToken)}";
 
         var subject = "Colabex — Activate Your Institutional Account";
@@ -79,6 +108,7 @@ public class SmtpEmailSender : IEmailSender
         var fromAddress = _configuration["Email:FromAddress"];
         var fromName = _configuration["Email:FromName"] ?? "Colabex Security";
         var enableSsl = _configuration.GetValue<bool?>("Email:EnableSsl") ?? true;
+        var timeoutSeconds = Math.Clamp(_configuration.GetValue<int?>("Email:TimeoutSeconds") ?? 15, 2, 120);
 
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(fromAddress))
         {
@@ -97,7 +127,8 @@ public class SmtpEmailSender : IEmailSender
         using var client = new SmtpClient(host, port)
         {
             EnableSsl = enableSsl,
-            DeliveryMethod = SmtpDeliveryMethod.Network
+            DeliveryMethod = SmtpDeliveryMethod.Network,
+            Timeout = timeoutSeconds * 1000
         };
 
         if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(password))

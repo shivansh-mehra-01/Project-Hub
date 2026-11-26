@@ -16,21 +16,26 @@ import {
   ShieldCheck,
   RotateCcw,
   AlertTriangle,
+  Upload,
+  Download,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Modal } from "@/design-system/components/Modal";
 import { SlideOverDrawer } from "@/design-system/components/SlideOverDrawer";
-import { Input } from "@/design-system/components/Input";
 import { Select } from "@/design-system/components/Select";
 import { collegeApi } from "@/lib/api/collegeApi";
 import {
-  CreateHodRequest,
   DepartmentDto,
   HodAssignmentHistoryDto,
   HodManagementDto,
   CollegeStaffDto,
 } from "@/lib/api/types";
 import { ApiConnectionBanner } from "../components/ApiConnectionBanner";
+import {
+  formatFacultyDesignation,
+  getEligibleHodCandidates,
+  resolveSelectedHodOnDepartmentChange,
+} from "./hodAppointmentHelpers";
 
 export const HodManagementView: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -48,15 +53,13 @@ export const HodManagementView: React.FC = () => {
   // Modals & Drawer
   const [showAppointModal, setShowAppointModal] = useState(false);
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
-  const [appointMode, setAppointMode] = useState<"promote" | "create">("promote");
   const [targetDepartmentId, setTargetDepartmentId] = useState("");
   const [selectedFacultyId, setSelectedFacultyId] = useState("");
-
-  // Create new HOD Form
-  const [newHodName, setNewHodName] = useState("");
-  const [newHodEmail, setNewHodEmail] = useState("");
-  const [newHodCode, setNewHodCode] = useState("");
+  const [confirmReplacement, setConfirmReplacement] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [relieveTarget, setRelieveTarget] = useState<HodManagementDto | null>(null);
+  const [relieving, setRelieving] = useState(false);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -107,54 +110,72 @@ export const HodManagementView: React.FC = () => {
     loadData();
   }, []);
 
+  const currentDepartmentHod = hods.find((h) => h.departmentId === targetDepartmentId);
+  const hasExistingHod = Boolean(currentDepartmentHod?.hodUserId && currentDepartmentHod?.hodName);
+  const eligibleFaculty = getEligibleHodCandidates(
+    facultyList,
+    targetDepartmentId,
+    currentDepartmentHod?.hodUserId
+  );
+
   const handleOpenAppoint = (deptId?: string) => {
-    const dId = deptId || departments[0]?.id || hods[0]?.departmentId || "";
+    const dId = deptId || departments[0]?.id || "";
+    const deptHod = hods.find((h) => h.departmentId === dId);
+    const candidates = getEligibleHodCandidates(facultyList, dId, deptHod?.hodUserId);
     setTargetDepartmentId(dId);
-    setSelectedFacultyId(facultyList[0]?.id || "");
-    setNewHodName("");
-    setNewHodEmail("");
-    setNewHodCode("");
-    setAppointMode("promote");
+    setSelectedFacultyId(candidates[0]?.id || "");
+    setConfirmReplacement(false);
+    setModalError(null);
     setShowAppointModal(true);
+  };
+
+  const handleDepartmentChange = (nextDeptId: string) => {
+    const nextDeptHod = hods.find((h) => h.departmentId === nextDeptId);
+    setTargetDepartmentId(nextDeptId);
+    setSelectedFacultyId((prev) =>
+      resolveSelectedHodOnDepartmentChange(facultyList, nextDeptId, prev, nextDeptHod?.hodUserId)
+    );
+    setConfirmReplacement(false);
+    setModalError(null);
   };
 
   const handleAppointSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetDepartmentId) return;
+    if (submitting) return;
+    setModalError(null);
+
+    if (!targetDepartmentId) {
+      setModalError("Please select a department.");
+      return;
+    }
+
+    if (!selectedFacultyId) {
+      setModalError("Please select an eligible faculty candidate.");
+      return;
+    }
+
+    if (hasExistingHod && !confirmReplacement) {
+      setModalError("Please confirm replacing the current HOD before submitting.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const targetDept = departments.find((d) => d.id === targetDepartmentId);
-      const targetHod = hods.find((h) => h.departmentId === targetDepartmentId);
-      const deptDisplayName = targetDept?.name || targetHod?.departmentName || "Department";
+      const deptDisplayName = targetDept?.name || currentDepartmentHod?.departmentName || "Department";
+      const fac = eligibleFaculty.find((f) => f.id === selectedFacultyId);
 
-      if (appointMode === "promote") {
-        if (!selectedFacultyId) {
-          showToast("Please select a faculty candidate.");
-          return;
-        }
-        const fac = facultyList.find((f) => f.id === selectedFacultyId);
-        await collegeApi.appointHod(targetDepartmentId, { hodUserId: selectedFacultyId });
-        showToast(`Assigned ${fac?.fullName || "Faculty"} as HOD of ${deptDisplayName}.`);
-      } else {
-        if (!newHodName.trim() || !newHodEmail.trim()) {
-          showToast("Name and email are required.");
-          return;
-        }
-        const payload: CreateHodRequest = {
-          fullName: newHodName.trim(),
-          email: newHodEmail.trim(),
-          employeeCode: newHodCode.trim() || `EMP-${Date.now().toString().slice(-4)}`,
-          departmentId: targetDepartmentId,
-        };
-        await collegeApi.createHod(payload);
-        showToast(`Created and appointed ${payload.fullName} as HOD of ${deptDisplayName}.`);
-      }
+      await collegeApi.appointHod(targetDepartmentId, {
+        hodUserId: selectedFacultyId,
+        confirmReplacement: hasExistingHod ? confirmReplacement : false,
+      });
 
       setShowAppointModal(false);
-      loadData();
+      await loadData();
+      showToast(`Assigned ${fac?.fullName || "Faculty"} as HOD of ${deptDisplayName}.`);
     } catch (err: any) {
-      console.error(err);
-      showToast(err?.message || "Error appointing HOD.");
+      console.error("Failed to appoint HOD:", err);
+      setModalError(err?.message || "Unable to appoint HOD. Please verify eligibility and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -403,6 +424,13 @@ export const HodManagementView: React.FC = () => {
                             >
                               Reassign
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => setRelieveTarget(item)}
+                              className="text-[11px] font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
+                            >
+                              End Appointment
+                            </button>
                           </>
                         ) : (
                           <button
@@ -423,102 +451,139 @@ export const HodManagementView: React.FC = () => {
         )}
       </div>
 
-      {/* Appoint / Promote Modal */}
+      {/* Appoint HOD Modal */}
       <Modal
         isOpen={showAppointModal}
-        onClose={() => setShowAppointModal(false)}
-        title="Appoint Head of Department (HOD)"
-        description="Assign a faculty member or onboard an external appointee as Head of Department."
+        onClose={() => {
+          if (!submitting) {
+            setShowAppointModal(false);
+            setModalError(null);
+          }
+        }}
+        title="Appoint Head of Department"
         size="md"
       >
         <form onSubmit={handleAppointSubmit} className="space-y-4">
-          <Select
-            label="Department Branch"
-            value={targetDepartmentId}
-            onChange={(e) => setTargetDepartmentId(e.target.value)}
-            options={departments.map((d) => ({
-              label: `${d.name} (${d.code})`,
-              value: d.id,
-            }))}
-            required
-          />
-
-          <div className="flex border-b border-slate-200 pb-2 gap-4 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setAppointMode("promote")}
-              className={`pb-1 cursor-pointer ${appointMode === "promote" ? "text-emerald-800 border-b-2 border-emerald-800" : "text-slate-500"}`}
+          {modalError && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
             >
-              Promote Existing Faculty
-            </button>
-            <button
-              type="button"
-              onClick={() => setAppointMode("create")}
-              className={`pb-1 cursor-pointer ${appointMode === "create" ? "text-emerald-800 border-b-2 border-emerald-800" : "text-slate-500"}`}
-            >
-              Onboard External HOD
-            </button>
-          </div>
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+              <span>{modalError}</span>
+            </div>
+          )}
 
-          {appointMode === "promote" ? (
-            <div>
-              <Select
-                label="Select Faculty Candidate"
-                value={selectedFacultyId}
-                onChange={(e) => setSelectedFacultyId(e.target.value)}
-                options={facultyList.map((f) => ({
-                  label: `${f.fullName} (${f.email}) - ${f.designation || "Faculty"}`,
-                  value: f.id,
-                }))}
-                required
-              />
-              <p className="text-[11px] text-slate-500 mt-1">
-                The selected faculty member will be assigned Head of Department responsibilities for this branch.
-              </p>
+          {loading ? (
+            <div className="flex items-center gap-2 py-2 text-xs text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin text-emerald-800" />
+              <span>Loading departments and faculty roster...</span>
+            </div>
+          ) : apiError ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+              {apiError}
             </div>
           ) : (
-            <div className="space-y-3">
-              <Input
-                label="Full Name"
-                placeholder="Dr. Full Name"
-                value={newHodName}
-                onChange={(e) => setNewHodName(e.target.value)}
+            <>
+              <Select
+                label="Department"
+                value={targetDepartmentId}
+                onChange={(e) => handleDepartmentChange(e.target.value)}
+                disabled={submitting || departments.length === 0}
                 required
-              />
-              <Input
-                label="Official Email"
-                type="email"
-                placeholder="hod.dept@college.ac.in"
-                value={newHodEmail}
-                onChange={(e) => setNewHodEmail(e.target.value)}
-                required
-              />
-              <Input
-                label="Employee ID (Optional)"
-                placeholder="EMP-HOD-01"
-                value={newHodCode}
-                onChange={(e) => setNewHodCode(e.target.value)}
-              />
-              <p className="text-[11px] text-slate-500">
-                An account invitation will be dispatched to this email address to establish access credentials.
-              </p>
-            </div>
+              >
+                {departments.length === 0 ? (
+                  <option value="">No departments configured</option>
+                ) : (
+                  departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.code})
+                    </option>
+                  ))
+                )}
+              </Select>
+
+              {hasExistingHod && currentDepartmentHod && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2 text-xs text-amber-900">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-700" />
+                    <div>
+                      <span className="font-semibold">Current HOD:</span>{" "}
+                      <span>{currentDepartmentHod.hodName}</span>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={confirmReplacement}
+                      onChange={(e) => setConfirmReplacement(e.target.checked)}
+                      disabled={submitting}
+                      className="h-3.5 w-3.5 rounded border-amber-400 text-emerald-800 focus:ring-emerald-700"
+                    />
+                    <span>Confirm replacing the current HOD for this department</span>
+                  </label>
+                </div>
+              )}
+
+              <div>
+                <Select
+                  label="Select HOD"
+                  value={selectedFacultyId}
+                  onChange={(e) => {
+                    setSelectedFacultyId(e.target.value);
+                    setModalError(null);
+                  }}
+                  disabled={submitting || !targetDepartmentId || eligibleFaculty.length === 0}
+                  required
+                >
+                  {eligibleFaculty.length === 0 ? (
+                    <option value="">No eligible faculty found for this department.</option>
+                  ) : (
+                    <>
+                      <option value="">Select eligible faculty</option>
+                      {eligibleFaculty.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.fullName} — {formatFacultyDesignation(f.designation)}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </Select>
+                {targetDepartmentId && eligibleFaculty.length === 0 && (
+                  <p className="mt-1.5 text-[11px] text-amber-700">
+                    No eligible faculty found for this department.
+                  </p>
+                )}
+              </div>
+            </>
           )}
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setShowAppointModal(false)}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+              onClick={() => {
+                setShowAppointModal(false);
+                setModalError(null);
+              }}
+              disabled={submitting}
+              className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={
+                submitting ||
+                loading ||
+                Boolean(apiError) ||
+                !targetDepartmentId ||
+                !selectedFacultyId ||
+                eligibleFaculty.length === 0 ||
+                (hasExistingHod && !confirmReplacement)
+              }
               className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-800 rounded-lg hover:bg-emerald-900 cursor-pointer disabled:opacity-50"
             >
-              {submitting ? "Appointing..." : "Confirm Appointment"}
+              {submitting ? "Appointing..." : "Appoint HOD"}
             </button>
           </div>
         </form>
@@ -547,14 +612,69 @@ export const HodManagementView: React.FC = () => {
                 </div>
                 <div className="text-xs text-slate-600">Department: {h.departmentName} ({h.departmentCode})</div>
                 <div className="text-[11px] text-slate-500">Email: {h.hodEmail} • Emp: {h.employeeCode}</div>
-                <div className="text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-100">
-                  Appointed: {new Date(h.appointedAtUtc).toLocaleDateString()} by {h.appointedBy}
+                <div className="text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-100 space-y-0.5">
+                  <div>Appointed: {new Date(h.appointedAtUtc).toLocaleDateString()} by {h.appointedBy}</div>
+                  {h.relievedAtUtc && (
+                    <div>Relieved: {new Date(h.relievedAtUtc).toLocaleDateString()}</div>
+                  )}
                 </div>
               </div>
             ))
           )}
         </div>
       </SlideOverDrawer>
+
+      {/* End HOD Appointment Confirmation Modal */}
+      <Modal
+        isOpen={Boolean(relieveTarget)}
+        onClose={() => !relieving && setRelieveTarget(null)}
+        title="End HOD Appointment"
+        description="Revoke Head of Department privileges while keeping the faculty account active."
+      >
+        {relieveTarget && (
+          <div className="space-y-4">
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
+              Are you sure you want to end the HOD appointment of{" "}
+              <span className="font-bold">{relieveTarget.hodName}</span> for{" "}
+              <span className="font-bold">
+                {relieveTarget.departmentName} ({relieveTarget.departmentCode})
+              </span>
+              ? Their role will revert to <span className="font-semibold">Faculty</span> and their account will remain active.
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={relieving}
+                onClick={() => setRelieveTarget(null)}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={relieving}
+                onClick={async () => {
+                  setRelieving(true);
+                  try {
+                    await collegeApi.relieveHod(relieveTarget.departmentId);
+                    const relievedName = relieveTarget.hodName || "Faculty";
+                    setRelieveTarget(null);
+                    await loadData();
+                    showToast(`Ended HOD appointment for ${relievedName}. Faculty account remains active.`);
+                  } catch (err: any) {
+                    showToast(err?.message || "Failed to end HOD appointment.");
+                  } finally {
+                    setRelieving(false);
+                  }
+                }}
+                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-rose-700 rounded-lg hover:bg-rose-800 cursor-pointer disabled:opacity-50"
+              >
+                {relieving ? "Ending..." : "Confirm End Appointment"}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

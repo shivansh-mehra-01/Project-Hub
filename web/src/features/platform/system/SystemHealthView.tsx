@@ -26,7 +26,7 @@ import { usePlatformData, ServiceHealthRecord, BackgroundJobRecord } from "../da
 import { showToast } from "@/lib/toast";
 
 export const SystemHealthView: React.FC = () => {
-  const { services, backgroundJobs, retryBackgroundJob, colleges } = usePlatformData();
+  const { services, backgroundJobs, retryBackgroundJob, healthDetails, refreshHealthDetails, colleges } = usePlatformData();
 
   // Active Category Tab
   const [activeTab, setActiveTab] = useState<
@@ -35,61 +35,66 @@ export const SystemHealthView: React.FC = () => {
 
   useDashboardHeader({
     title: "System Health & Telemetry",
-    breadcrumb: "PostgreSQL 17, Redis 7, S3 Vault & Hangfire Worker Telemetry",
+    breadcrumb: "Live PostgreSQL, Redis, Storage & Runtime Diagnostics",
   });
+
+  const overallStatus = healthDetails?.status || "Unknown";
+  const dbLatency = healthDetails?.database?.latencyMs != null ? `${healthDetails.database.latencyMs}ms` : "—";
+  const redisLatency = healthDetails?.redis?.latencyMs != null ? `${healthDetails.redis.latencyMs}ms` : "—";
+  const uptimeMinutes = healthDetails ? Math.floor((healthDetails.uptimeSeconds || 0) / 60) : 0;
 
   return (
     <div className="space-y-6">
       {/* ========================================================================= */}
-      {/* 1. TOP TELEMETRY METRICS STRIP                                            */}
+      {/* 1. TOP TELEMETRY METRICS STRIP (LIVE FROM /api/health/details)            */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-slate-500">
+          Environment: <span className="font-mono font-semibold text-slate-800">{healthDetails?.environment || "—"}</span>
+          {" • "}Last probe: <span className="font-mono">{healthDetails?.timestampUtc ? new Date(healthDetails.timestampUtc).toLocaleTimeString() : "—"}</span>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => refreshHealthDetails()} leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>
+          Refresh Probes
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
         <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-0.5">
-          <span className="text-[10px] text-slate-500 uppercase font-semibold">Platform Uptime</span>
-          <div className="text-lg font-bold font-mono text-emerald-800">99.98%</div>
-          <span className="text-[10px] text-emerald-600 font-medium">90d SLA met</span>
+          <span className="text-[10px] text-slate-500 uppercase font-semibold">Platform Status</span>
+          <div className={`text-lg font-bold font-mono ${overallStatus === "Healthy" ? "text-emerald-800" : overallStatus === "Degraded" ? "text-amber-700" : "text-rose-700"}`}>
+            {overallStatus}
+          </div>
+          <span className="text-[10px] text-slate-500">Uptime: {uptimeMinutes}m</span>
         </div>
 
         <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-0.5">
-          <span className="text-[10px] text-slate-500 uppercase font-semibold">API Latency P95</span>
-          <div className="text-lg font-bold font-mono text-slate-900">24ms</div>
-          <span className="text-[10px] text-slate-500">P99: 48ms</span>
+          <span className="text-[10px] text-slate-500 uppercase font-semibold">PostgreSQL Latency</span>
+          <div className="text-lg font-bold font-mono text-slate-900">{dbLatency}</div>
+          <span className="text-[10px] text-slate-500">{healthDetails?.database?.status || "Unknown"}</span>
         </div>
 
         <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-0.5">
-          <span className="text-[10px] text-slate-500 uppercase font-semibold">Error Rate</span>
-          <div className="text-lg font-bold font-mono text-emerald-800">0.02%</div>
-          <span className="text-[10px] text-slate-500">Sub-threshold</span>
+          <span className="text-[10px] text-slate-500 uppercase font-semibold">Redis PING</span>
+          <div className="text-lg font-bold font-mono text-slate-900">{redisLatency}</div>
+          <span className="text-[10px] text-slate-500">{healthDetails?.redis?.status || "Unknown"}</span>
         </div>
 
         <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-0.5">
-          <span className="text-[10px] text-slate-500 uppercase font-semibold">Active Incidents</span>
-          <div className="text-lg font-bold font-mono text-emerald-800">0</div>
-          <span className="text-[10px] text-emerald-600 font-medium">All clear</span>
+          <span className="text-[10px] text-slate-500 uppercase font-semibold">Active Sessions</span>
+          <div className="text-lg font-bold font-mono text-slate-900">{healthDetails?.telemetry?.activeSessionsCount ?? 0}</div>
+          <span className="text-[10px] text-slate-500">Authenticated JWTs</span>
         </div>
 
         <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-0.5">
-          <span className="text-[10px] text-slate-500 uppercase font-semibold">DB Pool Load</span>
-          <div className="text-lg font-bold font-mono text-slate-900">22%</div>
-          <span className="text-[10px] text-slate-500">PostgreSQL 17</span>
+          <span className="text-[10px] text-slate-500 uppercase font-semibold">Active Tenants</span>
+          <div className="text-lg font-bold font-mono text-slate-900">{healthDetails?.telemetry?.activeTenantsCount ?? 0}</div>
+          <span className="text-[10px] text-slate-500">Operational colleges</span>
         </div>
 
         <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-0.5">
-          <span className="text-[10px] text-slate-500 uppercase font-semibold">Redis Cache Latency</span>
-          <div className="text-lg font-bold font-mono text-emerald-800">1.1ms</div>
-          <span className="text-[10px] text-slate-500">99.1% Hit ratio</span>
-        </div>
-
-        <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-0.5">
-          <span className="text-[10px] text-slate-500 uppercase font-semibold">Hangfire Workers</span>
-          <div className="text-lg font-bold font-mono text-slate-900">8 / 8</div>
-          <span className="text-[10px] text-slate-500">0 queued backlogs</span>
-        </div>
-
-        <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-0.5">
-          <span className="text-[10px] text-slate-500 uppercase font-semibold">Automated Backup</span>
-          <div className="text-lg font-bold font-mono text-emerald-800">Verified</div>
-          <span className="text-[10px] text-slate-500">04:00 UTC Today</span>
+          <span className="text-[10px] text-slate-500 uppercase font-semibold">Failed Logins (24h)</span>
+          <div className="text-lg font-bold font-mono text-slate-900">{healthDetails?.telemetry?.failedLoginsLast24h ?? 0}</div>
+          <span className="text-[10px] text-slate-500">Pending migrations: {healthDetails?.telemetry?.pendingMigrationsCount ?? 0}</span>
         </div>
       </div>
 

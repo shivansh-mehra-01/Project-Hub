@@ -41,6 +41,7 @@ public record UserProfileDto
     public string EnrollmentOrEmployeeCode { get; init; } = string.Empty;
     public string? GitHubHandle { get; init; }
     public string? JiraKey { get; init; }
+    public string? PhoneNumber { get; init; }
     public bool MustChangePassword { get; init; }
 }
 
@@ -73,6 +74,33 @@ public record ActivateAccountRequest
     public string Email { get; init; } = string.Empty;
     public string Token { get; init; } = string.Empty;
     public string NewPassword { get; init; } = string.Empty;
+}
+
+public record PublicCollegeOptionDto
+{
+    public Guid Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string TenantCode { get; init; } = string.Empty;
+}
+
+public record RosterSignupRequest
+{
+    public Guid? CollegeId { get; init; }
+    public string? CollegeCode { get; init; }
+    public string CollegeUserId { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+}
+
+public record RosterSignupResponse
+{
+    public string Message { get; init; } = string.Empty;
+    public string Status { get; init; } = "VERIFICATION_SENT";
+}
+
+public record UpdateCurrentProfileRequest
+{
+    public string FullName { get; init; } = string.Empty;
+    public string? PhoneNumber { get; init; }
 }
 
 public record MfaConfirmRequest

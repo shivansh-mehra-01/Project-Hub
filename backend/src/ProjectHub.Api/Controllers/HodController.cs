@@ -115,64 +115,6 @@ public class HodController : ControllerBase
         var pendingExceptions = await _context.ExceptionAuditLogs
             .CountAsync(e => e.CollegeId == collegeId && e.DepartmentId == deptId && e.ActionType != ExceptionActionType.IndividualReVivaUnlock && !e.ApprovedByUserId.HasValue && !e.IsDeleted);
 
-        // Dynamically compute NBA Attainment from actual department evaluations and exit surveys
-        var deptEvals = await _context.VivaEvaluations
-            .Include(v => v.IndividualScores)
-            .Where(v => v.CollegeId == collegeId && v.ProjectTeam != null && v.ProjectTeam.DepartmentId == deptId && !v.IsDeleted)
-            .ToListAsync();
-
-        var exitSurveys = await _context.CourseExitSurveys
-            .Where(s => s.CollegeId == collegeId && s.ProjectTeam != null && s.ProjectTeam.DepartmentId == deptId && !s.IsDeleted)
-            .ToListAsync();
-
-        decimal? directPct = null;
-        if (deptEvals.Any())
-        {
-            var allScores = deptEvals.SelectMany(e => e.IndividualScores).ToList();
-            if (allScores.Any())
-            {
-                var met = allScores.Count(s => s.FinalComputedStudentMark >= 35m);
-                directPct = Math.Round((decimal)met / allScores.Count * 100m, 1);
-            }
-            else
-            {
-                var met = deptEvals.Count(e => e.SharedTotalScore >= 35m);
-                directPct = Math.Round((decimal)met / deptEvals.Count * 100m, 1);
-            }
-        }
-
-        decimal? indirectPct = null;
-        if (exitSurveys.Any())
-        {
-            var ratings = new List<int>();
-            foreach (var survey in exitSurveys)
-            {
-                if (!string.IsNullOrWhiteSpace(survey.PoRatingsJson))
-                {
-                    try
-                    {
-                        using var doc = System.Text.Json.JsonDocument.Parse(survey.PoRatingsJson);
-                        foreach (var prop in doc.RootElement.EnumerateObject())
-                        {
-                            if (prop.Value.TryGetInt32(out var r))
-                            {
-                                ratings.Add(r);
-                            }
-                        }
-                    }
-                    catch { }
-                }
-            }
-            if (ratings.Any())
-            {
-                indirectPct = Math.Round((decimal)ratings.Average() / 3m * 100m, 1);
-            }
-        }
-
-        decimal? blendedPct = (directPct.HasValue && indirectPct.HasValue)
-            ? Math.Round((directPct.Value * 0.8m) + (indirectPct.Value * 0.2m), 2)
-            : directPct ?? indirectPct;
-
         return Ok(new HodDashboardDto
         {
             DepartmentId = dept.Id,
@@ -190,12 +132,53 @@ public class HodController : ControllerBase
             PendingExceptions = pendingExceptions,
             TotalStudentsEnrolled = students,
             AvailableMentors = mentors,
-            NbaDirectAttainmentPct = directPct,
-            NbaIndirectAttainmentPct = indirectPct,
-            NbaBlendedCriterion3Pct = blendedPct,
-            IsSarAttested = dept.IsSarAttested,
-            SarAttestedAtUtc = dept.SarAttestedAtUtc
+            EvaluationCutoffDateUtc = dept.EvaluationCutoffDateUtc
         });
+    }
+
+    [HttpPut("department-settings/evaluation-cutoff")]
+    public async Task<ActionResult<HodDashboardDto>> UpdateEvaluationCutoff([FromBody] UpdateDepartmentEvaluationCutoffRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+        var dept = await _context.Departments.FirstOrDefaultAsync(d => d.Id == deptId && d.CollegeId == collegeId && !d.IsDeleted);
+        if (dept == null) return NotFound(new { message = "Department not found." });
+
+        if (request.EvaluationCutoffDateUtc.HasValue)
+        {
+            var activeSession = await _context.AcademicSessions
+                .AsNoTracking()
+                .Where(s => s.CollegeId == collegeId && s.IsActive && !s.IsDeleted)
+                .OrderByDescending(s => s.StartDate)
+                .FirstOrDefaultAsync();
+
+            if (activeSession != null &&
+                (request.EvaluationCutoffDateUtc.Value < activeSession.StartDate ||
+                 request.EvaluationCutoffDateUtc.Value > activeSession.EndDate))
+            {
+                return BadRequest(new
+                {
+                    message = $"Department evaluation cutoff date must fall within the active academic session ({activeSession.StartDate:yyyy-MM-dd} to {activeSession.EndDate:yyyy-MM-dd})."
+                });
+            }
+        }
+
+        dept.EvaluationCutoffDateUtc = request.EvaluationCutoffDateUtc.HasValue
+            ? DateTime.SpecifyKind(request.EvaluationCutoffDateUtc.Value, DateTimeKind.Utc)
+            : null;
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            ActorEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "hod",
+            Action = "UPDATE_DEPARTMENT_EVALUATION_CUTOFF",
+            TargetTenantId = collegeId,
+            TargetEntity = dept.Code,
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+        return await GetDashboard();
     }
 
     [HttpGet("academic-context")]
@@ -963,388 +946,6 @@ public class HodController : ControllerBase
         return NoContent();
     }
 
-    [HttpGet("nba-attainment")]
-    public async Task<ActionResult<NbaAttainmentReportDto>> GetNbaAttainmentReport()
-    {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var deptId = await ResolveDepartmentIdAsync();
-
-        var deptEvals = await _context.VivaEvaluations
-            .Include(v => v.IndividualScores)
-            .Where(v => v.CollegeId == collegeId && v.ProjectTeam != null && v.ProjectTeam.DepartmentId == deptId && !v.IsDeleted)
-            .ToListAsync();
-
-        var exitSurveys = await _context.CourseExitSurveys
-            .Where(s => s.CollegeId == collegeId && s.ProjectTeam != null && s.ProjectTeam.DepartmentId == deptId && !s.IsDeleted)
-            .ToListAsync();
-
-        decimal? baseDirect = null;
-        if (deptEvals.Any())
-        {
-            var allScores = deptEvals.SelectMany(e => e.IndividualScores).ToList();
-            if (allScores.Any())
-            {
-                var met = allScores.Count(s => s.FinalComputedStudentMark >= 35m);
-                baseDirect = Math.Round((decimal)met / allScores.Count * 100m, 1);
-            }
-            else
-            {
-                var met = deptEvals.Count(e => e.SharedTotalScore >= 35m);
-                baseDirect = Math.Round((decimal)met / deptEvals.Count * 100m, 1);
-            }
-        }
-
-        decimal? baseIndirect = null;
-        if (exitSurveys.Any())
-        {
-            var ratings = new List<int>();
-            foreach (var survey in exitSurveys)
-            {
-                if (!string.IsNullOrWhiteSpace(survey.PoRatingsJson))
-                {
-                    try
-                    {
-                        using var doc = System.Text.Json.JsonDocument.Parse(survey.PoRatingsJson);
-                        foreach (var prop in doc.RootElement.EnumerateObject())
-                        {
-                            if (prop.Value.TryGetInt32(out var r))
-                            {
-                                ratings.Add(r);
-                            }
-                        }
-                    }
-                    catch { }
-                }
-            }
-            if (ratings.Any())
-            {
-                baseIndirect = Math.Round((decimal)ratings.Average() / 3m * 100m, 1);
-            }
-        }
-
-        var masterOutcomes = await _context.MasterNbaOutcomes
-            .Where(o => o.Category == "ProgramOutcome")
-            .OrderBy(o => o.Code)
-            .ToListAsync();
-
-        var outcomes = new List<PoAttainmentScoreDto>();
-
-        if (masterOutcomes.Any())
-        {
-            foreach (var mo in masterOutcomes.Take(8))
-            {
-                outcomes.Add(CreatePoScore(mo.Code, mo.Title, baseDirect, baseIndirect));
-            }
-        }
-        else
-        {
-            outcomes.Add(CreatePoScore("PO1", "Engineering Knowledge", baseDirect, baseIndirect));
-            outcomes.Add(CreatePoScore("PO2", "Problem Analysis", baseDirect, baseIndirect));
-            outcomes.Add(CreatePoScore("PO3", "Design/Development of Solutions", baseDirect, baseIndirect));
-            outcomes.Add(CreatePoScore("PO4", "Conduct Investigations", baseDirect, baseIndirect));
-            outcomes.Add(CreatePoScore("PO5", "Modern Tool Usage", baseDirect, baseIndirect));
-            outcomes.Add(CreatePoScore("PO9", "Individual and Team Work", baseDirect, baseIndirect));
-            outcomes.Add(CreatePoScore("PO10", "Communication", baseDirect, baseIndirect));
-            outcomes.Add(CreatePoScore("PO12", "Life-long Learning", baseDirect, baseIndirect));
-        }
-
-        var directValues = outcomes.Where(o => o.DirectAttainmentPct.HasValue).Select(o => o.DirectAttainmentPct!.Value).ToList();
-        var avgDirect = directValues.Any() ? Math.Round(directValues.Average(), 2) : (decimal?)null;
-
-        var indirectValues = outcomes.Where(o => o.IndirectAttainmentPct.HasValue).Select(o => o.IndirectAttainmentPct!.Value).ToList();
-        var avgIndirect = indirectValues.Any() ? Math.Round(indirectValues.Average(), 2) : (decimal?)null;
-
-        var blendedValues = outcomes.Where(o => o.BlendedAttainmentPct.HasValue).Select(o => o.BlendedAttainmentPct!.Value).ToList();
-        var avgBlended = blendedValues.Any() ? Math.Round(blendedValues.Average(), 2) : (decimal?)null;
-
-        return Ok(new NbaAttainmentReportDto
-        {
-            DepartmentId = deptId,
-            AcademicYear = "2025-2026",
-            OverallDirectPct = avgDirect,
-            OverallIndirectPct = avgIndirect,
-            OverallBlendedPct = avgBlended,
-            PoBreakdown = outcomes
-        });
-    }
-
-    private static PoAttainmentScoreDto CreatePoScore(string code, string title, decimal? direct, decimal? indirect)
-    {
-        var clampedDirect = direct.HasValue ? Math.Clamp(Math.Round(direct.Value, 1), 0m, 100m) : (decimal?)null;
-        var clampedIndirect = indirect.HasValue ? Math.Clamp(Math.Round(indirect.Value, 1), 0m, 100m) : (decimal?)null;
-        decimal? blended = (clampedDirect.HasValue && clampedIndirect.HasValue)
-            ? Math.Round((clampedDirect.Value * 0.8m) + (clampedIndirect.Value * 0.2m), 2)
-            : clampedDirect ?? clampedIndirect;
-        bool targetMet = blended.HasValue && blended.Value >= 70.0m;
-
-        return new PoAttainmentScoreDto
-        {
-            PoCode = code,
-            Title = title,
-            DirectAttainmentPct = clampedDirect,
-            IndirectAttainmentPct = clampedIndirect,
-            BlendedAttainmentPct = blended,
-            TargetMet = targetMet
-        };
-    }
-
-    [HttpGet("nba/export-zip")]
-    public async Task<IActionResult> ExportNbaDossierZip(CancellationToken cancellationToken)
-    {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var deptId = await ResolveDepartmentIdAsync();
-
-        var dept = await _context.Departments
-            .Include(d => d.College)
-            .FirstOrDefaultAsync(d => d.Id == deptId && d.CollegeId == collegeId && !d.IsDeleted, cancellationToken);
-
-        var collegeName = dept?.College?.Name ?? "Institutional College Tenant";
-        var deptName = dept?.Name ?? "Academic Department";
-        var deptCode = dept?.Code ?? "DEPT";
-
-        var dbTeams = await _context.ProjectTeams
-            .Include(t => t.Members)
-                .ThenInclude(m => m.User)
-            .Include(t => t.GuideUser)
-            .Include(t => t.Evaluations)
-                .ThenInclude(e => e.IndividualScores)
-            .Include(t => t.Artifacts)
-            .Where(t => t.CollegeId == collegeId && t.DepartmentId == deptId && !t.IsDeleted)
-            .OrderByDescending(t => t.CreatedAtUtc)
-            .ToListAsync(cancellationToken);
-
-        var deptEvals = await _context.VivaEvaluations
-            .Include(v => v.IndividualScores)
-            .Where(v => v.CollegeId == collegeId && v.ProjectTeam != null && v.ProjectTeam.DepartmentId == deptId && !v.IsDeleted)
-            .ToListAsync(cancellationToken);
-
-        var exitSurveys = await _context.CourseExitSurveys
-            .Where(s => s.CollegeId == collegeId && s.ProjectTeam != null && s.ProjectTeam.DepartmentId == deptId && !s.IsDeleted)
-            .ToListAsync(cancellationToken);
-
-        decimal? exportDirectPct = null;
-        if (deptEvals.Any())
-        {
-            var allScores = deptEvals.SelectMany(e => e.IndividualScores).ToList();
-            if (allScores.Any())
-            {
-                var met = allScores.Count(s => s.FinalComputedStudentMark >= 35m);
-                exportDirectPct = Math.Round((decimal)met / allScores.Count * 100m, 1);
-            }
-            else
-            {
-                var met = deptEvals.Count(e => e.SharedTotalScore >= 35m);
-                exportDirectPct = Math.Round((decimal)met / deptEvals.Count * 100m, 1);
-            }
-        }
-
-        decimal? exportIndirectPct = null;
-        if (exitSurveys.Any())
-        {
-            var ratings = new List<int>();
-            foreach (var survey in exitSurveys)
-            {
-                if (!string.IsNullOrWhiteSpace(survey.PoRatingsJson))
-                {
-                    try
-                    {
-                        using var doc = System.Text.Json.JsonDocument.Parse(survey.PoRatingsJson);
-                        foreach (var prop in doc.RootElement.EnumerateObject())
-                        {
-                            if (prop.Value.TryGetInt32(out var r))
-                            {
-                                ratings.Add(r);
-                            }
-                        }
-                    }
-                    catch { }
-                }
-            }
-            if (ratings.Any())
-            {
-                exportIndirectPct = Math.Round((decimal)ratings.Average() / 3m * 100m, 1);
-            }
-        }
-
-        decimal? exportBlendedPct = (exportDirectPct.HasValue && exportIndirectPct.HasValue)
-            ? Math.Round((exportDirectPct.Value * 0.8m) + (exportIndirectPct.Value * 0.2m), 2)
-            : exportDirectPct ?? exportIndirectPct;
-
-        using var zipMemoryStream = new MemoryStream();
-        using (var archive = new ZipArchive(zipMemoryStream, ZipArchiveMode.Create, true))
-        {
-            // 1. 00_NBA_CO_PO_Attainment_Matrix.csv
-            var attainmentCsv = new StringBuilder();
-            attainmentCsv.AppendLine("Course Outcome,Outcome Statement,Direct Attainment (80%),Indirect Exit Survey (20%),Blended Criterion 3 Attainment (%),Target Benchmark (%),Attainment Status,Mapped POs & PSOs");
-
-            if (exportDirectPct.HasValue || exportIndirectPct.HasValue)
-            {
-                var dirStr = exportDirectPct.HasValue ? $"{exportDirectPct.Value:F1}%" : "N/A";
-                var indStr = exportIndirectPct.HasValue ? $"{exportIndirectPct.Value:F1}%" : "N/A";
-                var blnStr = exportBlendedPct.HasValue ? $"{exportBlendedPct.Value:F2}%" : "N/A";
-                var status = (exportBlendedPct.HasValue && exportBlendedPct.Value >= 70m) ? "Target Exceeded" : "Remedial / In Progress";
-
-                attainmentCsv.AppendLine($"CO1,Problem Identification & Feasibility Analysis,{dirStr},{indStr},{blnStr},70.0%,{status},\"PO1, PO2, PO3, PSO1\"");
-                attainmentCsv.AppendLine($"CO2,Architecture Design & Requirement Engineering,{dirStr},{indStr},{blnStr},70.0%,{status},\"PO2, PO3, PO5, PSO2\"");
-                attainmentCsv.AppendLine($"CO3,Prototype Implementation & Code Verification,{dirStr},{indStr},{blnStr},70.0%,{status},\"PO3, PO4, PO5, PO9\"");
-                attainmentCsv.AppendLine($"CO4,Report Writing & Technical Viva Defense,{dirStr},{indStr},{blnStr},70.0%,{status},\"PO7, PO9, PO10, PSO1\"");
-                attainmentCsv.AppendLine();
-                attainmentCsv.AppendLine("--- NBA CRITERION 2 & 3 ATTAINMENT SUMMARY ---");
-                attainmentCsv.AppendLine($"Institution,{collegeName}");
-                attainmentCsv.AppendLine($"Department,{deptName} ({deptCode})");
-                attainmentCsv.AppendLine("Academic Batch,AY 2025-2026");
-                attainmentCsv.AppendLine("Accreditation Cycle,NBA Tier-II Criterion 2 & 3 Evaluation");
-                attainmentCsv.AppendLine("Direct Continuous Assessment Weight,80%");
-                attainmentCsv.AppendLine("Indirect Course Exit Survey Weight,20%");
-                attainmentCsv.AppendLine($"Evaluation Data Status,Measured from {deptEvals.Count} evaluation record(s) and {exitSurveys.Count} exit survey(s)");
-                attainmentCsv.AppendLine($"Institutional Criterion 3 Attainment,{blnStr} (Threshold >= 70% {(exportBlendedPct.HasValue && exportBlendedPct.Value >= 70m ? "SATISFIED" : "NOT SATISFIED")})");
-            }
-            else
-            {
-                attainmentCsv.AppendLine("CO1,Problem Identification & Feasibility Analysis,N/A,N/A,N/A,70.0%,No Evaluation Data,\"PO1, PO2, PO3, PSO1\"");
-                attainmentCsv.AppendLine("CO2,Architecture Design & Requirement Engineering,N/A,N/A,N/A,70.0%,No Evaluation Data,\"PO2, PO3, PO5, PSO2\"");
-                attainmentCsv.AppendLine("CO3,Prototype Implementation & Code Verification,N/A,N/A,N/A,70.0%,No Evaluation Data,\"PO3, PO4, PO5, PO9\"");
-                attainmentCsv.AppendLine("CO4,Report Writing & Technical Viva Defense,N/A,N/A,N/A,70.0%,No Evaluation Data,\"PO7, PO9, PO10, PSO1\"");
-                attainmentCsv.AppendLine();
-                attainmentCsv.AppendLine("--- NBA CRITERION 2 & 3 ATTAINMENT SUMMARY ---");
-                attainmentCsv.AppendLine($"Institution,{collegeName}");
-                attainmentCsv.AppendLine($"Department,{deptName} ({deptCode})");
-                attainmentCsv.AppendLine("Academic Batch,AY 2025-2026");
-                attainmentCsv.AppendLine("Accreditation Cycle,NBA Tier-II Criterion 2 & 3 Evaluation");
-                attainmentCsv.AppendLine("Direct Continuous Assessment Weight,80%");
-                attainmentCsv.AppendLine("Indirect Course Exit Survey Weight,20%");
-                attainmentCsv.AppendLine("Evaluation Data Status,No evaluation records or exit surveys submitted for this department");
-                attainmentCsv.AppendLine("Institutional Criterion 3 Attainment,N/A (Pending Evaluation Records)");
-            }
-
-            var attainmentEntry = archive.CreateEntry("00_NBA_CO_PO_Attainment_Matrix.csv", CompressionLevel.Optimal);
-            await using (var entryStream = attainmentEntry.Open())
-            await using (var writer = new StreamWriter(entryStream, Encoding.UTF8))
-            {
-                await writer.WriteAsync(attainmentCsv.ToString());
-            }
-
-            // 2. 01_Department_Consolidated_Marksheet.csv
-            var marksheetCsv = new StringBuilder();
-            marksheetCsv.AppendLine($"CONSOLIDATED DEPARTMENT TABULATION REGISTER - {collegeName}");
-            marksheetCsv.AppendLine($"Department: {deptName} ({deptCode}) | Academic Year: 2025-2026");
-            marksheetCsv.AppendLine("S.No,Roll No / USN,Student Name,Department,Team Code,Project Title,Guide Score,Mid-Term Score,External Viva Score,Total Score (/100),Grade,Result");
-
-            int serialNo = 1;
-            if (!dbTeams.Any())
-            {
-                marksheetCsv.AppendLine("N/A,N/A,No registered project teams found for this department,N/A,N/A,N/A,0,0,0,0,N/A,NO DATA");
-            }
-            else
-            {
-                foreach (var team in dbTeams)
-                {
-                    var guideEval = team.Evaluations.FirstOrDefault(e => e.CheckpointType == CheckpointType.GuideContinuous && !e.IsDeleted);
-                    var midTermEval = team.Evaluations.FirstOrDefault(e => e.CheckpointType == CheckpointType.MidTermReview && !e.IsDeleted);
-                    var finalVivaEval = team.Evaluations.FirstOrDefault(e => e.CheckpointType == CheckpointType.FinalViva && !e.IsDeleted);
-
-                    foreach (var member in team.Members.Where(m => !m.IsDeleted && m.User != null))
-                    {
-                        var student = member.User!;
-                        decimal guideScore = guideEval?.SharedTotalScore ?? 0m;
-                        decimal midTermScore = midTermEval?.SharedTotalScore ?? 0m;
-                        decimal vivaScore = finalVivaEval?.SharedTotalScore ?? 0m;
-
-                        var indScore = finalVivaEval?.IndividualScores.FirstOrDefault(s => s.StudentUserId == student.Id);
-                        decimal total = indScore != null && indScore.FinalComputedStudentMark > 0
-                            ? indScore.FinalComputedStudentMark
-                            : Math.Round(guideScore * 0.30m + midTermScore * 0.30m + vivaScore * 0.40m, 1);
-
-                        string grade = total >= 85 ? "A+" : total >= 75 ? "A" : total >= 65 ? "B" : total >= 50 ? "C" : "F";
-                        string result = total >= 50 ? "PASS" : "REMEDIAL";
-
-                        marksheetCsv.AppendLine($"{serialNo++},{student.EnrollmentOrEmployeeCode},{student.FullName},{deptCode},{team.TeamCode},\"{team.Title}\",{guideScore},{midTermScore},{vivaScore},{total},{grade},{result}");
-                    }
-                }
-            }
-
-            var marksheetEntry = archive.CreateEntry("01_RGPV_Consolidated_Marksheet.csv", CompressionLevel.Optimal);
-            await using (var entryStream = marksheetEntry.Open())
-            await using (var writer = new StreamWriter(entryStream, Encoding.UTF8))
-            {
-                await writer.WriteAsync(marksheetCsv.ToString());
-            }
-
-            // 3. Dossiers for Department Teams under 02_Audit_Sample_Dossiers
-            var teamsToExport = dbTeams.Take(12).ToList();
-
-            foreach (var team in teamsToExport)
-            {
-                string safeTitle = new string(team.Title.Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '-').ToArray());
-                if (safeTitle.Length > 25) safeTitle = safeTitle[..25];
-                string projectFolderPath = $"02_Audit_Sample_Dossiers/01_Sample_Projects/{team.TeamCode}_{safeTitle}";
-
-                var scorecardCsv = new StringBuilder();
-                scorecardCsv.AppendLine("CAPSTONE PROJECT EVALUATION SCORECARD - AUDIT RECORD");
-                scorecardCsv.AppendLine($"Institution,{collegeName}");
-                scorecardCsv.AppendLine($"Department,{deptName}");
-                scorecardCsv.AppendLine($"Team Code,{team.TeamCode}");
-                scorecardCsv.AppendLine($"Project Title,\"{team.Title}\"");
-                scorecardCsv.AppendLine($"Faculty Guide,{team.GuideUser?.FullName ?? "Unassigned"}");
-                scorecardCsv.AppendLine($"Status,{team.Status}");
-                scorecardCsv.AppendLine();
-                scorecardCsv.AppendLine("Team Members:");
-                foreach (var m in team.Members.Where(m => !m.IsDeleted && m.User != null))
-                {
-                    scorecardCsv.AppendLine($"- {m.User!.FullName} ({m.User.EnrollmentOrEmployeeCode}) [{(m.IsTeamLead ? "Team Lead" : "Member")}]");
-                }
-
-                var scEntry = archive.CreateEntry($"{projectFolderPath}/{team.TeamCode}_Evaluation_Scorecard.csv", CompressionLevel.Optimal);
-                await using (var es = scEntry.Open())
-                await using (var w = new StreamWriter(es, Encoding.UTF8))
-                {
-                    await w.WriteAsync(scorecardCsv.ToString());
-                }
-
-                // Attach real vault deliverables from storage or fallback mock stream
-                var vaultSlots = new (ArtifactSlotType Slot, string Extension)[]
-                {
-                    (ArtifactSlotType.Synopsis, ".pdf"),
-                    (ArtifactSlotType.MidTermPPT, ".pptx"),
-                    (ArtifactSlotType.PlagiarismReport, ".pdf"),
-                    (ArtifactSlotType.FinalThesis, ".pdf")
-                };
-
-                foreach (var (slot, ext) in vaultSlots)
-                {
-                    var art = team.Artifacts?.FirstOrDefault(a => a.SlotType == slot && !a.IsDeleted);
-                    var entryFileName = $"{team.TeamCode}_{slot}{ext}";
-                    var entry = archive.CreateEntry($"{projectFolderPath}/{entryFileName}", CompressionLevel.Optimal);
-                    try
-                    {
-                        await using var destStream = entry.Open();
-                        if (art != null && !string.IsNullOrWhiteSpace(art.StorageKey))
-                        {
-                            var (fileStream, _) = await _fileStorageService.OpenReadAsync(art.StorageKey, cancellationToken);
-                            await using (fileStream)
-                            {
-                                await fileStream.CopyToAsync(destStream, cancellationToken);
-                            }
-                        }
-                        else
-                        {
-                            var (fallbackStream, _) = await _fileStorageService.OpenReadAsync($"vault/{collegeId}/{team?.Id ?? Guid.NewGuid()}/{slot}/{entryFileName}", cancellationToken);
-                            await using (fallbackStream)
-                            {
-                                await fallbackStream.CopyToAsync(destStream, cancellationToken);
-                            }
-                        }
-                    }
-                    catch { }
-                }
-            }
-        }
-
-        var zipBytes = zipMemoryStream.ToArray();
-        var downloadZipName = $"Collabex_NBA_SAR_{deptCode}_2025-2026.zip";
-        return File(zipBytes, "application/zip", downloadZipName);
-    }
-
     [HttpGet("exceptions")]
     public async Task<ActionResult<List<ExceptionAuditLogDto>>> GetExceptions()
     {
@@ -1680,80 +1281,6 @@ public class HodController : ControllerBase
         return Ok(new { success = true, id = exceptionLog.Id, isApproved = false, remarks });
     }
 
-    [HttpPost("sar/attest")]
-    public async Task<ActionResult<AttestSarResponse>> AttestDepartmentSar()
-    {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var deptId = await ResolveDepartmentIdAsync();
-
-        var dept = await _context.Departments
-            .FirstOrDefaultAsync(d => d.Id == deptId && d.CollegeId == collegeId && !d.IsDeleted);
-
-        if (dept == null)
-        {
-            return NotFound(new { message = "Department not found in current institutional tenant." });
-        }
-
-        var hasActiveTrack = await _context.AcademicTracks
-            .AnyAsync(t => t.CollegeId == collegeId && (t.DepartmentId == deptId || t.DepartmentId == null) && t.IsActive && !t.IsDeleted);
-
-        if (!hasActiveTrack)
-        {
-            return BadRequest(new { message = "Completeness validation failed: Department has no active academic project tracks configured." });
-        }
-
-        var pendingProposalsCount = await _context.ProjectTeams
-            .CountAsync(t => t.CollegeId == collegeId && t.DepartmentId == deptId && t.Status == ProjectStatus.PendingHOD && !t.IsDeleted);
-
-        if (pendingProposalsCount > 0)
-        {
-            return BadRequest(new { message = $"Completeness validation failed: {pendingProposalsCount} project proposal(s) are currently pending HOD review and approval." });
-        }
-
-        var teamCount = await _context.ProjectTeams
-            .CountAsync(t => t.CollegeId == collegeId && t.DepartmentId == deptId && !t.IsDeleted);
-
-        if (teamCount == 0)
-        {
-            return BadRequest(new { message = "Completeness validation failed: Department has no registered project teams." });
-        }
-
-        var caller = await ResolveCurrentUserAsync();
-
-        dept.IsSarAttested = true;
-        dept.SarAttestedAtUtc = DateTime.UtcNow;
-        dept.SarAttestedByUserId = _tenantContext.UserId;
-
-        var audit = new PlatformAuditLog
-        {
-            ActorUserId = _tenantContext.UserId,
-            ActorEmail = caller?.Email ?? "hod@collabex.edu",
-            Action = "HOD_SAR_ATTESTED",
-            TargetTenantId = collegeId,
-            TargetEntity = "Department",
-            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
-            {
-                departmentId = dept.Id,
-                departmentCode = dept.Code,
-                attestedAtUtc = dept.SarAttestedAtUtc,
-                totalTeams = teamCount
-            }),
-            OccurredAtUtc = DateTime.UtcNow
-        };
-        await _context.PlatformAuditLogs.AddAsync(audit);
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new AttestSarResponse
-        {
-            Success = true,
-            AttestedAtUtc = dept.SarAttestedAtUtc.Value,
-            AttestedByName = caller?.FullName ?? "Head of Department",
-            Status = "Attested",
-            Message = $"NBA SAR Departmental Self-Appraisal for {dept.Name} ({dept.Code}) successfully attested and digitally sealed."
-        });
-    }
-
     [HttpGet("results")]
     public async Task<ActionResult<List<DepartmentStudentResultDto>>> GetDepartmentResults()
     {
@@ -1840,8 +1367,7 @@ public class HodController : ControllerBase
                     MidTermScore = midTermScore,
                     ExternalVivaScore = externalVivaScore,
                     TotalMarks = totalMarks,
-                    LetterGrade = letterGrade,
-                    NbaAttainmentStatus = attainment
+                    LetterGrade = letterGrade
                 });
             }
         }

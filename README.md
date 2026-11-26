@@ -1,4 +1,4 @@
-# Collabex (Project Hub)
+# Colabex (Project Hub)
 
 > **Enterprise multi-tenant academic project & capstone management platform for engineering colleges, automating project lifecycle tracking and NBA Criterion 2 & 3 accreditation compliance.**
 
@@ -24,35 +24,16 @@ Ensure the following tools are installed on your machine:
 
 ---
 
-## ⚡ 1-Command Instant Full-Stack Launcher (Recommended)
+## 🚀 Local Development Workflow (Separate Terminals)
 
-Boot the entire stack (**PostgreSQL 17** + **.NET 10 Backend API** + **Next.js 16 Frontend**) with zero friction, automated port cleanup, database health polling, and dependency checks:
+Backend and frontend run independently in separate terminals, with PostgreSQL 17 and Redis 7 running in Docker.
 
-```powershell
-# From the repository root (PowerShell):
-.\start.ps1
-
-# Or using npm:
-npm run dev
-```
-
-What `start.ps1` handles automatically:
-1. **Prerequisites & Port Cleanup:** Verifies Docker, .NET SDK, and npm; cleanly frees ports `5000` and `3000` from any stale background processes.
-2. **PostgreSQL 17 Auto-Provisioning:** Detects Docker Desktop, spins up or attaches to the PostgreSQL 17 container (`projecthub_postgres` / `projecthub-db`), and polls until port `5432` accepts connections.
-3. **Frontend Dependencies & Env Setup:** Automatically checks `web/node_modules` (installs if missing) and creates `web/.env.local` from `web/.env.example`.
-4. **Backend Boot & Health Check:** Launches .NET 10 API on `http://localhost:5000` in a dedicated labeled console and polls `/api/health` before booting the frontend.
-5. **Frontend Launch & Summary Banner:** Launches Next.js on `http://localhost:3000` in a dedicated labeled console and prints a consolidated terminal dashboard with demo credentials.
-
----
-
-## 🚀 Manual Step-by-Step Setup Guide
-
-### 1. Clone & Configure Environment
+### 1. Configure Environment
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/collabex.git
-cd collabex
+git clone https://github.com/your-org/colabex.git
+cd colabex
 
 # Configure root environment
 cp .env.example .env
@@ -67,11 +48,14 @@ cp web/.env.example web/.env.local
 
 ### 2. Start Infrastructure (PostgreSQL 17 & Redis 7)
 
+Docker must be running before starting the backend API.
+
+From the repository root:
 ```bash
-docker compose up -d
+docker compose up -d postgres redis
 ```
 
-Verify that the containers are healthy:
+Verify that the containers are running and healthy:
 ```bash
 docker compose ps
 ```
@@ -80,72 +64,63 @@ docker compose ps
 
 ### 3. Start Backend API (.NET 10)
 
+From the repository root:
 ```bash
-cd backend
-dotnet restore
-dotnet run --project src/ProjectHub.Api
+dotnet run --project backend/src/ProjectHub.Api --launch-profile http
 ```
 
-- **API Base URL:** `http://localhost:5000`
+- **Backend URL:** `http://localhost:5000`
 - **Interactive Scalar Docs:** `http://localhost:5000/scalar/v1`
 - **OpenAPI JSON Spec:** `http://localhost:5000/openapi/v1.json`
 - **Health Check:** `http://localhost:5000/api/health`
 
-The database schema and initial master data (RGPV programs, college tenants, departments, sample teams, and users) seed automatically on initial startup.
+In `Development`, the API automatically applies pending EF Core migrations and seeds master reference catalogs on startup (zero demo tenants or users are seeded).
+
+#### First-Time SuperAdmin Bootstrap
+
+On a fresh database, bootstrap the initial SuperAdmin account explicitly from the repository root:
+```powershell
+$env:COLABEX_BOOTSTRAP_EMAIL = "admin@yourdomain.edu"
+$env:COLABEX_BOOTSTRAP_PASSWORD = "<strong-password>"
+$env:COLABEX_BOOTSTRAP_NAME = "Platform SuperAdmin"
+dotnet run --project backend/src/ProjectHub.Api -- bootstrap-superadmin
+```
 
 To execute the backend integration tests:
 ```bash
-dotnet test ProjectHub.slnx
+dotnet test backend/ProjectHub.slnx
 ```
 
 ---
 
 ### 4. Start Frontend Application (Next.js)
 
-In a new terminal window:
+In a separate terminal from the repository root:
 ```bash
-cd web
-npm install
-npm run dev
+npm --prefix web install
+npm --prefix web run dev
 ```
 
-- **Web Application URL:** `http://localhost:3000`
+- **Frontend URL:** `http://localhost:3000`
 - **Login Route:** `http://localhost:3000/login`
 
 To verify a production build:
 ```bash
-npm run build
+npm --prefix web run build
 ```
-
----
-
-## 🔑 Pre-Seeded Development Credentials
-
-The database is seeded with ready-to-test accounts across all roles (default password: `Pass@1234`):
-
-| Role | Name | Email | Default Password | Primary Workspace Route |
-|---|---|---|---|---|
-| **SuperAdmin** | Platform Ops Admin | `superadmin@collabex.in` | `Pass@1234` | `/admin` |
-| **CollegeAdmin** | Dr. Keshvendra Choudhary (Principal) | `collegeadmin@sistec.ac.in` | `Pass@1234` | `/college` |
-| **HOD (CSE)** | Dr. Ravindra Kumar Sharma | `hod@sistec.ac.in` | `Pass@1234` | `/hod` |
-| **Coordinator** | Prof. Priya Nair | `coordinator@sistec.ac.in` | `Pass@1234` | `/coordinator` |
-| **Faculty Guide** | Prof. S. K. Verma | `faculty@sistec.ac.in` | `Pass@1234` | `/faculty` |
-| **Student (Team Lead)** | Shivansh Mehra | `student@sistec.ac.in` | `Pass@1234` | `/student` |
-| **Student (Member)** | Aarav Sharma | `student2@sistec.ac.in` | `Pass@1234` | `/student` |
 
 ---
 
 ## 📁 Repository Structure
 
 ```
-collabex/
+colabex/
 ├── .agents/                               # Engineering guides and architectural rules
 ├── docs/                                  # Platform requirements and database schema
 ├── docker-compose.yml                     # PostgreSQL 17 + Redis 7 local stack
 ├── .env.example                           # Root environment template
 ├── .gitignore                             # Clean monorepo exclusion rules
-├── package.json                           # Root scripts (npm run dev launcher)
-├── start.ps1                              # Zero-friction full-stack local launcher
+├── package.json                           # Root build and test scripts
 ├── backend/
 │   ├── ProjectHub.slnx                    # .NET 10 solution file
 │   ├── src/
@@ -172,3 +147,19 @@ collabex/
 1. **Row-Level Security (RLS):** All tenant-specific entities implement `ITenantEntity` with `Guid CollegeId`, automatically scoped via EF Core 10 Global Query Filters.
 2. **Strict JWT Claim Enforcement:** Every authenticated request verifies the `college_id` claim in the bearer token.
 3. **Capstone Document Vault:** Uploaded files (`.pdf`, `.ppt`, `.pptx` $\le$ 25 MB) are streamed, SHA-256 hashed, and isolated per college and team under `App_Data/vault/{collegeId}/{teamId}/{slot}/`.
+
+---
+
+## 📋 Faculty Roster CSV Import Contract
+
+College Admins import faculty rosters via `POST /api/college/users/bulk` (and the **Import Faculty Roster (CSV)** modal in `/college/users`) using UTF-8 CSV with the exact 4-column header:
+
+```csv
+FullName,OfficialEmail,DepartmentCode,Designation
+```
+
+- **Supported `Designation` values:** `Professor`, `AssociateProfessor`, `AssistantProfessor`, `AdjunctFaculty`
+- **Limits:** Up to 1 MB per file and 500 rows per upload; RFC 4180 quoted commas and escaped quotes (`""`) are supported.
+- **Identity & Update Policy:** `OfficialEmail` (trimmed, lowercased) is matched within the authenticated college tenant. New emails create `Faculty` accounts and dispatch activation emails; existing same-tenant `Faculty` accounts update `FullName`, `DepartmentId`, and `Designation` while preserving `Id`, `Role`, `EmployeeCode`, and credentials. Cross-tenant emails and protected/incompatible roles (`HOD`, `CollegeAdmin`, `SuperAdmin`, `Student`) are rejected.
+- **Atomic Preview & Validation:** Legacy `Role` headers, duplicate/missing headers, duplicate emails in file, invalid designations, or unknown department codes are rejected before persistence (all-or-nothing transaction).
+- **HOD Separation:** Roster import never appoints HODs or modifies `HodAppointmentHistories`. HOD appointments must be performed separately through **Department Leadership** (`/college/hods`).

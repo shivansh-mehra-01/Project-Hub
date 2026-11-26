@@ -32,6 +32,9 @@ export const HodOverviewView: React.FC = () => {
   const [projects, setProjects] = useState<HodProjectDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [cutoffDate, setCutoffDate] = useState("");
+  const [savingCutoff, setSavingCutoff] = useState(false);
+  const [cutoffError, setCutoffError] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -53,6 +56,11 @@ export const HodOverviewView: React.FC = () => {
 
       if (dashRes.status === "fulfilled" && dashRes.value) {
         setDashboard(dashRes.value);
+        setCutoffDate(
+          dashRes.value.evaluationCutoffDateUtc
+            ? new Date(dashRes.value.evaluationCutoffDateUtc).toISOString().slice(0, 10)
+            : ""
+        );
       }
       if (projRes.status === "fulfilled" && projRes.value) {
         setProjects(projRes.value);
@@ -153,15 +161,6 @@ export const HodOverviewView: React.FC = () => {
             <Badge variant="neutral" size="sm">
               {dashboard?.departmentCode || "CSE"}
             </Badge>
-            {dashboard?.isSarAttested ? (
-              <Badge variant="success" size="sm" dot>
-                SAR Attested &amp; Sealed
-              </Badge>
-            ) : (
-              <Badge variant="warning" size="sm">
-                SAR Attestation Pending
-              </Badge>
-            )}
           </div>
           <p className="text-xs text-slate-500 font-medium">
             Academic Session: <span className="font-semibold text-slate-800">AY 2025–2026</span> •{" "}
@@ -171,14 +170,6 @@ export const HodOverviewView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => router.push("/hod/quality")}
-            leftIcon={<ShieldCheck className="h-3.5 w-3.5 text-emerald-700" />}
-          >
-            Accreditation Status
-          </Button>
           <Button
             size="sm"
             variant="primary"
@@ -340,6 +331,92 @@ export const HodOverviewView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Department Evaluation Cutoff Configuration (HOD Ownership) */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-sm font-bold text-slate-900">
+                Department Evaluation Cutoff Date
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-500">
+                Configure the evaluation cutoff deadline for {dashboard?.departmentCode || "your department"}.
+              </CardDescription>
+            </div>
+            <span className="text-xs font-mono text-slate-500">
+              {dashboard?.evaluationCutoffDateUtc
+                ? `Active: ${new Date(dashboard.evaluationCutoffDateUtc).toISOString().slice(0, 10)}`
+                : "Not configured"}
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {cutoffError && (
+            <div className="mb-3 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700">
+              {cutoffError}
+            </div>
+          )}
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="space-y-1 flex-1 max-w-xs">
+              <label className="text-xs font-semibold text-slate-700 block">
+                Evaluation Cutoff Date
+              </label>
+              <input
+                type="date"
+                value={cutoffDate}
+                onChange={(e) => setCutoffDate(e.target.value)}
+                className="w-full h-9 px-3 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-600"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={savingCutoff || !cutoffDate}
+                onClick={async () => {
+                  setCutoffError(null);
+                  setSavingCutoff(true);
+                  try {
+                    const updated = await hodApi.updateEvaluationCutoff(`${cutoffDate}T23:59:59Z`);
+                    setDashboard(updated);
+                    showToast("Department evaluation cutoff updated.");
+                  } catch (err: any) {
+                    setCutoffError(err?.data?.message || err?.message || "Failed to update evaluation cutoff.");
+                  } finally {
+                    setSavingCutoff(false);
+                  }
+                }}
+              >
+                {savingCutoff ? "Saving..." : "Save Cutoff Date"}
+              </Button>
+              {dashboard?.evaluationCutoffDateUtc && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={savingCutoff}
+                  onClick={async () => {
+                    setCutoffError(null);
+                    setSavingCutoff(true);
+                    try {
+                      const updated = await hodApi.updateEvaluationCutoff(null);
+                      setDashboard(updated);
+                      setCutoffDate("");
+                      showToast("Department evaluation cutoff cleared.");
+                    } catch (err: any) {
+                      setCutoffError(err?.data?.message || err?.message || "Failed to clear evaluation cutoff.");
+                    } finally {
+                      setSavingCutoff(false);
+                    }
+                  }}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

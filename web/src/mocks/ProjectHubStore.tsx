@@ -214,24 +214,44 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     }
     return initialPersonas.studentLead;
   });
-  const [college, setCollege] = useState<College>(initialCollege);
-  const [departments, setDepartments] = useState<Department[]>(initialDepartments);
-  const [cycle, setCycle] = useState<ProjectCycle>(initialCycle);
-  const [teams, setTeams] = useState<Team[]>(initialTeams);
-  const [evaluations, setEvaluations] = useState<Evaluation[]>(initialEvaluations);
-  const [rubrics, setRubrics] = useState<Rubric[]>(initialRubrics);
-  const [problemBank, setProblemBank] = useState<ProblemBankIdea[]>(initialProblemBank);
-  const [facultyRoster, setFacultyRoster] = useState<FacultyRosterItem[]>(initialFacultyRoster);
-  const [tenants, setTenants] = useState<TenantCollege[]>(initialTenants);
-  const [pilotRequests, setPilotRequests] = useState<PilotRequest[]>(initialPilotRequests);
-  const [auditLogs, setAuditLogs] = useState<PlatformAuditLog[]>(initialAuditLogs);
-  const [individualEvaluations, setIndividualEvaluations] = useState<IndividualEvaluation[]>(initialIndividualEvaluations);
-  const [exceptionAuditLogs, setExceptionAuditLogs] = useState<ExceptionAuditLog[]>(initialExceptionAuditLogs);
-  const [courseExitSurveys, setCourseExitSurveys] = useState<CourseExitSurvey[]>(initialCourseExitSurveys);
-  const [coursePrograms, setCoursePrograms] = useState<CourseProgram[]>(initialCoursePrograms);
-  const [academicSessions, setAcademicSessions] = useState<AcademicSession[]>(initialAcademicSessions);
-  const [semesterTerms, setSemesterTerms] = useState<SemesterTerm[]>(initialSemesterTerms);
-  const [subjectOfferings, setSubjectOfferings] = useState<SubjectOffering[]>(initialSubjectOfferings);
+  const [college, setCollege] = useState<College>({
+    id: "",
+    name: "",
+    code: "",
+    domain: "",
+    isActive: true,
+    subscriptionPlan: "Standard",
+    expiresAt: "",
+    studentCount: 0,
+  });
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [cycle, setCycle] = useState<ProjectCycle>({
+    id: "",
+    collegeId: "",
+    departmentId: "",
+    academicYear: "",
+    type: "Minor",
+    semester: 6,
+    proposalDeadline: "",
+    isActive: false,
+    minTeamSize: 2,
+    maxTeamSize: 4,
+  });
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [rubrics, setRubrics] = useState<Rubric[]>([]);
+  const [problemBank, setProblemBank] = useState<ProblemBankIdea[]>([]);
+  const [facultyRoster, setFacultyRoster] = useState<FacultyRosterItem[]>([]);
+  const [tenants, setTenants] = useState<TenantCollege[]>([]);
+  const [pilotRequests, setPilotRequests] = useState<PilotRequest[]>([]);
+  const [auditLogs, setAuditLogs] = useState<PlatformAuditLog[]>([]);
+  const [individualEvaluations, setIndividualEvaluations] = useState<IndividualEvaluation[]>([]);
+  const [exceptionAuditLogs, setExceptionAuditLogs] = useState<ExceptionAuditLog[]>([]);
+  const [courseExitSurveys, setCourseExitSurveys] = useState<CourseExitSurvey[]>([]);
+  const [coursePrograms, setCoursePrograms] = useState<CourseProgram[]>([]);
+  const [academicSessions, setAcademicSessions] = useState<AcademicSession[]>([]);
+  const [semesterTerms, setSemesterTerms] = useState<SemesterTerm[]>([]);
+  const [subjectOfferings, setSubjectOfferings] = useState<SubjectOffering[]>([]);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLiveSession, setIsLiveSession] = useState<boolean>(false);
   const [isHydrating, setIsHydrating] = useState<boolean>(false);
@@ -370,7 +390,6 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
               id: overviewRes.value.collegeId,
               name: overviewRes.value.collegeName,
               code: overviewRes.value.tenantCode,
-              criterion3Attainment: overviewRes.value.criterion3AttainmentPct,
             }));
 
             if (overviewRes.value.activeSession) {
@@ -401,8 +420,6 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
                 studentCount: d.studentCount || d.intakeQuota || 120,
                 facultyCount: d.facultyCount || 12,
                 hodName: d.hodName || "Appointed HOD",
-                criterion3Attainment: 82.5,
-                hodSignOffStatus: d.isSarAttested ? "Attested & Locked" : "Pending Sign-Off",
                 trackStatus: (d.trackStatus as "Active" | "Awaiting HOD Launch") || "Awaiting HOD Launch",
                 activeTrackCount: d.activeTrackCount || 0,
               }))
@@ -431,11 +448,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
             setDepartments((prev) =>
               prev.map((d) =>
                 d.code === dashRes.value.departmentCode
-                  ? {
-                      ...d,
-                      criterion3Attainment: dashRes.value.nbaBlendedCriterion3Pct ?? undefined,
-                      hodSignOffStatus: dashRes.value.isSarAttested ? "Attested & Locked" : d.hodSignOffStatus,
-                    }
+                  ? d
                   : d
               )
             );
@@ -1291,15 +1304,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     setDepartments((prev) =>
       prev.map((d) => (d.code === deptCode ? { ...d, hodSignOffStatus: "Attested & Locked" } : d))
     );
-
-    if (getAuthToken()) {
-      collegeApi
-        .signOffCompliance({
-          remarks: `Criterion 3 SAR Attestation attested for department ${deptCode}`,
-        })
-        .catch(() => {});
-    }
-    showToast(`SAR compliance attested & locked for ${deptCode}.`, "success");
+    showToast(`Department status updated for ${deptCode}.`, "success");
   };
 
   const updateFacultyCapacity = (facultyId: string, delta: number) => {
@@ -1832,11 +1837,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
       newSurvey,
       ...prev.filter((s) => s.enrollmentNumber !== survey.enrollmentNumber),
     ]);
-
-    if (getAuthToken()) {
-      studentApi.submitExitSurvey({ poRatings: survey.ratings }).catch(() => {});
-    }
-    showToast("Course exit survey recorded.", "success");
+    showToast("Feedback recorded.", "success");
   };
 
   const resetToDefaults = () => {

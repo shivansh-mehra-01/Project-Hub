@@ -173,18 +173,13 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         Assert.Equal(uniqueCode, result.Tenant.TenantCode);
         Assert.Equal("principal@lnct.ac.in", result.Tenant.PrincipalEmail);
 
-        // Verify the newly created CollegeAdmin can authenticate immediately
+        // Verify the newly created CollegeAdmin cannot log in with a default demo password before activation
         var loginRes = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
             Email = "principal@lnct.ac.in",
             Password = "Pass@1234"
         });
-        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
-        var auth = await loginRes.Content.ReadFromJsonAsync<AuthResponse>();
-        Assert.NotNull(auth);
-        Assert.NotNull(auth.User);
-        Assert.Equal(UserRole.CollegeAdmin, auth.User.Role);
-        Assert.Equal("principal@lnct.ac.in", auth.User.Email);
+        Assert.Equal(HttpStatusCode.BadRequest, loginRes.StatusCode);
     }
 
     [Fact]
@@ -213,17 +208,13 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         Assert.True(result.Success);
         Assert.Equal("principal@bmsce.ac.in", result.AdminEmail);
 
-        // Verify authentication works
+        // Verify unactivated principal cannot log in with a default demo password before activation
         var loginRes = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
             Email = "principal@bmsce.ac.in",
             Password = "Pass@1234"
         });
-        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
-        var auth = await loginRes.Content.ReadFromJsonAsync<AuthResponse>();
-        Assert.NotNull(auth);
-        Assert.NotNull(auth.User);
-        Assert.Equal(UserRole.CollegeAdmin, auth.User.Role);
+        Assert.Equal(HttpStatusCode.BadRequest, loginRes.StatusCode);
     }
 
     [Fact]
@@ -317,14 +308,14 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         // 1. Get Coordinator token
         var coordinatorToken = await GetTokenForPersonaAsync("Coordinator");
 
-        // 2. Reject non-institutional email domain
+        // 2. Reject malformed email address
         var badDomainReq = new HttpRequestMessage(HttpMethod.Post, "/api/coordinator/roster/student")
         {
             Content = JsonContent.Create(new AddSingleStudentRequest
             {
                 FullName = "Rohan Sharma",
                 EnrollmentNumber = "0176CS221098",
-                Email = "rohan.sharma@gmail.com",
+                Email = "not-a-valid-email",
                 DepartmentId = DbInitializer.CseDepartmentId,
                 SemesterNumber = 6,
                 AdmissionBatch = "2023-2027"
@@ -358,8 +349,7 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         Assert.Equal("Aditya Verma", provisioned.FullName);
         Assert.Equal("0176CS221099", provisioned.EnrollmentNumber);
         Assert.Equal("0176cs221099@sistec.ac.in", provisioned.Email);
-        Assert.NotNull(provisioned.DevOtp);
-        Assert.Equal(6, provisioned.DevOtp.Length);
+        Assert.Null(provisioned.DevOtp);
 
         // 4. Duplicate request must return 409 Conflict
         var dupReq = new HttpRequestMessage(HttpMethod.Post, "/api/coordinator/roster/student")
@@ -379,11 +369,19 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
         var dupRes = await _client.SendAsync(dupReq);
         Assert.Equal(HttpStatusCode.Conflict, dupRes.StatusCode);
 
-        // 5. Newly provisioned student can activate password via OTP on /api/auth/reset-password
+        // 5. Newly provisioned student requests OTP and activates password via /api/auth/reset-password
+        var otpReqRes = await _client.PostAsJsonAsync("/api/auth/request-password-otp", new RequestPasswordOtpRequest
+        {
+            Email = "0176cs221099@sistec.ac.in"
+        });
+        otpReqRes.EnsureSuccessStatusCode();
+        var otpReqBody = await otpReqRes.Content.ReadFromJsonAsync<RequestPasswordOtpResponse>();
+        Assert.NotNull(otpReqBody?.DevOtp);
+
         var resetRes = await _client.PostAsJsonAsync("/api/auth/reset-password", new ResetPasswordRequest
         {
             Email = "0176cs221099@sistec.ac.in",
-            Otp = provisioned.DevOtp,
+            Otp = otpReqBody.DevOtp,
             NewPassword = "NewStudentPass@123"
         });
         Assert.Equal(HttpStatusCode.OK, resetRes.StatusCode);
@@ -510,54 +508,21 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
     }
 
     [Fact]
-    public async Task CollegeAdmin_SignOffCompliance_IsStrictlyTenantIsolated()
+    public async Task RemovedAccreditationAndComplianceEndpoints_ReturnNotFound()
     {
-        // P0 Tenant Isolation: Verify SignOffCompliance only mutates departments belonging to caller's tenant
         var adminToken = await GetTokenForPersonaAsync("CollegeAdmin");
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/college/compliance/sign-off")
+
+        foreach (var (method, path) in new[]
         {
-            Content = JsonContent.Create(new SignOffComplianceRequest
-            {
-                Remarks = "Official Institutional NBA Compliance Sign-off"
-            })
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
-
-        var response = await _client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        // Verify across DB that non-Sistec departments are untouched
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
-
-        var nonSistecDepts = await db.Departments
-            .IgnoreQueryFilters()
-            .Where(d => d.CollegeId != DbInitializer.SistecTenantId && !d.IsDeleted)
-            .ToListAsync();
-
-        Assert.All(nonSistecDepts, d => Assert.False(d.IsSarAttested));
-    }
-
-    [Fact]
-    public async Task AccreditationEndpoints_AllowCollegeAdmin_BlocksStudent()
-    {
-        // 1. CollegeAdmin can access accreditation overview
-        var adminToken = await GetTokenForPersonaAsync("CollegeAdmin");
-        var adminReq = new HttpRequestMessage(HttpMethod.Get, "/api/college/accreditation/overview");
-        adminReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
-
-        var adminRes = await _client.SendAsync(adminReq);
-        Assert.Equal(HttpStatusCode.OK, adminRes.StatusCode);
-        var overview = await adminRes.Content.ReadFromJsonAsync<AccreditationOverviewDto>();
-        Assert.NotNull(overview);
-        Assert.NotNull(overview.Cycles);
-
-        // 2. Student is blocked with 403 Forbidden
-        var studentToken = await GetTokenForPersonaAsync("Student");
-        var studentReq = new HttpRequestMessage(HttpMethod.Get, "/api/college/accreditation/overview");
-        studentReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", studentToken);
-
-        var studentRes = await _client.SendAsync(studentReq);
-        Assert.Equal(HttpStatusCode.Forbidden, studentRes.StatusCode);
+            (HttpMethod.Get, "/api/college/accreditation/overview"),
+            (HttpMethod.Post, "/api/college/compliance/sign-off"),
+            (HttpMethod.Get, "/api/college/compliance/dossier")
+        })
+        {
+            var req = new HttpRequestMessage(method, path);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+            var res = await _client.SendAsync(req);
+            Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
+        }
     }
 }

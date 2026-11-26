@@ -11,6 +11,29 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                migrationBuilder.Sql(@"
+                    CREATE TABLE IF NOT EXISTS ""UserSessions"" (
+                        ""Id"" character varying(64) NOT NULL,
+                        ""UserId"" uuid NOT NULL,
+                        ""AccountEmail"" character varying(256) NOT NULL,
+                        ""AccountName"" character varying(150) NOT NULL,
+                        ""Role"" character varying(50) NOT NULL,
+                        ""Device"" character varying(150) NOT NULL,
+                        ""Browser"" character varying(100) NOT NULL,
+                        ""IpAddress"" character varying(50) NOT NULL,
+                        ""Location"" character varying(150) NOT NULL,
+                        ""LoginTimeUtc"" timestamp with time zone NOT NULL,
+                        ""LastActiveTimeUtc"" timestamp with time zone NOT NULL,
+                        ""IsRevoked"" boolean NOT NULL,
+                        ""RevokedAtUtc"" timestamp with time zone NULL,
+                        ""TokenHash"" text NULL,
+                        CONSTRAINT ""PK_UserSessions"" PRIMARY KEY (""Id"")
+                    );
+                ");
+            }
+
             migrationBuilder.AddColumn<Guid>(
                 name: "CollegeId",
                 table: "UserSessions",

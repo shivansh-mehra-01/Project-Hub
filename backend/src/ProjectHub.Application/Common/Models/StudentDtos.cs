@@ -149,11 +149,6 @@ public record ContinueLineageRequest
     public string NewAbstract { get; init; } = string.Empty;
 }
 
-public record SubmitExitSurveyRequest
-{
-    public Dictionary<string, int> PoRatings { get; init; } = new();
-}
-
 public record StudentPortfolioDto
 {
     public Guid StudentId { get; init; }

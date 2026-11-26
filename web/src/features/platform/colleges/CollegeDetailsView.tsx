@@ -1,59 +1,72 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   Building2,
-  MapPin,
   UserCheck,
   ArrowLeft,
   CheckCircle2,
-  AlertCircle,
-  FileText,
-  Clock,
-  ExternalLink,
-  Download,
-  Eye,
   X,
-  Check,
   Ban,
   ShieldCheck,
-  Database,
-  RefreshCw,
-  AlertTriangle,
-  Info,
-  Calendar,
-  Phone,
-  Mail,
-  Globe,
-  HardDrive,
-  Users,
-  KeyRound,
   History,
-  Shield,
-  Lock,
   UserPlus,
   RotateCcw,
-  Sliders,
   Send,
+  AlertCircle,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
-import { usePlatformData, CollegeTenantRecord } from "../data/platformDataStore";
+import { usePlatformData } from "../data/platformDataStore";
+import { platformApi } from "@/lib/api/platformApi";
+import { CollegeTenantDto, PlatformAuditLogDto } from "@/lib/api/types";
 import { showToast } from "@/lib/toast";
 
 export interface CollegeDetailsViewProps {
   id?: string;
 }
 
+function formatUtcTimestamp(iso?: string | null): string {
+  if (!iso) return "Never signed in";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function formatLocation(city?: string | null, state?: string | null, country?: string | null): string {
+  const parts = [city, state, country].filter((p) => Boolean(p && p.trim()));
+  return parts.length > 0 ? parts.join(", ") : "Not configured";
+}
+
+function parseAuditDetails(log: PlatformAuditLogDto): { details: string; result: string } {
+  try {
+    const parsed = JSON.parse(log.metadataJson || "{}");
+    return {
+      details: parsed.details || log.targetEntity || log.action,
+      result: parsed.result || "Success",
+    };
+  } catch {
+    return {
+      details: log.targetEntity || log.action,
+      result: "Success",
+    };
+  }
+}
+
 export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: propId }) => {
   const params = useParams();
-  const router = useRouter();
   const id = propId || (params?.id as string);
 
   const {
     colleges,
-    updateCollege,
     suspendCollege,
     reactivateCollege,
     resendAdminInvitation,
@@ -61,34 +74,130 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
   } = usePlatformData();
 
   useDashboardHeader({
-    title: "College Profile",
-    breadcrumb: "Colleges / College Profile",
+    title: "College Details",
+    breadcrumb: "Colleges / College Details",
   });
 
-  const college = useMemo(() => {
-    return colleges.find((c) => c.id === id || c.code.toLowerCase() === id?.toLowerCase());
-  }, [colleges, id]);
+  const storeCollege = useMemo(
+    () => colleges.find((c) => c.id === id || c.code.toLowerCase() === id?.toLowerCase()),
+    [colleges, id]
+  );
 
-  const [activeTab, setActiveTab] = useState<"overview" | "administration" | "configuration" | "activity">("overview");
+  const [liveTenant, setLiveTenant] = useState<CollegeTenantDto | null>(null);
+  const [tenantLogs, setTenantLogs] = useState<PlatformAuditLogDto[]>([]);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(true);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(true);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
 
-  // Modals
+  const [activeTab, setActiveTab] = useState<"overview" | "administration" | "activity">("overview");
+
+  // Action busy & modal states
+  const [isActionBusy, setIsActionBusy] = useState(false);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [suspendReason, setSuspendReason] = useState("");
-
   const [showReactivateModal, setShowReactivateModal] = useState(false);
   const [reactivateReason, setReactivateReason] = useState("");
-
   const [showReplaceAdminModal, setShowReplaceAdminModal] = useState(false);
-  const [replaceForm, setReplaceForm] = useState({
-    name: "",
-    email: "",
-    designation: "Principal / Institutional Head",
-    phone: "",
-    reason: "",
-    confirm: false,
-  });
+  const [replaceForm, setReplaceForm] = useState({ name: "", email: "", reason: "" });
 
-  if (!college) {
+  const resolvedTenantId = liveTenant?.id || storeCollege?.id || id;
+
+  const loadTenantDetails = useCallback(async () => {
+    if (!id) return;
+    setIsLoadingDetails(true);
+    setDetailsError(null);
+    try {
+      const dto = await platformApi.getTenant(id);
+      setLiveTenant(dto);
+    } catch (err: any) {
+      if (!storeCollege) {
+        setDetailsError(err?.message || "College tenant not found.");
+      }
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  }, [id, storeCollege]);
+
+  const loadTenantLogs = useCallback(async (tenantUuid: string) => {
+    setIsLoadingLogs(true);
+    try {
+      const logs = await platformApi.getTenantAuditLogs(tenantUuid, 100);
+      setTenantLogs(Array.isArray(logs) ? logs : []);
+    } catch {
+      setTenantLogs([]);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTenantDetails();
+  }, [loadTenantDetails]);
+
+  useEffect(() => {
+    if (resolvedTenantId && /^[0-9a-f-]{36}$/i.test(resolvedTenantId)) {
+      loadTenantLogs(resolvedTenantId);
+    } else {
+      setIsLoadingLogs(false);
+    }
+  }, [resolvedTenantId, loadTenantLogs]);
+
+  // Unified view model preferring authoritative live API data
+  const view = liveTenant
+    ? {
+        id: liveTenant.id,
+        name: liveTenant.name,
+        collegeType: liveTenant.collegeType || "Not configured",
+        university: liveTenant.affiliatingUniversity || "Not configured",
+        location: formatLocation(liveTenant.city, liveTenant.state, liveTenant.country),
+        isActive: liveTenant.isActive,
+        registrationDate: liveTenant.createdAtUtc ? liveTenant.createdAtUtc.split("T")[0] : "—",
+        studentCount: liveTenant.studentCount ?? 0,
+        facultyCount: liveTenant.facultyCount ?? 0,
+        activeProjectsCount: liveTenant.activeProjectsCount ?? 0,
+        departmentCount: liveTenant.departmentCount ?? 0,
+        enforceStrictSso: liveTenant.enforceStrictSso,
+        principalName: liveTenant.principalName || "Not assigned",
+        principalEmail: liveTenant.principalEmail || "Not configured",
+        principalIsActive: liveTenant.principalIsActive,
+        principalIsActivated: liveTenant.principalIsActivated,
+        principalIsEmailVerified: liveTenant.principalIsEmailVerified,
+        principalHasPendingInvitation: liveTenant.principalHasPendingInvitation,
+        principalLastLoginAtUtc: liveTenant.principalLastLoginAtUtc,
+      }
+    : storeCollege
+    ? {
+        id: storeCollege.id,
+        name: storeCollege.name,
+        collegeType: storeCollege.collegeType || "Not configured",
+        university: storeCollege.university || "Not configured",
+        location: formatLocation(storeCollege.city, storeCollege.state, storeCollege.country),
+        isActive: storeCollege.status === "Active",
+        registrationDate: storeCollege.registrationDate || "—",
+        studentCount: storeCollege.totalStudents ?? 0,
+        facultyCount: storeCollege.totalFaculty ?? 0,
+        activeProjectsCount: storeCollege.activeProjectsCount ?? 0,
+        departmentCount: storeCollege.departmentsCount ?? 0,
+        enforceStrictSso: storeCollege.strictSsoEnforced,
+        principalName: storeCollege.principalName || "Not assigned",
+        principalEmail: storeCollege.principalEmail || "Not configured",
+        principalIsActive: storeCollege.principalIsActive,
+        principalIsActivated: storeCollege.principalIsActivated,
+        principalIsEmailVerified: storeCollege.principalIsEmailVerified,
+        principalHasPendingInvitation: storeCollege.principalHasPendingInvitation,
+        principalLastLoginAtUtc: storeCollege.principalLastLoginAtUtc,
+      }
+    : null;
+
+  if (isLoadingDetails && !view) {
+    return (
+      <div className="max-w-5xl mx-auto py-16 text-center text-xs text-slate-500">
+        Loading college details...
+      </div>
+    );
+  }
+
+  if (!view) {
     return (
       <div className="max-w-4xl mx-auto py-16 text-center space-y-4">
         <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
@@ -96,11 +205,11 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
         </div>
         <h2 className="text-lg font-bold text-slate-900">College Not Found</h2>
         <p className="text-xs text-slate-500 max-w-sm mx-auto">
-          The requested college tenant ({id}) could not be located in the platform registry.
+          {detailsError || `The requested college tenant (${id}) could not be located.`}
         </p>
         <Link
           href="/platform/colleges"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-lg shadow-xs transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-lg"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to Colleges
@@ -109,133 +218,161 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
     );
   }
 
-  // Handle Suspend College
-  const handleConfirmSuspend = (e: React.FormEvent) => {
+  const refreshAll = async () => {
+    await loadTenantDetails();
+    await loadTenantLogs(view.id);
+  };
+
+  const handleConfirmSuspend = async (e: React.FormEvent) => {
     e.preventDefault();
-    suspendCollege(college.id, suspendReason.trim() || "Administrative suspension by Super Admin");
-    setShowSuspendModal(false);
-    setSuspendReason("");
+    setIsActionBusy(true);
+    try {
+      await suspendCollege(view.id, suspendReason.trim() || "Administrative suspension by Super Admin");
+      setShowSuspendModal(false);
+      setSuspendReason("");
+      await refreshAll();
+    } catch (err: any) {
+      showToast(err?.message || "Failed to suspend college.", "error");
+    } finally {
+      setIsActionBusy(false);
+    }
   };
 
-  // Handle Reactivate College
-  const handleConfirmReactivate = (e: React.FormEvent) => {
+  const handleConfirmReactivate = async (e: React.FormEvent) => {
     e.preventDefault();
-    reactivateCollege(college.id, reactivateReason.trim() || "Reactivated by Super Admin");
-    setShowReactivateModal(false);
-    setReactivateReason("");
+    setIsActionBusy(true);
+    try {
+      await reactivateCollege(view.id, reactivateReason.trim() || "Reactivated by Super Admin");
+      setShowReactivateModal(false);
+      setReactivateReason("");
+      await refreshAll();
+    } catch (err: any) {
+      showToast(err?.message || "Failed to reactivate college.", "error");
+    } finally {
+      setIsActionBusy(false);
+    }
   };
 
-  // Handle Resend Admin Invitation
-  const handleResendInvite = () => {
-    resendAdminInvitation(college.id);
+  const handleResendInvite = async () => {
+    if (!view.principalEmail || view.principalEmail === "Not configured") {
+      showToast("No primary administrator email configured for this college.", "warning");
+      return;
+    }
+    setIsActionBusy(true);
+    try {
+      await resendAdminInvitation(view.id);
+      await refreshAll();
+    } catch (err: any) {
+      showToast(err?.message || "Failed to resend invitation.", "error");
+    } finally {
+      setIsActionBusy(false);
+    }
   };
 
-  // Handle Replace Admin Submit
-  const handleReplaceAdminSubmit = (e: React.FormEvent) => {
+  const handleReplaceAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!replaceForm.name.trim() || !replaceForm.email.trim()) {
       showToast("Administrator full name and official email are required.", "warning");
       return;
     }
     if (!replaceForm.reason.trim()) {
-      showToast("Please provide a reason / justification for administrator replacement.", "warning");
+      showToast("Please provide a reason for replacing the administrator.", "warning");
       return;
     }
-
-    replacePrimaryAdmin(college.id, {
-      fullName: replaceForm.name.trim(),
-      email: replaceForm.email.trim(),
-      designation: replaceForm.designation,
-      phone: replaceForm.phone.trim() || college.contactPhone,
-      reason: replaceForm.reason.trim(),
-    });
-
-    setShowReplaceAdminModal(false);
-    setReplaceForm({
-      name: "",
-      email: "",
-      designation: "Principal / Institutional Head",
-      phone: "",
-      reason: "",
-      confirm: false,
-    });
+    setIsActionBusy(true);
+    try {
+      await replacePrimaryAdmin(view.id, {
+        fullName: replaceForm.name.trim(),
+        email: replaceForm.email.trim().toLowerCase(),
+        designation: "",
+        phone: "",
+        reason: replaceForm.reason.trim(),
+      });
+      setShowReplaceAdminModal(false);
+      setReplaceForm({ name: "", email: "", reason: "" });
+      await refreshAll();
+    } catch (err: any) {
+      showToast(err?.message || "Failed to replace administrator.", "error");
+    } finally {
+      setIsActionBusy(false);
+    }
   };
 
-  const activeProjectsCount = Math.round(college.totalStudents / 3.8);
-  const maxSeats = (college as any).maxStudentSeats || college.totalStudents + 500;
-  const activeSeats = college.totalStudents || 0;
-  const seatUtilization = Math.round((activeSeats / maxSeats) * 100);
+  const adminAccountStatusLabel =
+    view.principalEmail === "Not configured"
+      ? "Not assigned"
+      : view.principalIsActive === false
+      ? "Suspended"
+      : view.principalIsActivated === true
+      ? "Active"
+      : "Pending Activation";
+
+  const invitationStatusLabel =
+    view.principalEmail === "Not configured"
+      ? "Not issued"
+      : view.principalIsActivated === true
+      ? "Accepted"
+      : view.principalHasPendingInvitation === true
+      ? "Invitation Pending"
+      : "Expired / Not Sent";
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-20">
+    <div className="max-w-5xl mx-auto space-y-6 pb-16">
       {/* Header */}
       <div className="border-b border-slate-200 pb-5">
-        <div className="flex items-center justify-between gap-4 mb-2">
-          <Link
-            href="/platform/colleges"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to Colleges
-          </Link>
+        <Link
+          href="/platform/colleges"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 mb-3"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Colleges
+        </Link>
 
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono">
-            <Link href="/platform/colleges" className="hover:text-slate-800">
-              Colleges
-            </Link>
-            <span>/</span>
-            <span className="text-slate-900 font-bold">{college.code}</span>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{college.name}</h1>
-              <span className="px-2 py-0.5 text-xs font-mono font-bold bg-slate-100 text-slate-700 rounded border border-slate-200">
-                {college.code}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-              <span>{college.city}, {college.state}</span>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{view.name}</h1>
+            <p className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+              <span>{view.location}</span>
               <span>&bull;</span>
-              <span>{college.university}</span>
+              <span>{view.university}</span>
               <span>&bull;</span>
-              <span className="font-mono">Registered: {college.registrationDate}</span>
+              <span className="font-mono">Registered: {view.registrationDate}</span>
             </p>
           </div>
 
           <div className="flex items-center gap-2.5 self-start sm:self-auto">
             <span
-              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg ${
-                college.status === "Active"
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-rose-100 text-rose-800"
+              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border ${
+                view.isActive
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                  : "bg-rose-50 text-rose-800 border-rose-200"
               }`}
             >
-              {college.status === "Active" ? <Check className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
-              {college.status}
+              {view.isActive ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+              {view.isActive ? "Active" : "Suspended"}
             </span>
 
-            {college.status === "Active" ? (
+            {view.isActive ? (
               <button
                 type="button"
+                disabled={isActionBusy}
                 onClick={() => {
                   setSuspendReason("");
                   setShowSuspendModal(true);
                 }}
-                className="px-3 py-1 text-xs font-semibold rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50 cursor-pointer"
               >
                 Suspend College
               </button>
             ) : (
               <button
                 type="button"
+                disabled={isActionBusy}
                 onClick={() => {
                   setReactivateReason("");
                   setShowReactivateModal(true);
                 }}
-                className="px-3 py-1 text-xs font-semibold rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 cursor-pointer"
               >
                 Reactivate College
               </button>
@@ -244,13 +381,12 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
         </div>
       </div>
 
-      {/* 4 STRUCTURED TABS */}
+      {/* 3 AUTHORITATIVE TABS */}
       <div className="border-b border-slate-200">
         <nav className="flex space-x-6">
           {[
             { id: "overview", label: "Overview", icon: Building2 },
             { id: "administration", label: "Administration", icon: UserCheck },
-            { id: "configuration", label: "Platform Configuration", icon: Sliders },
             { id: "activity", label: "Activity & History", icon: History },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -276,108 +412,86 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
 
       {/* TAB 1: OVERVIEW */}
       {activeTab === "overview" && (
-        <div className="space-y-5 animate-in fade-in-50 duration-150">
-          {/* Quick Metrics */}
+        <div className="space-y-5">
+          {/* Real Database Counts */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
               <span className="text-[11px] text-slate-500 block">Enrolled Students</span>
               <span className="text-xl font-bold text-slate-900 mt-1 block font-mono">
-                {college.totalStudents.toLocaleString("en-IN")}
+                {view.studentCount.toLocaleString("en-IN")}
               </span>
             </div>
             <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
-              <span className="text-[11px] text-slate-500 block">Faculty Guides</span>
+              <span className="text-[11px] text-slate-500 block">Faculty &amp; HODs</span>
               <span className="text-xl font-bold text-slate-900 mt-1 block font-mono">
-                {college.totalFaculty}
+                {view.facultyCount.toLocaleString("en-IN")}
               </span>
             </div>
             <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
               <span className="text-[11px] text-slate-500 block">Active Project Teams</span>
               <span className="text-xl font-bold text-emerald-700 mt-1 block font-mono">
-                {activeProjectsCount}
+                {view.activeProjectsCount.toLocaleString("en-IN")}
               </span>
             </div>
             <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
               <span className="text-[11px] text-slate-500 block">Academic Departments</span>
               <span className="text-xl font-bold text-slate-900 mt-1 block font-mono">
-                {college.departmentsCount}
+                {view.departmentCount.toLocaleString("en-IN")}
               </span>
             </div>
           </div>
 
-          {/* Institutional Metadata Card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+          {/* College Overview Metadata */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-2">
-              College Metadata
+              College Overview
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
               <div>
                 <span className="text-slate-500 block text-[11px]">College Name</span>
-                <span className="font-semibold text-slate-900 mt-0.5 block">{college.name}</span>
+                <span className="font-semibold text-slate-900 mt-0.5 block">{view.name}</span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[11px]">College Code</span>
-                <span className="font-mono font-bold text-slate-800 mt-0.5 block">{college.code}</span>
+                <span className="text-slate-500 block text-[11px]">College Type</span>
+                <span className="text-slate-800 mt-0.5 block">{view.collegeType}</span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Affiliated University</span>
-                <span className="font-medium text-slate-800 mt-0.5 block">{college.university}</span>
+                <span className="text-slate-800 mt-0.5 block">{view.university}</span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[11px]">Campus Location</span>
-                <span className="text-slate-800 mt-0.5 block">{college.city}, {college.state}</span>
+                <span className="text-slate-500 block text-[11px]">Location</span>
+                <span className="text-slate-800 mt-0.5 block">{view.location}</span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[11px]">Official Contact Phone</span>
-                <span className="font-mono text-slate-800 mt-0.5 block">{college.contactPhone || "—"}</span>
+                <span className="text-slate-500 block text-[11px]">Tenant Status</span>
+                <span className="text-slate-800 mt-0.5 block font-semibold">
+                  {view.isActive ? "Active" : "Suspended"}
+                </span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[11px]">Web Portal</span>
-                <a
-                  href={college.website}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono text-slate-700 hover:text-slate-900 inline-flex items-center gap-1 mt-0.5"
-                >
-                  {college.website}
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                <span className="text-slate-500 block text-[11px]">Registration Date</span>
+                <span className="font-mono text-slate-800 mt-0.5 block">{view.registrationDate}</span>
               </div>
             </div>
           </div>
 
-          {/* Provisioning Details Card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-2">
-              Tenant &amp; Infrastructure Isolation
+          {/* Tenant Identity & Isolation */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-2 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              Tenant Identity &amp; Isolation
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
-                <span className="text-slate-500 block text-[11px]">Tenant Identifier</span>
-                <span className="font-mono font-bold text-slate-800 mt-0.5 block">{college.tenantId}</span>
+                <span className="text-slate-500 block text-[11px]">Tenant UUID</span>
+                <span className="font-mono font-semibold text-slate-900 mt-0.5 block break-all">{view.id}</span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[11px]">Database Schema Name</span>
-                <span className="font-mono text-slate-800 mt-0.5 block">tenant_{college.code.toLowerCase()}_prod</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">Provisioning Status</span>
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 mt-0.5">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Active Partition
+                <span className="text-slate-500 block text-[11px]">Isolation Architecture</span>
+                <span className="text-slate-800 mt-0.5 block">
+                  Shared PostgreSQL with Tenant UUID Partitioning (RLS &amp; Query Filters)
                 </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">Provisioned Date</span>
-                <span className="font-mono text-slate-800 mt-0.5 block">{college.registrationDate}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">Isolation Level</span>
-                <span className="text-slate-800 mt-0.5 block">Dedicated Schema (Zero Cross-Tenant Leakage)</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">Domain Restriction</span>
-                <span className="font-mono text-slate-800 mt-0.5 block">@{college.domain}</span>
               </div>
             </div>
           </div>
@@ -386,191 +500,137 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
 
       {/* TAB 2: ADMINISTRATION */}
       {activeTab === "administration" && (
-        <div className="space-y-5 animate-in fade-in-50 duration-150">
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Primary College Administrator</h3>
-                <p className="text-xs text-slate-500">
-                  Institutional administrator holding authority over this college tenant.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleResendInvite}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                >
-                  <Send className="w-3 h-3" />
-                  Resend Admin Invitation
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReplaceForm({
-                      name: "",
-                      email: "",
-                      designation: college.principalDesignation || "Principal / Institutional Head",
-                      phone: "",
-                      reason: "",
-                      confirm: false,
-                    });
-                    setShowReplaceAdminModal(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-lg shadow-xs transition-colors cursor-pointer"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Replace Administrator
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs pt-1">
-              <div>
-                <span className="text-slate-500 block text-[11px]">Administrator Name</span>
-                <span className="font-semibold text-slate-900 mt-0.5 block">{college.principalName}</span>
-                <span className="text-[11px] text-slate-500">{college.principalDesignation || "Principal"}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">Official Email</span>
-                <span className="font-mono text-slate-800 mt-0.5 block">{college.principalEmail}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">Official Phone</span>
-                <span className="font-mono text-slate-800 mt-0.5 block">{college.contactPhone || "+91 755 000 000"}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">Account Status</span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 mt-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Active Administrator
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">Invitation Status</span>
-                <span className="font-medium text-slate-800 mt-0.5 block">Accepted &bull; Active Token</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">Last Platform Login</span>
-                <span className="font-mono text-slate-800 mt-0.5 block">{college.lastAdminLogin || "Today at 09:42 AM IST"}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: PLATFORM CONFIGURATION (Quotas & Feature Flags Only — No Billing/Invoices!) */}
-      {activeTab === "configuration" && (
-        <div className="space-y-5 animate-in fade-in-50 duration-150">
-          {/* Licensing & Capacity Card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-2">
-              Licensed Capacity &amp; Academic Scope
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-              <div>
-                <span className="text-slate-500 block text-[11px]">License Tier</span>
-                <span className="font-bold text-slate-900 mt-0.5 block">Standard Academic (B.Tech)</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">License Status</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-50 text-emerald-800 border border-emerald-200 mt-0.5">
-                  <Check className="w-3 h-3" />
-                  Active License
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">License Validity / Expiry</span>
-                <span className="font-mono font-bold text-slate-800 mt-0.5 block">{college.renewalDate || "2027-06-30"}</span>
-              </div>
-            </div>
-
-            {/* Seat Progress Bar */}
-            <div className="pt-3 border-t border-slate-100 space-y-2">
-              <div className="flex justify-between text-xs text-slate-700">
-                <span>Student Capacity Utilization:</span>
-                <span className="font-mono font-semibold">
-                  {activeSeats.toLocaleString("en-IN")} / {maxSeats.toLocaleString("en-IN")} seats ({seatUtilization}%)
-                </span>
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div
-                  className="bg-slate-900 h-2.5 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, seatUtilization)}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Licensed student accounts permitted to register and submit academic project artifacts for this institution.
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Primary College Administrator</h3>
+              <p className="text-xs text-slate-500">
+                Institutional administrator with CollegeAdmin authority for this tenant.
               </p>
             </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={isActionBusy || view.principalEmail === "Not configured"}
+                onClick={handleResendInvite}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg disabled:opacity-50 cursor-pointer"
+              >
+                <Send className="w-3 h-3" />
+                Resend Admin Invitation
+              </button>
+
+              <button
+                type="button"
+                disabled={isActionBusy}
+                onClick={() => {
+                  setReplaceForm({ name: "", email: "", reason: "" });
+                  setShowReplaceAdminModal(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-lg disabled:opacity-50 cursor-pointer"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                Replace Administrator
+              </button>
+            </div>
           </div>
 
-          {/* Enabled Feature Flags */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-2">
-              Platform Feature Flags Enabled for this Tenant
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {[
-                { name: "Team Formation & Approval Workflows", desc: "Student team self-formation with faculty supervisor sign-off", enabled: true },
-                { name: "Multi-Branch Project Reviews", desc: "Internal evaluations and rubric-based Viva grading for B.Tech branches", enabled: true },
-                { name: "File Vault Cloud Storage", desc: "Encrypted project synopses, SRS, and code attachments", enabled: true },
-                { name: "Industry Mentorship Integration", desc: "External co-supervisor review access for capstone projects", enabled: true },
-              ].map((feat) => (
-                <div key={feat.name} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-semibold text-slate-900 block">{feat.name}</span>
-                    <span className="text-[11px] text-slate-500 leading-snug">{feat.desc}</span>
-                  </div>
-                </div>
-              ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs pt-1">
+            <div>
+              <span className="text-slate-500 block text-[11px]">Administrator Name</span>
+              <span className="font-semibold text-slate-900 mt-0.5 block">{view.principalName}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[11px]">Official Email</span>
+              <span className="font-mono text-slate-800 mt-0.5 block">{view.principalEmail}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[11px]">Colabex Role</span>
+              <span className="text-slate-800 mt-0.5 block font-medium">CollegeAdmin</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[11px]">Account Status</span>
+              <span
+                className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded border mt-1 ${
+                  adminAccountStatusLabel === "Active"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    : adminAccountStatusLabel === "Suspended"
+                    ? "bg-rose-50 text-rose-800 border-rose-200"
+                    : "bg-amber-50 text-amber-800 border-amber-200"
+                }`}
+              >
+                {adminAccountStatusLabel}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[11px]">Invitation &amp; Email Verification</span>
+              <span className="text-slate-800 mt-1 block">
+                {invitationStatusLabel}
+                {view.principalIsEmailVerified !== null && view.principalIsEmailVerified !== undefined
+                  ? ` • ${view.principalIsEmailVerified ? "Email Verified" : "Email Unverified"}`
+                  : ""}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[11px]">Last Platform Login</span>
+              <span className="font-mono text-slate-800 mt-1 block">
+                {formatUtcTimestamp(view.principalLastLoginAtUtc)}
+              </span>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 4: ACTIVITY & HISTORY */}
+      {/* TAB 3: ACTIVITY & HISTORY */}
       {activeTab === "activity" && (
-        <div className="space-y-5 animate-in fade-in-50 duration-150">
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
-              Chronological Institutional Audit Log
-            </h3>
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
+          <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
+            Institutional Audit Log
+          </h3>
 
-            <div className="space-y-3">
-              {(college.provisioningHistory && college.provisioningHistory.length > 0
-                ? college.provisioningHistory
-                : [
-                    { stage: "Initial Onboarding", timestamp: `${college.registrationDate} 10:00:00`, status: "Completed" as const, details: "Institutional tenant created and active on RGPV ecosystem." },
-                  ]
-              ).map((event, idx) => (
-                <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-start justify-between text-xs gap-3">
-                  <div className="space-y-0.5">
-                    <span className="font-semibold text-slate-900 block">{event.stage}</span>
-                    <p className="text-slate-600 text-[11px]">{event.details}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="font-mono text-slate-500 text-[11px] block">{event.timestamp}</span>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 inline-block mt-0.5">
-                      {event.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
+          {isLoadingLogs ? (
+            <p className="text-xs text-slate-400 py-6 text-center">Loading audit events...</p>
+          ) : tenantLogs.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-400 space-y-1">
+              <AlertCircle className="w-5 h-5 mx-auto text-slate-300" />
+              <p>No audit events recorded for this tenant yet.</p>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2.5">
+              {tenantLogs.map((log) => {
+                const parsed = parseAuditDetails(log);
+                return (
+                  <div
+                    key={log.id}
+                    className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-start justify-between text-xs gap-2"
+                  >
+                    <div className="space-y-0.5">
+                      <span className="font-semibold text-slate-900 block">{log.action}</span>
+                      <p className="text-slate-600 text-[11px]">{parsed.details}</p>
+                      <span className="text-[10px] text-slate-400 font-mono block">
+                        Actor: {log.actorEmail || "System"}
+                      </span>
+                    </div>
+                    <div className="sm:text-right shrink-0">
+                      <span className="font-mono text-slate-500 text-[11px] block">
+                        {formatUtcTimestamp(log.occurredAtUtc)}
+                      </span>
+                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 inline-block mt-1">
+                        {parsed.result}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* SUSPEND COLLEGE MODAL */}
+      {/* SUSPEND MODAL */}
       {showSuspendModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 space-y-3.5 border border-slate-200 animate-in fade-in-50 duration-150">
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 space-y-3.5 border border-slate-200">
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-full bg-rose-50 text-rose-700 border border-rose-200 flex items-center justify-center shrink-0">
                 <Ban className="w-5 h-5" />
@@ -578,11 +638,10 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Suspend College Access</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Suspending {college.name} will pause student, faculty, and administrator logins. All student project data and documents remain safely preserved.
+                  Suspending {view.name} revokes active user sessions and blocks sign-in while preserving all tenant records.
                 </p>
               </div>
             </div>
-
             <form onSubmit={handleConfirmSuspend} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-800 mb-1">
@@ -593,24 +652,24 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
                   rows={3}
                   value={suspendReason}
                   onChange={(e) => setSuspendReason(e.target.value)}
-                  placeholder="State the administrative reason for suspending this institution..."
-                  className="w-full text-xs border border-slate-300 rounded p-2 focus:ring-1 focus:ring-rose-500 focus:border-rose-500"
+                  placeholder="State the administrative reason..."
+                  className="w-full text-xs border border-slate-300 rounded p-2"
                 />
               </div>
-
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowSuspendModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 font-medium cursor-pointer"
+                  className="px-3 py-1.5 text-xs text-slate-600 font-medium cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded transition-colors cursor-pointer"
+                  disabled={isActionBusy}
+                  className="px-4 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded disabled:opacity-50 cursor-pointer"
                 >
-                  Confirm Suspension
+                  {isActionBusy ? "Suspending..." : "Confirm Suspension"}
                 </button>
               </div>
             </form>
@@ -618,10 +677,10 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
         </div>
       )}
 
-      {/* REACTIVATE COLLEGE MODAL */}
+      {/* REACTIVATE MODAL */}
       {showReactivateModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 space-y-3.5 border border-slate-200 animate-in fade-in-50 duration-150">
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 space-y-3.5 border border-slate-200">
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center shrink-0">
                 <RotateCcw className="w-5 h-5" />
@@ -629,11 +688,10 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Reactivate College Access</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Reactivate platform access for {college.name}. Faculty and student project activities will resume immediately.
+                  Restore platform access for {view.name}.
                 </p>
               </div>
             </div>
-
             <form onSubmit={handleConfirmReactivate} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-800 mb-1">
@@ -644,24 +702,24 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
                   rows={2}
                   value={reactivateReason}
                   onChange={(e) => setReactivateReason(e.target.value)}
-                  placeholder="Document resolution note for reactivation..."
-                  className="w-full text-xs border border-slate-300 rounded p-2 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Document resolution note..."
+                  className="w-full text-xs border border-slate-300 rounded p-2"
                 />
               </div>
-
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowReactivateModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 font-medium cursor-pointer"
+                  className="px-3 py-1.5 text-xs text-slate-600 font-medium cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors cursor-pointer"
+                  disabled={isActionBusy}
+                  className="px-4 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded disabled:opacity-50 cursor-pointer"
                 >
-                  Confirm Reactivation
+                  {isActionBusy ? "Reactivating..." : "Confirm Reactivation"}
                 </button>
               </div>
             </form>
@@ -671,13 +729,13 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
 
       {/* REPLACE ADMINISTRATOR MODAL */}
       {showReplaceAdminModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-5 space-y-4 border border-slate-200 animate-in fade-in-50 duration-150">
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 space-y-4 border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Replace College Administrator</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Transfer tenant administrative authority for {college.name} to a newly appointed official.
+                  Deactivates previous CollegeAdmin accounts for {view.name} and sends an activation link to the new administrator.
                 </p>
               </div>
               <button
@@ -688,7 +746,6 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
                 <X className="w-4 h-4" />
               </button>
             </div>
-
             <form onSubmit={handleReplaceAdminSubmit} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-800 mb-1">
@@ -697,40 +754,25 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Dr. Rajesh Kumar Sharma"
                   value={replaceForm.name}
                   onChange={(e) => setReplaceForm({ ...replaceForm, name: e.target.value })}
-                  className="w-full text-xs border border-slate-300 rounded p-2 focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                  placeholder="e.g. Dr. Rajesh Sharma"
+                  className="w-full text-xs border border-slate-300 rounded p-2"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-800 mb-1">
-                    Official Email <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="principal@college.ac.in"
-                    value={replaceForm.email}
-                    onChange={(e) => setReplaceForm({ ...replaceForm, email: e.target.value })}
-                    className="w-full text-xs border border-slate-300 rounded p-2 focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-800 mb-1">Contact Phone</label>
-                  <input
-                    type="tel"
-                    placeholder="+91 98260 00000"
-                    value={replaceForm.phone}
-                    onChange={(e) => setReplaceForm({ ...replaceForm, phone: e.target.value })}
-                    className="w-full text-xs border border-slate-300 rounded p-2 focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
-                  />
-                </div>
+              <div>
+                <label className="block font-semibold text-slate-800 mb-1">
+                  Official Email <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={replaceForm.email}
+                  onChange={(e) => setReplaceForm({ ...replaceForm, email: e.target.value })}
+                  placeholder="principal@college.edu.in"
+                  className="w-full text-xs border border-slate-300 rounded p-2 font-mono"
+                />
               </div>
-
               <div>
                 <label className="block font-semibold text-slate-800 mb-1">
                   Reason for Replacement <span className="text-rose-500">*</span>
@@ -740,24 +782,24 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
                   rows={2}
                   value={replaceForm.reason}
                   onChange={(e) => setReplaceForm({ ...replaceForm, reason: e.target.value })}
-                  placeholder="Institutional resolution, tenure transfer, or administrative reassignment..."
-                  className="w-full text-xs border border-slate-300 rounded p-2 focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                  placeholder="Tenure transfer or administrative reassignment..."
+                  className="w-full text-xs border border-slate-300 rounded p-2"
                 />
               </div>
-
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowReplaceAdminModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 font-medium cursor-pointer"
+                  className="px-3 py-1.5 text-xs text-slate-600 font-medium cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded transition-colors cursor-pointer"
+                  disabled={isActionBusy}
+                  className="px-4 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded disabled:opacity-50 cursor-pointer"
                 >
-                  Replace &amp; Issue Credentials
+                  {isActionBusy ? "Updating..." : "Replace & Send Invitation"}
                 </button>
               </div>
             </form>

@@ -120,19 +120,21 @@ export async function request<T>(endpoint: string, options: RequestOptions = {})
   }
 
   let data: any = null;
-  const contentType = response.headers.get("content-type");
-  if (contentType && (contentType.includes("json") || contentType.includes("problem+json"))) {
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
-    }
-  } else {
-    const text = await response.text();
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
+  if (response.status !== 204 && response.status !== 205) {
+    const contentType = response.headers.get("content-type");
+    if (contentType && (contentType.includes("json") || contentType.includes("problem+json"))) {
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+    } else {
+      const text = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
     }
   }
 

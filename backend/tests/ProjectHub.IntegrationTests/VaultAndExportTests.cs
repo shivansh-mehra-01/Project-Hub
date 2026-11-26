@@ -181,41 +181,6 @@ public class VaultAndExportTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task HodExportNbaZip_ReturnsValidZipArchiveWithRequiredDeliverables()
-    {
-        var hodToken = await GetTokenForPersonaAsync("HOD");
-        var request = new HttpRequestMessage(HttpMethod.Get, "/api/hod/nba/export-zip");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", hodToken);
-
-        var response = await _client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("application/zip", response.Content.Headers.ContentType?.MediaType);
-
-        var zipBytes = await response.Content.ReadAsByteArrayAsync();
-        Assert.True(zipBytes.Length > 0);
-
-        using var memoryStream = new MemoryStream(zipBytes);
-        using var archive = new ZipArchive(memoryStream, ZipArchiveMode.Read);
-
-        // 1. Attainment matrix CSV must be present
-        var attainmentEntry = archive.GetEntry("00_NBA_CO_PO_Attainment_Matrix.csv");
-        Assert.NotNull(attainmentEntry);
-
-        // 2. RGPV Marksheet CSV must be present
-        var marksheetEntry = archive.GetEntry("01_RGPV_Consolidated_Marksheet.csv");
-        Assert.NotNull(marksheetEntry);
-
-        // 3. Check for 02_Audit_Sample_Dossiers entries
-        var dossierEntries = archive.Entries
-            .Where(e => e.FullName.StartsWith("02_Audit_Sample_Dossiers/"))
-            .ToList();
-
-        Assert.NotEmpty(dossierEntries);
-        Assert.Contains(dossierEntries, e => e.FullName.Contains("Scorecard.csv"));
-        Assert.Contains(dossierEntries, e => e.FullName.EndsWith(".pdf") || e.FullName.EndsWith(".pptx"));
-    }
-
-    [Fact]
     public async Task CoordinatorExportMarksheet_ReturnsValidCsvWithStandardHeaders()
     {
         var coordinatorToken = await GetTokenForPersonaAsync("Coordinator");

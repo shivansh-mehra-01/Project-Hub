@@ -205,7 +205,11 @@ export const CoursesAndBranchesView: React.FC = () => {
   });
 
   const selectedProgramIntake = currentBranches.reduce(
-    (acc, b) => acc + (b.intakeQuota || b.studentCount || 0),
+    (acc, b) => acc + (b.intakeQuota || 120),
+    0
+  );
+  const selectedProgramEnrolled = currentBranches.reduce(
+    (acc, b) => acc + (b.studentCount ?? 0),
     0
   );
 
@@ -355,12 +359,17 @@ export const CoursesAndBranchesView: React.FC = () => {
   const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!branchCode.trim() || !branchName.trim() || !selectedProgram) return;
+    const quota = Number(branchIntake);
+    if (!Number.isFinite(quota) || quota < 1 || quota > 10000) {
+      showToast("Sanctioned intake quota must be between 1 and 10,000 seats.");
+      return;
+    }
     setSubmittingBranch(true);
     try {
       const payload: CreateDepartmentRequest = {
         code: branchCode.trim().toUpperCase(),
         name: branchName.trim(),
-        intakeQuota: Number(branchIntake) || 120,
+        intakeQuota: quota,
         courseProgramId: selectedProgram.id,
       };
       await collegeApi.createDepartment(payload);
@@ -386,12 +395,17 @@ export const CoursesAndBranchesView: React.FC = () => {
   const handleUpdateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingBranch || !branchName.trim()) return;
+    const quota = Number(branchIntake);
+    if (!Number.isFinite(quota) || quota < 1 || quota > 10000) {
+      showToast("Sanctioned intake quota must be between 1 and 10,000 seats.");
+      return;
+    }
     setSubmittingBranch(true);
     try {
       const payload: UpdateDepartmentRequest = {
         code: branchCode.trim().toUpperCase(),
         name: branchName.trim(),
-        intakeQuota: Number(branchIntake),
+        intakeQuota: quota,
         courseProgramId: editingBranch.courseProgramId || selectedProgram?.id,
         isActive: true,
       };
@@ -686,7 +700,9 @@ export const CoursesAndBranchesView: React.FC = () => {
                           <span>•</span>
                           <span>{currentBranches.length} {currentBranches.length === 1 ? "Branch" : "Branches"}</span>
                           <span>•</span>
-                          <span className="font-mono">{selectedProgramIntake.toLocaleString()} Sanctioned Seats</span>
+                          <span className="font-mono">
+                            {selectedProgramEnrolled.toLocaleString()} / {selectedProgramIntake.toLocaleString()} Seats
+                          </span>
                         </p>
                       </div>
                     </div>
@@ -827,16 +843,15 @@ export const CoursesAndBranchesView: React.FC = () => {
                                   </Link>
                                 )}
                                 <span>•</span>
-                                <span className="font-mono text-slate-600 whitespace-nowrap">{branch.intakeQuota || 120} Seats</span>
-                                {branch.isSarAttested && (
-                                  <>
-                                    <span>•</span>
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 whitespace-nowrap">
-                                      <ShieldCheck className="h-3 w-3 text-emerald-700" strokeWidth={1.75} />
-                                      NBA Attested
-                                    </span>
-                                  </>
-                                )}
+                                <span
+                                  className={`font-mono whitespace-nowrap ${
+                                    (branch.studentCount ?? 0) >= (branch.intakeQuota || 120)
+                                      ? "text-amber-700 font-semibold"
+                                      : "text-slate-600"
+                                  }`}
+                                >
+                                  {branch.studentCount ?? 0} / {branch.intakeQuota || 120} Seats
+                                </span>
                               </div>
                             </div>
                           </div>

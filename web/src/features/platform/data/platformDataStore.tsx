@@ -1,8 +1,15 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { platformApi } from "@/lib/api/platformApi";
+import { authApi } from "@/lib/api/authApi";
 import { getUserProfile } from "@/lib/api";
+import {
+  HealthDetailsDto,
+  PlatformAnnouncementDto,
+  PlatformSecuritySummaryDto,
+  SupportTicketDto,
+} from "@/lib/api/types";
 import { showToast } from "@/lib/toast";
 
 // =============================================================================
@@ -13,6 +20,7 @@ export interface CollegeTenantRecord {
   name: string;
   shortName: string;
   code: string;
+  collegeType?: string;
   university: string;
   tenantId: string;
   domain: string;
@@ -31,6 +39,11 @@ export interface CollegeTenantRecord {
   tenantHealth: "Healthy" | "Warning" | "Degraded";
   principalName: string;
   principalEmail: string;
+  principalIsActive?: boolean | null;
+  principalIsActivated?: boolean | null;
+  principalIsEmailVerified?: boolean | null;
+  principalHasPendingInvitation?: boolean | null;
+  principalLastLoginAtUtc?: string | null;
   contactPhone: string;
   principalDesignation?: string;
   adminAccountStatus?: "Active" | "Suspended";
@@ -38,6 +51,7 @@ export interface CollegeTenantRecord {
   address: string;
   city: string;
   state: string;
+  country?: string;
   pinCode: string;
   affiliationNumber: string;
   establishmentYear: number;
@@ -45,6 +59,7 @@ export interface CollegeTenantRecord {
   enabledModules: string[];
   strictSsoEnforced: boolean;
   maxStudentSeats?: number;
+  activeProjectsCount?: number;
   lastActivity?: string;
   adminInvitationStatus?: string;
   adminInvitationDate?: string;
@@ -761,7 +776,7 @@ export interface AnnouncementRecord {
   shortDescription?: string;
   fullMessage: string;
   targetAudience: AnnouncementAudience;
-  selectedCollegeCodes?: string[];
+  targetCollegeIds?: string[];
   deliveryChannels?: string[];
   sendInApp?: boolean;
   sendEmail?: boolean;
@@ -2565,7 +2580,7 @@ const INITIAL_ANNOUNCEMENTS: AnnouncementRecord[] = [
     shortDescription: "Batch reconciliation for institutional licenses on Nov 25.",
     fullMessage: "Razorpay webhook reconciliation for institutional annual licenses will run in batch mode between 01:00 AM and 01:30 AM IST on Nov 25.",
     targetAudience: "Selected Colleges",
-    selectedCollegeCodes: ["SISTEC", "LNCT"],
+    targetCollegeIds: ["SISTEC", "LNCT"],
     deliveryChannels: ["In-App Notification"],
     sendInApp: true,
     sendEmail: false,
@@ -2697,13 +2712,13 @@ const INITIAL_AUDIT_LOGS: PlatformAuditLogItem[] = [
     timestamp: "2026-11-21 12:14:00",
     user: "Aditi Trivedi",
     userEmail: "aditi.security@collabex.in",
-    action: "Academic Reference Template Published",
+    action: "Platform Policy Updated",
     category: "Platform Management",
-    affectedResource: "Regulation: RGPV-AICTE-FLEX-2022 (v2.4)",
+    affectedResource: "Tenant Governance Policy",
     result: "Success",
     ipAddress: "103.21.244.12",
-    details: "Locked and published standardized RGPV 8-semester curriculum scheme template for affiliated colleges.",
-    metadataJson: JSON.stringify({ version: "v2.4", totalSemesters: 8, regulatoryBody: "AICTE / RGPV" }, null, 2),
+    details: "Updated tenant security policy.",
+    metadataJson: JSON.stringify({ version: "v2.4" }, null, 2),
   },
   {
     id: "aud-904",
@@ -2822,13 +2837,13 @@ interface PlatformDataContextType {
     remarks?: string
   ) => void;
   sendCollegeAdminRecoveryOtp: (collegeId: string) => void;
-  suspendCollege: (collegeId: string, reason: string, actor?: string) => void;
-  reactivateCollege: (collegeId: string, reason: string, actor?: string) => void;
-  resendAdminInvitation: (collegeId: string) => void;
+  suspendCollege: (collegeId: string, reason: string, actor?: string) => Promise<void>;
+  reactivateCollege: (collegeId: string, reason: string, actor?: string) => Promise<void>;
+  resendAdminInvitation: (collegeId: string) => Promise<void>;
   replacePrimaryAdmin: (
     collegeId: string,
     data: { fullName: string; email: string; designation: string; phone: string; reason: string }
-  ) => void;
+  ) => Promise<void>;
   // Academic
   universities: UniversityRecord[];
   regulations: AcademicRegulationRecord[];
@@ -2881,10 +2896,10 @@ interface PlatformDataContextType {
   adminUsers: PlatformAdminUserRecord[];
   roles: RolePermissionRecord[];
   securityApprovals: SecurityApprovalRequestRecord[];
-  inviteAdminUser: (email: string, name: string, role?: string) => void;
-  updateAdminUser: (id: string, updates: Partial<PlatformAdminUserRecord>) => void;
+  inviteAdminUser: (email: string, name: string, role?: string) => Promise<void>;
+  updateAdminUser: (id: string, updates: Partial<PlatformAdminUserRecord>) => Promise<void>;
   revokeAdminUser: (id: string) => void;
-  revokeAdminSessions: (id: string) => void;
+  revokeAdminSessions: (id: string) => Promise<void>;
   initiateMfaRecovery: (id: string) => void;
   toggleAdminPermission: (adminId: string, permissionKey: string, granted: boolean, reason?: string, grantedBy?: string) => void;
   requestSecurityApproval: (adminId: string, permissionKey: string, reason: string) => void;
@@ -2897,6 +2912,10 @@ interface PlatformDataContextType {
   integrations: IntegrationConnectorRecord[];
   testIntegration: (id: string) => Promise<{ latency: number; status: string }>;
   // System Health
+  healthDetails: HealthDetailsDto | null;
+  refreshHealthDetails: () => Promise<void>;
+  securitySummary: PlatformSecuritySummaryDto | null;
+  isLoadingPlatformData: boolean;
   services: ServiceHealthRecord[];
   alerts: PlatformAlertRecord[];
   incidents: PlatformIncidentRecord[];
@@ -2908,19 +2927,19 @@ interface PlatformDataContextType {
   platformServices: PlatformServiceRecord[];
   testPlatformService: (id: string) => Promise<{ latency: number; status: string }>;
   announcements: AnnouncementRecord[];
-  addAnnouncement: (ann: Partial<AnnouncementRecord>) => void;
-  updateAnnouncement: (id: string, updates: Partial<AnnouncementRecord>) => void;
-  deleteAnnouncement: (id: string) => void;
-  publishAnnouncementNow: (id: string) => void;
-  withdrawAnnouncement: (id: string, reason?: string) => void;
-  archiveAnnouncement: (id: string, reason?: string) => void;
-  getAnnouncementsForCollege: (collegeCode: string) => AnnouncementRecord[];
-  replySupportTicket: (ticketId: string, message: string, isInternal?: boolean) => void;
-  updateTicketStatus: (ticketId: string, status: SupportTicketRecord["status"], resolutionNotes?: string) => void;
-  updateTicketPriority: (ticketId: string, priority: SupportTicketRecord["priority"]) => void;
-  assignSupportTicket: (ticketId: string, agentName: string) => void;
-  resolveSupportTicket: (ticketId: string, resolutionNotes: string) => void;
-  closeSupportTicket: (ticketId: string) => void;
+  addAnnouncement: (ann: Partial<AnnouncementRecord>) => Promise<boolean>;
+  updateAnnouncement: (id: string, updates: Partial<AnnouncementRecord>) => Promise<boolean>;
+  deleteAnnouncement: (id: string) => Promise<void>;
+  publishAnnouncementNow: (id: string) => Promise<void>;
+  withdrawAnnouncement: (id: string, reason?: string) => Promise<void>;
+  archiveAnnouncement: (id: string, reason?: string) => Promise<void>;
+  createSupportTicket: (data: { collegeId?: string; institutionName?: string; subject: string; description: string; category?: string; priority?: string }) => Promise<void>;
+  replySupportTicket: (ticketId: string, message: string, isInternal?: boolean) => Promise<void>;
+  updateTicketStatus: (ticketId: string, status: SupportTicketRecord["status"], resolutionNotes?: string) => Promise<void>;
+  updateTicketPriority: (ticketId: string, priority: SupportTicketRecord["priority"]) => Promise<void>;
+  assignSupportTicket: (ticketId: string, agentName: string) => Promise<void>;
+  resolveSupportTicket: (ticketId: string, resolutionNotes: string) => Promise<void>;
+  closeSupportTicket: (ticketId: string) => Promise<void>;
   getTicketsForCollege: (collegeCode: string) => SupportTicketRecord[];
   // Security
   activeSessions: ActiveSessionRecord[];
@@ -2945,8 +2964,8 @@ interface PlatformDataContextType {
 const PlatformDataContext = createContext<PlatformDataContextType | null>(null);
 
 export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [colleges, setColleges] = useState<CollegeTenantRecord[]>(INITIAL_COLLEGES);
-  const [onboardingRequests, setOnboardingRequests] = useState<OnboardingRequestRecord[]>(INITIAL_ONBOARDING_REQUESTS);
+  const [colleges, setColleges] = useState<CollegeTenantRecord[]>([]);
+  const [onboardingRequests, setOnboardingRequests] = useState<OnboardingRequestRecord[]>([]);
   const [universities, setUniversities] = useState<UniversityRecord[]>(INITIAL_UNIVERSITIES);
   const [regulations, setRegulations] = useState<AcademicRegulationRecord[]>(INITIAL_REGULATIONS);
   const [programs, setPrograms] = useState<AcademicProgramRecord[]>(INITIAL_PROGRAMS);
@@ -2959,30 +2978,33 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [unSdgs, setUnSdgs] = useState<UnSdgRecord[]>(INITIAL_UN_SDGS);
   const [templateVersions, setTemplateVersions] = useState<TemplateVersionRecord[]>(INITIAL_TEMPLATE_VERSIONS);
   const [plans, setPlans] = useState<SubscriptionPlanRecord[]>(INITIAL_PLANS);
-  const [collegeSubscriptions, setCollegeSubscriptions] = useState<CollegeSubscriptionRecord[]>(INITIAL_COLLEGE_SUBSCRIPTIONS);
-  const [invoices, setInvoices] = useState<InvoiceRecord[]>(INITIAL_INVOICES);
-  const [payments] = useState<PaymentTransactionRecord[]>(INITIAL_PAYMENTS);
+  const [collegeSubscriptions, setCollegeSubscriptions] = useState<CollegeSubscriptionRecord[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [payments] = useState<PaymentTransactionRecord[]>([]);
   const [refunds] = useState<RefundRecord[]>([]);
   const [discountCoupons] = useState<DiscountCouponRecord[]>([
     { id: "c-rgpv10", code: "RGPV-PILOT-2026", discountType: "Percentage", discountValue: 100, validFrom: "2026-01-01", validUntil: "2027-12-31", usageCount: 4, maxUsageLimit: 50, applicablePlans: ["Pilot License"], status: "Active" },
   ]);
-  const [adminUsers, setAdminUsers] = useState<PlatformAdminUserRecord[]>(INITIAL_ADMIN_USERS);
+  const [adminUsers, setAdminUsers] = useState<PlatformAdminUserRecord[]>([]);
   const [securityApprovals, setSecurityApprovals] = useState<SecurityApprovalRequestRecord[]>(INITIAL_SECURITY_APPROVALS);
   const [roles] = useState<RolePermissionRecord[]>(INITIAL_ROLES);
   const [modules, setModules] = useState<PlatformModuleRecord[]>(INITIAL_MODULES);
   const [featureFlags, setFeatureFlags] = useState<FeatureFlagRecord[]>(INITIAL_FEATURE_FLAGS);
   const [integrations] = useState<IntegrationConnectorRecord[]>(INITIAL_INTEGRATIONS);
-  const [services] = useState<ServiceHealthRecord[]>(INITIAL_SERVICES);
-  const [alerts, setAlerts] = useState<PlatformAlertRecord[]>(INITIAL_ALERTS);
-  const [incidents, setIncidents] = useState<PlatformIncidentRecord[]>(INITIAL_INCIDENTS_HISTORY);
+  const [healthDetails, setHealthDetails] = useState<HealthDetailsDto | null>(null);
+  const [securitySummary, setSecuritySummary] = useState<PlatformSecuritySummaryDto | null>(null);
+  const [isLoadingPlatformData, setIsLoadingPlatformData] = useState<boolean>(true);
+  const [services, setServices] = useState<ServiceHealthRecord[]>([]);
+  const [alerts, setAlerts] = useState<PlatformAlertRecord[]>([]);
+  const [incidents, setIncidents] = useState<PlatformIncidentRecord[]>([]);
   const [backupStatus, setBackupStatus] = useState<PlatformBackupStatusRecord>(INITIAL_BACKUP_STATUS);
-  const [backgroundJobs, setBackgroundJobs] = useState<BackgroundJobRecord[]>(INITIAL_BACKGROUND_JOBS);
-  const [tickets, setTickets] = useState<SupportTicketRecord[]>(INITIAL_SUPPORT_TICKETS);
-  const [platformServices, setPlatformServices] = useState<PlatformServiceRecord[]>(INITIAL_PLATFORM_SERVICES);
-  const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>(INITIAL_ANNOUNCEMENTS);
-  const [activeSessions, setActiveSessions] = useState<ActiveSessionRecord[]>(INITIAL_SESSIONS);
-  const [securityIncidents] = useState<SecurityIncidentRecord[]>(INITIAL_SECURITY_INCIDENTS);
-  const [auditLogs, setAuditLogs] = useState<PlatformAuditLogItem[]>(INITIAL_AUDIT_LOGS);
+  const [backgroundJobs, setBackgroundJobs] = useState<BackgroundJobRecord[]>([]);
+  const [tickets, setTickets] = useState<SupportTicketRecord[]>([]);
+  const [platformServices, setPlatformServices] = useState<PlatformServiceRecord[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
+  const [activeSessions, setActiveSessions] = useState<ActiveSessionRecord[]>([]);
+  const [securityIncidents, setSecurityIncidents] = useState<SecurityIncidentRecord[]>([]);
+  const [auditLogs, setAuditLogs] = useState<PlatformAuditLogItem[]>([]);
 
   const addAuditLog = (entry: any) => {
     const now = new Date();
@@ -3015,122 +3037,336 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  const failedLoginAttemptsCount = 5;
+  const failedLoginAttemptsCount = securitySummary?.failedLoginsLast24h ?? 0;
+
+  const mapAnnouncementDto = (a: PlatformAnnouncementDto): AnnouncementRecord => ({
+    id: a.id,
+    title: a.title,
+    category: (a.category as AnnouncementCategory) || "Maintenance",
+    priority: (a.priority as AnnouncementPriority) || "Normal",
+    shortDescription: a.shortDescription,
+    fullMessage: a.fullMessage,
+    targetAudience: (a.targetAudience as AnnouncementAudience) || "All Colleges",
+    targetCollegeIds: a.targetCollegeIds || [],
+    publishDate: a.publishDateUtc ? a.publishDateUtc.replace("T", " ").slice(0, 19) : "—",
+    status: (a.status as AnnouncementRecord["status"]) || "Draft",
+    readCount: 0,
+    authorName: a.createdByName || a.createdByEmail || "Super Admin",
+    createdAt: a.createdAtUtc ? a.createdAtUtc.replace("T", " ").slice(0, 19) : "",
+    updatedAt: a.updatedAtUtc ? a.updatedAtUtc.replace("T", " ").slice(0, 19) : undefined,
+    withdrawnAt: a.withdrawnAtUtc ? a.withdrawnAtUtc.replace("T", " ").slice(0, 19) : undefined,
+  });
+
+  const mapTicketDto = (t: SupportTicketDto): SupportTicketRecord => ({
+    id: t.id,
+    ticketNumber: t.ticketNumber,
+    institutionName: t.institutionName,
+    collegeCode: "",
+    subject: t.subject,
+    description: t.description,
+    category: (t.category as SupportTicketRecord["category"]) || "Technical Issues",
+    priority: (t.priority as SupportTicketRecord["priority"]) || "Medium",
+    status: (t.status as SupportTicketRecord["status"]) || "Open",
+    requesterName: t.reportedByName || t.reportedByEmail,
+    requesterEmail: t.reportedByEmail,
+    assignedAgent: t.assignedToName || "Unassigned",
+    createdAt: t.createdAtUtc ? t.createdAtUtc.replace("T", " ").slice(0, 19) : "",
+    updatedAt: t.updatedAtUtc ? t.updatedAtUtc.replace("T", " ").slice(0, 19) : (t.createdAtUtc ? t.createdAtUtc.replace("T", " ").slice(0, 19) : ""),
+    resolvedAt: t.resolvedAtUtc ? t.resolvedAtUtc.replace("T", " ").slice(0, 19) : undefined,
+    resolutionNotes: t.resolutionNotes || undefined,
+    conversation: (t.messages || []).map((m) => ({
+      id: m.id,
+      sender: m.senderName || m.senderEmail,
+      isStaff: m.senderRole === "SuperAdmin",
+      timestamp: m.sentAtUtc ? m.sentAtUtc.replace("T", " ").slice(0, 19) : "",
+      message: m.message,
+      isInternalNote: m.isInternalNote,
+    })),
+  });
+
+  const mapAuditLogDto = (log: any): PlatformAuditLogItem => {
+    let parsed: Record<string, any> = {};
+    try {
+      if (log.metadataJson) parsed = JSON.parse(log.metadataJson);
+    } catch {
+      parsed = {};
+    }
+    const validCategories = ["Authentication", "Administrator Management", "College Management", "Platform Management", "Subscription Management"];
+    const cat = validCategories.includes(parsed.category) ? parsed.category : "Platform Management";
+    const res = parsed.result === "Failure" ? "Failure" : "Success";
+    return {
+      id: log.id,
+      timestamp: log.occurredAtUtc ? log.occurredAtUtc.replace("T", " ").slice(0, 19) : new Date().toISOString().replace("T", " ").slice(0, 19),
+      user: parsed.actorName || log.actorEmail?.split("@")[0] || "Super Admin",
+      userEmail: log.actorEmail || "system@collabex.in",
+      action: log.action || "PLATFORM_EVENT",
+      category: cat,
+      affectedResource: log.targetEntity || "Platform Resource",
+      result: res,
+      ipAddress: log.ipAddress || "127.0.0.1",
+      details: parsed.details || `${log.action} on ${log.targetEntity}`,
+      metadataJson: log.metadataJson || "{}",
+    };
+  };
+
+  const applyHealthDetails = useCallback((health: HealthDetailsDto) => {
+    setHealthDetails(health);
+    const normalizeStatus = (s?: string): ServiceHealthRecord["status"] => {
+      if (s === "Healthy") return "Healthy";
+      if (s === "Degraded") return "Degraded";
+      if (s === "Unavailable") return "Down";
+      return "Unknown";
+    };
+    setServices([
+      {
+        serviceName: "Backend API",
+        category: "Backend API",
+        endpointOrInstance: "/api/health",
+        status: health.status === "Unavailable" ? "Degraded" : "Healthy",
+        latencyMs: 0,
+        uptime90d: 100,
+        lastChecked: health.timestampUtc,
+        details: `${health.environment} • v${health.version} • Uptime ${Math.floor((health.uptimeSeconds || 0) / 60)}m`,
+      },
+      {
+        serviceName: "PostgreSQL Database",
+        category: "Database",
+        endpointOrInstance: health.database?.provider || "PostgreSQL",
+        status: normalizeStatus(health.database?.status),
+        latencyMs: health.database?.latencyMs ?? 0,
+        uptime90d: health.database?.status === "Healthy" ? 100 : 0,
+        lastChecked: health.timestampUtc,
+        details: health.database?.details || "PostgreSQL connectivity probe",
+      },
+      {
+        serviceName: "Redis Cache",
+        category: "Cache",
+        endpointOrInstance: health.redis?.engine || "Redis",
+        status: normalizeStatus(health.redis?.status),
+        latencyMs: health.redis?.latencyMs ?? 0,
+        uptime90d: health.redis?.status === "Healthy" ? 100 : 0,
+        lastChecked: health.timestampUtc,
+        details: health.redis?.details || "Redis PING probe",
+      },
+      {
+        serviceName: "Authentication",
+        category: "Authentication",
+        endpointOrInstance: "JWT + Session Store",
+        status: health.database?.status === "Unavailable" ? "Degraded" : "Healthy",
+        latencyMs: health.database?.latencyMs ?? 0,
+        uptime90d: 100,
+        lastChecked: health.timestampUtc,
+        details: `${health.telemetry?.activeSessionsCount ?? 0} active session(s)`,
+      },
+      {
+        serviceName: "File Vault Storage",
+        category: "File Storage",
+        endpointOrInstance: health.storage?.provider || "Application Storage",
+        status: normalizeStatus(health.storage?.status),
+        latencyMs: 0,
+        uptime90d: health.storage?.status === "Healthy" ? 100 : 0,
+        lastChecked: health.timestampUtc,
+        details: health.storage?.details || "Disk availability probe",
+      },
+      {
+        serviceName: "Email Delivery Service",
+        category: "Email Service",
+        endpointOrInstance: health.email?.provider || "Email",
+        status: normalizeStatus(health.email?.status),
+        latencyMs: 0,
+        uptime90d: health.email?.status === "Healthy" ? 100 : 0,
+        lastChecked: health.timestampUtc,
+        details: health.email?.details || "Email provider configuration",
+      },
+    ]);
+  }, []);
+
+  const refreshHealthDetails = useCallback(async () => {
+    try {
+      const health = await platformApi.getHealthDetails();
+      applyHealthDetails(health);
+    } catch {
+      // Keep last known health state if unreachable
+    }
+  }, [applyHealthDetails]);
 
   // Sync with real backend API if available on mount (SuperAdmin only)
   useEffect(() => {
     async function loadBackendData() {
-      const user = getUserProfile();
+      let user = getUserProfile();
+      if (!user) {
+        try {
+          const sess = await authApi.session();
+          if (sess.authenticated && sess.user) {
+            user = sess.user;
+          }
+        } catch {
+          return;
+        }
+      }
       if (!user || user.role !== "SuperAdmin") {
         return;
       }
 
       try {
         const backendTenants = await platformApi.getTenants();
-        if (backendTenants && backendTenants.length > 0) {
-          // Merge real tenants into store
-          setColleges((prev) => {
-            const map = new Map(prev.map((c) => [c.code, c]));
-            backendTenants.forEach((bt) => {
-              const existing = map.get(bt.tenantCode);
-              map.set(bt.tenantCode, {
-                id: bt.id,
-                name: bt.name,
-                shortName: bt.name.split(" ")[0] || bt.name,
-                code: bt.tenantCode,
-                university: bt.affiliatingUniversity || "RGPV",
-                tenantId: `tenant_${bt.tenantCode.toLowerCase()}_prod`,
-                domain: bt.ssoDomain,
-                subscriptionPlan: bt.licenseTier as any || "Standard",
-                totalStudents: bt.studentCount || 1500,
-                totalFaculty: 80,
-                departmentsCount: bt.departmentCount || 4,
-                status: bt.isActive ? "Active" : "Suspended",
-                registrationDate: "2024-06-15",
-                renewalDate: bt.subscriptionExpiresAtUtc?.split("T")[0] || "2027-06-30",
-                databaseAllocation: "Dedicated Schema (RLS Enforced)",
-                storageQuotaGb: bt.storageQuotaGb || 50,
-                storageUsedGb: 12.5,
-                region: "AWS ap-south-1 (Mumbai)",
-                isolationStatus: "RLS Enforced",
-                tenantHealth: "Healthy",
-                principalName: "College Principal",
-                principalEmail: bt.principalEmail || `principal@${bt.ssoDomain}`,
-                contactPhone: "+91 755 000 0000",
-                address: "Institutional Campus",
-                city: "Bhopal",
-                state: "Madhya Pradesh",
-                pinCode: "462001",
-                affiliationNumber: `RGPV/${bt.tenantCode}/2024`,
-                establishmentYear: 2005,
-                website: `https://${bt.ssoDomain}`,
-                enabledModules: ["Project Tracks", "Rubric Evaluation", "NBA Attainment (SAR)"],
-                strictSsoEnforced: bt.enforceStrictSso,
-                provisioningHistory: existing?.provisioningHistory || [
-                  { stage: "Provisioning", timestamp: new Date().toISOString(), status: "Completed", details: "Imported from PostgreSQL 17 database." },
-                ],
-              });
-            });
-            return Array.from(map.values());
-          });
+        if (Array.isArray(backendTenants)) {
+          setColleges(
+            backendTenants.map((bt) => ({
+              id: bt.id,
+              name: bt.name,
+              shortName: bt.name.split(" ")[0] || bt.name,
+              code: bt.tenantCode,
+              collegeType: bt.collegeType || "Engineering College",
+              university: bt.affiliatingUniversity || "RGPV",
+              tenantId: bt.id,
+              domain: bt.ssoDomain,
+              subscriptionPlan: (bt.licenseTier as any) || "Standard",
+              totalStudents: bt.studentCount || 0,
+              totalFaculty: bt.facultyCount || 0,
+              departmentsCount: bt.departmentCount || 0,
+              activeProjectsCount: bt.activeProjectsCount || 0,
+              status: bt.isActive ? "Active" : "Suspended",
+              registrationDate: bt.createdAtUtc ? bt.createdAtUtc.split("T")[0] : new Date().toISOString().split("T")[0],
+              renewalDate: bt.subscriptionExpiresAtUtc?.split("T")[0] || "",
+              databaseAllocation: "RLS Enforced",
+              storageQuotaGb: bt.storageQuotaGb || 50,
+              storageUsedGb: 0,
+              region: "ap-south-1",
+              isolationStatus: "RLS Enforced",
+              tenantHealth: bt.isActive ? "Healthy" : "Degraded",
+              principalName: bt.principalName || "",
+              principalEmail: bt.principalEmail || "",
+              principalIsActive: bt.principalIsActive ?? null,
+              principalIsActivated: bt.principalIsActivated ?? null,
+              principalIsEmailVerified: bt.principalIsEmailVerified ?? null,
+              principalHasPendingInvitation: bt.principalHasPendingInvitation ?? null,
+              principalLastLoginAtUtc: bt.principalLastLoginAtUtc ?? null,
+              contactPhone: "",
+              address: bt.campusAddress || "Institutional Campus",
+              city: bt.city || "",
+              state: bt.state || "",
+              country: bt.country || "",
+              pinCode: "",
+              affiliationNumber: "",
+              establishmentYear: new Date().getFullYear(),
+              website: `https://${bt.ssoDomain}`,
+              enabledModules: ["Project Tracks", "Rubric Evaluation"],
+              strictSsoEnforced: bt.enforceStrictSso,
+              maxStudentSeats: bt.maxStudentSeats,
+              lastActivity: bt.lastActivityAtUtc || undefined,
+              provisioningHistory: [
+                { stage: "Provisioning", timestamp: bt.createdAtUtc || new Date().toISOString(), status: "Completed", details: `Provisioned with tenant UUID ${bt.id}.` },
+              ],
+            }))
+          );
         }
-        // Also load live audit logs if available
+        // Load real Platform Administrators from backend
         try {
-          const backendAuditLogs = await platformApi.getAuditLogs(100);
-          if (backendAuditLogs && backendAuditLogs.length > 0) {
-            setAuditLogs((prev) => {
-              const liveItems: PlatformAuditLogItem[] = backendAuditLogs.map((log) => ({
-                id: log.id,
-                timestamp: log.occurredAtUtc ? log.occurredAtUtc.replace("T", " ").slice(0, 19) : new Date().toISOString().replace("T", " ").slice(0, 19),
-                user: log.actorEmail?.split("@")[0] || "Super Admin",
-                userEmail: log.actorEmail || "admin@projecthub.in",
-                action: log.action || "PLATFORM_EVENT",
-                category: "Platform Management",
-                affectedResource: log.targetEntity || "Platform Resource",
-                result: "Success",
-                ipAddress: log.ipAddress || "127.0.0.1",
-                details: `System audit logged from backend: ${log.action} on ${log.targetEntity}`,
-                metadataJson: log.metadataJson || "{}",
-              }));
-              // Merge live items with initial local items (avoid duplicate ids)
-              const existingIds = new Set(liveItems.map((i) => i.id));
-              return [...liveItems, ...prev.filter((i) => !existingIds.has(i.id))];
-            });
+          const backendAdmins = await platformApi.getAdministrators();
+          if (Array.isArray(backendAdmins)) {
+            setAdminUsers(
+              backendAdmins.map((a) => ({
+                id: a.id,
+                name: a.fullName,
+                email: a.email,
+                adminId: a.adminId,
+                platformRole: (a.platformRole as any) || "Super Admin",
+                status: (a.status as any) || "Active",
+                mfaStatus: (a.mfaStatus as any) || "Enrollment Required",
+                createdAt: a.createdAtUtc ? a.createdAtUtc.slice(0, 19).replace("T", " ") : "",
+                lastLogin: a.lastLoginAtUtc ? a.lastLoginAtUtc.slice(0, 19).replace("T", " ") : "Never",
+                lastAuthTimestamp: a.lastLoginAtUtc ? a.lastLoginAtUtc.slice(0, 19).replace("T", " ") : "Never",
+                ipAddress: "—",
+                activeSessionsCount: a.activeSessionsCount ?? 0,
+                mfaDetails: {
+                  type: "FIDO2 / WebAuthn Hardware Key",
+                  keyModel: a.mfaEnabled ? "Configured" : "Enrollment Required",
+                  keyId: a.mfaEnabled ? "TOTP_ACTIVE" : "PENDING_REGISTRATION",
+                  enrolledAt: a.mfaEnabled ? "Enrolled" : "Pending Setup",
+                  backupCodesRemaining: 0,
+                  recoveryStatus: "Healthy",
+                },
+                permissions: STANDARD_PERMISSIONS_DEF.map((def, idx) => ({
+                  id: `perm-${a.id}-${idx}`,
+                  category: def.category,
+                  key: def.key,
+                  label: def.label,
+                  description: def.description,
+                  granted: true,
+                })),
+                securityActivity: [],
+                sensitiveSafeguards: { canPublishMasterData: true, canAuthorizeBilling: true, canManageTenants: true },
+              }))
+            );
           }
         } catch {
-          // Fallback to local logs
+          // Ignore if non-SuperAdmin or unavailable
+        }
+        // Load live audit logs
+        try {
+          const backendAuditLogs = await platformApi.getAuditLogs(200);
+          if (Array.isArray(backendAuditLogs)) {
+            setAuditLogs(backendAuditLogs.map(mapAuditLogDto));
+          }
+        } catch {
+          // Keep empty on error
         }
 
-        // Also load live sessions if available
+        // Load live active sessions
         try {
           const backendSessions = await platformApi.getSessions();
-          if (backendSessions && backendSessions.length > 0) {
-            setActiveSessions((prev) => {
-              const mappedSessions: ActiveSessionRecord[] = backendSessions.map((s: any) => ({
+          if (Array.isArray(backendSessions)) {
+            setActiveSessions(
+              backendSessions.map((s) => ({
                 id: s.id,
-                accountName: s.userEmail?.split("@")[0] || "Platform Admin",
-                accountEmail: s.userEmail || "admin@collabex.in",
-                role: s.role || "Super Admin",
+                accountName: s.accountName || s.accountEmail?.split("@")[0] || "Platform User",
+                accountEmail: s.accountEmail || "",
+                role: s.role || "SuperAdmin",
                 device: s.device || "Desktop Workstation",
-                browser: s.browser || "Chrome / Windows",
+                browser: s.browser || "Browser",
                 ipAddress: s.ipAddress || "127.0.0.1",
-                location: s.location || "Bhopal, MP, India",
-                loginTime: s.createdAtUtc ? s.createdAtUtc.replace("T", " ").slice(0, 19) : "Just now",
-                lastActiveTime: s.lastSeenAtUtc ? s.lastSeenAtUtc.replace("T", " ").slice(0, 19) : "Active now",
-                status: (s.isRevoked ? "Terminated" : "Active") as "Active" | "Idle" | "Terminated",
-              }));
-              return mappedSessions;
-            });
+                location: "Verified Session",
+                loginTime: s.loginTimeUtc ? s.loginTimeUtc.replace("T", " ").slice(0, 19) : "—",
+                lastActiveTime: s.lastActiveTimeUtc ? s.lastActiveTimeUtc.replace("T", " ").slice(0, 19) : "—",
+                status: "Active" as const,
+              }))
+            );
           }
         } catch {
-          // Fallback to local sessions
+          // Keep empty on error
         }
+
+        // Load live system health, security summary, announcements, and support tickets
+        await Promise.all([
+          platformApi.getHealthDetails().then(applyHealthDetails).catch(() => {}),
+          platformApi.getSecuritySummary().then((summary) => {
+            setSecuritySummary(summary);
+            setSecurityIncidents(
+              (summary.recentSecurityEvents || []).map((ev) => ({
+                id: ev.id,
+                incidentType: ev.action,
+                severity: ev.action.includes("Failed") || ev.action.includes("Suspended") ? "High" : "Informational",
+                affectedAccount: ev.actorEmail || ev.targetEntity,
+                institution: "Platform",
+                detectedAt: ev.occurredAtUtc ? ev.occurredAtUtc.replace("T", " ").slice(0, 19) : "",
+                status: ev.action.includes("Revoked") ? "Enforced" : "Logged",
+                investigator: "System",
+                details: ev.targetEntity,
+              }))
+            );
+          }).catch(() => {}),
+          platformApi.getAnnouncements().then((items) => setAnnouncements(items.map(mapAnnouncementDto))).catch(() => {}),
+          platformApi.getTickets().then((items) => setTickets(items.map(mapTicketDto))).catch(() => {}),
+        ]);
       } catch {
-        // Backend not reachable, seed data active
+        // Backend not reachable
+      } finally {
+        setIsLoadingPlatformData(false);
       }
     }
     loadBackendData();
-  }, []);
+  }, [applyHealthDetails]);
 
   const onboardCollege = async (data: Partial<CollegeTenantRecord>): Promise<CollegeTenantRecord> => {
     const code = (data.code || "NEW").toUpperCase().replace(/[^A-Z0-9_-]/g, "");
@@ -3222,30 +3458,66 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return [subItem, ...prev];
     });
 
-    // Attempt backend sync
-    try {
-      await platformApi.createTenant({
-        name: newCollege.name,
-        tenantCode: newCollege.code,
-        ssoDomain: newCollege.domain,
-        licenseTier: newCollege.subscriptionPlan,
-        maxStudentSeats: newCollege.totalStudents,
-        storageQuotaGb: newCollege.storageQuotaGb,
-        enforceStrictSso: newCollege.strictSsoEnforced,
-        principalName: newCollege.principalName,
-        principalEmail: newCollege.principalEmail,
-        affiliatingUniversity: newCollege.university,
-      });
-    } catch {
-      // Offline / dev fallback handled
-    }
+    // Persist to backend API
+    const res = await platformApi.createTenant({
+      name: newCollege.name,
+      tenantCode: data.code?.trim() ? newCollege.code : undefined,
+      ssoDomain: data.domain?.trim() ? newCollege.domain : undefined,
+      licenseTier: newCollege.subscriptionPlan,
+      maxStudentSeats: newCollege.totalStudents,
+      storageQuotaGb: newCollege.storageQuotaGb,
+      enforceStrictSso: newCollege.strictSsoEnforced,
+      principalName: newCollege.principalName,
+      principalEmail: newCollege.principalEmail,
+      collegeType: data.collegeType,
+      affiliatingUniversity: newCollege.university,
+      country: data.country,
+      state: newCollege.state,
+      city: newCollege.city,
+      campusAddress: data.address,
+    });
 
-    return newCollege;
+    const createdDto = res.tenant;
+    const syncedCollege: CollegeTenantRecord = {
+      ...newCollege,
+      id: createdDto.id,
+      tenantId: createdDto.id,
+      code: createdDto.tenantCode,
+      name: createdDto.name,
+      domain: createdDto.ssoDomain,
+      collegeType: createdDto.collegeType || data.collegeType,
+      university: createdDto.affiliatingUniversity || newCollege.university,
+      country: createdDto.country || data.country,
+      state: createdDto.state || newCollege.state,
+      city: createdDto.city || newCollege.city,
+      address: createdDto.campusAddress || newCollege.address,
+      status: createdDto.isActive ? "Active" : "Suspended",
+      totalStudents: createdDto.studentCount || 0,
+      totalFaculty: createdDto.facultyCount || 0,
+      departmentsCount: createdDto.departmentCount || 0,
+      activeProjectsCount: createdDto.activeProjectsCount || 0,
+    };
+
+    setColleges((prev) => [syncedCollege, ...prev.filter((c) => c.id !== newCollege.id && c.id !== syncedCollege.id)]);
+    return syncedCollege;
   };
 
   const updateCollege = (id: string, updates: Partial<CollegeTenantRecord>) => {
     setColleges((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
-    showToast("College tenant details updated successfully.", "success");
+    platformApi.updateTenant(id, {
+      name: updates.name,
+      licenseTier: updates.subscriptionPlan,
+      maxStudentSeats: updates.maxStudentSeats ?? updates.totalStudents,
+      storageQuotaGb: updates.storageQuotaGb,
+      isActive: updates.status ? updates.status === "Active" : undefined,
+      enforceStrictSso: updates.strictSsoEnforced,
+      affiliatingUniversity: updates.university,
+      campusAddress: updates.address,
+    }).then(() => {
+      showToast("College tenant details updated successfully.", "success");
+    }).catch((err: any) => {
+      showToast(err?.message || "Failed to persist college tenant updates.", "error");
+    });
   };
 
   const approveOnboardingRequest = (requestId: string) => {
@@ -3485,97 +3757,66 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     showToast(`Password recovery OTP successfully dispatched to ${col.principalEmail} (${col.principalName}).`, "success");
   };
 
-  const suspendCollege = (collegeId: string, reason: string, actor = "Dev Startup Admin") => {
+  const suspendCollege = async (collegeId: string, _reason: string) => {
     const target = colleges.find((c) => c.id === collegeId || c.code.toLowerCase() === collegeId.toLowerCase());
     if (!target) return;
 
+    await platformApi.updateTenant(target.id, { isActive: false });
     setColleges((prev) =>
       prev.map((c) => (c.id === target.id ? { ...c, status: "Suspended", adminAccountStatus: "Suspended" } : c))
     );
-
-    // Sync status with backend
-    platformApi.updateTenant(target.id, { isActive: false }).catch(() => {});
-
-    addAuditLog({
-      action: "COLLEGE_SUSPENDED",
-      actor,
-      affectedResource: `College: ${target.name} (${target.code})`,
-      metadataJson: JSON.stringify({ collegeId: target.id, code: target.code, reason }),
-      details: `Access suspended for ${target.name}. Reason: ${reason}. Active campus user sessions invalidated.`,
-      status: "Success",
-      category: "College Management",
-    });
-
     showToast(`${target.name} access has been suspended.`, "warning");
   };
 
-  const reactivateCollege = (collegeId: string, reason: string, actor = "Dev Startup Admin") => {
+  const reactivateCollege = async (collegeId: string, _reason: string) => {
     const target = colleges.find((c) => c.id === collegeId || c.code.toLowerCase() === collegeId.toLowerCase());
     if (!target) return;
 
+    await platformApi.updateTenant(target.id, { isActive: true });
     setColleges((prev) =>
       prev.map((c) => (c.id === target.id ? { ...c, status: "Active", adminAccountStatus: "Active" } : c))
     );
-
-    // Sync status with backend
-    platformApi.updateTenant(target.id, { isActive: true }).catch(() => {});
-
-    addAuditLog({
-      action: "COLLEGE_REACTIVATED",
-      actor,
-      affectedResource: `College: ${target.name} (${target.code})`,
-      metadataJson: JSON.stringify({ collegeId: target.id, code: target.code, reason }),
-      details: `Access restored for ${target.name}. Reason: ${reason}.`,
-      status: "Success",
-      category: "College Management",
-    });
-
     showToast(`${target.name} access has been reactivated.`, "success");
   };
 
-  const resendAdminInvitation = (collegeId: string) => {
+  const resendAdminInvitation = async (collegeId: string) => {
     const target = colleges.find((c) => c.id === collegeId || c.code.toLowerCase() === collegeId.toLowerCase());
-    if (!target) return;
+    if (!target || !target.principalEmail) return;
 
+    await platformApi.provisionAdmin(target.id, {
+      fullName: target.principalName || undefined,
+      email: target.principalEmail,
+      replaceExisting: false,
+    });
     setColleges((prev) =>
       prev.map((c) =>
         c.id === target.id
           ? {
               ...c,
+              principalIsActivated: false,
+              principalIsEmailVerified: false,
+              principalHasPendingInvitation: true,
               adminInvitationStatus: "Sent",
-              adminInvitationDate: new Date().toISOString().replace("T", " ").slice(0, 19),
             }
           : c
       )
     );
-
-    // Sync provisioning / reset OTP with backend
-    platformApi.provisionAdmin(target.id, { fullName: target.principalName, email: target.principalEmail }).catch(() => {});
-
-    addAuditLog({
-      action: "ADMIN_INVITATION_RESENT",
-      actor: "Dev Startup Admin",
-      affectedResource: `College: ${target.name} (${target.principalEmail})`,
-      metadataJson: JSON.stringify({ collegeId: target.id, principalEmail: target.principalEmail }),
-      details: `Invitation token re-dispatched to ${target.principalEmail}.`,
-      status: "Success",
-      category: "College Management",
-    });
-
-    showToast(`Invitation token re-sent to ${target.principalEmail}.`, "success");
+    showToast(`Activation invitation re-sent to ${target.principalEmail}.`, "success");
   };
 
-  const replacePrimaryAdmin = (
+  const replacePrimaryAdmin = async (
     collegeId: string,
     newAdmin: { fullName: string; email: string; designation: string; phone: string; reason: string }
   ) => {
     const target = colleges.find((c) => c.id === collegeId || c.code.toLowerCase() === collegeId.toLowerCase());
     if (!target) return;
 
-    const previousAdmin = {
-      name: target.principalName,
-      email: target.principalEmail,
-    };
+    await platformApi.provisionAdmin(target.id, {
+      fullName: newAdmin.fullName,
+      email: newAdmin.email,
+      replaceExisting: true,
+      reason: newAdmin.reason,
+    });
 
     setColleges((prev) =>
       prev.map((c) =>
@@ -3583,36 +3824,17 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
           ? {
               ...c,
               principalName: newAdmin.fullName,
-              principalEmail: newAdmin.email,
-              contactPhone: newAdmin.phone,
-              principalDesignation: newAdmin.designation,
-              adminAccountStatus: "Active",
-              adminInvitationStatus: "Sent",
-              adminInvitationDate: new Date().toISOString().replace("T", " ").slice(0, 19),
+              principalEmail: newAdmin.email.toLowerCase(),
+              principalIsActive: true,
+              principalIsActivated: false,
+              principalIsEmailVerified: false,
+              principalHasPendingInvitation: true,
+              principalLastLoginAtUtc: null,
             }
           : c
       )
     );
-
-    // Sync new admin account with backend
-    platformApi.provisionAdmin(target.id, { fullName: newAdmin.fullName, email: newAdmin.email }).catch(() => {});
-
-    addAuditLog({
-      action: "COLLEGE_ADMIN_REPLACED",
-      actor: "Dev Startup Admin",
-      affectedResource: `College: ${target.name}`,
-      metadataJson: JSON.stringify({
-        collegeId: target.id,
-        previousAdmin,
-        newAdmin: { fullName: newAdmin.fullName, email: newAdmin.email },
-        reason: newAdmin.reason,
-      }),
-      details: `Primary Administrator replaced from ${previousAdmin.email} to ${newAdmin.email}. Reason: ${newAdmin.reason}. Predecessor credentials revoked.`,
-      status: "Success",
-      category: "College Management",
-    });
-
-    showToast(`Primary administrator updated to ${newAdmin.fullName}. Credentials dispatched.`, "success");
+    showToast(`Primary administrator replaced. Activation link dispatched to ${newAdmin.email}.`, "success");
   };
 
   const addUniversity = (univ: Partial<UniversityRecord>) => {
@@ -4107,57 +4329,63 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     showToast(`Invoice status updated to ${status}.`, "info");
   };
 
-  const inviteAdminUser = (email: string, name: string, _role?: string) => {
-    const adminCount = adminUsers.length + 1;
-    const adminIdFormatted = `ADM-${String(adminCount).padStart(3, "0")}`;
-    const newUser: PlatformAdminUserRecord = {
-      id: `usr-adm-${Date.now()}`,
-      name,
+  const inviteAdminUser = async (email: string, name: string, role?: string) => {
+    const created = await platformApi.inviteAdministrator({
+      fullName: name,
       email,
-      adminId: adminIdFormatted,
-      platformRole: "Super Admin",
-      status: "Pending Invitation",
-      mfaStatus: "Pending Setup",
-      createdAt: new Date().toISOString().slice(0, 19).replace("T", " "),
+      platformRole: role,
+    });
+    const newUser: PlatformAdminUserRecord = {
+      id: created.id,
+      name: created.fullName,
+      email: created.email,
+      adminId: created.adminId,
+      platformRole: (created.platformRole as any) || "Super Admin",
+      status: (created.status as any) || "Pending Invitation",
+      mfaStatus: (created.mfaStatus as any) || "Enrollment Required",
+      createdAt: created.createdAtUtc ? created.createdAtUtc.slice(0, 19).replace("T", " ") : "",
       lastLogin: "Never",
       lastAuthTimestamp: "Never",
       ipAddress: "—",
       activeSessionsCount: 0,
       mfaDetails: {
         type: "FIDO2 / WebAuthn Hardware Key",
-        keyModel: "Hardware Token Enrollment Required",
+        keyModel: "Enrollment Required",
         keyId: "PENDING_REGISTRATION",
         enrolledAt: "Pending Initial Login",
         backupCodesRemaining: 0,
         recoveryStatus: "Healthy",
       },
       permissions: STANDARD_PERMISSIONS_DEF.map((def, idx) => ({
-        id: `perm-${Date.now()}-${idx}`,
+        id: `perm-${created.id}-${idx}`,
         category: def.category,
         key: def.key,
         label: def.label,
         description: def.description,
-        granted: false,
+        granted: true,
       })),
-      securityActivity: [
-        {
-          id: `act-${Date.now()}`,
-          timestamp: new Date().toISOString().slice(0, 19).replace("T", " "),
-          event: "Super Admin Invitation Dispatched",
-          ipAddress: "103.21.244.10",
-          status: "Success",
-          details: "24-hour cryptographically signed invitation token sent. Hardware FIDO2 registration required on first login.",
-        },
-      ],
-      sensitiveSafeguards: { canPublishMasterData: false, canAuthorizeBilling: false, canManageTenants: false },
+      securityActivity: [],
+      sensitiveSafeguards: { canPublishMasterData: true, canAuthorizeBilling: true, canManageTenants: true },
     };
     setAdminUsers((prev) => [...prev, newUser]);
-    showToast(`Super Admin invitation token dispatched to ${email} (valid 24h). Hardware FIDO2 key mandatory.`, "success");
+    showToast(`Invitation dispatched to ${created.email}.`, "success");
   };
 
-  const updateAdminUser = (id: string, updates: Partial<PlatformAdminUserRecord>) => {
+  const updateAdminUser = async (id: string, updates: Partial<PlatformAdminUserRecord>) => {
+    if (updates.status === "Active" || updates.status === "Suspended") {
+      const isActive = updates.status === "Active";
+      await platformApi.updateAdministratorStatus(id, isActive);
+      setAdminUsers((prev) =>
+        prev.map((u) =>
+          u.id === id
+            ? { ...u, status: updates.status!, activeSessionsCount: isActive ? u.activeSessionsCount : 0 }
+            : u
+        )
+      );
+      showToast(`Operator status updated to ${updates.status}.`, isActive ? "success" : "warning");
+      return;
+    }
     setAdminUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...updates } : u)));
-    showToast("Super Admin details updated.", "success");
   };
 
   const revokeAdminUser = (id: string) => {
@@ -4190,26 +4418,12 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     showToast(target?.status === "Active" ? "Super Admin access has been revoked and all sessions terminated." : "Super Admin access reactivated.", "warning");
   };
 
-  const revokeAdminSessions = (id: string) => {
+  const revokeAdminSessions = async (id: string) => {
+    await platformApi.revokeAdministratorSessions(id);
     setAdminUsers((prev) =>
-      prev.map((u) => {
-        if (u.id !== id) return u;
-        const newActivity: SecurityActivityRecord = {
-          id: `act-${Date.now()}`,
-          timestamp: new Date().toISOString().slice(0, 19).replace("T", " "),
-          event: "All Active Sessions Revoked",
-          ipAddress: "103.21.244.10",
-          status: "Warning",
-          details: "Administrator forced invalidation of all web sessions, API tokens, and refresh tokens.",
-        };
-        return {
-          ...u,
-          activeSessionsCount: 0,
-          securityActivity: [newActivity, ...(u.securityActivity || [])],
-        };
-      })
+      prev.map((u) => (u.id === id ? { ...u, activeSessionsCount: 0 } : u))
     );
-    showToast("All active sessions and cryptographic tokens invalidated immediately.", "success");
+    showToast("All active sessions and cryptographic tokens invalidated immediately.", "warning");
   };
 
   const initiateMfaRecovery = (id: string) => {
@@ -4438,300 +4652,193 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return { latency: randomLatency, status: "Operational" };
   };
 
-  const addAnnouncement = (ann: Partial<AnnouncementRecord>) => {
-    const isScheduled = !!ann.scheduledFor && ann.status === "Scheduled";
-    const isDraft = ann.status === "Draft";
-    const status = isDraft ? "Draft" : isScheduled ? "Scheduled" : "Published";
-    const timestamp = new Date().toISOString().slice(0, 19).replace("T", " ");
-
-    const initialAudit: AnnouncementAuditLogEntry = {
-      id: `audit-${Date.now()}`,
-      action: isDraft ? "Created" : isScheduled ? "Scheduled" : "Published",
-      performedBy: ann.authorName || "Dev Startup Admin (ADM-001)",
-      timestamp,
-      details: isDraft
-        ? "Draft notice created."
-        : isScheduled
-        ? `Scheduled for publication at ${ann.scheduledFor}.`
-        : "Published platform-wide.",
-    };
-
-    const newAnn: AnnouncementRecord = {
-      id: `ann-${Date.now()}`,
-      title: ann.title || "Platform Announcement",
-      category: ann.category || "General Notice",
-      priority: ann.priority || "Normal",
-      shortDescription: ann.shortDescription || (ann.fullMessage ? ann.fullMessage.slice(0, 100) + "..." : ""),
-      fullMessage: ann.fullMessage || "",
-      targetAudience: ann.targetAudience || "All Colleges",
-      selectedCollegeCodes: ann.selectedCollegeCodes || [],
-      deliveryChannels: ann.deliveryChannels || ["In-App Notification"],
-      sendInApp: ann.sendInApp ?? true,
-      sendEmail: ann.sendEmail ?? false,
-      publishDate: isDraft ? "—" : isScheduled ? ann.scheduledFor! : timestamp,
-      scheduledFor: ann.scheduledFor,
-      expiryDate: ann.expiryDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-      status,
-      readCount: 0,
-      deliveredCount: status === "Published" ? (ann.targetAudience === "All Colleges" ? 152 : 35) : 0,
-      authorName: ann.authorName || "Dev Startup Admin (ADM-001)",
-      createdAt: timestamp,
-      requiresAcknowledgement: ann.requiresAcknowledgement ?? false,
-      auditLog: [initialAudit],
-    };
-    setAnnouncements((prev) => [newAnn, ...prev]);
-    showToast(
-      isDraft
-        ? "Announcement saved as draft."
-        : isScheduled
-        ? `Announcement scheduled for ${ann.scheduledFor}.`
-        : "Announcement published immediately to colleges.",
-      "success"
-    );
-  };
-
-  const updateAnnouncement = (id: string, updates: Partial<AnnouncementRecord>) => {
-    const timestamp = new Date().toISOString().slice(0, 19).replace("T", " ");
-    const updateAudit: AnnouncementAuditLogEntry = {
-      id: `audit-${Date.now()}`,
-      action: "Updated",
-      performedBy: "Dev Startup Admin (ADM-001)",
-      timestamp,
-      details: "Announcement updated by Platform Super Admin.",
-    };
-
-    setAnnouncements((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              ...updates,
-              updatedAt: timestamp,
-              auditLog: [...(a.auditLog || []), updateAudit],
-            }
-          : a
-      )
-    );
-    showToast("Announcement updated successfully.", "success");
-  };
-
-  const deleteAnnouncement = (id: string) => {
-    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-    showToast("Announcement removed from platform registry.", "info");
-  };
-
-  const publishAnnouncementNow = (id: string) => {
-    const timestamp = new Date().toISOString().slice(0, 19).replace("T", " ");
-    const publishAudit: AnnouncementAuditLogEntry = {
-      id: `audit-${Date.now()}`,
-      action: "Published",
-      performedBy: "Dev Startup Admin (ADM-001)",
-      timestamp,
-      details: "Immediate publication executed.",
-    };
-
-    setAnnouncements((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              status: "Published",
-              publishDate: timestamp,
-              deliveredCount: a.targetAudience === "All Colleges" ? 152 : 35,
-              auditLog: [...(a.auditLog || []), publishAudit],
-            }
-          : a
-      )
-    );
-    showToast("Announcement published immediately to targeted colleges.", "success");
-  };
-
-  const withdrawAnnouncement = (id: string, reason?: string) => {
-    const timestamp = new Date().toISOString().slice(0, 19).replace("T", " ");
-    const withdrawAudit: AnnouncementAuditLogEntry = {
-      id: `audit-${Date.now()}`,
-      action: "Withdrawn",
-      performedBy: "Dev Startup Admin (ADM-001)",
-      timestamp,
-      details: reason || "Announcement withdrawn from live college dashboards by Super Admin.",
-    };
-
-    setAnnouncements((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              status: "Withdrawn",
-              withdrawnAt: timestamp,
-              withdrawnBy: "Dev Startup Admin (ADM-001)",
-              withdrawalReason: reason,
-              auditLog: [...(a.auditLog || []), withdrawAudit],
-            }
-          : a
-      )
-    );
-    showToast("Announcement withdrawn. Live college visibility revoked.", "info");
-  };
-
-  const archiveAnnouncement = (id: string, reason?: string) => {
-    setAnnouncements((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: "Withdrawn" as const } : a))
-    );
-    addAuditLog({
-      action: "ANNOUNCEMENT_ARCHIVED",
-      actor: "Dev Startup Admin",
-      affectedResource: `Announcement: ${id}`,
-      metadataJson: JSON.stringify({ announcementId: id, reason }),
-      details: `Announcement archived. Reason: ${reason || "Expired or superseded."}`,
-      status: "Success",
-      category: "Platform Management",
-    });
-    showToast("Announcement archived.", "info");
-  };
-
-  const getAnnouncementsForCollege = (collegeCode: string) => {
-    const college = colleges.find((c) => c.code === collegeCode);
-    const isActive = college?.status === "Active";
-    return announcements.filter((a) => {
-      if (a.status !== "Published") return false;
-      if (a.targetAudience === "All Colleges" || a.targetAudience === "All Institutions") return true;
-      if (a.targetAudience === "Active Colleges") return isActive;
-      if (a.targetAudience === "Selected Colleges" || a.targetAudience === "Selected Institutions") {
-        return a.selectedCollegeCodes?.includes(collegeCode);
-      }
+  const addAnnouncement = async (ann: Partial<AnnouncementRecord>): Promise<boolean> => {
+    try {
+      const created = await platformApi.createAnnouncement({
+        title: ann.title || "Platform Announcement",
+        category: ann.category || "Maintenance",
+        priority: ann.priority || "Normal",
+        shortDescription: ann.shortDescription,
+        fullMessage: ann.fullMessage || "",
+        targetAudience: ann.targetAudience || "All Colleges",
+        targetCollegeIds: ann.targetCollegeIds || [],
+        status: ann.status === "Draft" ? "Draft" : "Published",
+      });
+      setAnnouncements((prev) => [mapAnnouncementDto(created), ...prev]);
+      showToast(
+        created.status === "Draft"
+          ? "Announcement saved as draft."
+          : "Announcement published to colleges.",
+        "success"
+      );
+      return true;
+    } catch (err: any) {
+      showToast(err?.message || "Failed to create announcement.", "error");
       return false;
-    });
+    }
   };
 
-  const replySupportTicket = (ticketId: string, message: string, isInternal = false) => {
-    setTickets((prev) =>
-      prev.map((t) => {
-        if (t.id === ticketId) {
-          const newMsg = {
-            id: `c-${Date.now()}`,
-            sender: isInternal ? "Dev Startup Admin" : "Colabex Platform Support",
-            isStaff: true,
-            timestamp: new Date().toISOString().replace("T", " ").slice(0, 19),
-            message,
-            isInternalNote: isInternal,
-          };
-          return {
-            ...t,
-            updatedAt: newMsg.timestamp,
-            conversation: [...t.conversation, newMsg],
-          };
-        }
-        return t;
-      })
-    );
-    showToast(isInternal ? "Internal administrator note recorded." : "Ticket response sent to institution.", "success");
+  const updateAnnouncement = async (id: string, updates: Partial<AnnouncementRecord>): Promise<boolean> => {
+    const existing = announcements.find((a) => a.id === id);
+    if (!existing) return false;
+    try {
+      const updated = await platformApi.updateAnnouncement(id, {
+        title: updates.title ?? existing.title,
+        category: (updates.category ?? existing.category) || "Maintenance",
+        priority: (updates.priority ?? existing.priority) || "Normal",
+        shortDescription: updates.shortDescription ?? existing.shortDescription,
+        fullMessage: updates.fullMessage ?? existing.fullMessage,
+        targetAudience: (updates.targetAudience ?? existing.targetAudience) || "All Colleges",
+        targetCollegeIds: updates.targetCollegeIds ?? existing.targetCollegeIds ?? [],
+        status: updates.status ?? existing.status,
+      });
+      setAnnouncements((prev) => prev.map((a) => (a.id === id ? mapAnnouncementDto(updated) : a)));
+      showToast("Announcement updated successfully.", "success");
+      return true;
+    } catch (err: any) {
+      showToast(err?.message || "Failed to update announcement.", "error");
+      return false;
+    }
   };
 
-  const updateTicketStatus = (
+  const deleteAnnouncement = async (id: string) => {
+    try {
+      await platformApi.deleteAnnouncement(id);
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+      showToast("Announcement removed from platform registry.", "info");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to delete announcement.", "error");
+    }
+  };
+
+  const publishAnnouncementNow = async (id: string) => {
+    try {
+      const updated = await platformApi.publishAnnouncement(id);
+      setAnnouncements((prev) => prev.map((a) => (a.id === id ? mapAnnouncementDto(updated) : a)));
+      showToast("Announcement published immediately to targeted colleges.", "success");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to publish announcement.", "error");
+    }
+  };
+
+  const withdrawAnnouncement = async (id: string) => {
+    try {
+      const updated = await platformApi.withdrawAnnouncement(id);
+      setAnnouncements((prev) => prev.map((a) => (a.id === id ? mapAnnouncementDto(updated) : a)));
+      showToast("Announcement withdrawn. Live college visibility revoked.", "info");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to withdraw announcement.", "error");
+    }
+  };
+
+  const archiveAnnouncement = async (id: string, reason?: string) => {
+    try {
+      const updated = await platformApi.archiveAnnouncement(id, reason);
+      setAnnouncements((prev) => prev.map((a) => (a.id === id ? mapAnnouncementDto(updated) : a)));
+      showToast("Announcement archived.", "info");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to archive announcement.", "error");
+    }
+  };
+
+  const createSupportTicket = async (data: {
+    collegeId?: string;
+    institutionName?: string;
+    subject: string;
+    description: string;
+    category?: string;
+    priority?: string;
+  }) => {
+    try {
+      const created = await platformApi.createTicket(data);
+      setTickets((prev) => [mapTicketDto(created), ...prev]);
+      showToast(`Support ticket ${created.ticketNumber} created.`, "success");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to create support ticket.", "error");
+    }
+  };
+
+  const replySupportTicket = async (ticketId: string, message: string, isInternal = false) => {
+    try {
+      const updated = await platformApi.replyTicket(ticketId, message, isInternal);
+      setTickets((prev) => prev.map((t) => (t.id === ticketId ? mapTicketDto(updated) : t)));
+      showToast(isInternal ? "Internal administrator note recorded." : "Ticket response sent to institution.", "success");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to send ticket reply.", "error");
+    }
+  };
+
+  const updateTicketStatus = async (
     ticketId: string,
-    status: SupportTicketRecord["status"],
-    resolutionNotes?: string
+    status: SupportTicketRecord["status"]
   ) => {
-    const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
-    setTickets((prev) =>
-      prev.map((t) => {
-        if (t.id !== ticketId) return t;
-        const updates: Partial<SupportTicketRecord> = {
-          status,
-          updatedAt: timestamp,
-        };
-        if (status === "Resolved" || status === "Closed") {
-          updates.resolvedAt = timestamp;
-          updates.resolvedBy = "Dev Startup Admin";
-          if (resolutionNotes) {
-            updates.resolutionNotes = resolutionNotes;
-          }
-        }
-        return { ...t, ...updates };
-      })
-    );
-    showToast(`Ticket status updated to ${status}.`, "success");
+    try {
+      const updated = await platformApi.updateTicketStatus(ticketId, status);
+      setTickets((prev) => prev.map((t) => (t.id === ticketId ? mapTicketDto(updated) : t)));
+      showToast(`Ticket status updated to ${status}.`, "success");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to update ticket status.", "error");
+    }
   };
 
-  const resolveSupportTicket = (ticketId: string, resolutionNotes: string) => {
-    const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
-    setTickets((prev) =>
-      prev.map((t) => {
-        if (t.id !== ticketId) return t;
-        const resolutionMsg = {
-          id: `res-${Date.now()}`,
-          sender: "Dev Startup Admin",
-          isStaff: true,
-          timestamp,
-          message: `Resolution: ${resolutionNotes}`,
-        };
-        return {
-          ...t,
-          status: "Resolved",
-          resolutionNotes,
-          resolvedAt: timestamp,
-          resolvedBy: "Dev Startup Admin",
-          updatedAt: timestamp,
-          conversation: [...t.conversation, resolutionMsg],
-        };
-      })
-    );
-    showToast("Ticket resolved and resolution notes recorded.", "success");
+  const resolveSupportTicket = async (ticketId: string, resolutionNotes: string) => {
+    try {
+      const updated = await platformApi.resolveTicket(ticketId, resolutionNotes);
+      setTickets((prev) => prev.map((t) => (t.id === ticketId ? mapTicketDto(updated) : t)));
+      showToast("Ticket resolved and resolution notes recorded.", "success");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to resolve ticket.", "error");
+    }
   };
 
-  const closeSupportTicket = (ticketId: string) => {
-    setTickets((prev) =>
-      prev.map((t) => (t.id === ticketId ? { ...t, status: "Closed" as const, updatedAt: new Date().toISOString().replace("T", " ").slice(0, 19) } : t))
-    );
-    showToast("Ticket closed.", "info");
+  const closeSupportTicket = async (ticketId: string) => {
+    try {
+      const updated = await platformApi.closeTicket(ticketId);
+      setTickets((prev) => prev.map((t) => (t.id === ticketId ? mapTicketDto(updated) : t)));
+      showToast("Ticket closed.", "info");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to close ticket.", "error");
+    }
   };
 
   const getTicketsForCollege = (collegeCode: string) => {
     return tickets.filter((t) => t.collegeCode === collegeCode);
   };
 
-  const updateTicketPriority = (ticketId: string, priority: SupportTicketRecord["priority"]) => {
-    setTickets((prev) =>
-      prev.map((t) => (t.id === ticketId ? { ...t, priority, updatedAt: new Date().toISOString().replace("T", " ").slice(0, 19) } : t))
-    );
-    showToast(`Ticket priority changed to ${priority}.`, "info");
+  const updateTicketPriority = async (ticketId: string, priority: SupportTicketRecord["priority"]) => {
+    try {
+      const updated = await platformApi.updateTicketPriority(ticketId, priority);
+      setTickets((prev) => prev.map((t) => (t.id === ticketId ? mapTicketDto(updated) : t)));
+      showToast(`Ticket priority changed to ${priority}.`, "info");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to update ticket priority.", "error");
+    }
   };
 
-  const assignSupportTicket = (ticketId: string, agentName: string) => {
-    setTickets((prev) =>
-      prev.map((t) => (t.id === ticketId ? { ...t, assignedAgent: agentName, updatedAt: new Date().toISOString().replace("T", " ").slice(0, 19) } : t))
-    );
-    showToast(`Ticket assigned to ${agentName}.`, "info");
+  const assignSupportTicket = async (ticketId: string, agentName: string) => {
+    try {
+      const updated = await platformApi.assignTicket(ticketId, agentName);
+      setTickets((prev) => prev.map((t) => (t.id === ticketId ? mapTicketDto(updated) : t)));
+      showToast(`Ticket assigned to ${agentName}.`, "info");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to assign ticket.", "error");
+    }
   };
 
-  const terminateSession = (sessionId: string) => {
-    const targetSession = activeSessions.find((s) => s.id === sessionId);
-    setActiveSessions((prev) => prev.filter((s) => s.id !== sessionId));
-
-    addAuditLog({
-      user: "Dev Startup Admin",
-      userEmail: "admin@collabex.in",
-      action: "Admin Session Revoked",
-      category: "Authentication",
-      affectedResource: `Session: ${sessionId} (${targetSession?.accountEmail || "Platform Admin"})`,
-      result: "Success",
-      ipAddress: "103.21.244.10",
-      details: `Revoked active administrative session for ${targetSession?.accountName || "Admin"} on ${targetSession?.device || "device"}.`,
-      metadataJson: JSON.stringify(
-        {
-          revokedSessionId: sessionId,
-          accountEmail: targetSession?.accountEmail,
-          device: targetSession?.device,
-          browser: targetSession?.browser,
-          revokedBy: "admin@collabex.in",
-        },
-        null,
-        2
-      ),
-    });
-
-    platformApi.revokeSession(sessionId).catch(() => {});
-    showToast("Active administrative session revoked immediately.", "warning");
+  const terminateSession = async (sessionId: string) => {
+    try {
+      await platformApi.revokeSession(sessionId);
+      setActiveSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      const [backendLogs, summary] = await Promise.all([
+        platformApi.getAuditLogs(200).catch(() => null),
+        platformApi.getSecuritySummary().catch(() => null),
+      ]);
+      if (Array.isArray(backendLogs)) setAuditLogs(backendLogs.map(mapAuditLogDto));
+      if (summary) setSecuritySummary(summary);
+      showToast("Active administrative session revoked immediately.", "warning");
+    } catch (err: any) {
+      showToast(err?.message || "Failed to revoke session.", "error");
+    }
   };
 
   const getPlatformStats = () => {
@@ -4840,6 +4947,10 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         toggleFeatureFlag,
         integrations,
         testIntegration,
+        healthDetails,
+        refreshHealthDetails,
+        securitySummary,
+        isLoadingPlatformData,
         services,
         alerts,
         incidents,
@@ -4856,7 +4967,7 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         publishAnnouncementNow,
         withdrawAnnouncement,
         archiveAnnouncement,
-        getAnnouncementsForCollege,
+        createSupportTicket,
         replySupportTicket,
         updateTicketStatus,
         updateTicketPriority,

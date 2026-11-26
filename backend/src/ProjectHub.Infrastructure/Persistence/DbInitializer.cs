@@ -77,6 +77,20 @@ public static class DbInitializer
     public static readonly Guid DefensePanel01Id = Guid.Parse("70000000-0000-0000-0000-000000000001");
     public static readonly Guid DefenseEvaluatorNairId = Guid.Parse("70000000-0000-0000-0000-000000000002");
 
+    /// <summary>
+    /// Seeds only legitimate system-level master reference catalogs (SDGs, RGPV Catalog).
+    /// Safe for fresh production and local platforms; creates zero tenants, users, or academic records.
+    /// </summary>
+    public static async Task SeedMasterCatalogsAsync(ProjectHubDbContext context)
+    {
+        await SeedMasterSdgCatalogAsync(context);
+        await SeedRgpvMasterCatalogAsync(context);
+    }
+
+    /// <summary>
+    /// Test-only seeder used exclusively by integration test fixtures (CustomWebApplicationFactory).
+    /// Never invoked during normal application startup.
+    /// </summary>
     public static async Task SeedAsync(ProjectHubDbContext context, ITenantContext tenantContext, bool isDevelopment = false)
     {
         var originalSuperAdmin = tenantContext.IsSuperAdmin;
@@ -86,9 +100,7 @@ public static class DbInitializer
 
         try
         {
-            await SeedMasterNbaOutcomesAsync(context);
-            await SeedMasterSdgCatalogAsync(context);
-            await SeedRgpvMasterCatalogAsync(context);
+            await SeedMasterCatalogsAsync(context);
             await SeedTenantsAsync(context);
             await SeedDepartmentsAsync(context);
             if (isDevelopment)
@@ -105,30 +117,6 @@ public static class DbInitializer
             tenantContext.IsSuperAdmin = originalSuperAdmin;
             tenantContext.IsTrustedSystemSeeder = originalTrustedSeeder;
         }
-    }
-
-    private static async Task SeedMasterNbaOutcomesAsync(ProjectHubDbContext context)
-    {
-        if (await context.MasterNbaOutcomes.IgnoreQueryFilters().AnyAsync()) return;
-
-        var outcomes = new List<MasterNbaOutcome>
-        {
-            new() { Code = "PO1", Title = "Engineering Knowledge", Description = "Apply knowledge of mathematics, science, engineering fundamentals, and specialization to solve complex engineering problems.", Category = "ProgramOutcome" },
-            new() { Code = "PO2", Title = "Problem Analysis", Description = "Identify, formulate, review research literature, and analyze complex engineering problems reaching substantiated conclusions.", Category = "ProgramOutcome" },
-            new() { Code = "PO3", Title = "Design/Development of Solutions", Description = "Design solutions for complex engineering problems and design system components or processes that meet specified needs.", Category = "ProgramOutcome" },
-            new() { Code = "PO4", Title = "Conduct Investigations of Complex Problems", Description = "Use research-based knowledge and research methods including design of experiments, analysis and synthesis of information.", Category = "ProgramOutcome" },
-            new() { Code = "PO5", Title = "Modern Tool Usage", Description = "Create, select, and apply appropriate techniques, resources, and modern engineering and IT tools.", Category = "ProgramOutcome" },
-            new() { Code = "PO6", Title = "The Engineer and Society", Description = "Apply reasoning informed by contextual knowledge to assess societal, health, safety, legal and cultural issues.", Category = "ProgramOutcome" },
-            new() { Code = "PO7", Title = "Environment and Sustainability", Description = "Understand the impact of engineering solutions in societal and environmental contexts, demonstrating sustainable development.", Category = "SustainabilityGoal" },
-            new() { Code = "PO8", Title = "Ethics", Description = "Apply ethical principles and commit to professional ethics and responsibilities and norms of engineering practice.", Category = "ProgramOutcome" },
-            new() { Code = "PO9", Title = "Individual and Team Work", Description = "Function effectively as an individual, and as a member or leader in diverse teams, and in multidisciplinary settings.", Category = "ProgramOutcome" },
-            new() { Code = "PO10", Title = "Communication", Description = "Communicate effectively on complex engineering activities with the engineering community and society at large.", Category = "ProgramOutcome" },
-            new() { Code = "PO11", Title = "Project Management and Finance", Description = "Demonstrate knowledge and understanding of engineering and management principles and apply these to projects.", Category = "ProgramOutcome" },
-            new() { Code = "PO12", Title = "Life-long Learning", Description = "Recognize the need for, and have the preparation and ability to engage in independent and life-long learning.", Category = "ProgramOutcome" }
-        };
-
-        await context.MasterNbaOutcomes.AddRangeAsync(outcomes);
-        await context.SaveChangesAsync();
     }
 
     private static async Task SeedMasterSdgCatalogAsync(ProjectHubDbContext context)
@@ -666,9 +654,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 Code = "CSE",
                 Name = "Computer Science & Engineering",
-                IntakeQuota = 480,
-                IsSarAttested = true,
-                SarAttestedAtUtc = DateTime.UtcNow.AddDays(-15)
+                IntakeQuota = 480
             },
             new()
             {
@@ -676,9 +662,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 Code = "ECE",
                 Name = "Electronics & Communication Engineering",
-                IntakeQuota = 320,
-                IsSarAttested = true,
-                SarAttestedAtUtc = DateTime.UtcNow.AddDays(-20)
+                IntakeQuota = 320
             },
             new()
             {
@@ -686,8 +670,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 Code = "ME",
                 Name = "Mechanical Engineering",
-                IntakeQuota = 260,
-                IsSarAttested = false
+                IntakeQuota = 260
             },
             new()
             {
@@ -695,9 +678,7 @@ public static class DbInitializer
                 CollegeId = SistecTenantId,
                 Code = "CE",
                 Name = "Civil Engineering",
-                IntakeQuota = 220,
-                IsSarAttested = true,
-                SarAttestedAtUtc = DateTime.UtcNow.AddDays(-25)
+                IntakeQuota = 220
             }
         };
 
@@ -948,11 +929,11 @@ public static class DbInitializer
         {
             var mbaMcaDepts = new List<Department>
             {
-                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000011"), CollegeId = SistecTenantId, CourseProgramId = SistecMbaCourseProgramId, Code = "MBA-FIN", Name = "MBA Finance", IntakeQuota = 60, IsSarAttested = true, SarAttestedAtUtc = DateTime.UtcNow.AddDays(-10) },
-                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000012"), CollegeId = SistecTenantId, CourseProgramId = SistecMbaCourseProgramId, Code = "MBA-MKT", Name = "MBA Marketing", IntakeQuota = 60, IsSarAttested = true, SarAttestedAtUtc = DateTime.UtcNow.AddDays(-10) },
-                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000013"), CollegeId = SistecTenantId, CourseProgramId = SistecMbaCourseProgramId, Code = "MBA-HR", Name = "MBA Human Resources", IntakeQuota = 60, IsSarAttested = false },
-                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000021"), CollegeId = SistecTenantId, CourseProgramId = SistecMcaCourseProgramId, Code = "MCA-GEN", Name = "MCA General Software Development", IntakeQuota = 60, IsSarAttested = true, SarAttestedAtUtc = DateTime.UtcNow.AddDays(-5) },
-                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000022"), CollegeId = SistecTenantId, CourseProgramId = SistecMcaCourseProgramId, Code = "MCA-SPEC", Name = "MCA Specialization (AI & Data Science)", IntakeQuota = 60, IsSarAttested = false },
+                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000011"), CollegeId = SistecTenantId, CourseProgramId = SistecMbaCourseProgramId, Code = "MBA-FIN", Name = "MBA Finance", IntakeQuota = 60 },
+                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000012"), CollegeId = SistecTenantId, CourseProgramId = SistecMbaCourseProgramId, Code = "MBA-MKT", Name = "MBA Marketing", IntakeQuota = 60 },
+                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000013"), CollegeId = SistecTenantId, CourseProgramId = SistecMbaCourseProgramId, Code = "MBA-HR", Name = "MBA Human Resources", IntakeQuota = 60 },
+                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000021"), CollegeId = SistecTenantId, CourseProgramId = SistecMcaCourseProgramId, Code = "MCA-GEN", Name = "MCA General Software Development", IntakeQuota = 60 },
+                new() { Id = Guid.Parse("10000000-0000-0000-0000-000000000022"), CollegeId = SistecTenantId, CourseProgramId = SistecMcaCourseProgramId, Code = "MCA-SPEC", Name = "MCA Specialization (AI & Data Science)", IntakeQuota = 60 },
             };
             await context.Departments.AddRangeAsync(mbaMcaDepts);
             await context.SaveChangesAsync();
@@ -1365,29 +1346,7 @@ public static class DbInitializer
     /// <summary>
     /// Displays a formatted startup table in the console log of all 7 seeded role accounts with working credentials.
     /// </summary>
-    public static void PrintSeededAccountsTable()
-    {
-        Console.WriteLine();
-        Console.ForegroundColor = ConsoleColor.DarkGreen;
-        Console.WriteLine("====================================================================================================");
-        Console.WriteLine("                        COLLABEX - SEEDED ROLE ACCOUNTS (Password: Pass@1234)                       ");
-        Console.WriteLine("====================================================================================================");
-        Console.ResetColor();
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "ROLE", "NAME", "EMAIL", "DESIGNATION"));
-        Console.WriteLine(new string('-', 100));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "SuperAdmin", "Collabex Super Admin", "superadmin@collabex.in", "Platform Administrator"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "SuperAdmin (Alt)", "Dev Startup Admin", "admin@projecthub.in", "Platform Administrator"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "CollegeAdmin", "Dr. Keshvendra Choudhary", "collegeadmin@sistec.ac.in", "Campus Principal / Dean"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "HOD", "Dr. Ravindra Kumar Sharma", "hod@sistec.ac.in", "Head of Dept (CSE)"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "ProjectCoordinator", "Prof. Priya Nair", "coordinator@sistec.ac.in", "Project Coordinator"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "FacultyGuide", "Prof. S. K. Verma", "faculty@sistec.ac.in", "Faculty Mentor / Guide"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "TeamLead", "Shivansh Mehra", "student@sistec.ac.in", "Student Team Lead"));
-        Console.WriteLine(string.Format("{0,-20} {1,-28} {2,-30} {3}", "Student", "Aarav Sharma", "student2@sistec.ac.in", "Student Team Member"));
-        Console.ForegroundColor = ConsoleColor.DarkGreen;
-        Console.WriteLine("====================================================================================================");
-        Console.ResetColor();
-        Console.WriteLine();
-    }
+    // Test-only persona credential table removed from production/startup paths.
 
     private static async Task SeedPlatformAuditLogsAsync(ProjectHubDbContext context)
     {
@@ -1438,17 +1397,6 @@ public static class DbInitializer
                 IpAddress = "103.21.244.10",
                 OccurredAtUtc = DateTime.UtcNow.AddHours(-5),
                 MetadataJson = "{\"actorName\":\"Dev Startup Admin\",\"category\":\"College Management\",\"result\":\"Success\",\"details\":\"Tenant partition tenant_uit_rgpv_prod activated with 1,800 licensed student capacity.\",\"tenantCode\":\"UIT-RGPV\",\"seats\":1800}"
-            },
-            new()
-            {
-                Id = Guid.NewGuid(),
-                ActorUserId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0002"),
-                ActorEmail = "aditi.security@collabex.in",
-                Action = "Academic Reference Template Published",
-                TargetEntity = "Regulation: RGPV-AICTE-FLEX-2022 (v2.4)",
-                IpAddress = "103.21.244.12",
-                OccurredAtUtc = DateTime.UtcNow.AddHours(-18),
-                MetadataJson = "{\"actorName\":\"Aditi Trivedi\",\"category\":\"Platform Management\",\"result\":\"Success\",\"details\":\"Locked and published standardized RGPV 8-semester curriculum scheme template for affiliated colleges.\",\"version\":\"v2.4\"}"
             },
             new()
             {

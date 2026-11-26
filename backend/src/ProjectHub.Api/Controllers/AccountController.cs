@@ -4,7 +4,9 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using ProjectHub.Api.Authorization;
 using ProjectHub.Application.Interfaces;
 using ProjectHub.Domain.Entities;
@@ -20,21 +22,24 @@ namespace ProjectHub.Api.Controllers;
 public class AccountController : ControllerBase
 {
     private readonly ProjectHubDbContext _context;
-    private readonly IEmailSender _emailSender;
+    private readonly IEmailOutboxService _emailOutbox;
     private readonly ISessionSecurityService _sessionSecurity;
+    private readonly IMemoryCache _cache;
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         ProjectHubDbContext context,
-        IEmailSender emailSender,
+        IEmailOutboxService emailOutbox,
         ISessionSecurityService sessionSecurity,
+        IMemoryCache cache,
         IWebHostEnvironment environment,
         ILogger<AccountController> logger)
     {
         _context = context;
-        _emailSender = emailSender;
+        _emailOutbox = emailOutbox;
         _sessionSecurity = sessionSecurity;
+        _cache = cache;
         _environment = environment;
         _logger = logger;
     }
@@ -88,12 +93,12 @@ public class AccountController : ControllerBase
             FullName = user.FullName,
             Email = user.Email,
             IsEmailVerified = user.IsEmailVerified,
-            PhoneNumber = user.PhoneNumber ?? "+91 98260 12345",
+            PhoneNumber = user.PhoneNumber ?? string.Empty,
             IsPhoneVerified = user.IsPhoneVerified,
             AdminId = user.EnrollmentOrEmployeeCode,
             Role = "Super Admin",
-            PasswordChangedAtUtc = user.PasswordChangedAtUtc ?? DateTime.UtcNow.AddDays(-14),
-            MfaEnabled = true, // Mandatory for Super Admin
+            PasswordChangedAtUtc = user.PasswordChangedAtUtc ?? user.CreatedAtUtc,
+            MfaEnabled = user.MfaEnabled,
             NotificationPreferences = notificationPrefs,
             ConsolePreferences = consolePrefs
         };
@@ -164,6 +169,7 @@ public class AccountController : ControllerBase
     // =========================================================================
 
     [HttpPost("request-email-change")]
+    [EnableRateLimiting("EmailChangeLimit")]
     public async Task<IActionResult> RequestEmailChange([FromBody] RequestEmailChangeRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.NewEmail) || !request.NewEmail.Contains('@'))
@@ -194,28 +200,41 @@ public class AccountController : ControllerBase
 
         if (user == null) return NotFound(new { message = "User not found." });
 
+        if (user.EmailChangeOtpExpiresAtUtc.HasValue && user.EmailChangeOtpExpiresAtUtc.Value > DateTime.UtcNow)
+        {
+            var issuedAtUtc = user.EmailChangeOtpExpiresAtUtc.Value.AddMinutes(-10);
+            var elapsed = DateTime.UtcNow - issuedAtUtc;
+            if (elapsed < TimeSpan.FromSeconds(30))
+            {
+                var remainingSeconds = Math.Max(1, (int)Math.Ceiling((TimeSpan.FromSeconds(30) - elapsed).TotalSeconds));
+                return BadRequest(new { message = $"Please wait {remainingSeconds} seconds before requesting another email verification code." });
+            }
+        }
+
         var otpNumber = RandomNumberGenerator.GetInt32(100000, 1000000);
         var otp = otpNumber.ToString("D6");
+        var expiresAtUtc = DateTime.UtcNow.AddMinutes(10);
 
         user.PendingEmail = newEmail;
         user.EmailChangeOtpHashed = PasswordHelper.HashPassword(otp);
-        user.EmailChangeOtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(10);
+        user.EmailChangeOtpExpiresAtUtc = expiresAtUtc;
         user.EmailChangeOtpAttempts = 0;
-        await _context.SaveChangesAsync();
 
-        await _emailSender.SendEmailChangeVerificationAsync(newEmail, user.FullName, otp);
+        _emailOutbox.QueueEmailChangeVerification(newEmail, user.FullName, otp, expiresAtUtc, user.CollegeId);
+        await _context.SaveChangesAsync();
 
         string? devOtp = _environment.IsDevelopment() ? otp : null;
 
         return Ok(new
         {
             success = true,
-            message = $"Verification code dispatched to '{newEmail}'. Code expires in 10 minutes.",
+            message = $"Verification code queued for delivery to '{newEmail}'. Code expires in 10 minutes.",
             devOtp = devOtp
         });
     }
 
     [HttpPost("verify-email-change")]
+    [EnableRateLimiting("EmailChangeLimit")]
     public async Task<IActionResult> VerifyEmailChange([FromBody] VerifyEmailChangeRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.NewEmail) || string.IsNullOrWhiteSpace(request.Otp))
@@ -301,6 +320,115 @@ public class AccountController : ControllerBase
             success = true,
             email = newEmail,
             message = "Email address verified and updated successfully. Please use your new email for future logins."
+        });
+    }
+
+    [HttpPost("request-phone-verification")]
+    public async Task<IActionResult> RequestPhoneVerification()
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var user = await _context.Users
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Id == userId.Value && !u.IsDeleted);
+
+        if (user == null) return NotFound(new { message = "User not found." });
+        if (string.IsNullOrWhiteSpace(user.PhoneNumber))
+        {
+            return BadRequest(new { message = "Please save a contact number before requesting verification." });
+        }
+
+        var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString("D6");
+        var cacheKey = $"phone-verify:{user.Id}";
+        _cache.Set(cacheKey, new PhoneVerificationChallenge(
+            PasswordHelper.HashPassword(otp),
+            user.PhoneNumber.Trim(),
+            DateTime.UtcNow.AddMinutes(10),
+            0), TimeSpan.FromMinutes(10));
+
+        _logger.LogInformation("[PHONE VERIFICATION] OTP dispatched for SuperAdmin {UserId}", user.Id);
+        string? devOtp = _environment.IsDevelopment() ? otp : null;
+
+        return Ok(new
+        {
+            success = true,
+            message = "Verification code generated for your contact number. Code expires in 10 minutes.",
+            devOtp
+        });
+    }
+
+    [HttpPost("verify-phone")]
+    public async Task<IActionResult> VerifyPhone([FromBody] VerifyPhoneRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Otp))
+        {
+            return BadRequest(new { message = "6-digit verification code is required." });
+        }
+
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        var user = await _context.Users
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Id == userId.Value && !u.IsDeleted);
+
+        if (user == null) return NotFound(new { message = "User not found." });
+
+        var cacheKey = $"phone-verify:{user.Id}";
+        if (!_cache.TryGetValue<PhoneVerificationChallenge>(cacheKey, out var challenge) || challenge == null)
+        {
+            return BadRequest(new { message = "No active phone verification challenge found. Please request a new code." });
+        }
+
+        if (challenge.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            _cache.Remove(cacheKey);
+            return BadRequest(new { message = "Verification code has expired. Please request a new code." });
+        }
+
+        if (!string.Equals(user.PhoneNumber?.Trim(), challenge.PhoneNumber, StringComparison.Ordinal))
+        {
+            _cache.Remove(cacheKey);
+            return BadRequest(new { message = "Contact number changed after code was issued. Please request a new code." });
+        }
+
+        if (!PasswordHelper.VerifyPassword(request.Otp.Trim(), challenge.OtpHash))
+        {
+            var nextAttempts = challenge.Attempts + 1;
+            if (nextAttempts >= 5)
+            {
+                _cache.Remove(cacheKey);
+                return BadRequest(new { message = "Maximum verification attempts exceeded. Please request a new code." });
+            }
+            _cache.Set(cacheKey, challenge with { Attempts = nextAttempts }, challenge.ExpiresAtUtc - DateTime.UtcNow);
+            return BadRequest(new { message = "Invalid verification code. Please check and try again." });
+        }
+
+        _cache.Remove(cacheKey);
+        user.IsPhoneVerified = true;
+        user.UpdatedAtUtc = DateTime.UtcNow;
+
+        _context.PlatformAuditLogs.Add(new PlatformAuditLog
+        {
+            Id = Guid.NewGuid(),
+            ActorUserId = user.Id,
+            ActorEmail = user.Email,
+            Action = "Super Admin Phone Verified",
+            TargetEntity = "UserAccount: PhoneNumber",
+            IpAddress = GetClientIpAddress(),
+            OccurredAtUtc = DateTime.UtcNow,
+            MetadataJson = JsonSerializer.Serialize(new { verified = true })
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            phoneNumber = user.PhoneNumber ?? string.Empty,
+            isPhoneVerified = true,
+            message = "Contact number verified successfully."
         });
     }
 
@@ -553,6 +681,7 @@ public class AccountController : ControllerBase
         _context.PlatformAuditLogs.Add(new PlatformAuditLog
         {
             Id = Guid.NewGuid(),
+            ActorUserId = userId.Value,
             ActorEmail = email,
             Action = "Admin Session Revoked",
             TargetEntity = $"Session: {id}",
@@ -588,6 +717,7 @@ public class AccountController : ControllerBase
         _context.PlatformAuditLogs.Add(new PlatformAuditLog
         {
             Id = Guid.NewGuid(),
+            ActorUserId = userId.Value,
             ActorEmail = email,
             Action = "All Other Admin Sessions Revoked",
             TargetEntity = "UserAccount: ActiveSessions",
@@ -707,6 +837,7 @@ public class AccountController : ControllerBase
         _context.PlatformAuditLogs.Add(new PlatformAuditLog
         {
             Id = Guid.NewGuid(),
+            ActorUserId = GetCurrentUserId(),
             ActorEmail = email,
             Action = "Super Admin Logged Out",
             TargetEntity = "UserAccount: Session",
@@ -829,6 +960,13 @@ public class VerifyEmailChangeRequest
     public string NewEmail { get; set; } = string.Empty;
     public string Otp { get; set; } = string.Empty;
 }
+
+public class VerifyPhoneRequest
+{
+    public string Otp { get; set; } = string.Empty;
+}
+
+internal record PhoneVerificationChallenge(string OtpHash, string PhoneNumber, DateTime ExpiresAtUtc, int Attempts);
 
 public class ChangePasswordRequest
 {

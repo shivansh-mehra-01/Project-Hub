@@ -1,6 +1,6 @@
 export type UserRole = "SuperAdmin" | "CollegeAdmin" | "HOD" | "Faculty" | "Student";
 export type RoleType = UserRole | "TeamLead";
-export type FacultyDesignation = "Professor" | "AssociateProfessor" | "AssistantProfessor" | "AdjunctFaculty";
+export type FacultyDesignation = "Professor" | "AssociateProfessor" | "AssistantProfessor" | "AdjunctFaculty" | "Lecturer";
 export type InstitutionalResponsibility = "None" | "Principal" | "CampusDirector" | "DeanAcademics" | "ControllerOfExaminations" | "IqacCoordinator" | "Registrar";
 
 export type AcademicProgramLevel = "UG" | "PG" | "Diploma" | "Research";
@@ -72,6 +72,7 @@ export interface UserProfileDto {
   enrollmentOrEmployeeCode: string;
   gitHubHandle?: string;
   jiraKey?: string;
+  phoneNumber?: string | null;
 }
 
 export interface AuthResponse {
@@ -95,15 +96,30 @@ export interface CollegeTenantDto {
   subscriptionExpiresAtUtc?: string;
   departmentCount: number;
   studentCount: number;
+  facultyCount?: number;
+  activeProjectsCount?: number;
+  lastActivityAtUtc?: string | null;
   principalEmail?: string;
+  principalName?: string | null;
+  principalIsActive?: boolean | null;
+  principalIsActivated?: boolean | null;
+  principalIsEmailVerified?: boolean | null;
+  principalHasPendingInvitation?: boolean | null;
+  principalLastLoginAtUtc?: string | null;
   adminEmails?: string[];
+  collegeType?: string;
   affiliatingUniversity?: string;
+  country?: string;
+  state?: string;
+  city?: string;
+  campusAddress?: string;
+  createdAtUtc?: string;
 }
 
 export interface CreateTenantRequest {
   name: string;
-  tenantCode: string;
-  ssoDomain: string;
+  tenantCode?: string;
+  ssoDomain?: string;
   licenseTier?: LicenseTier;
   maxStudentSeats?: number;
   storageQuotaGb?: number;
@@ -112,7 +128,12 @@ export interface CreateTenantRequest {
   subscriptionExpiresAtUtc?: string;
   principalName?: string;
   principalEmail?: string;
+  collegeType?: string;
   affiliatingUniversity?: string;
+  country?: string;
+  state?: string;
+  city?: string;
+  campusAddress?: string;
 }
 
 export interface CreateTenantResponse {
@@ -137,6 +158,8 @@ export interface UpdateTenantRequest {
   enforceStrictSso?: boolean;
   crestUrl?: string;
   subscriptionExpiresAtUtc?: string;
+  affiliatingUniversity?: string;
+  campusAddress?: string;
 }
 
 export interface MasterOutcomeDto {
@@ -198,52 +221,25 @@ export interface OverviewCourseHierarchyDto {
   branches: string[];
 }
 
+export interface CollegeActionItemDto {
+  key: string;
+  title: string;
+  description: string;
+  severity: "warning" | "info";
+  actionLabel: string;
+  actionHref: string;
+  count?: number | null;
+}
+
 export interface CollegeActivityItemDto {
   title: string;
+  actor?: string | null;
+  targetEntity?: string | null;
   timeAgo: string;
   occurredAtUtc: string;
 }
 
-export interface CollegeNotificationItemDto {
-  type: "success" | "info" | "warning";
-  message: string;
-  timeAgo: string;
-  createdAtUtc: string;
-}
-
 // --- College DTOs ---
-export interface AicteCadreComplianceDto {
-  programLevel: string;
-  programCode: string;
-  sanctionedIntake: number;
-  programDurationYears: number;
-  totalSanctionedStrength: number;
-  requiredFaculty: number;
-  availableFaculty: number;
-  requiredRatio: string;
-  actualRatio: string;
-  isCompliant: boolean;
-  cadreStatus: "Compliant" | "Compliant — subject to qualification verification" | "NonCompliant" | "Insufficient Data";
-  requiredProfessors: number;
-  actualProfessors: number;
-  requiredAssociateProfessors: number;
-  actualAssociateProfessors: number;
-  requiredAssistantProfessors: number;
-  actualAssistantProfessors: number;
-  statusMessage?: string;
-  isSubstituted?: boolean;
-  substitutedProfessorsCount?: number;
-  qualificationVerificationNotice?: string;
-}
-
-export interface CohortEnrollmentCapacityDto {
-  totalSanctionedMultiCohortCapacity: number;
-  totalEnrolledStudents: number;
-  utilizationPercentage: number;
-  hasReliableEnrollmentRecords: boolean;
-  statusMessage?: string;
-}
-
 export interface CollegeOverviewDto {
   collegeId: string;
   collegeName: string;
@@ -252,28 +248,24 @@ export interface CollegeOverviewDto {
   totalCourses?: number;
   totalBranches?: number;
   totalDepartments: number;
+  appointedHodsCount: number;
+  vacantDepartmentsCount: number;
   totalStudents: number;
   totalFaculty: number;
   totalProjects: number;
-  criterion3AttainmentPct: number;
   strictSsoEnforced: boolean;
-  affiliatedUniversity?: string;
-  collegeType?: string;
-  establishedYear?: string;
-  campusesSummary?: string;
-  crestUrl?: string;
-  currentSemesterLabel?: string;
-  lastUpdatedUtc?: string;
-  activeSession?: AcademicSessionDto;
-  cohortCapacity?: CohortEnrollmentCapacityDto;
-  programAicteCompliance?: AicteCadreComplianceDto[];
-  sarDepartmentAttestationPct?: number;
-  attestedDepartmentsCount?: number;
-  totalDepartmentsForSar?: number;
+  ssoDomain: string;
+  affiliatedUniversity?: string | null;
+  campusAddress?: string | null;
+  campusesSummary?: string | null;
+  crestUrl?: string | null;
+  hasPrincipalSeal?: boolean;
+  currentSemesterLabel?: string | null;
+  activeSession?: AcademicSessionDto | null;
   departmentSummaries?: DepartmentTrackSummaryDto[];
   academicStructure?: OverviewCourseHierarchyDto[];
+  operationalActionItems?: CollegeActionItemDto[];
   recentActivities?: CollegeActivityItemDto[];
-  notifications?: CollegeNotificationItemDto[];
 }
 
 export interface DepartmentTrackSummaryDto {
@@ -284,7 +276,6 @@ export interface DepartmentTrackSummaryDto {
   intakeQuota: number;
   studentCount: number;
   facultyCount: number;
-  criterion3AttainmentPct: number;
   trackStatus: string;
   activeTrackCount: number;
   activeTrackNames: string[];
@@ -303,8 +294,6 @@ export interface DepartmentDto {
   intakeQuota: number;
   studentCount: number;
   facultyCount: number;
-  isSarAttested: boolean;
-  sarAttestedAtUtc?: string;
   trackStatus?: string;
   activeTrackCount?: number;
 }
@@ -326,14 +315,7 @@ export interface UpdateDepartmentRequest {
 
 export interface AppointHodRequest {
   hodUserId: string;
-}
-
-export interface CreateHodRequest {
-  fullName: string;
-  email: string;
-  employeeCode?: string;
-  departmentId: string;
-  temporaryPassword?: string;
+  confirmReplacement?: boolean;
 }
 
 export interface HodManagementDto {
@@ -361,8 +343,10 @@ export interface HodAssignmentHistoryDto {
   hodEmail: string;
   employeeCode: string;
   appointedAtUtc: string;
+  relievedAtUtc?: string;
   appointedBy: string;
   isCurrent: boolean;
+  remarks?: string;
 }
 
 export interface CollegeStaffDto {
@@ -404,21 +388,76 @@ export interface UpdateCollegeStaffRequest {
 export interface BulkStaffUploadRowDto {
   fullName: string;
   email: string;
-  departmentCode?: string;
-  employeeCode?: string;
-  role: RoleType;
-  designation?: FacultyDesignation;
+  departmentCode: string;
+  designation: FacultyDesignation;
 }
 
 export interface BulkStaffUploadRequest {
   staffRows: BulkStaffUploadRowDto[];
+  csvHeaders?: string[];
 }
 
 export interface BulkStaffUploadResultDto {
   totalSubmitted: number;
   successfullyCreated: number;
+  successfullyUpdated: number;
   failedCount: number;
   errors: string[];
+}
+
+export interface BulkStudentUploadRowDto {
+  studentName: string;
+  email: string;
+  studentNumber: string;
+  departmentCode: string;
+  program?: string;
+  admissionYear?: string;
+  currentSemester?: number;
+}
+
+export interface BulkStudentUploadRequest {
+  studentRows: BulkStudentUploadRowDto[];
+  csvHeaders?: string[];
+}
+
+export interface BulkStudentUploadResultDto {
+  totalSubmitted: number;
+  successfullyCreated: number;
+  successfullyUpdated: number;
+  failedCount: number;
+  errors: string[];
+}
+
+export interface RosterImportPreviewRowDto {
+  rowNumber: number;
+  fullName: string;
+  email: string;
+  departmentCode: string;
+  secondaryValue?: string;
+  action: "create" | "update" | "invalid";
+  errors: string[];
+}
+
+export interface RosterImportPreviewDto {
+  importType: string;
+  totalRows: number;
+  validCount: number;
+  invalidCount: number;
+  createCount: number;
+  updateCount: number;
+  duplicateCount: number;
+  headerErrors: string[];
+  rows: RosterImportPreviewRowDto[];
+}
+
+export interface RosterImportHistoryDto {
+  id: string;
+  importType: string;
+  actorEmail: string;
+  totalSubmitted: number;
+  createdCount: number;
+  updatedCount: number;
+  occurredAtUtc: string;
 }
 
 export interface ExaminationTabulationRowDto {
@@ -435,7 +474,6 @@ export interface ExaminationTabulationRowDto {
   grade: string;
   gradePoints: number;
   resultStatus: string;
-  meetsNbaAttainmentThreshold: boolean;
 }
 
 export interface ExaminationTabulationRegisterDto {
@@ -514,16 +552,9 @@ export interface CollegeSettingsDto {
   id: string;
   name: string;
   tenantCode: string;
-  ssoDomain: string;
-  enforceStrictSso: boolean;
-  crestUrl?: string;
-  principalSealUrl?: string;
-  affiliatedUniversity?: string;
-  campusAddress?: string;
-  campusesCsv?: string;
-  nbaModuleEnabled?: boolean;
-  githubIntegrationEnabled?: boolean;
-  jiraIntegrationEnabled?: boolean;
+  crestUrl?: string | null;
+  affiliatedUniversity?: string | null;
+  campusAddress?: string | null;
   licenseTier?: string;
   maxStudentSeats?: number;
   enrolledStudentCount?: number;
@@ -533,46 +564,8 @@ export interface CollegeSettingsDto {
 
 export interface UpdateCollegeSettingsRequest {
   name?: string;
-  enforceStrictSso?: boolean;
-  crestUrl?: string;
-  principalSealUrl?: string;
   affiliatedUniversity?: string;
   campusAddress?: string;
-  campusesCsv?: string;
-  nbaModuleEnabled?: boolean;
-  githubIntegrationEnabled?: boolean;
-  jiraIntegrationEnabled?: boolean;
-  ssoDomain?: string;
-}
-
-export interface SignOffComplianceRequest {
-  remarks: string;
-}
-
-export interface InstitutionalDossierDto {
-  collegeName: string;
-  tenantCode: string;
-  ssoDomain: string;
-  affiliatedUniversity: string;
-  academicYear: string;
-  totalDepartments: number;
-  totalStudents: number;
-  totalFaculty: number;
-  overallAttainmentPct: number;
-  isAttested: boolean;
-  attestedAtUtc?: string;
-  attestedBy?: string;
-  departments: DepartmentAttainmentSummaryDto[];
-}
-
-export interface DepartmentAttainmentSummaryDto {
-  departmentCode: string;
-  departmentName: string;
-  hodName?: string;
-  studentCount: number;
-  attainmentPct: number;
-  isSarAttested: boolean;
-  sarAttestedAtUtc?: string;
 }
 
 // --- HOD DTOs ---
@@ -592,11 +585,7 @@ export interface HodDashboardDto {
   pendingExceptions: number;
   totalStudentsEnrolled: number;
   availableMentors: number;
-  nbaDirectAttainmentPct?: number | null;
-  nbaIndirectAttainmentPct?: number | null;
-  nbaBlendedCriterion3Pct?: number | null;
-  isSarAttested: boolean;
-  sarAttestedAtUtc?: string;
+  evaluationCutoffDateUtc?: string | null;
 }
 
 export interface HodProjectMemberDto {
@@ -695,15 +684,6 @@ export interface DepartmentStudentResultDto {
   externalVivaScore: number;
   totalMarks: number;
   letterGrade: string;
-  nbaAttainmentStatus: string;
-}
-
-export interface AttestSarResponse {
-  success: boolean;
-  attestedAtUtc: string;
-  attestedByName: string;
-  status: string;
-  message: string;
 }
 
 export interface CreateDepartmentTrackRequest {
@@ -763,24 +743,6 @@ export interface ToggleCoordinatorRequest {
 
 export interface UpdateMentorCapRequest {
   maxMentorTeams: number;
-}
-
-export interface PoAttainmentScoreDto {
-  poCode: string;
-  title: string;
-  directAttainmentPct?: number | null;
-  indirectAttainmentPct?: number | null;
-  blendedAttainmentPct?: number | null;
-  targetMet: boolean;
-}
-
-export interface NbaAttainmentReportDto {
-  departmentId: string;
-  academicYear: string;
-  overallDirectPct?: number | null;
-  overallIndirectPct?: number | null;
-  overallBlendedPct?: number | null;
-  poBreakdown: PoAttainmentScoreDto[];
 }
 
 export interface ExceptionAuditLogDto {
@@ -1097,10 +1059,6 @@ export interface ContinueLineageRequest {
   targetAcademicTrackId: string;
   newTitle: string;
   newAbstract: string;
-}
-
-export interface SubmitExitSurveyRequest {
-  poRatings: Record<string, number>;
 }
 
 // --- Phase 2: Student Identity, Profile & Dashboard DTOs ---
@@ -2079,7 +2037,6 @@ export interface RubricCriterionDto {
   maxMarks: number;
   weightPercentage: number;
   displayOrder: number;
-  nbaPoMapping?: string;
   bloomTaxonomyLevel?: string;
 }
 
@@ -2240,4 +2197,184 @@ export interface PublicStudentPortfolioDto {
   institutionalAttestation: string;
   verifiedProjects: PublicPortfolioProjectDto[];
 }
+
+export interface PlatformAdministratorDto {
+  id: string;
+  adminId: string;
+  fullName: string;
+  email: string;
+  platformRole: string;
+  status: string;
+  isActive: boolean;
+  isActivated: boolean;
+  mfaEnabled: boolean;
+  mfaStatus: string;
+  createdAtUtc: string;
+  lastLoginAtUtc?: string | null;
+  activeSessionsCount: number;
+}
+
+export interface PlatformAnalyticsCollegeDto {
+  id: string;
+  name: string;
+  tenantCode: string;
+  licenseTier?: LicenseTier;
+  storageQuotaGb?: number;
+  isActive: boolean;
+  departmentCount?: number;
+  facultyCount?: number;
+  activeStudents: number;
+  activeProjects: number;
+  completedProjects?: number;
+  logbooksInRange?: number;
+  lastActivityAtUtc?: string | null;
+}
+
+export interface PlatformAnalyticsOverviewDto {
+  range?: string;
+  rangeStartUtc?: string | null;
+  totalColleges: number;
+  activeColleges: number;
+  suspendedColleges?: number;
+  totalDepartments?: number;
+  activeFaculty?: number;
+  registeredStudents: number;
+  activeUsersInRange?: number;
+  activeProjects: number;
+  completedProjects?: number;
+  weeklyLogbooksInRange?: number;
+  evaluationsInRange?: number;
+  colleges: PlatformAnalyticsCollegeDto[];
+}
+
+export interface HealthDetailsDto {
+  status: "Healthy" | "Degraded" | "Unavailable" | "Unknown" | string;
+  environment: string;
+  version: string;
+  timestampUtc: string;
+  uptimeSeconds: number;
+  database: {
+    status: string;
+    provider: string;
+    latencyMs?: number | null;
+    pendingMigrations?: number | null;
+    details?: string | null;
+  };
+  redis: {
+    status: string;
+    engine: string;
+    latencyMs?: number | null;
+    details?: string | null;
+  };
+  email: {
+    status: string;
+    provider: string;
+    latencyMs?: number | null;
+    details?: string | null;
+  };
+  storage: {
+    status: string;
+    provider: string;
+    latencyMs?: number | null;
+    details?: string | null;
+  };
+  tenant: {
+    resolved: boolean;
+    collegeId?: string | null;
+    mode: string;
+  };
+  telemetry: {
+    activeSessionsCount: number;
+    activeTenantsCount: number;
+    failedLoginsLast24h: number;
+    pendingMigrationsCount: number;
+  };
+}
+
+export interface PlatformSecuritySummaryDto {
+  activeSessionsCount: number;
+  totalSuperAdmins: number;
+  mfaEnrolledSuperAdmins: number;
+  failedLoginsLast24h: number;
+  failedLoginsLast7d: number;
+  revokedSessionsLast7d: number;
+  recentSecurityEvents: PlatformAuditLogDto[];
+}
+
+export interface CollegeAnnouncementDto {
+  id: string;
+  title: string;
+  category: string;
+  priority: string;
+  shortDescription: string;
+  fullMessage: string;
+  targetAudience: string;
+  publishDateUtc: string;
+  createdByName: string;
+}
+
+export interface PlatformAnnouncementDto {
+  id: string;
+  title: string;
+  category: string;
+  priority: string;
+  shortDescription: string;
+  fullMessage: string;
+  targetAudience: string;
+  targetCollegeIds: string[];
+  status: "Draft" | "Published" | "Withdrawn" | "Archived" | string;
+  publishDateUtc?: string | null;
+  withdrawnAtUtc?: string | null;
+  archivedAtUtc?: string | null;
+  archiveReason?: string | null;
+  createdByEmail: string;
+  createdByName: string;
+  createdAtUtc: string;
+  updatedAtUtc?: string | null;
+}
+
+export interface SavePlatformAnnouncementRequest {
+  title: string;
+  category: string;
+  priority: string;
+  shortDescription?: string;
+  fullMessage: string;
+  targetAudience: string;
+  targetCollegeIds?: string[];
+  status: string;
+}
+
+export interface SupportTicketMessageDto {
+  id: string;
+  ticketId: string;
+  senderName: string;
+  senderEmail: string;
+  senderRole: string;
+  message: string;
+  isInternalNote: boolean;
+  sentAtUtc: string;
+}
+
+export interface SupportTicketDto {
+  id: string;
+  ticketNumber: string;
+  collegeId?: string | null;
+  institutionName: string;
+  subject: string;
+  description: string;
+  category: string;
+  priority: "Low" | "Medium" | "High" | "Urgent" | string;
+  status: "Open" | "In Progress" | "Resolved" | "Closed" | string;
+  reportedByName: string;
+  reportedByEmail: string;
+  assignedToName?: string | null;
+  assignedToEmail?: string | null;
+  resolutionNotes?: string | null;
+  createdAtUtc: string;
+  updatedAtUtc?: string | null;
+  resolvedAtUtc?: string | null;
+  closedAtUtc?: string | null;
+  messages: SupportTicketMessageDto[];
+}
+
 

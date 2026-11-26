@@ -33,15 +33,11 @@ public class CollegeTenantConfiguration : IEntityTypeConfiguration<CollegeTenant
             .HasDefaultValue("RGPV");
 
         builder.Property(c => c.CampusAddress)
-            .HasMaxLength(500)
-            .HasDefaultValue("Airport Road, Gandhi Nagar, Bhopal, MP 462036");
+            .HasMaxLength(500);
 
         builder.Property(c => c.CampusesCsv)
             .HasMaxLength(500)
             .HasDefaultValue("Main Campus (Bhopal), Extension Center");
-
-        builder.Property(c => c.NbaModuleEnabled)
-            .HasDefaultValue(true);
 
         builder.Property(c => c.GithubIntegrationEnabled)
             .HasDefaultValue(true);
@@ -57,11 +53,6 @@ public class CollegeTenantConfiguration : IEntityTypeConfiguration<CollegeTenant
         builder.HasMany(c => c.HodHistories)
             .WithOne(h => h.College)
             .HasForeignKey(h => h.CollegeId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.HasMany(c => c.AccreditationCycles)
-            .WithOne(ac => ac.College)
-            .HasForeignKey(ac => ac.CollegeId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(c => c.TenantCode)

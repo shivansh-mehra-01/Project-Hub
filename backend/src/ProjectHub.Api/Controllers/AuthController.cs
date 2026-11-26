@@ -23,7 +23,7 @@ public class AuthController : ControllerBase
     private readonly ProjectHubDbContext _context;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly ISessionSecurityService _sessionSecurity;
-    private readonly IEmailSender _emailSender;
+    private readonly IEmailOutboxService _emailOutbox;
     private readonly IWebHostEnvironment _environment;
     private readonly ITenantContext _tenantContext;
     private readonly ILogger<AuthController> _logger;
@@ -32,7 +32,7 @@ public class AuthController : ControllerBase
         ProjectHubDbContext context,
         IJwtTokenService jwtTokenService,
         ISessionSecurityService sessionSecurity,
-        IEmailSender emailSender,
+        IEmailOutboxService emailOutbox,
         IWebHostEnvironment environment,
         ITenantContext tenantContext,
         ILogger<AuthController> logger)
@@ -40,7 +40,7 @@ public class AuthController : ControllerBase
         _context = context;
         _jwtTokenService = jwtTokenService;
         _sessionSecurity = sessionSecurity;
-        _emailSender = emailSender;
+        _emailOutbox = emailOutbox;
         _environment = environment;
         _tenantContext = tenantContext;
         _logger = logger;
@@ -401,6 +401,48 @@ public class AuthController : ControllerBase
         return Ok(MapUserProfile(user));
     }
 
+    [HttpPut("me")]
+    [Authorize]
+    public async Task<ActionResult<UserProfileDto>> UpdateCurrentProfile([FromBody] UpdateCurrentProfileRequest request, CancellationToken cancellationToken)
+    {
+        var userIdRaw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(userIdRaw, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var fullName = request.FullName?.Trim() ?? string.Empty;
+        if (fullName.Length < 2 || fullName.Length > 150)
+        {
+            return BadRequest(new { message = "Full name must be between 2 and 150 characters." });
+        }
+
+        var phone = request.PhoneNumber?.Trim();
+        if (!string.IsNullOrEmpty(phone) && phone.Length > 30)
+        {
+            return BadRequest(new { message = "Phone number must be 30 characters or fewer." });
+        }
+
+        _tenantContext.IsAuthLookup = true;
+        var user = await _context.Users
+            .IgnoreQueryFilters()
+            .Include(u => u.College)
+            .Include(u => u.Department)
+            .FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted && u.IsActive, cancellationToken);
+
+        if (user == null)
+        {
+            return Unauthorized();
+        }
+
+        _tenantContext.CollegeId = user.CollegeId;
+        user.FullName = fullName;
+        user.PhoneNumber = string.IsNullOrEmpty(phone) ? null : phone;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return Ok(MapUserProfile(user));
+    }
+
     [HttpPost("change-password")]
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] AuthChangePasswordRequest request, CancellationToken cancellationToken)
@@ -612,24 +654,24 @@ public class AuthController : ControllerBase
 
         var otpNumber = RandomNumberGenerator.GetInt32(100000, 1000000);
         var otp = otpNumber.ToString("D6");
+        var expiresAtUtc = DateTime.UtcNow.AddMinutes(15);
 
         _tenantContext.CollegeId = user.CollegeId;
         user.PasswordResetOtpHashed = PasswordHelper.HashPassword(otp);
-        user.PasswordResetOtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(15);
+        user.PasswordResetOtpExpiresAtUtc = expiresAtUtc;
         user.PasswordResetOtpAttempts = 0;
 
+        _emailOutbox.QueuePasswordResetOtp(user.Email, user.FullName, otp, expiresAtUtc, user.CollegeId);
         await _context.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Password reset OTP generated and dispatched to {Email}", email);
-
-        await _emailSender.SendPasswordResetOtpAsync(user.Email, user.FullName, otp, cancellationToken);
+        _logger.LogInformation("Password reset OTP queued for {Email}", email);
 
         string? devOtp = _environment.IsDevelopment() ? otp : null;
 
         return Ok(new RequestPasswordOtpResponse
         {
             Success = true,
-            Message = "A 6-digit verification code has been dispatched to your institutional email. Code expires in 15 minutes.",
+            Message = "If this institutional email is registered and active, a 6-digit verification code has been queued for delivery. Code expires in 15 minutes.",
             DevOtp = devOtp
         });
     }
@@ -769,9 +811,100 @@ public class AuthController : ControllerBase
         return Ok(authResponse);
     }
 
+    [HttpGet("colleges")]
+    [AllowAnonymous]
+    public async Task<ActionResult<List<PublicCollegeOptionDto>>> GetPublicColleges(CancellationToken cancellationToken)
+    {
+        var colleges = await _context.CollegeTenants
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(c => c.IsActive && !c.IsDeleted)
+            .OrderBy(c => c.Name)
+            .Select(c => new PublicCollegeOptionDto
+            {
+                Id = c.Id,
+                Name = c.Name,
+                TenantCode = c.TenantCode
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(colleges);
+    }
+
+    [HttpPost("roster-signup")]
+    [AllowAnonymous]
+    [EnableRateLimiting("RosterSignupLimit")]
+    public async Task<IActionResult> RosterSignup([FromBody] RosterSignupRequest request, CancellationToken cancellationToken)
+    {
+        if ((!request.CollegeId.HasValue && string.IsNullOrWhiteSpace(request.CollegeCode)) ||
+            string.IsNullOrWhiteSpace(request.CollegeUserId) ||
+            string.IsNullOrWhiteSpace(request.Email))
+        {
+            return BadRequest(new { message = "College, College ID, and registered email are required." });
+        }
+
+        var normalizedEmail = NormalizeEmail(request.Email);
+        var normalizedCollegeUserId = request.CollegeUserId.Trim().ToUpperInvariant();
+        var normalizedCollegeCode = request.CollegeCode?.Trim().ToUpperInvariant();
+
+        var college = await _context.CollegeTenants
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c =>
+                !c.IsDeleted &&
+                c.IsActive &&
+                (request.CollegeId.HasValue ? c.Id == request.CollegeId.Value : c.TenantCode == normalizedCollegeCode),
+                cancellationToken);
+
+        if (college == null)
+        {
+            return BadRequest(new { message = "We could not verify an eligible roster record for the selected college, College ID, and email address." });
+        }
+
+        _tenantContext.IsAuthLookup = true;
+        var user = await _context.Users
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u =>
+                u.CollegeId == college.Id &&
+                u.Email == normalizedEmail &&
+                u.EnrollmentOrEmployeeCode == normalizedCollegeUserId &&
+                !u.IsDeleted,
+                cancellationToken);
+
+        if (user == null || !user.IsActive || user.Role == UserRole.SuperAdmin)
+        {
+            return BadRequest(new { message = "We could not verify an eligible roster record for the selected college, College ID, and email address." });
+        }
+
+        if (user.IsActivated)
+        {
+            return Conflict(new
+            {
+                message = "This account is already activated. Please sign in on the login page.",
+                code = "ALREADY_ACTIVATED"
+            });
+        }
+
+        var rawActivationToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+        var expiresAtUtc = DateTime.UtcNow.AddHours(24);
+
+        _tenantContext.CollegeId = user.CollegeId;
+        user.ActivationTokenHashed = HashToken(rawActivationToken);
+        user.ActivationTokenExpiresAtUtc = expiresAtUtc;
+        _emailOutbox.QueueAccountActivation(user.Email, user.FullName, rawActivationToken, expiresAtUtc, user.CollegeId);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return Ok(new RosterSignupResponse
+        {
+            Message = "Roster record verified. Your activation link has been queued for delivery to your registered email.",
+            Status = "VERIFICATION_QUEUED"
+        });
+    }
+
     [HttpPost("activate")]
     [AllowAnonymous]
-    [EnableRateLimiting("PasswordResetLimit")]
+    [EnableRateLimiting("RosterSignupLimit")]
     public async Task<IActionResult> ActivateAccount([FromBody] ActivateAccountRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Token) || string.IsNullOrWhiteSpace(request.NewPassword))
@@ -795,16 +928,39 @@ public class AuthController : ControllerBase
             .Include(u => u.Department)
             .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
 
-        if (user == null || !user.IsActive || string.IsNullOrEmpty(user.ActivationTokenHashed) ||
-            !user.ActivationTokenExpiresAtUtc.HasValue || user.ActivationTokenExpiresAtUtc.Value < DateTime.UtcNow ||
+        if (user == null || !user.IsActive)
+        {
+            return BadRequest(new { message = "Activation link is invalid or has expired." });
+        }
+
+        if (user.IsActivated && string.IsNullOrEmpty(user.ActivationTokenHashed))
+        {
+            return Conflict(new
+            {
+                message = "This verification link has already been used or your account is already activated. Please sign in.",
+                code = "ALREADY_ACTIVATED"
+            });
+        }
+
+        if (string.IsNullOrEmpty(user.ActivationTokenHashed) ||
             !CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(user.ActivationTokenHashed), Encoding.ASCII.GetBytes(tokenHash)))
         {
             return BadRequest(new { message = "Activation link is invalid or has expired." });
         }
 
+        if (!user.ActivationTokenExpiresAtUtc.HasValue || user.ActivationTokenExpiresAtUtc.Value < DateTime.UtcNow)
+        {
+            return BadRequest(new
+            {
+                message = "Your verification link has expired. Please request a new activation link from the onboarding page.",
+                code = "TOKEN_EXPIRED"
+            });
+        }
+
         _tenantContext.CollegeId = user.CollegeId;
         user.PasswordHash = PasswordHelper.HashPassword(request.NewPassword);
         user.IsActivated = true;
+        user.IsEmailVerified = true;
         user.ActivationTokenHashed = null;
         user.ActivationTokenExpiresAtUtc = null;
         user.SecurityStamp = Guid.NewGuid().ToString("N");
@@ -1004,6 +1160,7 @@ public class AuthController : ControllerBase
             EnrollmentOrEmployeeCode = user.EnrollmentOrEmployeeCode,
             GitHubHandle = user.GitHubHandle,
             JiraKey = user.JiraKey,
+            PhoneNumber = user.PhoneNumber,
             MustChangePassword = user.PasswordChangedAtUtc == null
         };
     }

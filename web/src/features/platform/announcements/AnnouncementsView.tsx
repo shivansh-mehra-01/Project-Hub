@@ -96,7 +96,15 @@ export const AnnouncementsView: React.FC = () => {
     setFormCategory(ann.category);
     setFormPriority(ann.priority);
     setFormAudience(ann.targetAudience);
-    setFormSelectedColleges(ann.selectedCollegeCodes || []);
+    const normalizedIds = (ann.targetCollegeIds || []).map((idOrCode) => {
+      const matched = colleges.find(
+        (c) =>
+          c.id.toLowerCase() === idOrCode.toLowerCase() ||
+          c.code.toLowerCase() === idOrCode.toLowerCase()
+      );
+      return matched ? matched.id : idOrCode;
+    });
+    setFormSelectedColleges(normalizedIds);
     setCollegeSearchQuery("");
     setFormPublishOption(ann.status === "Draft" ? "draft" : "now");
     setShowCreateEditModal(true);
@@ -119,7 +127,7 @@ export const AnnouncementsView: React.FC = () => {
   }, [colleges, collegeSearchQuery]);
 
   // Form Submission
-  const handleSubmitForm = (e: React.FormEvent) => {
+  const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formTitle.trim()) {
@@ -144,25 +152,18 @@ export const AnnouncementsView: React.FC = () => {
       fullMessage: formFullMessage.trim(),
       shortDescription: formFullMessage.slice(0, 120) + (formFullMessage.length > 120 ? "..." : ""),
       targetAudience: formAudience,
-      selectedCollegeCodes: formAudience === "Selected Colleges" ? formSelectedColleges : [],
+      targetCollegeIds: formAudience === "Selected Colleges" ? formSelectedColleges : [],
       status: formPublishOption === "draft" ? "Draft" : "Published",
       publishDate: formPublishOption === "now" ? new Date().toISOString().replace("T", " ").slice(0, 19) : new Date().toISOString().replace("T", " ").slice(0, 10),
     };
 
-    if (editingAnnouncement) {
-      updateAnnouncement(editingAnnouncement.id, payload);
-      showToast("Announcement updated successfully.", "success");
-    } else {
-      addAnnouncement(payload);
-      showToast(
-        formPublishOption === "draft"
-          ? "Announcement saved as Draft."
-          : "Announcement published to colleges.",
-        "success"
-      );
-    }
+    const ok = editingAnnouncement
+      ? await updateAnnouncement(editingAnnouncement.id, payload)
+      : await addAnnouncement(payload);
 
-    setShowCreateEditModal(false);
+    if (ok) {
+      setShowCreateEditModal(false);
+    }
   };
 
   // Handle Archive Submission
@@ -427,9 +428,9 @@ export const AnnouncementsView: React.FC = () => {
                       <span className="font-medium text-slate-800">
                         {ann.targetAudience}
                       </span>
-                      {ann.targetAudience === "Selected Colleges" && ann.selectedCollegeCodes && (
+                      {ann.targetAudience === "Selected Colleges" && ann.targetCollegeIds && (
                         <span className="text-[10px] text-slate-500 block font-mono">
-                          {ann.selectedCollegeCodes.length} college(s)
+                          {ann.targetCollegeIds.length} college(s)
                         </span>
                       )}
                     </td>
@@ -584,7 +585,7 @@ export const AnnouncementsView: React.FC = () => {
 
               <div>
                 <label className="block font-semibold text-slate-800 mb-1">Target Audience</label>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                   <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
                     <input
                       type="radio"
@@ -600,12 +601,23 @@ export const AnnouncementsView: React.FC = () => {
                     <input
                       type="radio"
                       name="audience"
+                      value="Active Colleges"
+                      checked={formAudience === "Active Colleges"}
+                      onChange={() => setFormAudience("Active Colleges")}
+                      className="text-slate-900 focus:ring-slate-900"
+                    />
+                    <span>Active Colleges ({colleges.filter((c) => c.status === "Active").length})</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                    <input
+                      type="radio"
+                      name="audience"
                       value="Selected Colleges"
                       checked={formAudience === "Selected Colleges"}
                       onChange={() => setFormAudience("Selected Colleges")}
                       className="text-slate-900 focus:ring-slate-900"
                     />
-                    <span>Specific Colleges</span>
+                    <span>Selected Colleges</span>
                   </label>
                 </div>
 
@@ -631,8 +643,8 @@ export const AnnouncementsView: React.FC = () => {
                         >
                           <input
                             type="checkbox"
-                            checked={formSelectedColleges.includes(c.code)}
-                            onChange={() => toggleCollegeSelection(c.code)}
+                            checked={formSelectedColleges.includes(c.id)}
+                            onChange={() => toggleCollegeSelection(c.id)}
                             className="rounded text-slate-900 focus:ring-slate-900"
                           />
                           <span className="font-semibold text-slate-800">{c.code}</span>

@@ -67,19 +67,14 @@ export const RouteGuard: React.FC<RouteGuardProps> = ({ children }) => {
 
   if (!isAuthorized) {
     return (
-      <>
-        <div className="min-h-[50vh] flex items-center justify-center p-6 text-slate-600 select-none">
-          <div className="flex items-center gap-3">
-            <div className="w-5 h-5 rounded-full border-2 border-emerald-700 border-t-transparent animate-spin text-emerald-700" />
-            <span className="text-xs text-slate-600 font-mono">
-              Verifying session authorization...
-            </span>
-          </div>
+      <div className="min-h-[50vh] flex items-center justify-center p-6 text-slate-600 select-none">
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-5 rounded-full border-2 border-emerald-700 border-t-transparent animate-spin text-emerald-700" />
+          <span className="text-xs text-slate-600 font-mono">
+            Verifying session authorization...
+          </span>
         </div>
-        <div className="hidden" aria-hidden="true">
-          {children}
-        </div>
-      </>
+      </div>
     );
   }
 

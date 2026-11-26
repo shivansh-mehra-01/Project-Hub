@@ -39,6 +39,10 @@ public static class DependencyInjection
             services.AddScoped<IEmailSender, LoggingEmailSender>();
         }
 
+        services.AddSingleton<EmailOutboxMetrics>();
+        services.AddScoped<IEmailOutboxService, EmailOutboxService>();
+        services.AddHostedService<EmailOutboxWorker>();
+
         services.AddScoped<IFileStorageService, LocalDiskStorageService>();
 
         // Register EF Core Interceptors

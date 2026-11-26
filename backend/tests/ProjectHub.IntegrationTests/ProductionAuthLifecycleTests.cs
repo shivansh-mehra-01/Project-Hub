@@ -404,4 +404,94 @@ public class ProductionAuthLifecycleTests : IClassFixture<CustomWebApplicationFa
         var (validAfter, _) = await noRedisService.ValidateAccessTokenAsync(principal);
         Assert.False(validAfter);
     }
+
+    [Fact]
+    public async Task SuperAdminBootstrap_CreatesInitialAdmin_AndRefusesReuseAfterClosure()
+    {
+        var opts = new DbContextOptionsBuilder<ProjectHubDbContext>()
+            .UseInMemoryDatabase($"bootstrap_test_{Guid.NewGuid():N}")
+            .Options;
+        var tc = new ProjectHub.Infrastructure.Services.TenantContext();
+
+        await using var db = new ProjectHubDbContext(opts, tc);
+        await db.Database.EnsureCreatedAsync();
+        await DbInitializer.SeedMasterCatalogsAsync(db);
+
+        // Fresh platform must have 0 tenants and 0 users
+        Assert.Empty(await db.CollegeTenants.IgnoreQueryFilters().ToListAsync());
+        Assert.Empty(await db.Users.IgnoreQueryFilters().ToListAsync());
+
+        // Weak password rejected
+        var (weakOk, _) = await SuperAdminBootstrapper.BootstrapAsync(db, tc, "root@colabex.in", "Pass@1234");
+        Assert.False(weakOk);
+
+        // Valid strong password succeeds
+        var (ok, _) = await SuperAdminBootstrapper.BootstrapAsync(db, tc, "root@colabex.in", "RootSuperAdmin!2026");
+        Assert.True(ok);
+
+        // Second bootstrap attempt permanently refused
+        var (secondOk, msg) = await SuperAdminBootstrapper.BootstrapAsync(db, tc, "other@colabex.in", "OtherStrongPass!2026");
+        Assert.False(secondOk);
+        Assert.Contains("refused", msg, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PlatformAdministrators_CrudAndSessionRevocation_ReflectsRealDatabaseUsers()
+    {
+        var superAuth = await LoginAsync("admin@projecthub.in");
+
+        // 1. List administrators
+        var listReq = new HttpRequestMessage(HttpMethod.Get, "/api/platform/administrators");
+        listReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", superAuth.Token);
+        var listRes = await _client.SendAsync(listReq);
+        Assert.Equal(HttpStatusCode.OK, listRes.StatusCode);
+        var admins = await listRes.Content.ReadFromJsonAsync<List<PlatformAdministratorDto>>();
+        Assert.NotNull(admins);
+        Assert.Contains(admins, a => a.Email == "admin@projecthub.in");
+        Assert.DoesNotContain(admins, a => a.Email == "aditi.security@collabex.in");
+
+        // 2. Invite new administrator
+        var inviteEmail = $"ops.{Guid.NewGuid():N}@colabex.in";
+        var invReq = new HttpRequestMessage(HttpMethod.Post, "/api/platform/administrators")
+        {
+            Content = JsonContent.Create(new InvitePlatformAdminRequest { FullName = "Ops Admin", Email = inviteEmail })
+        };
+        invReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", superAuth.Token);
+        var invRes = await _client.SendAsync(invReq);
+        Assert.Equal(HttpStatusCode.Created, invRes.StatusCode);
+        var created = await invRes.Content.ReadFromJsonAsync<PlatformAdministratorDto>();
+        Assert.NotNull(created);
+        Assert.Equal("Pending Invitation", created.Status);
+
+        // 3. Suspend & reactivate invited admin
+        var suspReq = new HttpRequestMessage(HttpMethod.Put, $"/api/platform/administrators/{created.Id}/status")
+        {
+            Content = JsonContent.Create(new UpdatePlatformAdminStatusRequest { IsActive = false })
+        };
+        suspReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", superAuth.Token);
+        Assert.Equal(HttpStatusCode.OK, (await _client.SendAsync(suspReq)).StatusCode);
+
+        // 4. Revoke sessions
+        var revReq = new HttpRequestMessage(HttpMethod.Post, $"/api/platform/administrators/{created.Id}/revoke-sessions");
+        revReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", superAuth.Token);
+        Assert.Equal(HttpStatusCode.OK, (await _client.SendAsync(revReq)).StatusCode);
+    }
+
+    [Fact]
+    public async Task PlatformAnalytics_ReturnsRealDatabaseMetrics_ExcludingPlatformTenant()
+    {
+        var superAuth = await LoginAsync("admin@projecthub.in");
+
+        var req = new HttpRequestMessage(HttpMethod.Get, "/api/platform/analytics");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", superAuth.Token);
+        var res = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var analytics = await res.Content.ReadFromJsonAsync<PlatformAnalyticsOverviewDto>();
+        Assert.NotNull(analytics);
+        Assert.True(analytics.TotalColleges >= 3);
+        Assert.DoesNotContain(analytics.Colleges, c => c.TenantCode == "PLATFORM");
+        Assert.Equal(analytics.Colleges.Count, analytics.TotalColleges);
+        Assert.Equal(analytics.Colleges.Count(c => c.IsActive), analytics.ActiveColleges);
+    }
 }

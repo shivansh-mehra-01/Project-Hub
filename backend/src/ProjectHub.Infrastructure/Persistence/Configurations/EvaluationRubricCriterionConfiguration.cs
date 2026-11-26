@@ -30,9 +30,6 @@ public class EvaluationRubricCriterionConfiguration : IEntityTypeConfiguration<E
         builder.Property(c => c.WeightPercentage)
             .HasPrecision(5, 2);
 
-        builder.Property(c => c.NbaPoMapping)
-            .HasMaxLength(100);
-
         builder.Property(c => c.BloomTaxonomyLevel)
             .HasMaxLength(100);
 

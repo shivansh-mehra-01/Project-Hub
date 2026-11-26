@@ -48,4 +48,44 @@ export const authApi = {
       skipAuth: true,
       directBff: true,
     }),
+
+  activate: (data: { email: string; token: string; newPassword: string }) =>
+    apiClient.post<AuthResponse>("/api/auth/activate", data, {
+      skipAuth: true,
+      directBff: true,
+    }),
+
+  getPublicColleges: () =>
+    apiClient.get<Array<{ id: string; name: string; tenantCode: string }>>("/api/auth/colleges", {
+      skipAuth: true,
+      directBff: true,
+      suppressToast: true,
+    }),
+
+  rosterSignup: (data: { collegeId: string; collegeUserId: string; email: string }) =>
+    apiClient.post<{ message: string; status: string }>("/api/auth/roster-signup", data, {
+      skipAuth: true,
+      directBff: true,
+      suppressToast: true,
+    }),
+
+  getProfile: () => apiClient.get<UserProfileDto>("/api/auth/me"),
+
+  updateProfile: (data: { fullName: string; phoneNumber?: string }) =>
+    apiClient.put<UserProfileDto>("/api/auth/me", data),
+
+  changePassword: (data: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => apiClient.post<{ message: string }>("/api/auth/change-password", data),
+
+  enrollMfa: () =>
+    apiClient.post<{ secret: string; otpauthUri: string }>("/api/auth/mfa/enroll"),
+
+  confirmMfa: (data: { code: string }) =>
+    apiClient.post<{ success: boolean; mfaEnabled: boolean; recoveryCodes: string[] }>(
+      "/api/auth/mfa/confirm",
+      data
+    ),
 };

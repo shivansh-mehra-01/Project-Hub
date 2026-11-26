@@ -34,9 +34,12 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
 
     // Platform Root Entities
     public DbSet<CollegeTenant> CollegeTenants => Set<CollegeTenant>();
-    public DbSet<MasterNbaOutcome> MasterNbaOutcomes => Set<MasterNbaOutcome>();
     public DbSet<MasterSdgCatalog> MasterSdgCatalogs => Set<MasterSdgCatalog>();
     public DbSet<PlatformAuditLog> PlatformAuditLogs => Set<PlatformAuditLog>();
+    public DbSet<PlatformAnnouncement> PlatformAnnouncements => Set<PlatformAnnouncement>();
+    public DbSet<EmailOutboxMessage> EmailOutboxMessages => Set<EmailOutboxMessage>();
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<SupportTicketMessage> SupportTicketMessages => Set<SupportTicketMessage>();
     public DbSet<MasterUniversity> MasterUniversities => Set<MasterUniversity>();
     public DbSet<MasterCurriculumScheme> MasterCurriculumSchemes => Set<MasterCurriculumScheme>();
     public DbSet<MasterProgram> MasterPrograms => Set<MasterProgram>();
@@ -47,7 +50,6 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<UserAccount> Users => Set<UserAccount>();
     public DbSet<AcademicTrack> AcademicTracks => Set<AcademicTrack>();
-    public DbSet<CourseOutcomeDefinition> CourseOutcomeDefinitions => Set<CourseOutcomeDefinition>();
     public DbSet<ProblemBankStatement> ProblemBankStatements => Set<ProblemBankStatement>();
     public DbSet<ProjectTeam> ProjectTeams => Set<ProjectTeam>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
@@ -66,7 +68,6 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
     public DbSet<TeamVivaDefenseSchedule> TeamVivaDefenseSchedules => Set<TeamVivaDefenseSchedule>();
     public DbSet<EvaluationRubric> EvaluationRubrics => Set<EvaluationRubric>();
     public DbSet<EvaluationRubricCriterion> EvaluationRubricCriteria => Set<EvaluationRubricCriterion>();
-    public DbSet<CourseExitSurvey> CourseExitSurveys => Set<CourseExitSurvey>();
     public DbSet<ExceptionAuditLog> ExceptionAuditLogs => Set<ExceptionAuditLog>();
     public DbSet<ProjectClosureRecord> ProjectClosureRecords => Set<ProjectClosureRecord>();
     public DbSet<StudentAcademicRecord> StudentAcademicRecords => Set<StudentAcademicRecord>();
@@ -84,11 +85,6 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
     // College Admin Phase 2 Persistence Entities
     public DbSet<CollegeCampus> CollegeCampuses => Set<CollegeCampus>();
     public DbSet<HodAppointmentHistory> HodAppointmentHistories => Set<HodAppointmentHistory>();
-    public DbSet<AccreditationCycle> AccreditationCycles => Set<AccreditationCycle>();
-    public DbSet<AccreditationCriterion> AccreditationCriteria => Set<AccreditationCriterion>();
-    public DbSet<AccreditationMetric> AccreditationMetrics => Set<AccreditationMetric>();
-    public DbSet<AccreditationEvidence> AccreditationEvidences => Set<AccreditationEvidence>();
-    public DbSet<AccreditationActivityLog> AccreditationActivityLogs => Set<AccreditationActivityLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -21,20 +21,20 @@ public class CoordinatorController : ControllerBase
 {
     private readonly ProjectHubDbContext _context;
     private readonly ITenantContext _tenantContext;
-    private readonly IEmailSender _emailSender;
+    private readonly IEmailOutboxService _emailOutbox;
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<CoordinatorController> _logger;
 
     public CoordinatorController(
         ProjectHubDbContext context,
         ITenantContext tenantContext,
-        IEmailSender emailSender,
+        IEmailOutboxService emailOutbox,
         IWebHostEnvironment environment,
         ILogger<CoordinatorController> logger)
     {
         _context = context;
         _tenantContext = tenantContext;
-        _emailSender = emailSender;
+        _emailOutbox = emailOutbox;
         _environment = environment;
         _logger = logger;
     }
@@ -127,20 +127,17 @@ public class CoordinatorController : ControllerBase
         }
 
         var email = request.Email.Trim().ToLowerInvariant();
-        var enrollmentNumber = request.EnrollmentNumber.Trim().ToUpperInvariant();
-
-        // 1. Validate that Email matches the tenant's configured EmailDomain/SsoDomain
-        var tenant = await _context.CollegeTenants.FirstOrDefaultAsync(c => c.Id == collegeId);
-        if (tenant != null && !string.IsNullOrWhiteSpace(tenant.SsoDomain))
+        if (email.Any(char.IsWhiteSpace) ||
+            !System.Net.Mail.MailAddress.TryCreate(email, out var parsedMail) ||
+            !parsedMail.Host.Contains('.') ||
+            parsedMail.Host.EndsWith('.'))
         {
-            var expectedDomain = $"@{tenant.SsoDomain.Trim().ToLowerInvariant()}";
-            if (!email.EndsWith(expectedDomain, StringComparison.OrdinalIgnoreCase))
-            {
-                return BadRequest(new { message = $"Student email must belong to the college institutional domain '{expectedDomain}'." });
-            }
+            return BadRequest(new { message = "A valid email address is required." });
         }
 
-        // 2. Reject duplicate EnrollmentNumber or Email within the same CollegeId with 409 Conflict
+        var enrollmentNumber = request.EnrollmentNumber.Trim().ToUpperInvariant();
+
+        // 1. Reject duplicate EnrollmentNumber or Email within the same CollegeId with 409 Conflict
         var isDuplicate = await _context.Users
             .IgnoreQueryFilters()
             .AnyAsync(u => u.CollegeId == collegeId &&
@@ -214,10 +211,10 @@ public class CoordinatorController : ControllerBase
             await _context.SaveChangesAsync();
         }
 
-        // 5. Create Pre-activated Student UserAccount
-        var defaultHash = PasswordHelper.HashPassword("Pass@1234");
-        var otpNumber = RandomNumberGenerator.GetInt32(100000, 1000000);
-        var otp = otpNumber.ToString("D6");
+        // 5. Create Pre-activated Student UserAccount (no default password; activation via email/OTP)
+        var rawActivationToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+        var activationTokenHash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawActivationToken)));
 
         var newUser = new UserAccount
         {
@@ -227,14 +224,15 @@ public class CoordinatorController : ControllerBase
             Email = email,
             EnrollmentOrEmployeeCode = enrollmentNumber,
             Role = UserRole.Student,
-            PasswordHash = defaultHash,
+            PasswordHash = null,
             IsActivated = false,
             IsActive = true,
-            PasswordResetOtpHashed = PasswordHelper.HashPassword(otp),
-            PasswordResetOtpExpiresAtUtc = DateTime.UtcNow.AddHours(24)
+            ActivationTokenHashed = activationTokenHash,
+            ActivationTokenExpiresAtUtc = DateTime.UtcNow.AddHours(24)
         };
 
         await _context.Users.AddAsync(newUser);
+        _emailOutbox.QueueAccountActivation(newUser.Email, newUser.FullName, rawActivationToken, newUser.ActivationTokenExpiresAtUtc ?? DateTime.UtcNow.AddHours(24), collegeId);
         await _context.SaveChangesAsync();
 
         // 6. Create StudentAcademicEnrollment Record
@@ -253,11 +251,8 @@ public class CoordinatorController : ControllerBase
 
         await _context.StudentAcademicEnrollments.AddAsync(enrollment);
 
-        // 7. Dispatch 6-digit Activation OTP via IEmailSender
-        await _emailSender.SendPasswordResetOtpAsync(newUser.Email, newUser.FullName, otp);
-
-        _logger.LogInformation("[STUDENT ONBOARDING] Dispatched 6-digit Activation OTP for newly provisioned student {Email} ({Usn}): {Otp}",
-            newUser.Email, newUser.EnrollmentOrEmployeeCode, otp);
+        _logger.LogInformation("[STUDENT ONBOARDING] Dispatched activation link for newly provisioned student {Email} ({Usn}).",
+            newUser.Email, newUser.EnrollmentOrEmployeeCode);
 
         // 8. Record ExceptionAuditLog
         var defaultTeam = await _context.ProjectTeams.FirstOrDefaultAsync(t => t.CollegeId == collegeId && t.DepartmentId == effectiveDeptId && !t.IsDeleted);
@@ -289,7 +284,7 @@ public class CoordinatorController : ControllerBase
         await _context.ExceptionAuditLogs.AddAsync(auditLog);
         await _context.SaveChangesAsync();
 
-        string? devOtp = _environment.IsDevelopment() ? otp : null;
+        string? devOtp = null;
 
         return StatusCode(StatusCodes.Status201Created, new SingleStudentProvisionedResponse
         {
@@ -297,7 +292,7 @@ public class CoordinatorController : ControllerBase
             FullName = newUser.FullName,
             EnrollmentNumber = newUser.EnrollmentOrEmployeeCode,
             Email = newUser.Email,
-            Message = "Student account provisioned successfully. A 6-digit activation OTP has been dispatched to their institutional email.",
+            Message = "Student account provisioned successfully. An activation link has been dispatched to their institutional email.",
             DevOtp = devOtp
         });
     }
@@ -332,14 +327,7 @@ public class CoordinatorController : ControllerBase
         var inserted = 0;
         var updated = 0;
         var warnings = new List<string>();
-
-        var defaultHash = Infrastructure.Security.PasswordHelper.HashPassword("Pass@1234");
-
-        // Validate tenant SSO domain
-        var tenant = await _context.CollegeTenants.FirstOrDefaultAsync(c => c.Id == collegeId);
-        var expectedDomain = !string.IsNullOrWhiteSpace(tenant?.SsoDomain)
-            ? $"@{tenant.SsoDomain.Trim().ToLowerInvariant()}"
-            : null;
+        var activationDispatches = new List<(string Email, string FullName, string RawToken)>();
 
         foreach (var row in request.Rows)
         {
@@ -351,13 +339,6 @@ public class CoordinatorController : ControllerBase
 
             var email = row.Email.Trim().ToLowerInvariant();
             var code = row.EnrollmentOrEmployeeCode.Trim().ToUpperInvariant();
-
-            // Validate email domain
-            if (expectedDomain != null && !email.EndsWith(expectedDomain, StringComparison.OrdinalIgnoreCase))
-            {
-                warnings.Add($"Skipping '{email}': Email must belong to institutional domain '{expectedDomain}'.");
-                continue;
-            }
 
             // Role Security Rule: Roster import can only provision or update Student accounts.
             if (row.Role != UserRole.Student && (int)row.Role != 0)
@@ -398,6 +379,10 @@ public class CoordinatorController : ControllerBase
             }
             else
             {
+                var rawActivationToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+                    .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+                var activationTokenHash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawActivationToken)));
+
                 var newUser = new UserAccount
                 {
                     CollegeId = collegeId,
@@ -406,15 +391,24 @@ public class CoordinatorController : ControllerBase
                     Email = email,
                     EnrollmentOrEmployeeCode = code,
                     Role = UserRole.Student, // STRICT: ALWAYS UserRole.Student
-                    PasswordHash = defaultHash,
+                    PasswordHash = null,
                     IsActivated = false,
                     IsActive = true,
+                    ActivationTokenHashed = activationTokenHash,
+                    ActivationTokenExpiresAtUtc = DateTime.UtcNow.AddHours(24),
                     SkillsCsv = row.SkillsCsv,
                     GitHubHandle = row.GitHubHandle
                 };
                 await _context.Users.AddAsync(newUser);
+                activationDispatches.Add((newUser.Email, newUser.FullName, rawActivationToken));
                 inserted++;
             }
+        }
+
+        var expiresAtUtc = DateTime.UtcNow.AddHours(24);
+        foreach (var dispatch in activationDispatches)
+        {
+            _emailOutbox.QueueAccountActivation(dispatch.Email, dispatch.FullName, dispatch.RawToken, expiresAtUtc, collegeId);
         }
 
         await _context.SaveChangesAsync();

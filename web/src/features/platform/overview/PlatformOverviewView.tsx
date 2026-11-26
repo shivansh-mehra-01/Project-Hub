@@ -28,64 +28,6 @@ import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { usePlatformData } from "../data/platformDataStore";
 import { showToast } from "@/lib/toast";
 
-interface RecentAdminEvent {
-  id: string;
-  title: string;
-  college?: string;
-  actor: string;
-  timestamp: string;
-  category: "Colleges" | "Applications" | "Announcements" | "Security";
-  details: string;
-}
-
-const RECENT_ADMIN_ACTIVITIES: RecentAdminEvent[] = [
-  {
-    id: "act-01",
-    title: "College Application Approved",
-    college: "IES College of Technology (IES-BPL)",
-    actor: "Super Admin",
-    timestamp: "1 hour ago",
-    category: "Applications",
-    details: "Reviewed institutional accreditation documents and initiated tenant provisioning for RGPV affiliation.",
-  },
-  {
-    id: "act-02",
-    title: "Platform Announcement Published",
-    college: "All Affiliated Colleges",
-    actor: "Super Admin",
-    timestamp: "3 hours ago",
-    category: "Announcements",
-    details: 'Broadcasted maintenance notice: "Scheduled Database Performance Upgrade".',
-  },
-  {
-    id: "act-03",
-    title: "College Tenant Activated",
-    college: "University Institute of Technology, RGPV",
-    actor: "Super Admin",
-    timestamp: "5 hours ago",
-    category: "Colleges",
-    details: "Tenant schema tenant_uit_rgpv_prod verified with 1,800 licensed student capacity.",
-  },
-  {
-    id: "act-04",
-    title: "Administrator Credentials Dispatched",
-    college: "Sagar Institute of Science and Technology (SISTec)",
-    actor: "Super Admin",
-    timestamp: "1 day ago",
-    category: "Colleges",
-    details: "Secure activation token and initial administrator credentials dispatched to official institutional email.",
-  },
-  {
-    id: "act-05",
-    title: "MFA Hardware Token Enrolled",
-    college: "Platform Security",
-    actor: "Dev Startup Admin",
-    timestamp: "2 days ago",
-    category: "Security",
-    details: "FIDO2 security key enrolled for privileged platform operator multi-factor authentication.",
-  },
-];
-
 export const PlatformOverviewView: React.FC = () => {
   const {
     colleges,
@@ -93,6 +35,7 @@ export const PlatformOverviewView: React.FC = () => {
     tickets,
     services,
     alerts,
+    auditLogs,
     updateCollege,
   } = usePlatformData();
 
@@ -118,7 +61,7 @@ export const PlatformOverviewView: React.FC = () => {
   }, [colleges]);
 
   const totalOngoingProjects = useMemo(() => {
-    return colleges.reduce((sum, c) => sum + (c.status === "Active" ? Math.round((c.totalStudents || 0) / 4.2) : 0), 0);
+    return colleges.reduce((sum, c) => sum + (c.activeProjectsCount || 0), 0);
   }, [colleges]);
 
   // 2. ESSENTIAL 6 SERVICES PLATFORM HEALTH
@@ -549,21 +492,25 @@ export const PlatformOverviewView: React.FC = () => {
             </div>
 
             <div className="space-y-3">
-              {RECENT_ADMIN_ACTIVITIES.slice(0, 4).map((activity) => (
-                <div key={activity.id} className="text-xs space-y-0.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-900">{activity.title}</span>
-                    <span className="text-[10px] font-mono text-slate-400">{activity.timestamp}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-snug">{activity.details}</p>
-                  {activity.college && (
-                    <div className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
-                      <Building2 className="w-2.5 h-2.5" />
-                      {activity.college}
+              {auditLogs.length === 0 ? (
+                <p className="text-xs text-slate-400 py-4 text-center">No recent administrative events recorded.</p>
+              ) : (
+                auditLogs.slice(0, 4).map((activity) => (
+                  <div key={activity.id} className="text-xs space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-900 truncate">{activity.action}</span>
+                      <span className="text-[10px] font-mono text-slate-400 shrink-0">{activity.timestamp}</span>
                     </div>
-                  )}
-                </div>
-              ))}
+                    <p className="text-[11px] text-slate-500 leading-snug">{activity.details}</p>
+                    {activity.affectedResource && (
+                      <div className="text-[10px] text-slate-400 flex items-center gap-1 font-mono truncate">
+                        <Building2 className="w-2.5 h-2.5 shrink-0" />
+                        {activity.affectedResource}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

@@ -17,19 +17,19 @@ public class LoggingEmailSender : IEmailSender
 
     public Task SendPasswordResetOtpAsync(string recipientEmail, string recipientName, string otp, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[DEV EMAIL] Password reset verification queued for {Email} (content redacted).", recipientEmail);
+        _logger.LogInformation("[DEV EMAIL - NON-PRODUCTION] Password reset verification dispatched for {Email} (content redacted).", recipientEmail);
         return Task.CompletedTask;
     }
 
     public Task SendAccountActivationAsync(string recipientEmail, string recipientName, string activationToken, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[DEV EMAIL] Account activation email queued for {Email} (token redacted).", recipientEmail);
+        _logger.LogInformation("[DEV EMAIL - NON-PRODUCTION] Account activation email dispatched for {Email} (token redacted).", recipientEmail);
         return Task.CompletedTask;
     }
 
     public Task SendEmailChangeVerificationAsync(string recipientEmail, string recipientName, string otp, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("[DEV EMAIL] Email change verification queued for {Email} (content redacted).", recipientEmail);
+        _logger.LogInformation("[DEV EMAIL - NON-PRODUCTION] Email change verification dispatched for {Email} (content redacted).", recipientEmail);
         return Task.CompletedTask;
     }
 }

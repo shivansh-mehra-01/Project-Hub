@@ -24,6 +24,7 @@ backend/src/ProjectHub.Api/App_Data/vault/*
 # Local developer overrides (allow safe appsettings.Development.json in repo)
 appsettings.Local.json
 *.local.json
+.dpkeys/
 
 # ------------------------------------------------------------------------------
 # Next.js / Node

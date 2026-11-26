@@ -76,6 +76,5 @@ public class AcademicTrack : BaseEntity, ITenantEntity
     public CurriculumScheme? CurriculumScheme { get; set; }
 
     public ICollection<ProjectTeam> Teams { get; set; } = new List<ProjectTeam>();
-    public ICollection<CourseOutcomeDefinition> CourseOutcomes { get; set; } = new List<CourseOutcomeDefinition>();
     public ICollection<ProblemBankStatement> ProblemStatements { get; set; } = new List<ProblemBankStatement>();
 }

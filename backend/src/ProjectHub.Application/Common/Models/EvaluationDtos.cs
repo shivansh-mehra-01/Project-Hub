@@ -151,9 +151,6 @@ public record SaveRubricCriterionRequest
     public int DisplayOrder { get; init; }
 
     [MaxLength(100)]
-    public string? NbaPoMapping { get; init; }
-
-    [MaxLength(100)]
     public string? BloomTaxonomyLevel { get; init; }
 }
 

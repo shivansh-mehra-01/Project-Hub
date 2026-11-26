@@ -5,7 +5,12 @@ import {
   AppointHodRequest,
   BulkStaffUploadRequest,
   BulkStaffUploadResultDto,
+  BulkStudentUploadRequest,
+  BulkStudentUploadResultDto,
+  RosterImportHistoryDto,
+  RosterImportPreviewDto,
   CertifyExaminationRegisterRequest,
+  CollegeAnnouncementDto,
   CollegeOverviewDto,
   CollegeSettingsDto,
   CollegeStaffDto,
@@ -18,7 +23,6 @@ import {
   CreateCollegeTrackRequest,
   CreateCourseProgramRequest,
   CreateDepartmentRequest,
-  CreateHodRequest,
   CreateSemesterTermRequest,
   CreateSubjectOfferingRequest,
   DepartmentDto,
@@ -27,10 +31,8 @@ import {
   HodManagementDto,
   ImportCatalogResultDto,
   ImportUniversityCatalogRequest,
-  InstitutionalDossierDto,
   MasterCatalogOverviewDto,
   SemesterTermDto,
-  SignOffComplianceRequest,
   SubjectOfferingDto,
   UpdateCollegeSettingsRequest,
   UpdateCourseProgramRequest,
@@ -39,8 +41,11 @@ import {
 } from "./types";
 
 export const collegeApi = {
-  // A. Executive Overview
+  // A. Executive Overview & Platform Announcements
   getOverview: () => apiClient.get<CollegeOverviewDto>("/api/college/overview"),
+
+  getAnnouncements: () =>
+    apiClient.get<CollegeAnnouncementDto[]>("/api/college/announcements", { suppressToast: true }),
 
   // B. Course Program Management
   getCoursePrograms: () => apiClient.get<CourseProgramDto[]>("/api/college/course-programs"),
@@ -69,13 +74,15 @@ export const collegeApi = {
   // D. HOD Leadership Management
   getHods: () => apiClient.get<HodManagementDto[]>("/api/college/hods"),
 
-  createHod: (data: CreateHodRequest) =>
-    apiClient.post<HodManagementDto>("/api/college/hods/create", data),
-
   appointHod: (departmentId: string, data: AppointHodRequest) =>
     apiClient.put<{ success: boolean; departmentId: string; hodId: string; hodName: string }>(
       `/api/college/departments/${departmentId}/appoint-hod`,
       data
+    ),
+
+  relieveHod: (departmentId: string) =>
+    apiClient.post<{ success: boolean; departmentId: string; relievedUserId?: string; relievedUserName?: string }>(
+      `/api/college/departments/${departmentId}/relieve-hod`
     ),
 
   getHodHistory: () => apiClient.get<HodAssignmentHistoryDto[]>("/api/college/hods/history"),
@@ -107,8 +114,20 @@ export const collegeApi = {
   resetStaffPassword: (id: string) =>
     apiClient.post<{ success: boolean; message: string; emailDispatched?: boolean; expiresAtUtc?: string }>(`/api/college/users/${id}/reset-password`),
 
+  previewBulkStaff: (data: BulkStaffUploadRequest) =>
+    apiClient.post<RosterImportPreviewDto>("/api/college/users/bulk/preview", data),
+
   bulkUploadStaff: (data: BulkStaffUploadRequest) =>
     apiClient.post<BulkStaffUploadResultDto>("/api/college/users/bulk", data),
+
+  previewBulkStudents: (data: BulkStudentUploadRequest) =>
+    apiClient.post<RosterImportPreviewDto>("/api/college/students/bulk/preview", data),
+
+  bulkUploadStudents: (data: BulkStudentUploadRequest) =>
+    apiClient.post<BulkStudentUploadResultDto>("/api/college/students/bulk", data),
+
+  getRosterImportHistory: () =>
+    apiClient.get<RosterImportHistoryDto[]>("/api/college/roster-imports/history"),
 
   // F. Examination Tabulation Register
   getExaminationResults: (params?: { trackId?: string; departmentId?: string }) => {
@@ -125,20 +144,19 @@ export const collegeApi = {
       data
     ),
 
-  // G. Accreditation & Institutional Reports
-  getComplianceDossier: () => apiClient.get<InstitutionalDossierDto>("/api/college/compliance/dossier"),
-
-  signOffCompliance: (data: SignOffComplianceRequest) =>
-    apiClient.post<{ success: boolean; attestedAtUtc: string; message: string }>(
-      "/api/college/compliance/sign-off",
-      data
-    ),
-
   // G. Subscription & Platform Settings
   getSettings: () => apiClient.get<CollegeSettingsDto>("/api/college/settings"),
 
   updateSettings: (data: UpdateCollegeSettingsRequest) =>
     apiClient.put<CollegeSettingsDto>("/api/college/settings", data),
+
+  uploadLogo: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient.postFormData<CollegeSettingsDto>("/api/college/settings/logo", formData);
+  },
+
+  deleteLogo: () => apiClient.delete<CollegeSettingsDto>("/api/college/settings/logo"),
 
   // Master Catalog & Academic Hierarchy
   getMasterCatalog: () => apiClient.get<MasterCatalogOverviewDto[]>("/api/college/master-catalog"),
@@ -151,7 +169,8 @@ export const collegeApi = {
   // Academic Sessions & Terms
   getAcademicSessions: () => apiClient.get<AcademicSessionDto[]>("/api/college/academic-sessions"),
 
-  getActiveSession: () => apiClient.get<AcademicSessionDto>("/api/college/sessions/active"),
+  getActiveSession: () =>
+    apiClient.get<AcademicSessionDto>("/api/college/sessions/active", { suppressToast: true }),
 
   configureSession: (data: ConfigureAcademicSessionRequest) =>
     apiClient.post<AcademicSessionDto>("/api/college/sessions", data),

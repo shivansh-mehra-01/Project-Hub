@@ -156,14 +156,6 @@ export const getCommandPaletteItems = (
         path: "/platform/colleges/new",
       },
       {
-        id: "act-admin-academic",
-        title: "Manage Academic Reference Catalog",
-        subtitle: "Standard RGPV B.Tech programs and verified engineering branch catalog",
-        category: "Actions",
-        iconName: "BookOpen",
-        path: "/platform/academic-reference",
-      },
-      {
         id: "act-admin-announcement",
         title: "Broadcast Platform Announcement",
         subtitle: "Notify colleges of scheduled maintenance or platform updates",
@@ -205,14 +197,6 @@ export const getCommandPaletteItems = (
         category: "Actions",
         iconName: "FolderGit2",
         path: "/student?subtab=logs",
-      },
-      {
-        id: "act-course-exit-survey",
-        title: "Complete 60s Course Exit Survey",
-        subtitle: "Rate PO attainments and unlock tamper-proof credential export",
-        category: "Actions",
-        iconName: "GraduationCap",
-        path: "/student/portfolio",
       }
     );
   } else if (role === "Faculty") {

@@ -110,7 +110,7 @@ export const PlatformManagementView: React.FC = () => {
     setFormCategory(ann.category);
     setFormPriority(ann.priority);
     setFormAudience(ann.targetAudience);
-    setFormSelectedColleges(ann.selectedCollegeCodes || []);
+    setFormSelectedColleges(ann.targetCollegeIds || []);
     setCollegeSearchQuery("");
     setFormPublishOption(
       ann.status === "Scheduled" ? "scheduled" : ann.status === "Draft" ? "draft" : "now"
@@ -166,7 +166,7 @@ export const PlatformManagementView: React.FC = () => {
       fullMessage: formFullMessage.trim(),
       shortDescription: formFullMessage.slice(0, 100) + (formFullMessage.length > 100 ? "..." : ""),
       targetAudience: formAudience,
-      selectedCollegeCodes: formAudience === "Selected Colleges" ? formSelectedColleges : [],
+      targetCollegeIds: formAudience === "Selected Colleges" ? formSelectedColleges : [],
       status: formPublishOption === "draft" ? "Draft" : formPublishOption === "scheduled" ? "Scheduled" : "Published",
       scheduledFor: formPublishOption === "scheduled" ? formScheduledDate : undefined,
     };
@@ -444,10 +444,10 @@ export const PlatformManagementView: React.FC = () => {
                           {ann.targetAudience}
                         </span>
                         {ann.targetAudience === "Selected Colleges" &&
-                          ann.selectedCollegeCodes &&
-                          ann.selectedCollegeCodes.length > 0 && (
+                          ann.targetCollegeIds &&
+                          ann.targetCollegeIds.length > 0 && (
                             <span className="text-[10px] font-mono text-slate-500 block">
-                              {ann.selectedCollegeCodes.length} {ann.selectedCollegeCodes.length === 1 ? "college" : "colleges"} ({ann.selectedCollegeCodes.join(", ")})
+                              {ann.targetCollegeIds.length} {ann.targetCollegeIds.length === 1 ? "college" : "colleges"} ({ann.targetCollegeIds.join(", ")})
                             </span>
                           )}
                       </div>
@@ -857,9 +857,9 @@ export const PlatformManagementView: React.FC = () => {
                   <span className="text-[11px] text-slate-500 block">Target Audience:</span>
                   <span className="font-semibold text-slate-900">{viewingAnnouncement.targetAudience}</span>
                   {viewingAnnouncement.targetAudience === "Selected Colleges" &&
-                    viewingAnnouncement.selectedCollegeCodes && (
+                    viewingAnnouncement.targetCollegeIds && (
                       <span className="text-[10px] font-mono text-slate-500 block mt-0.5">
-                        {viewingAnnouncement.selectedCollegeCodes.join(", ")}
+                        {viewingAnnouncement.targetCollegeIds.join(", ")}
                       </span>
                     )}
                 </div>

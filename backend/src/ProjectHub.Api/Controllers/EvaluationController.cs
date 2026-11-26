@@ -78,7 +78,6 @@ public class EvaluationController : ControllerBase
                         MaxMarks = c.MaxMarks,
                         WeightPercentage = c.WeightPercentage,
                         DisplayOrder = c.DisplayOrder,
-                        NbaPoMapping = c.NbaPoMapping,
                         BloomTaxonomyLevel = c.BloomTaxonomyLevel
                     })
                     .ToList()
@@ -163,7 +162,6 @@ public class EvaluationController : ControllerBase
                 MaxMarks = c.MaxMarks,
                 WeightPercentage = c.WeightPercentage,
                 DisplayOrder = c.DisplayOrder > 0 ? c.DisplayOrder : order++,
-                NbaPoMapping = c.NbaPoMapping?.Trim(),
                 BloomTaxonomyLevel = c.BloomTaxonomyLevel?.Trim()
             });
         }
@@ -188,7 +186,6 @@ public class EvaluationController : ControllerBase
                 MaxMarks = c.MaxMarks,
                 WeightPercentage = c.WeightPercentage,
                 DisplayOrder = c.DisplayOrder,
-                NbaPoMapping = c.NbaPoMapping,
                 BloomTaxonomyLevel = c.BloomTaxonomyLevel
             }).ToList()
         });

@@ -11,28 +11,24 @@ public record CollegeOverviewDto
     public int TotalCourses { get; init; }
     public int TotalBranches { get; init; }
     public int TotalDepartments { get; init; }
+    public int AppointedHodsCount { get; init; }
+    public int VacantDepartmentsCount { get; init; }
     public int TotalStudents { get; init; }
     public int TotalFaculty { get; init; }
     public int TotalProjects { get; init; }
-    public decimal Criterion3AttainmentPct { get; init; }
     public bool StrictSsoEnforced { get; init; }
-    public string AffiliatedUniversity { get; init; } = string.Empty;
-    public string CollegeType { get; init; } = "Engineering";
-    public string EstablishedYear { get; init; } = "1952";
-    public string CampusesSummary { get; init; } = "1 Campus";
+    public string SsoDomain { get; init; } = string.Empty;
+    public string? AffiliatedUniversity { get; init; }
+    public string? CampusAddress { get; init; }
+    public string? CampusesSummary { get; init; }
     public string? CrestUrl { get; init; }
-    public string CurrentSemesterLabel { get; init; } = "Odd Semester";
-    public DateTime LastUpdatedUtc { get; init; } = DateTime.UtcNow;
+    public bool HasPrincipalSeal { get; init; }
+    public string? CurrentSemesterLabel { get; init; }
     public AcademicSessionDto? ActiveSession { get; init; }
-    public CohortEnrollmentCapacityDto? CohortCapacity { get; init; }
-    public List<AicteCadreComplianceDto> ProgramAicteCompliance { get; init; } = new();
-    public decimal SarDepartmentAttestationPct { get; init; }
-    public int AttestedDepartmentsCount { get; init; }
-    public int TotalDepartmentsForSar { get; init; }
     public List<DepartmentTrackSummaryDto> DepartmentSummaries { get; init; } = new();
     public List<OverviewCourseHierarchyDto> AcademicStructure { get; init; } = new();
+    public List<CollegeActionItemDto> OperationalActionItems { get; init; } = new();
     public List<CollegeActivityItemDto> RecentActivities { get; init; } = new();
-    public List<CollegeNotificationItemDto> Notifications { get; init; } = new();
 }
 
 public record OverviewCourseHierarchyDto
@@ -44,19 +40,24 @@ public record OverviewCourseHierarchyDto
     public List<string> Branches { get; init; } = new();
 }
 
+public record CollegeActionItemDto
+{
+    public string Key { get; init; } = string.Empty;
+    public string Title { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+    public string Severity { get; init; } = "info";
+    public string ActionLabel { get; init; } = string.Empty;
+    public string ActionHref { get; init; } = string.Empty;
+    public int? Count { get; init; }
+}
+
 public record CollegeActivityItemDto
 {
     public string Title { get; init; } = string.Empty;
+    public string? Actor { get; init; }
+    public string? TargetEntity { get; init; }
     public string TimeAgo { get; init; } = string.Empty;
     public DateTime OccurredAtUtc { get; init; }
-}
-
-public record CollegeNotificationItemDto
-{
-    public string Type { get; init; } = "info"; // success, info, warning
-    public string Message { get; init; } = string.Empty;
-    public string TimeAgo { get; init; } = string.Empty;
-    public DateTime CreatedAtUtc { get; init; }
 }
 
 public record DepartmentTrackSummaryDto
@@ -68,7 +69,6 @@ public record DepartmentTrackSummaryDto
     public int IntakeQuota { get; init; }
     public int StudentCount { get; init; }
     public int FacultyCount { get; init; }
-    public decimal Criterion3AttainmentPct { get; init; }
     public string TrackStatus { get; init; } = "Awaiting HOD Launch"; // "Active" vs "Awaiting HOD Launch"
     public int ActiveTrackCount { get; init; }
     public List<string> ActiveTrackNames { get; init; } = new();
@@ -88,8 +88,6 @@ public record DepartmentDto
     public int IntakeQuota { get; init; }
     public int StudentCount { get; init; }
     public int FacultyCount { get; init; }
-    public bool IsSarAttested { get; init; }
-    public DateTime? SarAttestedAtUtc { get; init; }
     public string TrackStatus { get; init; } = "Awaiting HOD Launch"; // "Active" vs "Awaiting HOD Launch"
     public int ActiveTrackCount { get; init; }
 }
@@ -114,15 +112,7 @@ public record UpdateDepartmentRequest
 public record AppointHodRequest
 {
     public Guid HodUserId { get; init; }
-}
-
-public record CreateHodRequest
-{
-    public string FullName { get; init; } = string.Empty;
-    public string Email { get; init; } = string.Empty;
-    public string EmployeeCode { get; init; } = string.Empty;
-    public Guid DepartmentId { get; init; }
-    public string? TemporaryPassword { get; init; }
+    public bool ConfirmReplacement { get; init; } = false;
 }
 
 public record HodManagementDto
@@ -152,8 +142,10 @@ public record HodAssignmentHistoryDto
     public string HodEmail { get; init; } = string.Empty;
     public string EmployeeCode { get; init; } = string.Empty;
     public DateTime AppointedAtUtc { get; init; }
+    public DateTime? RelievedAtUtc { get; init; }
     public string AppointedBy { get; init; } = "College Administrator";
     public bool IsCurrent { get; init; }
+    public string? Remarks { get; init; }
 }
 
 public record CollegeStaffDto
@@ -255,16 +247,9 @@ public record CollegeSettingsDto
     public Guid Id { get; init; }
     public string Name { get; init; } = string.Empty;
     public string TenantCode { get; init; } = string.Empty;
-    public string SsoDomain { get; init; } = string.Empty;
-    public bool EnforceStrictSso { get; init; }
     public string? CrestUrl { get; init; }
-    public string? PrincipalSealUrl { get; init; }
     public string? AffiliatedUniversity { get; init; }
     public string? CampusAddress { get; init; }
-    public string? CampusesCsv { get; init; }
-    public bool NbaModuleEnabled { get; init; } = true;
-    public bool GithubIntegrationEnabled { get; init; } = true;
-    public bool JiraIntegrationEnabled { get; init; } = true;
     public LicenseTier LicenseTier { get; init; } = LicenseTier.Pilot;
     public int MaxStudentSeats { get; init; }
     public int EnrolledStudentCount { get; init; }
@@ -275,48 +260,8 @@ public record CollegeSettingsDto
 public record UpdateCollegeSettingsRequest
 {
     public string? Name { get; init; }
-    public bool? EnforceStrictSso { get; init; }
-    public string? CrestUrl { get; init; }
-    public string? PrincipalSealUrl { get; init; }
     public string? AffiliatedUniversity { get; init; }
     public string? CampusAddress { get; init; }
-    public string? CampusesCsv { get; init; }
-    public bool? NbaModuleEnabled { get; init; }
-    public bool? GithubIntegrationEnabled { get; init; }
-    public bool? JiraIntegrationEnabled { get; init; }
-}
-
-public record SignOffComplianceRequest
-{
-    public string Remarks { get; init; } = string.Empty;
-}
-
-public record InstitutionalDossierDto
-{
-    public string CollegeName { get; init; } = string.Empty;
-    public string TenantCode { get; init; } = string.Empty;
-    public string SsoDomain { get; init; } = string.Empty;
-    public string AffiliatedUniversity { get; init; } = string.Empty;
-    public string AcademicYear { get; init; } = "2026–2027";
-    public int TotalDepartments { get; init; }
-    public int TotalStudents { get; init; }
-    public int TotalFaculty { get; init; }
-    public decimal OverallAttainmentPct { get; init; }
-    public bool IsAttested { get; init; }
-    public DateTime? AttestedAtUtc { get; init; }
-    public string? AttestedBy { get; init; }
-    public List<DepartmentAttainmentSummaryDto> Departments { get; init; } = new();
-}
-
-public record DepartmentAttainmentSummaryDto
-{
-    public string DepartmentCode { get; init; } = string.Empty;
-    public string DepartmentName { get; init; } = string.Empty;
-    public string? HodName { get; init; }
-    public int StudentCount { get; init; }
-    public decimal AttainmentPct { get; init; }
-    public bool IsSarAttested { get; init; }
-    public DateTime? SarAttestedAtUtc { get; init; }
 }
 
 // --- RGPV Catalog & Dynamic Academic Hierarchy DTOs ---
@@ -522,42 +467,6 @@ public record MasterProgramSummaryDto
     public List<string> Branches { get; init; } = new();
 }
 
-// --- Statutory AICTE Compliance & Cadre Ratio Models ---
-
-public record AicteCadreComplianceDto
-{
-    public string ProgramLevel { get; init; } = string.Empty; // "UG Engineering", "PG Engineering", "MBA", "MCA"
-    public string ProgramCode { get; init; } = string.Empty;
-    public int SanctionedIntake { get; init; }
-    public int ProgramDurationYears { get; init; }
-    public int TotalSanctionedStrength { get; init; }
-    public int RequiredFaculty { get; init; }
-    public int AvailableFaculty { get; init; }
-    public string RequiredRatio { get; init; } = "1:20";
-    public string ActualRatio { get; init; } = string.Empty;
-    public bool IsCompliant { get; init; }
-    public string CadreStatus { get; init; } = "Insufficient Data"; // "Compliant", "NonCompliant", "Insufficient Data"
-    public int RequiredProfessors { get; init; }
-    public int ActualProfessors { get; init; }
-    public int RequiredAssociateProfessors { get; init; }
-    public int ActualAssociateProfessors { get; init; }
-    public int RequiredAssistantProfessors { get; init; }
-    public int ActualAssistantProfessors { get; init; }
-    public string StatusMessage { get; init; } = string.Empty;
-    public bool IsSubstituted { get; init; } = false;
-    public int SubstitutedProfessorsCount { get; init; } = 0;
-    public string? QualificationVerificationNotice { get; init; }
-}
-
-public record CohortEnrollmentCapacityDto
-{
-    public int TotalSanctionedMultiCohortCapacity { get; init; }
-    public int TotalEnrolledStudents { get; init; }
-    public decimal UtilizationPercentage { get; init; }
-    public bool HasReliableEnrollmentRecords { get; init; }
-    public string StatusMessage { get; init; } = string.Empty;
-}
-
 // --- University Examination Tabulation Register Models ---
 
 public record ExaminationTabulationRowDto
@@ -575,7 +484,6 @@ public record ExaminationTabulationRowDto
     public string Grade { get; init; } = "F"; // "A+", "A", "B+", "B", "C+", "C", "F"
     public int GradePoints { get; init; } // 10, 9, 8, 7, 6, 5, 0
     public string ResultStatus { get; init; } = "Pass"; // "Pass", "Fail", "Pending"
-    public bool MeetsNbaAttainmentThreshold { get; init; }
 }
 
 public record ExaminationTabulationRegisterDto
@@ -613,20 +521,94 @@ public record BulkStaffUploadRowDto
     public string FullName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string DepartmentCode { get; init; } = string.Empty;
-    public string EmployeeCode { get; init; } = string.Empty;
-    public UserRole Role { get; init; } = UserRole.Faculty;
-    public FacultyDesignation? Designation { get; init; }
+    public string Designation { get; init; } = string.Empty;
 }
 
 public record BulkStaffUploadRequest
 {
     public List<BulkStaffUploadRowDto> StaffRows { get; init; } = new();
+    public List<string>? CsvHeaders { get; init; }
 }
 
 public record BulkStaffUploadResultDto
 {
     public int TotalSubmitted { get; init; }
     public int SuccessfullyCreated { get; init; }
+    public int SuccessfullyUpdated { get; init; }
     public int FailedCount { get; init; }
     public List<string> Errors { get; init; } = new();
+}
+
+public record BulkStudentUploadRowDto
+{
+    public string StudentName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string StudentNumber { get; init; } = string.Empty;
+    public string DepartmentCode { get; init; } = string.Empty;
+    public string? Program { get; init; }
+    public string? AdmissionYear { get; init; }
+    public int? CurrentSemester { get; init; }
+}
+
+public record BulkStudentUploadRequest
+{
+    public List<BulkStudentUploadRowDto> StudentRows { get; init; } = new();
+    public List<string>? CsvHeaders { get; init; }
+}
+
+public record BulkStudentUploadResultDto
+{
+    public int TotalSubmitted { get; init; }
+    public int SuccessfullyCreated { get; init; }
+    public int SuccessfullyUpdated { get; init; }
+    public int FailedCount { get; init; }
+    public List<string> Errors { get; init; } = new();
+}
+
+public record RosterImportPreviewRowDto
+{
+    public int RowNumber { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string DepartmentCode { get; init; } = string.Empty;
+    public string? SecondaryValue { get; init; } // StudentNumber or Designation
+    public string Action { get; init; } = "invalid"; // "create" | "update" | "invalid"
+    public List<string> Errors { get; init; } = new();
+}
+
+public record RosterImportPreviewDto
+{
+    public string ImportType { get; init; } = string.Empty; // "Faculty" | "Students"
+    public int TotalRows { get; init; }
+    public int ValidCount { get; init; }
+    public int InvalidCount { get; init; }
+    public int CreateCount { get; init; }
+    public int UpdateCount { get; init; }
+    public int DuplicateCount { get; init; }
+    public List<string> HeaderErrors { get; init; } = new();
+    public List<RosterImportPreviewRowDto> Rows { get; init; } = new();
+}
+
+public record RosterImportHistoryDto
+{
+    public Guid Id { get; init; }
+    public string ImportType { get; init; } = string.Empty;
+    public string ActorEmail { get; init; } = string.Empty;
+    public int TotalSubmitted { get; init; }
+    public int CreatedCount { get; init; }
+    public int UpdatedCount { get; init; }
+    public DateTime OccurredAtUtc { get; init; }
+}
+
+public record CollegeAnnouncementDto
+{
+    public Guid Id { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public string Category { get; init; } = "Maintenance";
+    public string Priority { get; init; } = "Normal";
+    public string ShortDescription { get; init; } = string.Empty;
+    public string FullMessage { get; init; } = string.Empty;
+    public string TargetAudience { get; init; } = "All Colleges";
+    public DateTime PublishDateUtc { get; init; }
+    public string CreatedByName { get; init; } = string.Empty;
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,19 +23,25 @@ public class CollegeController : ControllerBase
     private readonly IEmailSender _emailSender;
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<CollegeController> _logger;
+    private readonly ISessionSecurityService? _sessionSecurity;
+    private readonly IEmailOutboxService? _emailOutbox;
 
     public CollegeController(
         ProjectHubDbContext context,
         ITenantContext tenantContext,
         IEmailSender emailSender,
         IWebHostEnvironment environment,
-        ILogger<CollegeController> logger)
+        ILogger<CollegeController> logger,
+        ISessionSecurityService? sessionSecurity = null,
+        IEmailOutboxService? emailOutbox = null)
     {
         _context = context;
         _tenantContext = tenantContext;
         _emailSender = emailSender;
         _environment = environment;
         _logger = logger;
+        _sessionSecurity = sessionSecurity;
+        _emailOutbox = emailOutbox;
     }
 
     private async Task<(Guid? UserId, string Email, string FullName)> ResolveCallerIdentityAsync()
@@ -51,6 +58,89 @@ public class CollegeController : ControllerBase
         return (null, "principal@college.ac.in", "College Administrator");
     }
 
+    [HttpGet("announcements")]
+    public async Task<ActionResult<List<CollegeAnnouncementDto>>> GetAnnouncements()
+    {
+        var collegeId = _tenantContext.CollegeId;
+        if (!collegeId.HasValue) return BadRequest(new { message = "Active tenant context required." });
+
+        var college = await _context.CollegeTenants
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == collegeId.Value && !c.IsDeleted);
+
+        if (college == null) return NotFound(new { message = "College tenant record not found." });
+
+        var published = await _context.PlatformAnnouncements
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(a => !a.IsDeleted && a.Status == "Published")
+            .OrderByDescending(a => a.PublishDateUtc ?? a.CreatedAtUtc)
+            .ToListAsync();
+
+        var collegeIdStr = college.Id.ToString();
+        var result = new List<CollegeAnnouncementDto>();
+
+        foreach (var a in published)
+        {
+            var isEligible = IsAnnouncementEligibleForCollege(a, collegeIdStr, college.TenantCode, college.IsActive);
+            if (!isEligible) continue;
+
+            result.Add(new CollegeAnnouncementDto
+            {
+                Id = a.Id,
+                Title = a.Title,
+                Category = a.Category,
+                Priority = a.Priority,
+                ShortDescription = a.ShortDescription,
+                FullMessage = a.FullMessage,
+                TargetAudience = a.TargetAudience,
+                PublishDateUtc = a.PublishDateUtc ?? a.CreatedAtUtc,
+                CreatedByName = string.IsNullOrWhiteSpace(a.CreatedByName) ? "Super Admin" : a.CreatedByName
+            });
+        }
+
+        return Ok(result);
+    }
+
+    private static bool IsAnnouncementEligibleForCollege(
+        PlatformAnnouncement announcement,
+        string collegeIdStr,
+        string tenantCode,
+        bool isCollegeActive)
+    {
+        if (string.Equals(announcement.TargetAudience, "All Colleges", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(announcement.TargetAudience, "All Institutions", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(announcement.TargetAudience, "Active Colleges", StringComparison.OrdinalIgnoreCase))
+        {
+            return isCollegeActive;
+        }
+
+        if (string.Equals(announcement.TargetAudience, "Selected Colleges", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(announcement.TargetAudience, "Selected Institutions", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(announcement.TargetCollegeIdsJson)) return false;
+            try
+            {
+                var targets = JsonSerializer.Deserialize<List<string>>(announcement.TargetCollegeIdsJson);
+                if (targets == null || targets.Count == 0) return false;
+                return targets.Any(t =>
+                    string.Equals(t, collegeIdStr, StringComparison.OrdinalIgnoreCase) ||
+                    (!string.IsNullOrWhiteSpace(tenantCode) && string.Equals(t, tenantCode, StringComparison.OrdinalIgnoreCase)));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
     [HttpGet("overview")]
     public async Task<ActionResult<CollegeOverviewDto>> GetOverview()
     {
@@ -63,7 +153,7 @@ public class CollegeController : ControllerBase
 
         if (college == null) return NotFound(new { message = "College tenant record not found." });
 
-        // 1. Resolve Active Institutional Academic Session
+        // 1. Resolve Active Institutional Academic Session (read-only; never auto-fabricate)
         var activeSession = await _context.AcademicSessions
             .Where(s => s.CollegeId == collegeId.Value && s.IsActive && !s.IsDeleted)
             .OrderByDescending(s => s.StartDate)
@@ -77,23 +167,14 @@ public class CollegeController : ControllerBase
                 .FirstOrDefaultAsync();
         }
 
-        if (activeSession == null)
-        {
-            activeSession = new AcademicSession
-            {
-                CollegeId = collegeId.Value,
-                Label = "2026–2027",
-                StartDate = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
-                EndDate = new DateTime(2027, 6, 30, 23, 59, 59, DateTimeKind.Utc),
-                ExamCutoffDateUtc = new DateTime(2027, 5, 31, 23, 59, 59, DateTimeKind.Utc),
-                AllowInterdisciplinaryTeams = true,
-                IsActive = true
-            };
-            await _context.AcademicSessions.AddAsync(activeSession);
-            await _context.SaveChangesAsync();
-        }
+        string? currentSemesterLabel = await _context.SemesterTerms
+            .Where(t => t.CollegeId == collegeId.Value && t.IsActive && !t.IsDeleted &&
+                        (activeSession == null || t.AcademicSessionId == null || t.AcademicSessionId == activeSession.Id))
+            .OrderByDescending(t => t.SemesterNumber)
+            .Select(t => t.SemesterName)
+            .FirstOrDefaultAsync();
 
-        // 2. Resolve Department Summaries with Track Status
+        // 2. Resolve Tenant-Scoped Programs, Departments, Tracks, and Active Users
         var courses = await _context.CoursePrograms
             .Where(p => p.CollegeId == collegeId.Value && !p.IsDeleted)
             .OrderBy(p => p.Code)
@@ -106,358 +187,166 @@ public class CollegeController : ControllerBase
             .ToListAsync();
 
         var activeTracks = await _context.AcademicTracks
-            .Where(t => t.DepartmentId.HasValue && t.IsActive && !t.IsDeleted)
+            .Where(t => t.CollegeId == collegeId.Value && t.DepartmentId.HasValue && t.IsActive && !t.IsDeleted)
             .ToListAsync();
 
-        var allCollegeUsers = await _context.Users
-            .Where(u => u.CollegeId == collegeId.Value && !u.IsDeleted)
+        var activeCollegeUsers = await _context.Users
+            .Where(u => u.CollegeId == collegeId.Value && u.IsActive && !u.IsDeleted)
             .ToListAsync();
-
-        var vivaEvaluations = await _context.VivaEvaluations
-            .Include(v => v.ProjectTeam)
-            .Where(v => v.CollegeId == collegeId.Value && !v.IsDeleted)
-            .ToListAsync();
-
-        var overallAttainment = vivaEvaluations.Any()
-            ? Math.Round(vivaEvaluations.Average(e => e.SharedTotalScore > 0 ? Math.Min(100m, Math.Max(0m, e.SharedTotalScore)) : 0m), 1)
-            : 0m;
 
         var deptSummaries = depts.Select(d =>
         {
             var tracks = activeTracks.Where(t => t.DepartmentId == d.Id).ToList();
             var count = tracks.Count;
-            var deptFaculty = allCollegeUsers.Count(u => u.DepartmentId == d.Id && (u.Role == UserRole.Faculty || u.Role == UserRole.HOD));
-            var deptStudents = allCollegeUsers.Count(u => u.DepartmentId == d.Id && u.Role == UserRole.Student);
-            var deptEvals = vivaEvaluations.Where(v => v.ProjectTeam != null && v.ProjectTeam.DepartmentId == d.Id).ToList();
-            var deptAttainment = deptEvals.Any()
-                ? Math.Round(deptEvals.Average(e => e.SharedTotalScore > 0 ? Math.Min(100m, Math.Max(0m, e.SharedTotalScore)) : 0m), 1)
-                : 0m;
+            var deptFaculty = activeCollegeUsers.Count(u => u.DepartmentId == d.Id && (u.Role == UserRole.Faculty || u.Role == UserRole.HOD));
+            var deptStudents = activeCollegeUsers.Count(u => u.DepartmentId == d.Id && u.Role == UserRole.Student);
+            var hasActiveHod = d.HodUserId.HasValue && d.HodUser != null && d.HodUser.CollegeId == collegeId.Value && d.HodUser.IsActive && !d.HodUser.IsDeleted;
 
             return new DepartmentTrackSummaryDto
             {
                 DepartmentId = d.Id,
                 DepartmentCode = d.Code,
                 DepartmentName = d.Name,
-                HodName = d.HodUser != null ? d.HodUser.FullName : null,
-                IntakeQuota = d.IntakeQuota > 0 ? d.IntakeQuota : 120,
+                HodName = hasActiveHod ? d.HodUser!.FullName : null,
+                IntakeQuota = d.IntakeQuota,
                 StudentCount = deptStudents,
                 FacultyCount = deptFaculty,
-                Criterion3AttainmentPct = deptAttainment,
                 TrackStatus = count > 0 ? "Active" : "Awaiting HOD Launch",
                 ActiveTrackCount = count,
                 ActiveTrackNames = tracks.Select(t => t.Name).ToList()
             };
         }).ToList();
 
-        var (currentUserId, _, adminName) = await ResolveCallerIdentityAsync();
+        var (_, _, adminName) = await ResolveCallerIdentityAsync();
 
-        var totalEnrolledIntake = allCollegeUsers.Count(u => u.Role == UserRole.Student);
-        var totalFaculty = allCollegeUsers.Count(u => u.Role == UserRole.Faculty || u.Role == UserRole.HOD);
+        var activeStudentCount = activeCollegeUsers.Count(u => u.Role == UserRole.Student);
+        var activeFacultyCount = activeCollegeUsers.Count(u => u.Role == UserRole.Faculty || u.Role == UserRole.HOD);
+        var appointedHodsCount = depts.Count(d => d.HodUserId.HasValue && d.HodUser != null && d.HodUser.CollegeId == collegeId.Value && d.HodUser.IsActive && !d.HodUser.IsDeleted);
+        var vacantDepartmentsCount = Math.Max(0, depts.Count - appointedHodsCount);
 
-        // 3. Cohort-Adjusted Capacity Calculation
-        var enrollmentQuery = _context.StudentAcademicEnrollments
-            .Include(e => e.CurrentSemesterTerm)
-            .Where(e => e.CollegeId == collegeId.Value && !e.IsDeleted && e.AcademicStatus == AcademicStatus.Active);
+        var projectCount = await _context.ProjectTeams
+            .CountAsync(t => t.CollegeId == collegeId.Value && !t.IsDeleted);
 
-        if (activeSession != null)
-        {
-            enrollmentQuery = enrollmentQuery.Where(e => e.CurrentSemesterTerm == null || e.CurrentSemesterTerm.AcademicSessionId == activeSession.Id);
-        }
-
-        var studentEnrollments = await enrollmentQuery.ToListAsync();
-
-        int totalSanctionedCapacity = 0;
-        foreach (var d in depts)
-        {
-            var prog = courses.FirstOrDefault(c => c.Id == d.CourseProgramId);
-            var durationYears = (prog?.TotalSemesters ?? 8) / 2;
-            if (durationYears < 1) durationYears = 4;
-            totalSanctionedCapacity += (d.IntakeQuota > 0 ? d.IntakeQuota : 120) * durationYears;
-        }
-
-        // Distinct student counting avoids multi-counting a student who has multiple historical semester enrollment records
-        int distinctEnrolledStudents = studentEnrollments.Any()
-            ? studentEnrollments.Select(e => e.StudentUserId).Distinct().Count()
-            : totalEnrolledIntake;
-
-        int totalEnrolledStudents = distinctEnrolledStudents > 0 ? distinctEnrolledStudents : totalEnrolledIntake;
-
-        decimal utilizationPct = totalSanctionedCapacity > 0
-            ? Math.Round((decimal)totalEnrolledStudents / totalSanctionedCapacity * 100m, 1)
-            : 0m;
-
-        var cohortCapacity = new CohortEnrollmentCapacityDto
-        {
-            TotalSanctionedMultiCohortCapacity = totalSanctionedCapacity,
-            TotalEnrolledStudents = totalEnrolledStudents,
-            UtilizationPercentage = utilizationPct,
-            HasReliableEnrollmentRecords = studentEnrollments.Count > 0,
-            StatusMessage = studentEnrollments.Count > 0
-                ? $"Calculated across {depts.Count} departments over full multi-year degree cohorts."
-                : "Active student accounts used; formal semester cohort enrollment records recommended for statutory audit."
-        };
-
-        // 4. Statutory AICTE Cadre & FSR Compliance per Program
-        var aicteComplianceList = new List<AicteCadreComplianceDto>();
-        foreach (var prog in courses)
-        {
-            var childDepts = depts.Where(d => d.CourseProgramId == prog.Id || (!d.CourseProgramId.HasValue && prog.Code == "BTECH")).ToList();
-            var sanctionedIntake = childDepts.Sum(d => d.IntakeQuota);
-            var durationYears = prog.TotalSemesters / 2;
-            if (durationYears < 1) durationYears = (prog.Level == AcademicProgramLevel.PG ? 2 : 4);
-            var totalStrength = sanctionedIntake * durationYears;
-
-            // Determine statutory programme type and discipline per AICTE APH 2024-2027 Annexure 5
-            var codeUpper = prog.Code?.Trim().ToUpperInvariant() ?? "";
-            var nameUpper = prog.Name?.Trim().ToUpperInvariant() ?? "";
-
-            bool isManagement = codeUpper.Contains("MBA") || codeUpper.Contains("PGDM") || nameUpper.Contains("MANAGEMENT");
-            bool isMca = codeUpper.Contains("MCA") || nameUpper.Contains("COMPUTER APPLICATION");
-            bool isPgEngineering = prog.Level == AcademicProgramLevel.PG && !isManagement && !isMca;
-
-            // Statutory Faculty-to-Student Ratio (FSR):
-            // - PG Engineering (M.Tech): 1:15
-            // - UG Engineering (B.Tech): 1:20
-            // - Management (MBA): 1:20
-            // - Computer Applications (MCA): 1:20
-            int ratioDenominator = isPgEngineering ? 15 : 20;
-            int requiredFaculty = totalStrength > 0 ? (int)Math.Ceiling((double)totalStrength / ratioDenominator) : 0;
-
-            var childDeptIds = childDepts.Select(d => d.Id).ToHashSet();
-            var progFaculty = allCollegeUsers.Where(u => u.DepartmentId.HasValue && childDeptIds.Contains(u.DepartmentId.Value) && (u.Role == UserRole.Faculty || u.Role == UserRole.HOD)).ToList();
-            int availableFaculty = progFaculty.Count;
-
-            int actualProf = progFaculty.Count(f => f.Designation == FacultyDesignation.Professor);
-            int actualAssoc = progFaculty.Count(f => f.Designation == FacultyDesignation.AssociateProfessor);
-            int actualAsst = progFaculty.Count(f => f.Designation == FacultyDesignation.AssistantProfessor);
-
-            int reqProf = 0, reqAssoc = 0, reqAsst = 0;
-            if (requiredFaculty > 0)
-            {
-                if (isPgEngineering)
-                {
-                    // AICTE APH Annexure 5: PG Engineering Cadre ratio is 1 Professor : 1 Assoc Professor : 1 Asst Professor (Divisor: 3)
-                    // For requiredFaculty = 4 (30 intake * 2 yrs = 60 students / 15): 1 Prof, 1 Assoc, 2 Asst.
-                    if (requiredFaculty == 1)
-                    {
-                        reqProf = 1; reqAssoc = 0; reqAsst = 0;
-                    }
-                    else if (requiredFaculty == 2)
-                    {
-                        reqProf = 1; reqAssoc = 1; reqAsst = 0;
-                    }
-                    else
-                    {
-                        reqProf = Math.Max(1, requiredFaculty / 3);
-                        reqAssoc = Math.Max(1, (requiredFaculty - reqProf) / 2);
-                        reqAsst = Math.Max(0, requiredFaculty - reqProf - reqAssoc);
-                    }
-                }
-                else
-                {
-                    // AICTE APH Annexure 5: UG Engineering, MBA, MCA Cadre ratio is 1 Professor : 2 Assoc Professors : 6 Asst Professors (Divisor: 9)
-                    if (requiredFaculty == 1)
-                    {
-                        reqProf = 1; reqAssoc = 0; reqAsst = 0;
-                    }
-                    else if (requiredFaculty == 2)
-                    {
-                        reqProf = 1; reqAssoc = 1; reqAsst = 0;
-                    }
-                    else
-                    {
-                        reqProf = Math.Min(requiredFaculty, Math.Max(1, (int)Math.Round((double)requiredFaculty / 9.0, MidpointRounding.AwayFromZero)));
-                        reqAssoc = Math.Min(requiredFaculty - reqProf, Math.Max(1, (int)Math.Round((double)requiredFaculty * 2.0 / 9.0, MidpointRounding.AwayFromZero)));
-                        reqAsst = Math.Max(0, requiredFaculty - reqProf - reqAssoc);
-                    }
-                }
-            }
-
-            bool hasDesignations = progFaculty.Any(f => f.Designation.HasValue);
-            string cadreStatus;
-            string statusMsg;
-            bool isSubstituted = false;
-            int substitutedProf = 0;
-            string? qualificationNotice = null;
-
-            if (totalStrength == 0)
-            {
-                cadreStatus = "Compliant";
-                statusMsg = "Zero sanctioned intake; no mandatory AICTE cadre requirement.";
-            }
-            else if (availableFaculty == 0)
-            {
-                cadreStatus = "NonCompliant";
-                statusMsg = "Faculty count falls below AICTE sanctioned norms.";
-            }
-            else if (!hasDesignations)
-            {
-                cadreStatus = "Insufficient Data";
-                statusMsg = "Faculty cadre designations (Professor, Assoc Prof, Asst Prof) must be assigned in Staff Directory for AICTE audit.";
-            }
-            else
-            {
-                // Professor substitution rule per AICTE APH Annexure 5 Note:
-                // An eligible Associate Professor may be considered in lieu of a Professor if a Professor is unavailable.
-                int profDeficit = Math.Max(0, reqProf - actualProf);
-                int assocSurplus = Math.Max(0, actualAssoc - reqAssoc);
-                substitutedProf = Math.Min(profDeficit, assocSurplus);
-                int effectiveProf = actualProf + substitutedProf;
-                int effectiveAssoc = actualAssoc - substitutedProf;
-
-                bool isCadreCompliant = availableFaculty >= requiredFaculty &&
-                                        effectiveProf >= reqProf &&
-                                        effectiveAssoc >= reqAssoc;
-
-                if (isCadreCompliant)
-                {
-                    isSubstituted = substitutedProf > 0;
-                    cadreStatus = isSubstituted
-                        ? "Compliant — subject to qualification verification"
-                        : "Compliant";
-                    statusMsg = isSubstituted
-                        ? "Meets AICTE APH cadre requirements via eligible Associate Professor substitution in lieu of Professor per Annexure 5 Note."
-                        : "Meets AICTE APH cadre and FSR requirements.";
-                    qualificationNotice = isSubstituted
-                        ? "Statutory Qualification Notice: Associate Professor substitution in lieu of Professor is permitted under AICTE APH 2024–2027 Annexure 5 Note only if the substituting faculty member satisfies prescribed Professor qualifications (PhD degree and applicable teaching/research experience). Colabex does not independently validate academic credentials; the institution must independently verify and document qualification eligibility."
-                        : null;
-                }
-                else
-                {
-                    cadreStatus = "NonCompliant";
-                    statusMsg = "Faculty count or cadre distribution falls below AICTE sanctioned norms.";
-                }
-            }
-
-            string actualRatio = availableFaculty > 0 
-                ? (totalStrength == 0 ? "1:0" : $"1:{Math.Round((decimal)totalStrength / availableFaculty, 1)}")
-                : "N/A";
-
-            string programLevelDisplay = isPgEngineering
-                ? "PG Engineering"
-                : (isManagement ? "MBA" : (isMca ? "MCA" : (prog.Level == AcademicProgramLevel.UG ? "UG Engineering" : prog.Level.ToString())));
-
-            aicteComplianceList.Add(new AicteCadreComplianceDto
-            {
-                ProgramLevel = programLevelDisplay,
-                ProgramCode = prog.Code,
-                SanctionedIntake = sanctionedIntake,
-                ProgramDurationYears = durationYears,
-                TotalSanctionedStrength = totalStrength,
-                RequiredFaculty = requiredFaculty,
-                AvailableFaculty = availableFaculty,
-                RequiredRatio = $"1:{ratioDenominator}",
-                ActualRatio = actualRatio,
-                IsCompliant = cadreStatus.StartsWith("Compliant"),
-                CadreStatus = cadreStatus,
-                RequiredProfessors = reqProf,
-                ActualProfessors = actualProf,
-                RequiredAssociateProfessors = reqAssoc,
-                ActualAssociateProfessors = actualAssoc,
-                RequiredAssistantProfessors = reqAsst,
-                ActualAssistantProfessors = actualAsst,
-                StatusMessage = statusMsg,
-                IsSubstituted = isSubstituted,
-                SubstitutedProfessorsCount = substitutedProf,
-                QualificationVerificationNotice = qualificationNotice
-            });
-        }
-
-        // 5. Department SAR Attestation Progress
-        int totalDeptsForSar = depts.Count;
-        int attestedDeptsCount = depts.Count(d => d.IsSarAttested);
-        decimal sarAttestPct = totalDeptsForSar > 0 ? Math.Round((decimal)attestedDeptsCount / totalDeptsForSar * 100m, 1) : 0m;
-
-        var projectCount = await _context.ProjectTeams.CountAsync(t => !t.IsDeleted);
-
-        // Real Academic Structure Tree
+        // 3. Academic Structure Tree
         var academicStructure = courses.Select(c =>
         {
-            var childBranches = depts.Where(d => d.CourseProgramId == c.Id || (!d.CourseProgramId.HasValue && c.Code == "BTECH")).ToList();
-            var displayCode = c.Code switch
-            {
-                "BTECH" => "B.Tech",
-                "MTECH" => "M.Tech",
-                _ => c.Code
-            };
+            var childBranches = depts.Where(d => d.CourseProgramId == c.Id).ToList();
             return new OverviewCourseHierarchyDto
             {
                 CourseId = c.Id,
-                Code = displayCode,
+                Code = c.Code,
                 Name = c.Name,
                 BranchCount = childBranches.Count,
                 Branches = childBranches.Select(b => b.Code).ToList()
             };
         }).OrderByDescending(s => s.BranchCount).ToList();
 
-        var campusesCount = !string.IsNullOrWhiteSpace(college.CampusesCsv)
-            ? college.CampusesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length
-            : 1;
+        var campuses = !string.IsNullOrWhiteSpace(college.CampusesCsv)
+            ? college.CampusesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : Array.Empty<string>();
+        string? campusesSummary = campuses.Length > 0
+            ? (campuses.Length == 1 ? "1 Campus" : $"{campuses.Length} Campuses")
+            : null;
 
-        // Recent Activities from Institutional Audit Logs
+        // 4. Operational Action Items (derived strictly from live institutional state)
+        var actionItems = new List<CollegeActionItemDto>();
+        if (vacantDepartmentsCount > 0)
+        {
+            actionItems.Add(new CollegeActionItemDto
+            {
+                Key = "hod-vacancies",
+                Title = "HOD Vacancies Requiring Appointment",
+                Description = vacantDepartmentsCount == 1
+                    ? "1 department is operating without an appointed Head of Department."
+                    : $"{vacantDepartmentsCount} departments are operating without an appointed Head of Department.",
+                Severity = "warning",
+                ActionLabel = "Appoint HOD",
+                ActionHref = "/college/hods",
+                Count = vacantDepartmentsCount
+            });
+        }
+
+        if (activeSession == null)
+        {
+            actionItems.Add(new CollegeActionItemDto
+            {
+                Key = "missing-academic-session",
+                Title = "Academic Session Not Configured",
+                Description = "Configure an active academic session to align project cycles and terms.",
+                Severity = "warning",
+                ActionLabel = "Configure Session",
+                ActionHref = "/college/settings"
+            });
+        }
+
+        if (courses.Count == 0 || depts.Count == 0)
+        {
+            actionItems.Add(new CollegeActionItemDto
+            {
+                Key = "incomplete-academic-structure",
+                Title = "Academic Programs or Departments Missing",
+                Description = "Configure degree programs and departments so faculty and students can be onboarded.",
+                Severity = "info",
+                ActionLabel = "Configure Programs",
+                ActionHref = "/college/courses"
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(college.AffiliatingUniversity) ||
+            string.IsNullOrWhiteSpace(college.CampusAddress) ||
+            string.IsNullOrWhiteSpace(college.SsoDomain))
+        {
+            actionItems.Add(new CollegeActionItemDto
+            {
+                Key = "incomplete-institution-profile",
+                Title = "Institution Profile Incomplete",
+                Description = "Complete affiliating university, campus address, and institutional domain in Settings.",
+                Severity = "info",
+                ActionLabel = "Update Settings",
+                ActionHref = "/college/settings"
+            });
+        }
+
+        // 5. Recent Activities from Tenant-Scoped Institutional Audit Logs
         var relevantActions = new[]
         {
             "CREATE_COURSE", "UPDATE_COURSE", "CREATE_DEPARTMENT", "UPDATE_DEPARTMENT",
-            "APPOINT_HOD", "SIGN_OFF_COMPLIANCE", "UPDATE_SETTINGS", "CREATE_STAFF", "ACTIVATE_SESSION"
+            "APPOINT_HOD", "REVOKE_HOD", "UPDATE_SETTINGS", "CREATE_STAFF",
+            "BULK_ROSTER_IMPORT", "ACTIVATE_SESSION"
         };
 
         var auditLogs = await _context.PlatformAuditLogs
             .Where(l => l.TargetTenantId == collegeId.Value && relevantActions.Contains(l.Action))
             .OrderByDescending(l => l.OccurredAtUtc)
-            .Take(5)
+            .Take(6)
             .ToListAsync();
 
-        var recentActivities = new List<CollegeActivityItemDto>();
-        foreach (var log in auditLogs)
+        var recentActivities = auditLogs.Select(log =>
         {
             var title = log.Action switch
             {
-                "CREATE_COURSE" => "New degree program added",
+                "CREATE_COURSE" => "Degree program added",
                 "UPDATE_COURSE" => "Degree program updated",
-                "CREATE_DEPARTMENT" => "New branch added",
-                "UPDATE_DEPARTMENT" => "Branch configuration updated",
-                "APPOINT_HOD" => $"HOD appointed for {log.TargetEntity}",
-                "SIGN_OFF_COMPLIANCE" => "NBA Attainment Dossier Exported & Attested",
-                "UPDATE_SETTINGS" => "Campus institutional settings saved",
-                "CREATE_STAFF" => "New administrative account created",
+                "CREATE_DEPARTMENT" => "Department added",
+                "UPDATE_DEPARTMENT" => "Department updated",
+                "APPOINT_HOD" => $"HOD appointed ({log.TargetEntity})",
+                "REVOKE_HOD" => $"HOD appointment revoked ({log.TargetEntity})",
+                "UPDATE_SETTINGS" => "Institutional settings updated",
+                "CREATE_STAFF" => "Staff account created",
+                "BULK_ROSTER_IMPORT" => "Faculty roster imported",
+                "ACTIVATE_SESSION" => "Academic session activated",
                 _ => log.Action.Replace('_', ' ')
             };
-            recentActivities.Add(new CollegeActivityItemDto
+
+            return new CollegeActivityItemDto
             {
                 Title = title,
+                Actor = !string.IsNullOrWhiteSpace(log.ActorEmail) ? log.ActorEmail : "System",
+                TargetEntity = !string.IsNullOrWhiteSpace(log.TargetEntity) ? log.TargetEntity : null,
                 TimeAgo = GetRelativeTime(log.OccurredAtUtc),
                 OccurredAtUtc = log.OccurredAtUtc
-            });
-        }
-
-        // Real Notifications
-        var pendingSarCount = depts.Count(d => !d.IsSarAttested);
-        var notifications = new List<CollegeNotificationItemDto>
-        {
-            new()
-            {
-                Type = "success",
-                Message = $"Academic session {activeSession.Label} activated",
-                TimeAgo = "2h ago",
-                CreatedAtUtc = DateTime.UtcNow.AddHours(-2)
-            },
-            new()
-            {
-                Type = "info",
-                Message = $"{depts.Count} departments active under {courses.Count} degree programs",
-                TimeAgo = "3h ago",
-                CreatedAtUtc = DateTime.UtcNow.AddHours(-3)
-            },
-            new()
-            {
-                Type = pendingSarCount > 0 ? "warning" : "success",
-                Message = pendingSarCount > 0
-                    ? $"NBA SAR sign-off pending for {pendingSarCount} branches"
-                    : "NBA report generation completed",
-                TimeAgo = "1d ago",
-                CreatedAtUtc = DateTime.UtcNow.AddDays(-1)
-            }
-        };
+            };
+        }).ToList();
 
         return Ok(new CollegeOverviewDto
         {
@@ -468,40 +357,40 @@ public class CollegeController : ControllerBase
             TotalCourses = courses.Count,
             TotalBranches = depts.Count,
             TotalDepartments = depts.Count,
-            TotalStudents = totalEnrolledIntake,
-            TotalFaculty = totalFaculty,
+            AppointedHodsCount = appointedHodsCount,
+            VacantDepartmentsCount = vacantDepartmentsCount,
+            TotalStudents = activeStudentCount,
+            TotalFaculty = activeFacultyCount,
             TotalProjects = projectCount,
-            Criterion3AttainmentPct = overallAttainment,
             StrictSsoEnforced = college.EnforceStrictSso,
-            AffiliatedUniversity = !string.IsNullOrWhiteSpace(college.AffiliatedUniversity)
-                ? college.AffiliatedUniversity
-                : "RGPV, Bhopal",
-            CollegeType = "Engineering",
-            EstablishedYear = "1952",
-            CampusesSummary = campusesCount == 1 ? "1 Campus" : $"{campusesCount} Campuses",
+            SsoDomain = college.SsoDomain,
+            AffiliatedUniversity = !string.IsNullOrWhiteSpace(college.AffiliatingUniversity)
+                ? college.AffiliatingUniversity.Trim()
+                : null,
+            CampusAddress = !string.IsNullOrWhiteSpace(college.CampusAddress)
+                ? college.CampusAddress.Trim()
+                : null,
+            CampusesSummary = campusesSummary,
             CrestUrl = college.CrestUrl,
-            CurrentSemesterLabel = "Odd Semester",
-            LastUpdatedUtc = DateTime.UtcNow,
-            CohortCapacity = cohortCapacity,
-            ProgramAicteCompliance = aicteComplianceList,
-            SarDepartmentAttestationPct = sarAttestPct,
-            AttestedDepartmentsCount = attestedDeptsCount,
-            TotalDepartmentsForSar = totalDeptsForSar,
-            ActiveSession = new AcademicSessionDto
-            {
-                Id = activeSession.Id,
-                CollegeId = activeSession.CollegeId,
-                Label = activeSession.Label,
-                StartDate = activeSession.StartDate,
-                EndDate = activeSession.EndDate,
-                ExamCutoffDateUtc = activeSession.ExamCutoffDateUtc,
-                AllowInterdisciplinaryTeams = activeSession.AllowInterdisciplinaryTeams,
-                IsActive = activeSession.IsActive
-            },
+            HasPrincipalSeal = !string.IsNullOrWhiteSpace(college.PrincipalSealUrl),
+            CurrentSemesterLabel = currentSemesterLabel,
+            ActiveSession = activeSession == null
+                ? null
+                : new AcademicSessionDto
+                {
+                    Id = activeSession.Id,
+                    CollegeId = activeSession.CollegeId,
+                    Label = activeSession.Label,
+                    StartDate = activeSession.StartDate,
+                    EndDate = activeSession.EndDate,
+                    ExamCutoffDateUtc = activeSession.ExamCutoffDateUtc,
+                    AllowInterdisciplinaryTeams = activeSession.AllowInterdisciplinaryTeams,
+                    IsActive = activeSession.IsActive
+                },
             DepartmentSummaries = deptSummaries,
             AcademicStructure = academicStructure,
-            RecentActivities = recentActivities,
-            Notifications = notifications
+            OperationalActionItems = actionItems,
+            RecentActivities = recentActivities
         });
     }
 
@@ -663,8 +552,7 @@ public class CollegeController : ControllerBase
                             CourseProgramId = courseProg.Id,
                             Code = masterBranch.Code,
                             Name = masterBranch.Name,
-                            IntakeQuota = 120,
-                            IsSarAttested = false
+                            IntakeQuota = 120
                         };
                         await _context.Departments.AddAsync(dept);
                         deptsCreated++;
@@ -946,6 +834,7 @@ public class CollegeController : ControllerBase
         var collegeId = _tenantContext.CollegeId!.Value;
 
         var session = await _context.AcademicSessions
+            .AsNoTracking()
             .Where(s => s.CollegeId == collegeId && s.IsActive && !s.IsDeleted)
             .OrderByDescending(s => s.StartDate)
             .FirstOrDefaultAsync();
@@ -953,6 +842,7 @@ public class CollegeController : ControllerBase
         if (session == null)
         {
             session = await _context.AcademicSessions
+                .AsNoTracking()
                 .Where(s => s.CollegeId == collegeId && !s.IsDeleted)
                 .OrderByDescending(s => s.StartDate)
                 .FirstOrDefaultAsync();
@@ -960,18 +850,7 @@ public class CollegeController : ControllerBase
 
         if (session == null)
         {
-            session = new AcademicSession
-            {
-                CollegeId = collegeId,
-                Label = "2026–2027",
-                StartDate = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
-                EndDate = new DateTime(2027, 6, 30, 23, 59, 59, DateTimeKind.Utc),
-                ExamCutoffDateUtc = new DateTime(2027, 5, 31, 23, 59, 59, DateTimeKind.Utc),
-                AllowInterdisciplinaryTeams = true,
-                IsActive = true
-            };
-            await _context.AcademicSessions.AddAsync(session);
-            await _context.SaveChangesAsync();
+            return NotFound(new { message = "No academic session is configured for this institution." });
         }
 
         return Ok(new AcademicSessionDto
@@ -991,7 +870,32 @@ public class CollegeController : ControllerBase
     public async Task<ActionResult<AcademicSessionDto>> ConfigureAcademicSession([FromBody] ConfigureAcademicSessionRequest request)
     {
         var collegeId = _tenantContext.CollegeId!.Value;
-        var label = string.IsNullOrWhiteSpace(request.AcademicYear) ? "2026–2027" : request.AcademicYear.Trim();
+        var label = request.AcademicYear?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(label) || label.Length > 40)
+        {
+            return BadRequest(new { message = "Academic session label is required and must be 40 characters or fewer." });
+        }
+
+        var existingSession = await _context.AcademicSessions
+            .FirstOrDefaultAsync(s => s.CollegeId == collegeId && (s.Label == label || s.Label == label.Replace("–", "-")) && !s.IsDeleted);
+
+        var startDate = request.StartDate ?? existingSession?.StartDate ?? new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var defaultEndDate = new DateTime(2027, 6, 30, 23, 59, 59, DateTimeKind.Utc);
+        var endDate = request.EndDate
+            ?? existingSession?.EndDate
+            ?? (request.ExamCutoffDateUtc.HasValue && request.ExamCutoffDateUtc.Value > defaultEndDate
+                ? request.ExamCutoffDateUtc.Value
+                : defaultEndDate);
+        if (startDate >= endDate)
+        {
+            return BadRequest(new { message = "Session start date must be earlier than session end date." });
+        }
+
+        var examCutoff = request.ExamCutoffDateUtc ?? existingSession?.ExamCutoffDateUtc;
+        if (examCutoff.HasValue && (examCutoff.Value < startDate || examCutoff.Value > endDate))
+        {
+            return BadRequest(new { message = "Exam cutoff date must fall within the academic session start and end dates." });
+        }
 
         if (request.IsActive)
         {
@@ -1001,18 +905,16 @@ public class CollegeController : ControllerBase
             foreach (var s in otherActive) s.IsActive = false;
         }
 
-        var session = await _context.AcademicSessions
-            .FirstOrDefaultAsync(s => s.CollegeId == collegeId && (s.Label == label || s.Label == label.Replace("–", "-")) && !s.IsDeleted);
-
+        var session = existingSession;
         if (session == null)
         {
             session = new AcademicSession
             {
                 CollegeId = collegeId,
                 Label = label,
-                StartDate = request.StartDate ?? new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
-                EndDate = request.EndDate ?? (request.ExamCutoffDateUtc ?? new DateTime(2027, 6, 30, 23, 59, 59, DateTimeKind.Utc)),
-                ExamCutoffDateUtc = request.ExamCutoffDateUtc ?? new DateTime(2027, 5, 31, 23, 59, 59, DateTimeKind.Utc),
+                StartDate = startDate,
+                EndDate = endDate,
+                ExamCutoffDateUtc = examCutoff ?? endDate,
                 AllowInterdisciplinaryTeams = request.AllowInterdisciplinaryTeams,
                 IsActive = request.IsActive
             };
@@ -1021,12 +923,23 @@ public class CollegeController : ControllerBase
         else
         {
             session.Label = label;
-            session.ExamCutoffDateUtc = request.ExamCutoffDateUtc ?? session.ExamCutoffDateUtc;
+            session.StartDate = startDate;
+            session.EndDate = endDate;
+            if (examCutoff.HasValue) session.ExamCutoffDateUtc = examCutoff.Value;
             session.AllowInterdisciplinaryTeams = request.AllowInterdisciplinaryTeams;
             session.IsActive = request.IsActive;
-            if (request.StartDate.HasValue) session.StartDate = request.StartDate.Value;
-            if (request.EndDate.HasValue) session.EndDate = request.EndDate.Value;
         }
+
+        var (actorUserId, actorEmail, _) = await ResolveCallerIdentityAsync();
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = actorUserId,
+            ActorEmail = actorEmail,
+            Action = "ACTIVATE_SESSION",
+            TargetTenantId = collegeId,
+            TargetEntity = session.Label,
+            OccurredAtUtc = DateTime.UtcNow
+        });
 
         await _context.SaveChangesAsync();
 
@@ -1297,10 +1210,8 @@ public class CollegeController : ControllerBase
                 HodUserId = d.HodUserId,
                 HodName = d.HodUser != null ? d.HodUser.FullName : null,
                 IntakeQuota = d.IntakeQuota > 0 ? d.IntakeQuota : 120,
-                StudentCount = sCount > 0 ? sCount : (d.IntakeQuota > 0 ? d.IntakeQuota : 120),
+                StudentCount = sCount,
                 FacultyCount = fCount,
-                IsSarAttested = d.IsSarAttested,
-                SarAttestedAtUtc = d.SarAttestedAtUtc,
                 TrackStatus = count > 0 ? "Active" : "Awaiting HOD Launch",
                 ActiveTrackCount = count
             };
@@ -1312,6 +1223,11 @@ public class CollegeController : ControllerBase
     [HttpPost("departments")]
     public async Task<ActionResult<DepartmentDto>> CreateDepartment([FromBody] CreateDepartmentRequest request)
     {
+        if (request.IntakeQuota < 1 || request.IntakeQuota > 10000)
+        {
+            return BadRequest(new { message = "Sanctioned intake quota must be between 1 and 10,000 seats." });
+        }
+
         var collegeId = _tenantContext.CollegeId!.Value;
         var code = request.Code.Trim().ToUpperInvariant();
 
@@ -1357,6 +1273,11 @@ public class CollegeController : ControllerBase
 
         if (dept == null) return NotFound(new { message = "Department not found." });
 
+        if (request.IntakeQuota < 0 || request.IntakeQuota > 10000)
+        {
+            return BadRequest(new { message = "Sanctioned intake quota must be between 1 and 10,000 seats." });
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Name)) dept.Name = request.Name.Trim();
         if (!string.IsNullOrWhiteSpace(request.Code)) dept.Code = request.Code.Trim().ToUpperInvariant();
         if (request.IntakeQuota > 0) dept.IntakeQuota = request.IntakeQuota;
@@ -1379,10 +1300,8 @@ public class CollegeController : ControllerBase
             HodUserId = dept.HodUserId,
             HodName = dept.HodUser?.FullName,
             IntakeQuota = dept.IntakeQuota,
-            StudentCount = studentCount > 0 ? studentCount : dept.IntakeQuota,
-            FacultyCount = facultyCount,
-            IsSarAttested = dept.IsSarAttested,
-            SarAttestedAtUtc = dept.SarAttestedAtUtc
+            StudentCount = studentCount,
+            FacultyCount = facultyCount
         });
     }
 
@@ -1404,8 +1323,20 @@ public class CollegeController : ControllerBase
     [HttpPut("departments/{id}/appoint-hod")]
     public async Task<IActionResult> AppointHod(Guid id, [FromBody] AppointHodRequest request)
     {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var department = await _context.Departments.FirstOrDefaultAsync(d => d.Id == id && d.CollegeId == collegeId && !d.IsDeleted);
+        if (!_tenantContext.CollegeId.HasValue)
+        {
+            return Forbid();
+        }
+
+        if (request.HodUserId == Guid.Empty)
+        {
+            return BadRequest(new { message = "A valid faculty candidate must be selected." });
+        }
+
+        var collegeId = _tenantContext.CollegeId.Value;
+        var department = await _context.Departments
+            .Include(d => d.HodUser)
+            .FirstOrDefaultAsync(d => d.Id == id && d.CollegeId == collegeId && !d.IsDeleted);
         if (department == null) return NotFound(new { message = "Department not found." });
 
         var faculty = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.HodUserId && u.CollegeId == collegeId && !u.IsDeleted);
@@ -1416,14 +1347,226 @@ public class CollegeController : ControllerBase
             return BadRequest(new { message = "Platform SuperAdmin accounts cannot be assigned as department HOD." });
         }
 
+        if (faculty.Role != UserRole.Faculty && faculty.Role != UserRole.HOD)
+        {
+            return BadRequest(new { message = "Only eligible faculty members can be appointed as department HOD." });
+        }
+
+        if (!faculty.IsActive)
+        {
+            return BadRequest(new { message = "Inactive faculty accounts cannot be appointed as department HOD." });
+        }
+
+        if (faculty.DepartmentId != department.Id)
+        {
+            return BadRequest(new { message = "Selected faculty member is not assigned to this department." });
+        }
+
+        var otherHodDepartment = await _context.Departments
+            .FirstOrDefaultAsync(d => d.CollegeId == collegeId && !d.IsDeleted && d.Id != department.Id && d.HodUserId == faculty.Id);
+        if (otherHodDepartment != null)
+        {
+            return Conflict(new { message = $"Selected faculty member is already the active HOD of {otherHodDepartment.Name}." });
+        }
+
+        if (department.HodUserId.HasValue)
+        {
+            if (department.HodUserId.Value == faculty.Id)
+            {
+                return Conflict(new { message = $"{faculty.FullName} is already the current HOD of {department.Name}." });
+            }
+
+            if (!request.ConfirmReplacement)
+            {
+                var currentHodName = department.HodUser?.FullName ?? "an existing HOD";
+                return Conflict(new
+                {
+                    message = $"{department.Name} already has an active HOD ({currentHodName}). Explicit replacement confirmation is required.",
+                    requiresReplacementConfirmation = true,
+                    currentHodUserId = department.HodUserId,
+                    currentHodName
+                });
+            }
+
+            if (department.HodUser != null && department.HodUser.Role == UserRole.HOD)
+            {
+                var isHodElsewhere = await _context.Departments
+                    .AnyAsync(d => d.CollegeId == collegeId && !d.IsDeleted && d.Id != department.Id && d.HodUserId == department.HodUser.Id);
+                if (!isHodElsewhere)
+                {
+                    department.HodUser.Role = UserRole.Faculty;
+                    department.HodUser.SecurityStamp = Guid.NewGuid().ToString("N");
+                    var sessionSec = HttpContext.RequestServices.GetRequiredService<ISessionSecurityService>();
+                    await sessionSec.RevokeAllUserSessionsAsync(department.HodUser.Id, null, "HodAppointmentReplaced");
+                }
+            }
+        }
+
         // Promote user role to HOD and assign to department
+        var roleChanged = faculty.Role != UserRole.HOD;
         faculty.Role = UserRole.HOD;
         faculty.DepartmentId = department.Id;
+        if (roleChanged)
+        {
+            faculty.SecurityStamp = Guid.NewGuid().ToString("N");
+            var sessionSec = HttpContext.RequestServices.GetRequiredService<ISessionSecurityService>();
+            await sessionSec.RevokeAllUserSessionsAsync(faculty.Id, null, "HodAppointed");
+        }
 
         department.HodUserId = faculty.Id;
 
         var (callerId, callerEmail, callerName) = await ResolveCallerIdentityAsync();
 
+        try
+        {
+            if (_context.Database.IsRelational())
+            {
+                var strategy = _context.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var tx = await _context.Database.BeginTransactionAsync();
+                    try
+                    {
+                        await PersistHodAppointmentAsync(collegeId, department, faculty, callerId, callerEmail, callerName);
+                        await tx.CommitAsync();
+                    }
+                    catch
+                    {
+                        try { await tx.RollbackAsync(); } catch (InvalidOperationException) { }
+                        throw;
+                    }
+                });
+            }
+            else
+            {
+                await PersistHodAppointmentAsync(collegeId, department, faculty, callerId, callerEmail, callerName);
+            }
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { message = "Department leadership was modified concurrently by another request. Please refresh and try again." });
+        }
+
+        return Ok(new { success = true, departmentId = department.Id, hodId = faculty.Id, hodName = faculty.FullName });
+    }
+
+    [HttpDelete("departments/{id}/hod")]
+    [HttpPost("departments/{id}/relieve-hod")]
+    public async Task<IActionResult> RelieveHod(Guid id)
+    {
+        if (!_tenantContext.CollegeId.HasValue)
+        {
+            return Forbid();
+        }
+
+        var collegeId = _tenantContext.CollegeId.Value;
+        var department = await _context.Departments
+            .Include(d => d.HodUser)
+            .FirstOrDefaultAsync(d => d.Id == id && d.CollegeId == collegeId && !d.IsDeleted);
+        if (department == null) return NotFound(new { message = "Department not found." });
+
+        if (!department.HodUserId.HasValue)
+        {
+            return BadRequest(new { message = $"{department.Name} does not currently have an active HOD appointment." });
+        }
+
+        var previousHod = department.HodUser;
+        department.HodUserId = null;
+
+        var usersToRevoke = new List<Guid>();
+        if (previousHod != null && previousHod.Role == UserRole.HOD)
+        {
+            var isHodElsewhere = await _context.Departments
+                .AnyAsync(d => d.CollegeId == collegeId && !d.IsDeleted && d.Id != department.Id && d.HodUserId == previousHod.Id);
+            if (!isHodElsewhere)
+            {
+                previousHod.Role = UserRole.Faculty;
+                previousHod.SecurityStamp = Guid.NewGuid().ToString("N");
+                usersToRevoke.Add(previousHod.Id);
+            }
+        }
+
+        var (callerId, callerEmail, callerName) = await ResolveCallerIdentityAsync();
+
+        var activeAppts = await _context.HodAppointmentHistories
+            .Where(h => h.DepartmentId == department.Id && h.CollegeId == collegeId && h.IsCurrent && !h.IsDeleted)
+            .ToListAsync();
+        foreach (var appt in activeAppts)
+        {
+            appt.IsCurrent = false;
+            appt.RelievedAtUtc = DateTime.UtcNow;
+            appt.Remarks = string.IsNullOrWhiteSpace(appt.Remarks)
+                ? $"Relieved by {callerName}"
+                : $"{appt.Remarks}; Relieved by {callerName}";
+        }
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = callerId,
+            ActorEmail = callerEmail,
+            Action = "RELIEVE_HOD",
+            TargetTenantId = collegeId,
+            TargetEntity = "Department",
+            MetadataJson = $"{{\"DepartmentCode\":\"{department.Code}\",\"PreviousHodName\":\"{previousHod?.FullName ?? ""}\",\"PreviousHodEmail\":\"{previousHod?.Email ?? ""}\"}}",
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        try
+        {
+            if (_context.Database.IsRelational())
+            {
+                var strategy = _context.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var tx = await _context.Database.BeginTransactionAsync();
+                    try
+                    {
+                        await _context.SaveChangesAsync();
+                        await tx.CommitAsync();
+                    }
+                    catch
+                    {
+                        try { await tx.RollbackAsync(); } catch (InvalidOperationException) { }
+                        throw;
+                    }
+                });
+            }
+            else
+            {
+                await _context.SaveChangesAsync();
+            }
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { message = "Department leadership was modified concurrently by another request. Please refresh and try again." });
+        }
+
+        if (usersToRevoke.Count > 0)
+        {
+            var sessionSec = HttpContext.RequestServices.GetRequiredService<ISessionSecurityService>();
+            foreach (var userId in usersToRevoke)
+            {
+                await sessionSec.RevokeAllUserSessionsAsync(userId, null, "HodAppointmentEnded");
+            }
+        }
+
+        return Ok(new
+        {
+            success = true,
+            departmentId = department.Id,
+            relievedUserId = previousHod?.Id,
+            relievedUserName = previousHod?.FullName
+        });
+    }
+
+    private async Task PersistHodAppointmentAsync(
+        Guid collegeId,
+        Department department,
+        UserAccount faculty,
+        Guid? callerId,
+        string callerEmail,
+        string callerName)
+    {
         // Relieve previous active appointment
         var pastAppts = await _context.HodAppointmentHistories
             .Where(h => h.DepartmentId == department.Id && h.CollegeId == collegeId && h.IsCurrent && !h.IsDeleted)
@@ -1462,8 +1605,6 @@ public class CollegeController : ControllerBase
         await _context.PlatformAuditLogs.AddAsync(audit);
 
         await _context.SaveChangesAsync();
-
-        return Ok(new { success = true, departmentId = department.Id, hodId = faculty.Id, hodName = faculty.FullName });
     }
 
     // --- D. HOD Management Endpoints ---
@@ -1479,6 +1620,14 @@ public class CollegeController : ControllerBase
             .OrderBy(d => d.Code)
             .ToListAsync();
 
+        var activeAppointments = await _context.HodAppointmentHistories
+            .AsNoTracking()
+            .Where(h => h.CollegeId == collegeId && h.IsCurrent && !h.IsDeleted)
+            .ToListAsync();
+        var apptByDept = activeAppointments
+            .GroupBy(h => h.DepartmentId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.AppointedAtUtc).First());
+
         var result = depts.Select(d => new HodManagementDto
         {
             DepartmentId = d.Id,
@@ -1492,132 +1641,12 @@ public class CollegeController : ControllerBase
             HodEmail = d.HodUser?.Email,
             EmployeeCode = d.HodUser?.EnrollmentOrEmployeeCode,
             IsActive = d.HodUser?.IsActive ?? false,
-            AppointedAtUtc = d.HodUser?.CreatedAtUtc
+            AppointedAtUtc = apptByDept.TryGetValue(d.Id, out var activeAppt)
+                ? activeAppt.AppointedAtUtc
+                : d.HodUser?.CreatedAtUtc
         }).ToList();
 
         return Ok(result);
-    }
-
-    [HttpPost("hods/create")]
-    public async Task<ActionResult<HodManagementDto>> CreateHod([FromBody] CreateHodRequest request)
-    {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var email = request.Email.Trim().ToLowerInvariant();
-
-        var dept = await _context.Departments
-            .Include(d => d.CourseProgram)
-            .FirstOrDefaultAsync(d => d.Id == request.DepartmentId && d.CollegeId == collegeId && !d.IsDeleted);
-
-        if (dept == null) return NotFound(new { message = "Department not found." });
-
-        var existingUser = await _context.Users
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
-
-        if (existingUser != null && existingUser.CollegeId != collegeId)
-        {
-            return Conflict(new { message = $"User with email '{email}' is registered under another institution." });
-        }
-
-        if (existingUser != null && existingUser.Role == UserRole.SuperAdmin)
-        {
-            return BadRequest(new { message = "Platform SuperAdmin accounts cannot be reassigned as department HOD." });
-        }
-
-        UserAccount hod;
-        var defaultPassword = string.IsNullOrWhiteSpace(request.TemporaryPassword) 
-            ? $"Collabex!{System.Security.Cryptography.RandomNumberGenerator.GetHexString(3).ToUpper()}@{System.Security.Cryptography.RandomNumberGenerator.GetInt32(100, 999)}"
-            : request.TemporaryPassword;
-        var passwordHash = PasswordHelper.HashPassword(defaultPassword);
-
-        if (existingUser != null)
-        {
-            hod = existingUser;
-            hod.Role = UserRole.HOD;
-            hod.DepartmentId = dept.Id;
-            hod.IsActive = true;
-            hod.IsActivated = true;
-            if (string.IsNullOrWhiteSpace(hod.PasswordHash))
-            {
-                hod.PasswordHash = passwordHash;
-                hod.PasswordChangedAtUtc = null;
-            }
-        }
-        else
-        {
-            hod = new UserAccount
-            {
-                CollegeId = collegeId,
-                DepartmentId = dept.Id,
-                FullName = request.FullName.Trim(),
-                Email = email,
-                EnrollmentOrEmployeeCode = string.IsNullOrWhiteSpace(request.EmployeeCode) ? $"HOD-{dept.Code}" : request.EmployeeCode.Trim(),
-                Role = UserRole.HOD,
-                PasswordHash = passwordHash,
-                PasswordChangedAtUtc = null,
-                IsActivated = true,
-                IsActive = true
-            };
-            await _context.Users.AddAsync(hod);
-        }
-
-        dept.HodUserId = hod.Id;
-
-        var (callerId, callerEmail, callerName) = await ResolveCallerIdentityAsync();
-
-        // Relieve previous active appointment
-        var pastAppts = await _context.HodAppointmentHistories
-            .Where(h => h.DepartmentId == dept.Id && h.CollegeId == collegeId && h.IsCurrent && !h.IsDeleted)
-            .ToListAsync();
-        foreach (var past in pastAppts)
-        {
-            past.IsCurrent = false;
-            past.RelievedAtUtc = DateTime.UtcNow;
-        }
-
-        var newAppt = new HodAppointmentHistory
-        {
-            CollegeId = collegeId,
-            DepartmentId = dept.Id,
-            HodUserId = hod.Id,
-            AppointedByUserId = callerId,
-            AppointedByName = callerName,
-            AppointedAtUtc = DateTime.UtcNow,
-            IsCurrent = true,
-            Remarks = $"Direct appointment by {callerName}"
-        };
-        await _context.HodAppointmentHistories.AddAsync(newAppt);
-
-        // Log appointment audit
-        var audit = new PlatformAuditLog
-        {
-            ActorUserId = callerId,
-            ActorEmail = callerEmail,
-            Action = "APPOINT_HOD",
-            TargetTenantId = collegeId,
-            TargetEntity = "Department",
-            MetadataJson = $"{{\"DepartmentCode\":\"{dept.Code}\",\"HodName\":\"{hod.FullName}\",\"HodEmail\":\"{hod.Email}\"}}",
-            OccurredAtUtc = DateTime.UtcNow
-        };
-        await _context.PlatformAuditLogs.AddAsync(audit);
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new HodManagementDto
-        {
-            DepartmentId = dept.Id,
-            DepartmentCode = dept.Code,
-            DepartmentName = dept.Name,
-            CourseProgramId = dept.CourseProgramId,
-            CourseProgramCode = dept.CourseProgram?.Code,
-            CourseProgramName = dept.CourseProgram?.Name,
-            HodUserId = hod.Id,
-            HodName = hod.FullName,
-            HodEmail = hod.Email,
-            EmployeeCode = hod.EnrollmentOrEmployeeCode,
-            IsActive = hod.IsActive,
-            AppointedAtUtc = DateTime.UtcNow
-        });
     }
 
     [HttpGet("hods/history")]
@@ -1674,8 +1703,10 @@ public class CollegeController : ControllerBase
             HodEmail = h.HodUser?.Email ?? "hod@college.ac.in",
             EmployeeCode = h.HodUser?.EnrollmentOrEmployeeCode ?? "N/A",
             AppointedAtUtc = h.AppointedAtUtc,
+            RelievedAtUtc = h.RelievedAtUtc,
             AppointedBy = h.AppointedByName,
-            IsCurrent = h.IsCurrent
+            IsCurrent = h.IsCurrent,
+            Remarks = h.Remarks
         }).ToList();
 
         return Ok(history);
@@ -1688,14 +1719,19 @@ public class CollegeController : ControllerBase
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId && u.CollegeId == collegeId && !u.IsDeleted);
         if (user == null) return NotFound(new { message = "User not found." });
 
-        user.IsActive = request.IsActive;
-        if (!request.IsActive)
+        var requiresAnotherActiveAdmin = user.Role == UserRole.CollegeAdmin && user.IsActive && !request.IsActive;
+        var blocked = await ExecuteCollegeAdminMutationAsync(collegeId, user.Id, requiresAnotherActiveAdmin, async () =>
         {
-            user.SecurityStamp = Guid.NewGuid().ToString("N");
-            var sessionSecurity = HttpContext.RequestServices.GetRequiredService<ISessionSecurityService>();
-            await sessionSecurity.RevokeAllUserSessionsAsync(user.Id, null, "AccountDeactivated");
-        }
-        await _context.SaveChangesAsync();
+            user.IsActive = request.IsActive;
+            if (!request.IsActive)
+            {
+                user.SecurityStamp = Guid.NewGuid().ToString("N");
+                var sessionSecurity = HttpContext.RequestServices.GetRequiredService<ISessionSecurityService>();
+                await sessionSecurity.RevokeAllUserSessionsAsync(user.Id, null, "AccountDeactivated");
+            }
+        });
+        if (blocked != null) return blocked;
+
         return Ok(new { success = true, isActive = user.IsActive });
     }
 
@@ -1783,10 +1819,17 @@ public class CollegeController : ControllerBase
         };
 
         await _context.Users.AddAsync(user);
-        await _context.SaveChangesAsync();
-
-        var emailSender = HttpContext.RequestServices.GetRequiredService<IEmailSender>();
-        await emailSender.SendAccountActivationAsync(user.Email, user.FullName, rawActivationToken);
+        if (_emailOutbox != null)
+        {
+            _emailOutbox.QueueAccountActivation(user.Email, user.FullName, rawActivationToken, user.ActivationTokenExpiresAtUtc ?? DateTime.UtcNow.AddHours(24), collegeId);
+            await _context.SaveChangesAsync();
+        }
+        else
+        {
+            await _context.SaveChangesAsync();
+            var emailSender = HttpContext.RequestServices.GetRequiredService<IEmailSender>();
+            await emailSender.SendAccountActivationAsync(user.Email, user.FullName, rawActivationToken);
+        }
 
         var dept = request.DepartmentId.HasValue 
             ? await _context.Departments.FirstOrDefaultAsync(d => d.Id == request.DepartmentId.Value) 
@@ -1829,14 +1872,19 @@ public class CollegeController : ControllerBase
             return Forbid();
         }
 
-        user.IsActive = request.IsActive;
-        if (!request.IsActive)
+        var requiresAnotherActiveAdmin = user.Role == UserRole.CollegeAdmin && user.IsActive && !request.IsActive;
+        var blocked = await ExecuteCollegeAdminMutationAsync(collegeId, user.Id, requiresAnotherActiveAdmin, async () =>
         {
-            user.SecurityStamp = Guid.NewGuid().ToString("N");
-            var sessionSecurity = HttpContext.RequestServices.GetRequiredService<ISessionSecurityService>();
-            await sessionSecurity.RevokeAllUserSessionsAsync(user.Id, null, "AccountDeactivated");
-        }
-        await _context.SaveChangesAsync();
+            user.IsActive = request.IsActive;
+            if (!request.IsActive)
+            {
+                user.SecurityStamp = Guid.NewGuid().ToString("N");
+                var sessionSecurity = HttpContext.RequestServices.GetRequiredService<ISessionSecurityService>();
+                await sessionSecurity.RevokeAllUserSessionsAsync(user.Id, null, "AccountDeactivated");
+            }
+        });
+        if (blocked != null) return blocked;
+
         return Ok(new { success = true, isActive = user.IsActive });
     }
 
@@ -1855,38 +1903,79 @@ public class CollegeController : ControllerBase
         // Generate cryptographically secure 6-digit OTP matching platform standard for /api/auth/reset-password
         var otpNumber = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000);
         var otp = otpNumber.ToString("D6");
+        var expiresAtUtc = DateTime.UtcNow.AddMinutes(15);
 
         user.PasswordResetOtpHashed = PasswordHelper.HashPassword(otp);
-        user.PasswordResetOtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(15);
+        user.PasswordResetOtpExpiresAtUtc = expiresAtUtc;
         user.PasswordResetOtpAttempts = 0;
-        user.PasswordChangedAtUtc = null;
+
+        if (_emailOutbox != null)
+        {
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            if (_sessionSecurity != null)
+            {
+                await _sessionSecurity.RevokeAllUserSessionsAsync(user.Id, null, "AdminInitiatedPasswordReset");
+            }
+            _emailOutbox.QueuePasswordResetOtp(user.Email, user.FullName, otp, expiresAtUtc, collegeId);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Password reset OTP queued for staff member {Email} for tenant {CollegeId}", user.Email, collegeId);
+            string? devOtp = _environment.IsDevelopment() ? otp : null;
+
+            return Ok(new
+            {
+                success = true,
+                message = "A 6-digit password reset verification code has been queued for delivery to the user's official email address (valid for 15 minutes).",
+                emailQueued = true,
+                emailDispatched = true,
+                expiresAtUtc = user.PasswordResetOtpExpiresAtUtc,
+                devOtp = devOtp
+            });
+        }
+
         await _context.SaveChangesAsync();
 
-        bool emailDispatched = false;
         try
         {
             await _emailSender.SendPasswordResetOtpAsync(user.Email, user.FullName, otp);
-            emailDispatched = true;
-            _logger.LogInformation("Password reset OTP dispatched to staff member {Email} for tenant {CollegeId}", user.Email, collegeId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to dispatch password reset OTP email to {Email}", user.Email);
-            emailDispatched = false;
+            _logger.LogError(ex, "Failed to dispatch password reset OTP email to {Email} for tenant {CollegeId}", user.Email, collegeId);
+            user.PasswordResetOtpHashed = null;
+            user.PasswordResetOtpExpiresAtUtc = null;
+            user.PasswordResetOtpAttempts = 0;
+            await _context.SaveChangesAsync();
+
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                success = false,
+                emailDispatched = false,
+                code = "EMAIL_DELIVERY_FAILED",
+                message = "Unable to dispatch the password reset verification code email. Please check the institutional mail configuration and try again."
+            });
         }
 
+        // Rotate security stamp and revoke active sessions so the user must complete OTP reset
+        user.SecurityStamp = Guid.NewGuid().ToString("N");
+        if (_sessionSecurity != null)
+        {
+            await _sessionSecurity.RevokeAllUserSessionsAsync(user.Id, null, "AdminInitiatedPasswordReset");
+        }
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Password reset OTP dispatched to staff member {Email} for tenant {CollegeId}", user.Email, collegeId);
+
         // In development only, supply devOtp for test harnesses. In production, never expose credentials.
-        string? devOtp = _environment.IsDevelopment() ? otp : null;
+        string? devOtpFallback = _environment.IsDevelopment() ? otp : null;
 
         return Ok(new
         {
             success = true,
-            message = emailDispatched
-                ? "Password reset token generated and dispatched to staff member's official email address."
-                : "Password reset token generated, but email delivery failed. Please check institutional mail service.",
-            emailDispatched = emailDispatched,
+            message = "A 6-digit password reset verification code has been dispatched to the user's official email address (valid for 15 minutes).",
+            emailDispatched = true,
             expiresAtUtc = user.PasswordResetOtpExpiresAtUtc,
-            devOtp = devOtp
+            devOtp = devOtpFallback
         });
     }
 
@@ -1897,28 +1986,35 @@ public class CollegeController : ControllerBase
         var user = await _context.Users.Include(u => u.Department).FirstOrDefaultAsync(u => u.Id == id && u.CollegeId == collegeId && !u.IsDeleted);
         if (user == null) return NotFound(new { message = "User not found." });
 
-        if (!string.IsNullOrWhiteSpace(request.FullName)) user.FullName = request.FullName.Trim();
-        if (request.Role.HasValue)
+        if (request.Role == UserRole.SuperAdmin)
         {
-            if (request.Role.Value == UserRole.SuperAdmin)
+            return BadRequest(new { message = "College administrators cannot assign the SuperAdmin platform role." });
+        }
+
+        var previousRole = user.Role;
+        var requiresAnotherActiveAdmin =
+            previousRole == UserRole.CollegeAdmin &&
+            user.IsActive &&
+            request.Role.HasValue &&
+            request.Role.Value != UserRole.CollegeAdmin;
+
+        var blocked = await ExecuteCollegeAdminMutationAsync(collegeId, user.Id, requiresAnotherActiveAdmin, async () =>
+        {
+            if (!string.IsNullOrWhiteSpace(request.FullName)) user.FullName = request.FullName.Trim();
+            if (request.Role.HasValue) user.Role = request.Role.Value;
+            if (request.Designation.HasValue) user.Designation = request.Designation.Value;
+            if (request.DelegatedResponsibility.HasValue) user.DelegatedResponsibility = request.DelegatedResponsibility.Value;
+            if (request.EmployeeCode != null) user.EnrollmentOrEmployeeCode = request.EmployeeCode.Trim();
+            user.DepartmentId = request.DepartmentId;
+
+            // If updated to HOD and departmentId is specified, also set as department's HodUserId
+            if (user.Role == UserRole.HOD && user.DepartmentId.HasValue)
             {
-                return BadRequest(new { message = "College administrators cannot assign the SuperAdmin platform role." });
+                var dept = await _context.Departments.FirstOrDefaultAsync(d => d.Id == user.DepartmentId.Value && d.CollegeId == collegeId && !d.IsDeleted);
+                if (dept != null) dept.HodUserId = user.Id;
             }
-            user.Role = request.Role.Value;
-        }
-        if (request.Designation.HasValue) user.Designation = request.Designation.Value;
-        if (request.DelegatedResponsibility.HasValue) user.DelegatedResponsibility = request.DelegatedResponsibility.Value;
-        if (request.EmployeeCode != null) user.EnrollmentOrEmployeeCode = request.EmployeeCode.Trim();
-        user.DepartmentId = request.DepartmentId;
-
-        // If updated to HOD and departmentId is specified, also set as department's HodUserId
-        if (user.Role == UserRole.HOD && user.DepartmentId.HasValue)
-        {
-            var dept = await _context.Departments.FirstOrDefaultAsync(d => d.Id == user.DepartmentId.Value);
-            if (dept != null) dept.HodUserId = user.Id;
-        }
-
-        await _context.SaveChangesAsync();
+        });
+        if (blocked != null) return blocked;
         return Ok(new CollegeStaffDto
         {
             Id = user.Id,
@@ -1937,139 +2033,1155 @@ public class CollegeController : ControllerBase
         });
     }
 
-    [HttpPost("users/bulk")]
-    public async Task<ActionResult<BulkStaffUploadResultDto>> BulkUploadStaff([FromBody] BulkStaffUploadRequest request)
+    private static readonly string[] PlaceholderExactDomains =
     {
-        var collegeId = _tenantContext.CollegeId!.Value;
+        "localhost",
+        "example.com",
+        "example.org",
+        "example.net",
+        "example.edu",
+    };
+
+    private static readonly string[] PlaceholderDomainSuffixes =
+    {
+        ".example",
+        ".example.com",
+        ".example.org",
+        ".example.net",
+        ".example.edu",
+        ".test",
+        ".invalid",
+        ".localhost",
+        ".local",
+    };
+
+    private static bool TryValidateInstitutionalEmail(
+        string rawEmail,
+        int maxEmailLength,
+        CollegeTenant? tenant,
+        out string normalizedEmail,
+        out string errorMessage)
+    {
+        normalizedEmail = string.Empty;
+        errorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(rawEmail) ||
+            rawEmail.Length > maxEmailLength ||
+            rawEmail.Any(char.IsWhiteSpace) ||
+            !System.Net.Mail.MailAddress.TryCreate(rawEmail, out var parsedMail))
+        {
+            errorMessage = "Valid institutional email is required.";
+            return false;
+        }
+
+        var host = parsedMail.Host.Trim().ToLowerInvariant();
+        if (!host.Contains('.') || host.StartsWith('.') || host.EndsWith('.') || host.Contains(".."))
+        {
+            errorMessage = "Valid institutional email is required.";
+            return false;
+        }
+
+        if (PlaceholderExactDomains.Contains(host, StringComparer.OrdinalIgnoreCase) ||
+            PlaceholderDomainSuffixes.Any(suffix => host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)))
+        {
+            errorMessage = $"Valid institutional email is required. Placeholder domain '{host}' is not allowed.";
+            return false;
+        }
+
+        normalizedEmail = rawEmail.ToLowerInvariant();
+        return true;
+    }
+
+    private static readonly HashSet<string> DisallowedSecurityCsvHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Role", "IsHOD", "IsCollegeAdmin", "Password", "PasswordHash",
+        "UserId", "TenantId", "CollegeId", "IsActivated", "IsEmailVerified",
+        "IsActive", "CreatedAt", "CreatedAtUtc"
+    };
+
+    /// <summary>
+    /// Normalizes a program string for matching: trim, uppercase, remove dots/spaces,
+    /// and collapse internal runs of whitespace.  E.g. "B.Tech", "Btech", "B TECH", "B-TECH"
+    /// all normalize to "BTECH".
+    /// </summary>
+    private static string NormalizeProgramString(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return raw!;
+        var s = raw.Trim();
+        // Uppercase
+        s = s.ToUpperInvariant();
+        // Remove dots/periods
+        s = s.Replace(".", string.Empty);
+        // Remove dashes/hyphens
+        s = s.Replace("-", string.Empty);
+        // Collapse internal whitespace
+        s = string.Join(" ", s.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+        return s;
+    }
+
+    private static bool TryParseFacultyDesignation(string? raw, out FacultyDesignation designation)
+    {
+        designation = default;
+        var trimmed = (raw ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(trimmed) || int.TryParse(trimmed, out _))
+        {
+            return false;
+        }
+
+        var normalized = trimmed.Replace(" ", string.Empty, StringComparison.Ordinal);
+        return Enum.TryParse<FacultyDesignation>(normalized, ignoreCase: true, out designation)
+               && Enum.IsDefined(designation);
+    }
+
+    private sealed record StaffImportUpdatePlan(
+        Guid UserId,
+        string FullName,
+        Guid DepartmentId,
+        FacultyDesignation Designation);
+
+    private sealed record StudentImportUpdatePlan(
+        Guid UserId,
+        string FullName,
+        Guid DepartmentId);
+
+    private sealed class StaffImportValidationResult
+    {
+        public List<string> HeaderErrors { get; init; } = new();
+        public List<RosterImportPreviewRowDto> PreviewRows { get; init; } = new();
+        public List<UserAccount> UsersToAdd { get; init; } = new();
+        public List<StaffImportUpdatePlan> UsersToUpdate { get; init; } = new();
+        public List<(string Email, string FullName, string RawToken)> ActivationDispatches { get; init; } = new();
+        public List<string> FlatErrors { get; init; } = new();
+        public int DuplicateCount { get; init; }
+    }
+
+    private async Task<StaffImportValidationResult> ValidateAndPrepareStaffImportAsync(Guid collegeId, BulkStaffUploadRequest request)
+    {
+        const int maxRosterRows = 500;
+        const int maxFullNameLength = 150;
+        const int maxEmailLength = 254;
+        const int maxDepartmentCodeLength = 32;
+
+        if (request.CsvHeaders != null)
+        {
+            var normalizedHeaders = request.CsvHeaders
+                .Select(h => (h ?? string.Empty).Trim())
+                .ToList();
+
+            var forbidden = normalizedHeaders.Where(h => DisallowedSecurityCsvHeaders.Contains(h)).ToList();
+            if (forbidden.Count > 0)
+            {
+                var msg = forbidden.Any(h => string.Equals(h, "Role", StringComparison.OrdinalIgnoreCase))
+                    ? "Legacy header 'Role' is not supported in the roster contract. HOD appointments must be performed via Department Leadership."
+                    : $"Security-sensitive column(s) ({string.Join(", ", forbidden)}) are not permitted in Faculty.csv. Roles and tenant scope are managed by the platform.";
+                return new StaffImportValidationResult { HeaderErrors = new List<string> { msg }, FlatErrors = new List<string> { msg } };
+            }
+
+            if (normalizedHeaders.Distinct(StringComparer.OrdinalIgnoreCase).Count() != normalizedHeaders.Count)
+            {
+                const string msg = "Invalid CSV headers. Duplicate columns detected.";
+                return new StaffImportValidationResult { HeaderErrors = new List<string> { msg }, FlatErrors = new List<string> { msg } };
+            }
+
+            var hasFullName = normalizedHeaders.Any(h => string.Equals(h, "FullName", StringComparison.OrdinalIgnoreCase));
+            var hasEmail = normalizedHeaders.Any(h => string.Equals(h, "Email", StringComparison.OrdinalIgnoreCase));
+            var hasDept = normalizedHeaders.Any(h => string.Equals(h, "DepartmentCode", StringComparison.OrdinalIgnoreCase));
+            var hasDesig = normalizedHeaders.Any(h => string.Equals(h, "Designation", StringComparison.OrdinalIgnoreCase));
+            var allowedHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "FullName", "Email", "DepartmentCode", "Designation"
+            };
+            var unexpected = normalizedHeaders.Where(h => !allowedHeaders.Contains(h)).ToList();
+
+            if (!hasFullName || !hasEmail || !hasDept || !hasDesig || unexpected.Count > 0)
+            {
+                const string msg = "Invalid CSV headers. Expected columns: FullName, Email, DepartmentCode, Designation.";
+                return new StaffImportValidationResult { HeaderErrors = new List<string> { msg }, FlatErrors = new List<string> { msg } };
+            }
+        }
+
         if (request.StaffRows == null || request.StaffRows.Count == 0)
         {
-            return BadRequest(new { message = "No staff records provided in request." });
+            const string msg = "No staff records provided in request.";
+            return new StaffImportValidationResult { HeaderErrors = new List<string> { msg }, FlatErrors = new List<string> { msg } };
+        }
+
+        if (request.StaffRows.Count > maxRosterRows)
+        {
+            var msg = $"Roster import is limited to {maxRosterRows} rows per upload.";
+            return new StaffImportValidationResult { HeaderErrors = new List<string> { msg }, FlatErrors = new List<string> { msg } };
         }
 
         var errors = new List<string>();
+        var previewRows = new List<RosterImportPreviewRowDto>();
         var emailsInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int duplicateCount = 0;
+
+        var tenant = await _context.CollegeTenants
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == collegeId && !c.IsDeleted);
         var depts = await _context.Departments
             .Where(d => d.CollegeId == collegeId && !d.IsDeleted)
             .ToListAsync();
 
-        var existingEmails = (await _context.Users
+        var existingUsers = await _context.Users
             .IgnoreQueryFilters()
             .Where(u => !u.IsDeleted)
-            .Select(u => u.Email)
-            .ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .ToListAsync();
+        var existingUsersByEmail = existingUsers
+            .GroupBy(u => u.Email.Trim().ToLowerInvariant())
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var usersToAdd = new List<UserAccount>();
+        var staffUpdates = new List<StaffImportUpdatePlan>();
+        var activationDispatches = new List<(string Email, string FullName, string RawToken)>();
 
         for (int i = 0; i < request.StaffRows.Count; i++)
         {
             var row = request.StaffRows[i];
             int rowNum = i + 1;
+            var rowErrors = new List<string>();
 
-            if (string.IsNullOrWhiteSpace(row.FullName))
+            var fullName = (row.FullName ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(fullName))
             {
-                errors.Add($"Row {rowNum}: Full name is required.");
-                continue;
+                rowErrors.Add("FullName is required.");
+            }
+            else if (fullName.Length > maxFullNameLength)
+            {
+                rowErrors.Add($"FullName exceeds {maxFullNameLength} characters.");
             }
 
-            if (string.IsNullOrWhiteSpace(row.Email) || !row.Email.Contains('@'))
+            var rawEmail = (row.Email ?? string.Empty).Trim();
+
+            if (!TryValidateInstitutionalEmail(rawEmail, maxEmailLength, tenant, out var normalizedEmail, out var emailError))
             {
-                errors.Add($"Row {rowNum}: Valid institutional email is required.");
-                continue;
+                rowErrors.Add(emailError);
+            }
+            else if (!emailsInFile.Add(normalizedEmail))
+            {
+                duplicateCount++;
+                rowErrors.Add($"Duplicate Email '{normalizedEmail}' in upload file.");
             }
 
-            if (row.Role == UserRole.SuperAdmin)
+            var deptCode = (row.DepartmentCode ?? string.Empty).Trim();
+            Department? dept = null;
+            if (string.IsNullOrWhiteSpace(deptCode) || deptCode.Length > maxDepartmentCodeLength)
             {
-                errors.Add($"Row {rowNum}: College administrators cannot provision the SuperAdmin platform role.");
-                continue;
+                rowErrors.Add("DepartmentCode is required.");
             }
-
-            var normalizedEmail = row.Email.Trim().ToLowerInvariant();
-            if (emailsInFile.Contains(normalizedEmail))
+            else
             {
-                errors.Add($"Row {rowNum}: Duplicate email '{normalizedEmail}' in upload file.");
-                continue;
-            }
-            emailsInFile.Add(normalizedEmail);
-
-            if (existingEmails.Contains(normalizedEmail))
-            {
-                errors.Add($"Row {rowNum}: User with email '{normalizedEmail}' already exists in platform.");
-                continue;
-            }
-
-            Guid? deptId = null;
-            if (!string.IsNullOrWhiteSpace(row.DepartmentCode))
-            {
-                var dept = depts.FirstOrDefault(d => string.Equals(d.Code, row.DepartmentCode.Trim(), StringComparison.OrdinalIgnoreCase));
+                dept = depts.FirstOrDefault(d => string.Equals(d.Code, deptCode, StringComparison.OrdinalIgnoreCase));
                 if (dept == null)
                 {
-                    errors.Add($"Row {rowNum}: Department with code '{row.DepartmentCode}' not found.");
-                    continue;
+                    rowErrors.Add($"DepartmentCode '{deptCode}' not found in this institution.");
                 }
-                deptId = dept.Id;
             }
 
-            var tempPassword = $"Collabex!{System.Security.Cryptography.RandomNumberGenerator.GetHexString(3).ToUpper()}@{System.Security.Cryptography.RandomNumberGenerator.GetInt32(100, 999)}";
+            if (!TryParseFacultyDesignation(row.Designation, out var designation))
+            {
+                rowErrors.Add($"Unsupported Designation '{row.Designation}'. Allowed: Professor, Associate Professor, Assistant Professor, Adjunct Faculty, Lecturer.");
+            }
+
+            if (rowErrors.Count == 0 && existingUsersByEmail.TryGetValue(normalizedEmail, out var existingUser))
+            {
+                if (existingUser.CollegeId != collegeId)
+                {
+                    rowErrors.Add($"Email '{normalizedEmail}' conflicts with an existing platform account and cannot be imported.");
+                }
+                else if (existingUser.Role != UserRole.Faculty)
+                {
+                    rowErrors.Add($"Email '{normalizedEmail}' belongs to an existing account with a protected or incompatible role ('{existingUser.Role}') and cannot be overwritten via roster import.");
+                }
+                else
+                {
+                    staffUpdates.Add(new StaffImportUpdatePlan(existingUser.Id, fullName, dept!.Id, designation));
+                    previewRows.Add(new RosterImportPreviewRowDto
+                    {
+                        RowNumber = rowNum,
+                        FullName = fullName,
+                        Email = normalizedEmail,
+                        DepartmentCode = dept.Code,
+                        SecondaryValue = designation.ToString(),
+                        Action = "update",
+                        Errors = new List<string>()
+                    });
+                    continue;
+                }
+            }
+
+            if (rowErrors.Count > 0)
+            {
+                foreach (var err in rowErrors)
+                {
+                    errors.Add($"Row {rowNum}: {err}");
+                }
+                previewRows.Add(new RosterImportPreviewRowDto
+                {
+                    RowNumber = rowNum,
+                    FullName = fullName,
+                    Email = string.IsNullOrEmpty(normalizedEmail) ? rawEmail : normalizedEmail,
+                    DepartmentCode = deptCode,
+                    SecondaryValue = row.Designation,
+                    Action = "invalid",
+                    Errors = rowErrors
+                });
+                continue;
+            }
+
+            var rawActivationToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+                .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+            var activationTokenHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawActivationToken)));
+
+            var employeeCode = $"STAFF-{Guid.NewGuid().ToString("N")[..6].ToUpper()}";
+
             var user = new UserAccount
             {
                 CollegeId = collegeId,
-                DepartmentId = deptId,
-                FullName = row.FullName.Trim(),
+                DepartmentId = dept!.Id,
+                FullName = fullName,
                 Email = normalizedEmail,
-                Role = row.Role,
-                Designation = row.Designation,
-                EnrollmentOrEmployeeCode = string.IsNullOrWhiteSpace(row.EmployeeCode) ? $"STAFF-{Guid.NewGuid().ToString("N")[..6].ToUpper()}" : row.EmployeeCode.Trim(),
-                PasswordHash = PasswordHelper.HashPassword(tempPassword),
+                Role = UserRole.Faculty,
+                Designation = designation,
+                EnrollmentOrEmployeeCode = employeeCode,
+                PasswordHash = null,
                 PasswordChangedAtUtc = null,
+                ActivationTokenHashed = activationTokenHash,
+                ActivationTokenExpiresAtUtc = DateTime.UtcNow.AddHours(24),
                 IsActive = true,
-                IsActivated = true
+                IsActivated = false
             };
 
             usersToAdd.Add(user);
+            activationDispatches.Add((user.Email, user.FullName, rawActivationToken));
+            previewRows.Add(new RosterImportPreviewRowDto
+            {
+                RowNumber = rowNum,
+                FullName = fullName,
+                Email = normalizedEmail,
+                DepartmentCode = dept.Code,
+                SecondaryValue = designation.ToString(),
+                Action = "create",
+                Errors = new List<string>()
+            });
         }
 
-        // Pass 1: In-Memory Validation Gate (All-or-Nothing Atomicity)
-        // If ANY row in the upload fails validation, ZERO records are persisted.
-        if (errors.Count > 0)
+        return new StaffImportValidationResult
+        {
+            PreviewRows = previewRows,
+            UsersToAdd = usersToAdd,
+            UsersToUpdate = staffUpdates,
+            ActivationDispatches = activationDispatches,
+            FlatErrors = errors,
+            DuplicateCount = duplicateCount
+        };
+    }
+
+    [HttpPost("users/bulk/preview")]
+    public async Task<ActionResult<RosterImportPreviewDto>> PreviewBulkUploadStaff([FromBody] BulkStaffUploadRequest request)
+    {
+        if (!_tenantContext.CollegeId.HasValue)
+        {
+            return Forbid();
+        }
+
+        var result = await ValidateAndPrepareStaffImportAsync(_tenantContext.CollegeId.Value, request);
+        return Ok(new RosterImportPreviewDto
+        {
+            ImportType = "Faculty",
+            TotalRows = result.HeaderErrors.Count > 0 ? (request.StaffRows?.Count ?? 0) : result.PreviewRows.Count,
+            ValidCount = result.PreviewRows.Count(r => r.Action != "invalid"),
+            InvalidCount = result.PreviewRows.Count(r => r.Action == "invalid"),
+            CreateCount = result.PreviewRows.Count(r => r.Action == "create"),
+            UpdateCount = result.PreviewRows.Count(r => r.Action == "update"),
+            DuplicateCount = result.DuplicateCount,
+            HeaderErrors = result.HeaderErrors,
+            Rows = result.PreviewRows
+        });
+    }
+
+    [HttpPost("users/bulk")]
+    public async Task<ActionResult<BulkStaffUploadResultDto>> BulkUploadStaff([FromBody] BulkStaffUploadRequest request)
+    {
+        if (!_tenantContext.CollegeId.HasValue)
+        {
+            return Forbid();
+        }
+
+        var collegeId = _tenantContext.CollegeId.Value;
+        var validation = await ValidateAndPrepareStaffImportAsync(collegeId, request);
+
+        if (validation.HeaderErrors.Count > 0 || validation.FlatErrors.Count > 0)
         {
             return BadRequest(new BulkStaffUploadResultDto
             {
-                TotalSubmitted = request.StaffRows.Count,
+                TotalSubmitted = request.StaffRows?.Count ?? 0,
                 SuccessfullyCreated = 0,
-                FailedCount = errors.Count,
-                Errors = errors
+                SuccessfullyUpdated = 0,
+                FailedCount = validation.FlatErrors.Count > 0 ? validation.FlatErrors.Count : validation.HeaderErrors.Count,
+                Errors = validation.FlatErrors.Count > 0 ? validation.FlatErrors : validation.HeaderErrors
             });
         }
 
-        // Pass 2: Atomic Transactional Database Persistence
-        if (usersToAdd.Count > 0)
+        var (callerId, callerEmail, _) = await ResolveCallerIdentityAsync();
+
+        if (_emailOutbox != null)
         {
-            var strategy = _context.Database.CreateExecutionStrategy();
-            await strategy.ExecuteAsync(async () =>
+            var activationExpiry = DateTime.UtcNow.AddHours(24);
+            foreach (var dispatch in validation.ActivationDispatches)
             {
-                using var tx = await _context.Database.BeginTransactionAsync();
-                try
+                _emailOutbox.QueueAccountActivation(dispatch.Email, dispatch.FullName, dispatch.RawToken, activationExpiry, collegeId);
+            }
+        }
+
+        try
+        {
+            if (_context.Database.IsRelational())
+            {
+                var strategy = _context.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
                 {
-                    await _context.Users.AddRangeAsync(usersToAdd);
-                    await _context.SaveChangesAsync();
-                    await tx.CommitAsync();
-                }
-                catch (Exception ex)
-                {
-                    await tx.RollbackAsync();
-                    _logger.LogError(ex, "Transaction rolled back during bulk staff import for college {CollegeId}", collegeId);
-                    throw;
-                }
+                    await using var tx = await _context.Database.BeginTransactionAsync();
+                    try
+                    {
+                        await PersistBulkRosterImportAsync(collegeId, callerId, callerEmail, request.StaffRows.Count, validation.UsersToAdd, validation.UsersToUpdate);
+                        await tx.CommitAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        await tx.RollbackAsync();
+                        _logger.LogError(ex, "Transaction rolled back during bulk staff import for college {CollegeId}", collegeId);
+                        throw;
+                    }
+                });
+            }
+            else
+            {
+                await PersistBulkRosterImportAsync(collegeId, callerId, callerEmail, request.StaffRows.Count, validation.UsersToAdd, validation.UsersToUpdate);
+            }
+        }
+        catch (DbUpdateException ex) when (IsDatabaseConflict(ex))
+        {
+            return Conflict(new BulkStaffUploadResultDto
+            {
+                TotalSubmitted = request.StaffRows.Count,
+                SuccessfullyCreated = 0,
+                SuccessfullyUpdated = 0,
+                FailedCount = 1,
+                Errors = new List<string> { "Roster import conflicted with a concurrent database update or uniqueness constraint. Please refresh and try again." }
             });
+        }
+
+        if (_emailOutbox == null)
+        {
+            var emailSender = HttpContext.RequestServices.GetRequiredService<IEmailSender>();
+            foreach (var dispatch in validation.ActivationDispatches)
+            {
+                await emailSender.SendAccountActivationAsync(dispatch.Email, dispatch.FullName, dispatch.RawToken);
+            }
         }
 
         return Ok(new BulkStaffUploadResultDto
         {
             TotalSubmitted = request.StaffRows.Count,
-            SuccessfullyCreated = usersToAdd.Count,
+            SuccessfullyCreated = validation.UsersToAdd.Count,
+            SuccessfullyUpdated = validation.UsersToUpdate.Count,
             FailedCount = 0,
             Errors = new List<string>()
         });
+    }
+
+    private sealed class StudentImportValidationResult
+    {
+        public List<string> HeaderErrors { get; init; } = new();
+        public List<RosterImportPreviewRowDto> PreviewRows { get; init; } = new();
+        public List<UserAccount> UsersToAdd { get; init; } = new();
+        public List<StudentImportUpdatePlan> UsersToUpdate { get; init; } = new();
+        public List<StudentAcademicEnrollment> EnrollmentsToAdd { get; init; } = new();
+        public List<(string Email, string FullName, string RawToken)> ActivationDispatches { get; init; } = new();
+        public List<string> FlatErrors { get; init; } = new();
+        public int DuplicateCount { get; init; }
+    }
+
+    private async Task<StudentImportValidationResult> ValidateAndPrepareStudentImportAsync(Guid collegeId, BulkStudentUploadRequest request)
+    {
+        const int maxRows = 500;
+        const int maxNameLen = 150;
+        const int maxEmailLen = 254;
+        const int maxCodeLen = 40;
+
+        if (request.CsvHeaders != null)
+        {
+            var normalizedHeaders = request.CsvHeaders.Select(h => (h ?? string.Empty).Trim()).ToList();
+            var forbidden = normalizedHeaders.Where(h => DisallowedSecurityCsvHeaders.Contains(h)).ToList();
+            if (forbidden.Count > 0)
+            {
+                var msg = $"Security-sensitive column(s) ({string.Join(", ", forbidden)}) are not permitted in Students.csv. Imported records are always assigned the Student role within your college.";
+                return new StudentImportValidationResult { HeaderErrors = new List<string> { msg }, FlatErrors = new List<string> { msg } };
+            }
+
+            if (normalizedHeaders.Distinct(StringComparer.OrdinalIgnoreCase).Count() != normalizedHeaders.Count)
+            {
+                const string msg = "Invalid CSV headers. Duplicate columns detected.";
+                return new StudentImportValidationResult { HeaderErrors = new List<string> { msg }, FlatErrors = new List<string> { msg } };
+            }
+
+            var hasName = normalizedHeaders.Any(h => string.Equals(h, "StudentName", StringComparison.OrdinalIgnoreCase));
+            var hasEmail = normalizedHeaders.Any(h => string.Equals(h, "Email", StringComparison.OrdinalIgnoreCase));
+            var hasNum = normalizedHeaders.Any(h => string.Equals(h, "StudentNumber", StringComparison.OrdinalIgnoreCase));
+            var hasDept = normalizedHeaders.Any(h => string.Equals(h, "DepartmentCode", StringComparison.OrdinalIgnoreCase));
+            var allowedHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "StudentName", "Email", "StudentNumber", "DepartmentCode", "Program", "AdmissionYear", "CurrentSemester"
+            };
+
+            if (!hasName || !hasEmail || !hasNum || !hasDept || normalizedHeaders.Any(h => !allowedHeaders.Contains(h)))
+            {
+                const string msg = "Invalid CSV headers. Required: StudentName, Email, StudentNumber, DepartmentCode. Optional: Program, AdmissionYear, CurrentSemester.";
+                return new StudentImportValidationResult { HeaderErrors = new List<string> { msg }, FlatErrors = new List<string> { msg } };
+            }
+        }
+
+        if (request.StudentRows == null || request.StudentRows.Count == 0)
+        {
+            const string msg = "No student records provided in request.";
+            return new StudentImportValidationResult { HeaderErrors = new List<string> { msg }, FlatErrors = new List<string> { msg } };
+        }
+
+        if (request.StudentRows.Count > maxRows)
+        {
+            var msg = $"Student roster import is limited to {maxRows} rows per upload.";
+            return new StudentImportValidationResult { HeaderErrors = new List<string> { msg }, FlatErrors = new List<string> { msg } };
+        }
+
+        var depts = await _context.Departments
+            .AsNoTracking()
+            .Include(d => d.CourseProgram)
+            .Where(d => d.CollegeId == collegeId && !d.IsDeleted)
+            .ToListAsync();
+
+        var programs = await _context.CoursePrograms
+            .AsNoTracking()
+            .Where(p => p.CollegeId == collegeId && !p.IsDeleted)
+            .ToListAsync();
+
+        // Build a normalized program lookup: trim + uppercase + strip dots + collapse spaces.
+        // This allows "B.Tech", "Btech", "B TECH", "B-TECH" etc. to all resolve to the same canonical program.
+        var normalizedProgramLookup = programs
+            .ToDictionary(
+                p => NormalizeProgramString(p.Code),
+                p => p,
+                StringComparer.OrdinalIgnoreCase);
+        // If multiple DB programs normalize to the same key, keep the first (or could reject as ambiguous).
+        // Also index by normalized name for fallback lookups.
+        var normalizedNameLookup = programs
+            .ToDictionary(
+                p => NormalizeProgramString(p.Name),
+                p => p,
+                StringComparer.OrdinalIgnoreCase);
+
+        var activeSession = await _context.AcademicSessions
+            .AsNoTracking()
+            .Where(s => s.CollegeId == collegeId && s.IsActive && !s.IsDeleted)
+            .OrderByDescending(s => s.StartDate)
+            .FirstOrDefaultAsync();
+
+        var semesterTerms = await _context.SemesterTerms
+            .AsNoTracking()
+            .Where(t => t.CollegeId == collegeId && t.IsActive && !t.IsDeleted)
+            .ToListAsync();
+
+        var existingUsers = await _context.Users
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(u => !u.IsDeleted)
+            .ToListAsync();
+
+        var existingByEmail = existingUsers
+            .GroupBy(u => u.Email.Trim().ToLowerInvariant())
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var existingCollegeByStudentNumber = existingUsers
+            .Where(u => u.CollegeId == collegeId && !string.IsNullOrWhiteSpace(u.EnrollmentOrEmployeeCode))
+            .GroupBy(u => u.EnrollmentOrEmployeeCode.Trim().ToUpperInvariant())
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var errors = new List<string>();
+        var previewRows = new List<RosterImportPreviewRowDto>();
+        var seenEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenNumbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int duplicateCount = 0;
+
+        var currentStudentCountsByDept = existingUsers
+            .Where(u => u.CollegeId == collegeId && u.Role == UserRole.Student && u.DepartmentId.HasValue)
+            .GroupBy(u => u.DepartmentId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+        var projectedAdditionsByDept = new Dictionary<Guid, int>();
+
+        var usersToAdd = new List<UserAccount>();
+        var studentUpdates = new List<StudentImportUpdatePlan>();
+        var enrollmentsToAdd = new List<StudentAcademicEnrollment>();
+        var activationDispatches = new List<(string Email, string FullName, string RawToken)>();
+
+        for (int i = 0; i < request.StudentRows.Count; i++)
+        {
+            var row = request.StudentRows[i];
+            int rowNum = i + 1;
+            var rowErrors = new List<string>();
+
+            var fullName = (row.StudentName ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(fullName) || fullName.Length > maxNameLen)
+            {
+                rowErrors.Add($"Valid StudentName (1–{maxNameLen} chars) is required.");
+            }
+
+            var rawEmail = (row.Email ?? string.Empty).Trim();
+            if (!TryValidateInstitutionalEmail(rawEmail, maxEmailLen, null, out var normalizedEmail, out var emailErr))
+            {
+                rowErrors.Add(emailErr);
+            }
+            else if (!seenEmails.Add(normalizedEmail))
+            {
+                duplicateCount++;
+                rowErrors.Add($"Duplicate Email '{normalizedEmail}' in file.");
+            }
+
+            var studentNumber = (row.StudentNumber ?? string.Empty).Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(studentNumber) || studentNumber.Length > maxCodeLen)
+            {
+                rowErrors.Add("Valid StudentNumber is required.");
+            }
+            else if (!seenNumbers.Add(studentNumber))
+            {
+                duplicateCount++;
+                rowErrors.Add($"Duplicate StudentNumber '{studentNumber}' in file.");
+            }
+
+            var deptCode = (row.DepartmentCode ?? string.Empty).Trim();
+            var dept = depts.FirstOrDefault(d => string.Equals(d.Code, deptCode, StringComparison.OrdinalIgnoreCase));
+            if (dept == null)
+            {
+                rowErrors.Add($"DepartmentCode '{deptCode}' not found in this institution.");
+            }
+
+            CourseProgram? matchedProg = null;
+            if (!string.IsNullOrWhiteSpace(row.Program))
+            {
+                var progKey = row.Program.Trim();
+                var normalized = NormalizeProgramString(progKey);
+
+                // Try lookup by normalized code first, then by normalized name.
+                if (normalizedProgramLookup.TryGetValue(normalized, out var progByCode))
+                {
+                    matchedProg = progByCode;
+                }
+                else if (normalizedNameLookup.TryGetValue(normalized, out var progByName))
+                {
+                    matchedProg = progByName;
+                }
+                else
+                {
+                    rowErrors.Add($"Program '{row.Program}' not found in this institution.");
+                }
+
+                // If matchedProg is found but its normalized code/name differs from the normalized input,
+                // that indicates ambiguity (multiple programs normalizing to the same key); reject.
+                // This is a safety net; the dictionary pick-first approach already handles most cases.
+                if (matchedProg != null)
+                {
+                    var matchedCodeNorm = NormalizeProgramString(matchedProg.Code);
+                    var matchedNameNorm = NormalizeProgramString(matchedProg.Name);
+                    if (matchedCodeNorm != normalized && matchedNameNorm != normalized)
+                    {
+                        // The match fell through to the fallback name lookup; ensure it's a true match,
+                        // not an ambiguous overlap. Re-validate strictly.
+                        if (!string.Equals(matchedProg.Code, progKey, StringComparison.OrdinalIgnoreCase) &&
+                            !string.Equals(matchedProg.Name, progKey, StringComparison.OrdinalIgnoreCase))
+                        {
+                            rowErrors.Add($"Program '{row.Program}' is ambiguous; it resolves to '{matchedProg.Name}' but the input does not match the configured code or name exactly. Please use the exact program code or name.");
+                            matchedProg = null;
+                        }
+                    }
+                }
+            }
+            else if (dept?.CourseProgramId.HasValue == true)
+            {
+                matchedProg = dept.CourseProgram;
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.AdmissionYear))
+            {
+                var yrStr = row.AdmissionYear.Trim();
+                if (!int.TryParse(yrStr, out var yr) || yr < 1990 || yr > 2100)
+                {
+                    rowErrors.Add("AdmissionYear must be a valid 4-digit year (1990–2100).");
+                }
+            }
+
+            if (row.CurrentSemester.HasValue && (row.CurrentSemester.Value < 1 || row.CurrentSemester.Value > 12))
+            {
+                rowErrors.Add("CurrentSemester must be between 1 and 12.");
+            }
+
+            if (rowErrors.Count == 0 && existingByEmail.TryGetValue(normalizedEmail, out var existingByMail))
+            {
+                if (existingByMail.CollegeId != collegeId)
+                {
+                    rowErrors.Add($"Email '{normalizedEmail}' conflicts with an existing platform account.");
+                }
+                else if (existingByMail.Role != UserRole.Student)
+                {
+                    rowErrors.Add($"Email '{normalizedEmail}' belongs to a non-student account and cannot be overwritten.");
+                }
+                else if (!string.Equals(existingByMail.EnrollmentOrEmployeeCode, studentNumber, StringComparison.OrdinalIgnoreCase))
+                {
+                    rowErrors.Add($"Email '{normalizedEmail}' is already linked to StudentNumber '{existingByMail.EnrollmentOrEmployeeCode}'.");
+                }
+                else
+                {
+                    if (existingByMail.DepartmentId != dept!.Id && dept.IntakeQuota > 0)
+                    {
+                        var currentCount = currentStudentCountsByDept.GetValueOrDefault(dept.Id, 0);
+                        var pendingAdd = projectedAdditionsByDept.GetValueOrDefault(dept.Id, 0);
+                        if (currentCount + pendingAdd + 1 > dept.IntakeQuota)
+                        {
+                            rowErrors.Add($"Department '{dept.Code}' has reached its sanctioned intake quota ({dept.IntakeQuota} seats).");
+                        }
+                        else
+                        {
+                            projectedAdditionsByDept[dept.Id] = pendingAdd + 1;
+                        }
+                    }
+
+                    if (rowErrors.Count == 0)
+                    {
+                        // Enrollment and semester progression remain untouched on re-import.
+                        studentUpdates.Add(new StudentImportUpdatePlan(existingByMail.Id, fullName, dept.Id));
+                        previewRows.Add(new RosterImportPreviewRowDto
+                        {
+                            RowNumber = rowNum,
+                            FullName = fullName,
+                            Email = normalizedEmail,
+                            DepartmentCode = dept.Code,
+                            SecondaryValue = studentNumber,
+                            Action = "update",
+                            Errors = new List<string>()
+                        });
+                        continue;
+                    }
+                }
+            }
+            else if (rowErrors.Count == 0 && existingCollegeByStudentNumber.TryGetValue(studentNumber, out var existingByNum))
+            {
+                rowErrors.Add($"StudentNumber '{studentNumber}' is already registered to '{existingByNum.Email}'.");
+            }
+
+            if (rowErrors.Count == 0 && dept!.IntakeQuota > 0)
+            {
+                var currentCount = currentStudentCountsByDept.GetValueOrDefault(dept.Id, 0);
+                var pendingAdd = projectedAdditionsByDept.GetValueOrDefault(dept.Id, 0);
+                if (currentCount + pendingAdd + 1 > dept.IntakeQuota)
+                {
+                    rowErrors.Add($"Department '{dept.Code}' has reached its sanctioned intake quota ({dept.IntakeQuota} seats).");
+                }
+                else
+                {
+                    projectedAdditionsByDept[dept.Id] = pendingAdd + 1;
+                }
+            }
+
+            if (rowErrors.Count > 0)
+            {
+                foreach (var err in rowErrors)
+                {
+                    errors.Add($"Row {rowNum}: {err}");
+                }
+                previewRows.Add(new RosterImportPreviewRowDto
+                {
+                    RowNumber = rowNum,
+                    FullName = fullName,
+                    Email = string.IsNullOrEmpty(normalizedEmail) ? rawEmail : normalizedEmail,
+                    DepartmentCode = deptCode,
+                    SecondaryValue = studentNumber,
+                    Action = "invalid",
+                    Errors = rowErrors
+                });
+                continue;
+            }
+
+            var rawToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+                .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+            var tokenHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawToken)));
+
+            var newStudent = new UserAccount
+            {
+                CollegeId = collegeId,
+                DepartmentId = dept!.Id,
+                FullName = fullName,
+                Email = normalizedEmail,
+                EnrollmentOrEmployeeCode = studentNumber,
+                Role = UserRole.Student,
+                PasswordHash = null,
+                PasswordChangedAtUtc = null,
+                ActivationTokenHashed = tokenHash,
+                ActivationTokenExpiresAtUtc = DateTime.UtcNow.AddHours(24),
+                IsActive = true,
+                IsActivated = false,
+                IsEmailVerified = false
+            };
+
+            usersToAdd.Add(newStudent);
+            activationDispatches.Add((newStudent.Email, newStudent.FullName, rawToken));
+
+            var matchedTerm = row.CurrentSemester.HasValue
+                ? semesterTerms.FirstOrDefault(t =>
+                    t.DepartmentId == dept.Id &&
+                    t.SemesterNumber == row.CurrentSemester.Value &&
+                    (activeSession == null || t.AcademicSessionId == activeSession.Id))
+                : semesterTerms.FirstOrDefault(t => t.DepartmentId == dept.Id);
+
+            var resolvedProgramId = matchedProg?.Id ?? dept.CourseProgramId ?? programs.FirstOrDefault()?.Id;
+            if (resolvedProgramId.HasValue && matchedTerm != null)
+            {
+                enrollmentsToAdd.Add(new StudentAcademicEnrollment
+                {
+                    CollegeId = collegeId,
+                    StudentUserId = newStudent.Id,
+                    CourseProgramId = resolvedProgramId.Value,
+                    DepartmentId = dept.Id,
+                    CurrentSemesterTermId = matchedTerm.Id,
+                    AdmissionBatch = string.IsNullOrWhiteSpace(row.AdmissionYear) ? DateTime.UtcNow.Year.ToString() : row.AdmissionYear.Trim(),
+                    AcademicStatus = AcademicStatus.Active
+                });
+            }
+
+            previewRows.Add(new RosterImportPreviewRowDto
+            {
+                RowNumber = rowNum,
+                FullName = fullName,
+                Email = normalizedEmail,
+                DepartmentCode = dept.Code,
+                SecondaryValue = studentNumber,
+                Action = "create",
+                Errors = new List<string>()
+            });
+        }
+
+        return new StudentImportValidationResult
+        {
+            PreviewRows = previewRows,
+            UsersToAdd = usersToAdd,
+            UsersToUpdate = studentUpdates,
+            EnrollmentsToAdd = enrollmentsToAdd,
+            ActivationDispatches = activationDispatches,
+            FlatErrors = errors,
+            DuplicateCount = duplicateCount
+        };
+    }
+
+    [HttpPost("students/bulk/preview")]
+    public async Task<ActionResult<RosterImportPreviewDto>> PreviewBulkUploadStudents([FromBody] BulkStudentUploadRequest request)
+    {
+        if (!_tenantContext.CollegeId.HasValue)
+        {
+            return Forbid();
+        }
+
+        var result = await ValidateAndPrepareStudentImportAsync(_tenantContext.CollegeId.Value, request);
+        return Ok(new RosterImportPreviewDto
+        {
+            ImportType = "Students",
+            TotalRows = result.HeaderErrors.Count > 0 ? (request.StudentRows?.Count ?? 0) : result.PreviewRows.Count,
+            ValidCount = result.PreviewRows.Count(r => r.Action != "invalid"),
+            InvalidCount = result.PreviewRows.Count(r => r.Action == "invalid"),
+            CreateCount = result.PreviewRows.Count(r => r.Action == "create"),
+            UpdateCount = result.PreviewRows.Count(r => r.Action == "update"),
+            DuplicateCount = result.DuplicateCount,
+            HeaderErrors = result.HeaderErrors,
+            Rows = result.PreviewRows
+        });
+    }
+
+    [HttpPost("students/bulk")]
+    public async Task<ActionResult<BulkStudentUploadResultDto>> BulkUploadStudents([FromBody] BulkStudentUploadRequest request)
+    {
+        if (!_tenantContext.CollegeId.HasValue)
+        {
+            return Forbid();
+        }
+
+        var collegeId = _tenantContext.CollegeId.Value;
+        var validation = await ValidateAndPrepareStudentImportAsync(collegeId, request);
+
+        if (validation.HeaderErrors.Count > 0 || validation.FlatErrors.Count > 0)
+        {
+            return BadRequest(new BulkStudentUploadResultDto
+            {
+                TotalSubmitted = request.StudentRows?.Count ?? 0,
+                FailedCount = validation.FlatErrors.Count > 0 ? validation.FlatErrors.Count : validation.HeaderErrors.Count,
+                Errors = validation.FlatErrors.Count > 0 ? validation.FlatErrors : validation.HeaderErrors
+            });
+        }
+
+        var (actorId, actorEmail, _) = await ResolveCallerIdentityAsync();
+
+        if (_emailOutbox != null)
+        {
+            var activationExpiry = DateTime.UtcNow.AddHours(24);
+            foreach (var dispatch in validation.ActivationDispatches)
+            {
+                _emailOutbox.QueueAccountActivation(dispatch.Email, dispatch.FullName, dispatch.RawToken, activationExpiry, collegeId);
+            }
+        }
+
+        try
+        {
+            if (_context.Database.IsRelational())
+            {
+                var strategy = _context.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var tx = await _context.Database.BeginTransactionAsync();
+                    try
+                    {
+                        await PersistBulkStudentImportAsync(collegeId, actorId, actorEmail, request.StudentRows.Count, validation);
+                        await tx.CommitAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        await tx.RollbackAsync();
+                        _logger.LogError(ex, "Transaction rolled back during bulk student import for college {CollegeId}", collegeId);
+                        throw;
+                    }
+                });
+            }
+            else
+            {
+                await PersistBulkStudentImportAsync(collegeId, actorId, actorEmail, request.StudentRows.Count, validation);
+            }
+        }
+        catch (DbUpdateException ex) when (IsDatabaseConflict(ex))
+        {
+            return Conflict(new BulkStudentUploadResultDto
+            {
+                TotalSubmitted = request.StudentRows.Count,
+                SuccessfullyCreated = 0,
+                SuccessfullyUpdated = 0,
+                FailedCount = 1,
+                Errors = new List<string> { "Student roster import conflicted with a concurrent database update or uniqueness constraint. Please refresh and try again." }
+            });
+        }
+
+        if (_emailOutbox == null)
+        {
+            var emailSender = HttpContext.RequestServices.GetRequiredService<IEmailSender>();
+            foreach (var dispatch in validation.ActivationDispatches)
+            {
+                await emailSender.SendAccountActivationAsync(dispatch.Email, dispatch.FullName, dispatch.RawToken);
+            }
+        }
+
+        return Ok(new BulkStudentUploadResultDto
+        {
+            TotalSubmitted = request.StudentRows.Count,
+            SuccessfullyCreated = validation.UsersToAdd.Count,
+            SuccessfullyUpdated = validation.UsersToUpdate.Count,
+            FailedCount = 0,
+            Errors = new List<string>()
+        });
+    }
+
+    [HttpGet("roster-imports/history")]
+    public async Task<ActionResult<List<RosterImportHistoryDto>>> GetRosterImportHistory()
+    {
+        if (!_tenantContext.CollegeId.HasValue)
+        {
+            return Forbid();
+        }
+
+        var collegeId = _tenantContext.CollegeId.Value;
+        var logs = await _context.PlatformAuditLogs
+            .AsNoTracking()
+            .Where(l => l.TargetTenantId == collegeId &&
+                        (l.Action == "BULK_ROSTER_IMPORT" || l.Action == "BULK_STUDENT_ROSTER_IMPORT"))
+            .OrderByDescending(l => l.OccurredAtUtc)
+            .Take(50)
+            .ToListAsync();
+
+        var history = new List<RosterImportHistoryDto>(logs.Count);
+        foreach (var log in logs)
+        {
+            int totalSubmitted = 0;
+            int createdCount = 0;
+            int updatedCount = 0;
+
+            if (!string.IsNullOrWhiteSpace(log.MetadataJson))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(log.MetadataJson);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("TotalSubmitted", out var ts) || root.TryGetProperty("totalSubmitted", out ts))
+                        totalSubmitted = ts.GetInt32();
+                    if (root.TryGetProperty("CreatedCount", out var cc) || root.TryGetProperty("createdCount", out cc))
+                        createdCount = cc.GetInt32();
+                    if (root.TryGetProperty("UpdatedCount", out var uc) || root.TryGetProperty("updatedCount", out uc))
+                        updatedCount = uc.GetInt32();
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    // Ignore malformed metadata
+                }
+            }
+
+            history.Add(new RosterImportHistoryDto
+            {
+                Id = log.Id,
+                ImportType = log.Action == "BULK_STUDENT_ROSTER_IMPORT" ? "Students" : "Faculty",
+                ActorEmail = log.ActorEmail,
+                TotalSubmitted = totalSubmitted,
+                CreatedCount = createdCount,
+                UpdatedCount = updatedCount,
+                OccurredAtUtc = log.OccurredAtUtc
+            });
+        }
+
+        return Ok(history);
+    }
+
+    private static bool IsDatabaseConflict(DbUpdateException ex)
+    {
+        if (ex is DbUpdateConcurrencyException) return true;
+
+        for (Exception? current = ex; current != null; current = current.InnerException)
+        {
+            var message = current.Message ?? string.Empty;
+            if (message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("serialization failure", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("deadlock", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task ApplyStaffImportUpdatesAsync(Guid collegeId, IReadOnlyList<StaffImportUpdatePlan> updates)
+    {
+        if (updates.Count == 0) return;
+
+        var ids = updates.Select(u => u.UserId).ToHashSet();
+        var tracked = await _context.Users
+            .IgnoreQueryFilters()
+            .Where(u => ids.Contains(u.Id) && u.CollegeId == collegeId && !u.IsDeleted)
+            .ToListAsync();
+        var byId = tracked.ToDictionary(u => u.Id);
+
+        foreach (var plan in updates)
+        {
+            if (!byId.TryGetValue(plan.UserId, out var user))
+            {
+                throw new DbUpdateConcurrencyException($"Faculty account {plan.UserId} changed during roster import.");
+            }
+
+            user.FullName = plan.FullName;
+            user.DepartmentId = plan.DepartmentId;
+            user.Designation = plan.Designation;
+        }
+    }
+
+    private async Task ApplyStudentImportUpdatesAsync(Guid collegeId, IReadOnlyList<StudentImportUpdatePlan> updates)
+    {
+        if (updates.Count == 0) return;
+
+        var ids = updates.Select(u => u.UserId).ToHashSet();
+        var tracked = await _context.Users
+            .IgnoreQueryFilters()
+            .Where(u => ids.Contains(u.Id) && u.CollegeId == collegeId && !u.IsDeleted)
+            .ToListAsync();
+        var byId = tracked.ToDictionary(u => u.Id);
+
+        foreach (var plan in updates)
+        {
+            if (!byId.TryGetValue(plan.UserId, out var user))
+            {
+                throw new DbUpdateConcurrencyException($"Student account {plan.UserId} changed during roster import.");
+            }
+
+            // Never overwrite role, credentials, activation state, enrollment, or semester progression.
+            user.FullName = plan.FullName;
+            user.DepartmentId = plan.DepartmentId;
+        }
+    }
+
+    private async Task PersistBulkRosterImportAsync(
+        Guid collegeId,
+        Guid? callerId,
+        string callerEmail,
+        int totalSubmitted,
+        List<UserAccount> usersToAdd,
+        IReadOnlyList<StaffImportUpdatePlan> updates)
+    {
+        await ApplyStaffImportUpdatesAsync(collegeId, updates);
+
+        if (usersToAdd.Count > 0)
+        {
+            await _context.Users.AddRangeAsync(usersToAdd);
+        }
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = callerId,
+            ActorEmail = callerEmail,
+            Action = "BULK_ROSTER_IMPORT",
+            TargetTenantId = collegeId,
+            TargetEntity = "UserAccount",
+            MetadataJson = $"{{\"TotalSubmitted\":{totalSubmitted},\"CreatedCount\":{usersToAdd.Count},\"UpdatedCount\":{updates.Count}}}",
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+    }
+
+    private async Task PersistBulkStudentImportAsync(
+        Guid collegeId,
+        Guid? callerId,
+        string callerEmail,
+        int totalSubmitted,
+        StudentImportValidationResult validation)
+    {
+        await ApplyStudentImportUpdatesAsync(collegeId, validation.UsersToUpdate);
+
+        if (validation.UsersToAdd.Count > 0)
+        {
+            await _context.Users.AddRangeAsync(validation.UsersToAdd);
+        }
+
+        if (validation.EnrollmentsToAdd.Count > 0)
+        {
+            await _context.StudentAcademicEnrollments.AddRangeAsync(validation.EnrollmentsToAdd);
+        }
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = callerId,
+            ActorEmail = callerEmail,
+            Action = "BULK_STUDENT_ROSTER_IMPORT",
+            TargetTenantId = collegeId,
+            TargetEntity = "StudentRoster",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                createdCount = validation.UsersToAdd.Count,
+                updatedCount = validation.UsersToUpdate.Count,
+                totalSubmitted
+            }),
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
     }
 
     [HttpDelete("users/{id}")]
@@ -2089,19 +3201,96 @@ public class CollegeController : ControllerBase
             return Forbid();
         }
 
-        user.IsDeleted = true;
-        user.DeletedAtUtc = DateTime.UtcNow;
-        user.IsActive = false;
-
-        // If this user was HOD of any department, unassign them
-        var hodDepts = await _context.Departments.Where(d => d.HodUserId == id).ToListAsync();
-        foreach (var d in hodDepts)
+        var requiresAnotherActiveAdmin = user.Role == UserRole.CollegeAdmin && user.IsActive;
+        var blocked = await ExecuteCollegeAdminMutationAsync(collegeId, user.Id, requiresAnotherActiveAdmin, async () =>
         {
-            d.HodUserId = null;
-        }
+            user.IsDeleted = true;
+            user.DeletedAtUtc = DateTime.UtcNow;
+            user.IsActive = false;
 
-        await _context.SaveChangesAsync();
+            // If this user was HOD of any department, unassign them
+            var hodDepts = await _context.Departments.Where(d => d.HodUserId == id && d.CollegeId == collegeId).ToListAsync();
+            foreach (var d in hodDepts)
+            {
+                d.HodUserId = null;
+            }
+        });
+        if (blocked != null) return blocked;
+
         return NoContent();
+    }
+
+    private async Task<ActionResult?> ExecuteCollegeAdminMutationAsync(
+        Guid collegeId,
+        Guid targetUserId,
+        bool requiresAnotherActiveAdmin,
+        Func<Task> applyChangesAsync)
+    {
+        try
+        {
+            if (_context.Database.IsRelational())
+            {
+                var strategy = _context.Database.CreateExecutionStrategy();
+                ActionResult? blockedResult = null;
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                    try
+                    {
+                        if (requiresAnotherActiveAdmin &&
+                            !await _context.Users.AnyAsync(u =>
+                                u.CollegeId == collegeId &&
+                                !u.IsDeleted &&
+                                u.IsActive &&
+                                u.Role == UserRole.CollegeAdmin &&
+                                u.Id != targetUserId))
+                        {
+                            blockedResult = BadRequest(new { message = "Cannot deactivate, demote, or delete the last active College Admin for this institution." });
+                            await tx.RollbackAsync();
+                            return;
+                        }
+
+                        await applyChangesAsync();
+                        await _context.SaveChangesAsync();
+                        await tx.CommitAsync();
+                    }
+                    catch
+                    {
+                        try { await tx.RollbackAsync(); } catch (InvalidOperationException) { }
+                        throw;
+                    }
+                });
+
+                return blockedResult;
+            }
+
+            if (requiresAnotherActiveAdmin &&
+                !await _context.Users.AnyAsync(u =>
+                    u.CollegeId == collegeId &&
+                    !u.IsDeleted &&
+                    u.IsActive &&
+                    u.Role == UserRole.CollegeAdmin &&
+                    u.Id != targetUserId))
+            {
+                return BadRequest(new { message = "Cannot deactivate, demote, or delete the last active College Admin for this institution." });
+            }
+
+            await applyChangesAsync();
+            await _context.SaveChangesAsync();
+            return null;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { message = "Staff account was modified concurrently. Please refresh and try again." });
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException pgEx && pgEx.SqlState == "40001")
+        {
+            return Conflict(new { message = "Concurrent modification detected while updating College Admin status. Please refresh and try again." });
+        }
+        catch (Npgsql.PostgresException pgEx) when (pgEx.SqlState == "40001")
+        {
+            return Conflict(new { message = "Concurrent modification detected while updating College Admin status. Please refresh and try again." });
+        }
     }
 
     [HttpGet("results")]
@@ -2210,8 +3399,7 @@ public class CollegeController : ControllerBase
                 TotalScore = totalScore,
                 Grade = grade,
                 GradePoints = gradePoints,
-                ResultStatus = resultStatus,
-                MeetsNbaAttainmentThreshold = totalScore >= 60m
+                ResultStatus = resultStatus
             });
         }
 
@@ -2435,208 +3623,221 @@ public class CollegeController : ControllerBase
         var collegeId = _tenantContext.CollegeId!.Value;
         var college = await _context.CollegeTenants
             .IgnoreQueryFilters()
+            .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == collegeId && !c.IsDeleted);
 
         if (college == null) return NotFound();
 
-        var studentCount = await _context.Users.CountAsync(u => u.CollegeId == collegeId && u.Role == UserRole.Student && !u.IsDeleted);
+        return Ok(await BuildCollegeSettingsDtoAsync(college));
+    }
+
+    [HttpPut("settings")]
+    public async Task<ActionResult<CollegeSettingsDto>> UpdateSettings([FromBody] UpdateCollegeSettingsRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var college = await _context.CollegeTenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Id == collegeId && !c.IsDeleted);
+
+        if (college == null) return NotFound();
+
+        if (request.Name != null)
+        {
+            var trimmedName = request.Name.Trim();
+            if (trimmedName.Length < 2 || trimmedName.Length > 150)
+            {
+                return BadRequest(new { message = "Official college name must be between 2 and 150 characters." });
+            }
+            college.Name = trimmedName;
+        }
+
+        if (request.AffiliatedUniversity != null)
+        {
+            var trimmedUni = request.AffiliatedUniversity.Trim();
+            if (trimmedUni.Length > 200)
+            {
+                return BadRequest(new { message = "Affiliated university must be 200 characters or fewer." });
+            }
+            college.AffiliatingUniversity = string.IsNullOrWhiteSpace(trimmedUni) ? null : trimmedUni;
+        }
+
+        if (request.CampusAddress != null)
+        {
+            var trimmedAddr = request.CampusAddress.Trim();
+            if (trimmedAddr.Length > 300)
+            {
+                return BadRequest(new { message = "Main campus address must be 300 characters or fewer." });
+            }
+            college.CampusAddress = string.IsNullOrWhiteSpace(trimmedAddr) ? null : trimmedAddr;
+        }
+
+        var (actorUserId, actorEmail, _) = await ResolveCallerIdentityAsync();
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = actorUserId,
+            ActorEmail = actorEmail,
+            Action = "UPDATE_SETTINGS",
+            TargetTenantId = collegeId,
+            TargetEntity = college.Name,
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+        return Ok(await BuildCollegeSettingsDtoAsync(college));
+    }
+
+    [HttpPost("settings/logo")]
+    [RequestSizeLimit(2 * 1024 * 1024)]
+    public async Task<ActionResult<CollegeSettingsDto>> UploadCollegeLogo(IFormFile file)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var college = await _context.CollegeTenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Id == collegeId && !c.IsDeleted);
+
+        if (college == null) return NotFound();
+
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Please select a PNG, JPEG, or WEBP logo image." });
+        }
+
+        const long maxLogoBytes = 2 * 1024 * 1024;
+        if (file.Length > maxLogoBytes)
+        {
+            return BadRequest(new { message = "College logo must be 2 MB or smaller." });
+        }
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        var bytes = ms.ToArray();
+
+        var detectedExt = DetectSafeImageExtension(bytes);
+        if (detectedExt == null)
+        {
+            return BadRequest(new { message = "Unsupported image format. Only valid PNG, JPEG, and WEBP images are allowed." });
+        }
+
+        var logoDir = Path.Combine(_environment.ContentRootPath, "App_Data", "college-logos", collegeId.ToString("N"));
+        Directory.CreateDirectory(logoDir);
+
+        foreach (var existingFile in Directory.GetFiles(logoDir, "logo.*"))
+        {
+            System.IO.File.Delete(existingFile);
+        }
+
+        var targetPath = Path.Combine(logoDir, $"logo{detectedExt}");
+        await System.IO.File.WriteAllBytesAsync(targetPath, bytes);
+
+        college.CrestUrl = $"/api/proxy/api/college/logo?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+
+        var (actorUserId, actorEmail, _) = await ResolveCallerIdentityAsync();
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = actorUserId,
+            ActorEmail = actorEmail,
+            Action = "UPDATE_SETTINGS",
+            TargetTenantId = collegeId,
+            TargetEntity = "College Logo",
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+        return Ok(await BuildCollegeSettingsDtoAsync(college));
+    }
+
+    [HttpDelete("settings/logo")]
+    public async Task<ActionResult<CollegeSettingsDto>> DeleteCollegeLogo()
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var college = await _context.CollegeTenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Id == collegeId && !c.IsDeleted);
+
+        if (college == null) return NotFound();
+
+        var logoDir = Path.Combine(_environment.ContentRootPath, "App_Data", "college-logos", collegeId.ToString("N"));
+        if (Directory.Exists(logoDir))
+        {
+            foreach (var existingFile in Directory.GetFiles(logoDir, "logo.*"))
+            {
+                System.IO.File.Delete(existingFile);
+            }
+        }
+
+        college.CrestUrl = null;
+
+        var (actorUserId, actorEmail, _) = await ResolveCallerIdentityAsync();
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = actorUserId,
+            ActorEmail = actorEmail,
+            Action = "UPDATE_SETTINGS",
+            TargetTenantId = collegeId,
+            TargetEntity = "College Logo Removed",
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+        return Ok(await BuildCollegeSettingsDtoAsync(college));
+    }
+
+    private async Task<CollegeSettingsDto> BuildCollegeSettingsDtoAsync(CollegeTenant college)
+    {
+        var studentCount = await _context.Users.CountAsync(u =>
+            u.CollegeId == college.Id &&
+            u.Role == UserRole.Student &&
+            u.IsActive &&
+            !u.IsDeleted);
 
         var artifactBytes = await _context.TeamArtifacts
-            .Where(a => a.CollegeId == collegeId && !a.IsDeleted)
+            .Where(a => a.CollegeId == college.Id && !a.IsDeleted)
             .SumAsync(a => (long?)a.FileSizeBytes) ?? 0L;
-        var evidenceBytes = await _context.AccreditationEvidences
-            .Where(e => e.CollegeId == collegeId && !e.IsDeleted)
-            .SumAsync(e => (long?)e.FileSizeBytes) ?? 0L;
-        var usedStorageGb = Math.Round((double)(artifactBytes + evidenceBytes) / (1024.0 * 1024.0 * 1024.0), 2);
+        var usedStorageGb = Math.Round((double)artifactBytes / (1024.0 * 1024.0 * 1024.0), 3);
 
-        var campuses = await _context.CollegeCampuses
-            .Where(c => c.CollegeId == collegeId && !c.IsDeleted)
-            .OrderByDescending(c => c.IsMainCampus)
-            .ToListAsync();
-
-        var campusesCsv = campuses.Any()
-            ? string.Join(", ", campuses.Select(c => c.Name))
-            : college.CampusesCsv ?? "Main Campus (Bhopal)";
-
-        return Ok(new CollegeSettingsDto
+        return new CollegeSettingsDto
         {
             Id = college.Id,
             Name = college.Name,
             TenantCode = college.TenantCode,
-            SsoDomain = college.SsoDomain,
-            EnforceStrictSso = college.EnforceStrictSso,
             CrestUrl = college.CrestUrl,
-            PrincipalSealUrl = college.PrincipalSealUrl,
-            AffiliatedUniversity = college.AffiliatedUniversity ?? "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV)",
-            CampusAddress = college.CampusAddress ?? "Airport Road, Gandhi Nagar, Bhopal, MP 462036",
-            CampusesCsv = campusesCsv,
-            NbaModuleEnabled = college.NbaModuleEnabled,
-            GithubIntegrationEnabled = college.GithubIntegrationEnabled,
-            JiraIntegrationEnabled = college.JiraIntegrationEnabled,
+            AffiliatedUniversity = !string.IsNullOrWhiteSpace(college.AffiliatingUniversity)
+                ? college.AffiliatingUniversity.Trim()
+                : null,
+            CampusAddress = !string.IsNullOrWhiteSpace(college.CampusAddress)
+                ? college.CampusAddress.Trim()
+                : null,
             LicenseTier = college.LicenseTier,
             MaxStudentSeats = college.MaxStudentSeats,
             EnrolledStudentCount = studentCount,
             StorageQuotaGb = college.StorageQuotaGb,
             UsedStorageGb = usedStorageGb
-        });
+        };
     }
 
-    [HttpPut("settings")]
-    public async Task<IActionResult> UpdateSettings([FromBody] UpdateCollegeSettingsRequest request)
+    private static string? DetectSafeImageExtension(byte[] bytes)
     {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var college = await _context.CollegeTenants
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.Id == collegeId && !c.IsDeleted);
-
-        if (college == null) return NotFound();
-
-        if (request.Name != null) college.Name = request.Name.Trim();
-        if (request.EnforceStrictSso.HasValue) college.EnforceStrictSso = request.EnforceStrictSso.Value;
-        if (request.CrestUrl != null) college.CrestUrl = request.CrestUrl;
-        if (request.PrincipalSealUrl != null) college.PrincipalSealUrl = request.PrincipalSealUrl;
-        if (request.AffiliatedUniversity != null) college.AffiliatedUniversity = request.AffiliatedUniversity.Trim();
-        if (request.CampusAddress != null) college.CampusAddress = request.CampusAddress.Trim();
-        if (request.CampusesCsv != null)
+        if (bytes.Length >= 8 &&
+            bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 &&
+            bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A)
         {
-            college.CampusesCsv = request.CampusesCsv.Trim();
-
-            // Sync normalized CollegeCampuses collection
-            var campusNames = college.CampusesCsv
-                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Distinct()
-                .ToList();
-
-            var existingCampuses = await _context.CollegeCampuses
-                .Where(c => c.CollegeId == collegeId && !c.IsDeleted)
-                .ToListAsync();
-
-            // Soft-delete removed campuses
-            foreach (var ec in existingCampuses)
-            {
-                if (!campusNames.Contains(ec.Name, StringComparer.OrdinalIgnoreCase))
-                {
-                    ec.IsDeleted = true;
-                    ec.DeletedAtUtc = DateTime.UtcNow;
-                }
-            }
-
-            // Add new campuses
-            for (int i = 0; i < campusNames.Count; i++)
-            {
-                var name = campusNames[i];
-                var existing = existingCampuses.FirstOrDefault(ec => !ec.IsDeleted && string.Equals(ec.Name, name, StringComparison.OrdinalIgnoreCase));
-                if (existing == null)
-                {
-                    await _context.CollegeCampuses.AddAsync(new CollegeCampus
-                    {
-                        CollegeId = collegeId,
-                        Name = name,
-                        IsMainCampus = i == 0,
-                        Address = i == 0 ? college.CampusAddress : null
-                    });
-                }
-            }
-        }
-        if (request.NbaModuleEnabled.HasValue) college.NbaModuleEnabled = request.NbaModuleEnabled.Value;
-        if (request.GithubIntegrationEnabled.HasValue) college.GithubIntegrationEnabled = request.GithubIntegrationEnabled.Value;
-        if (request.JiraIntegrationEnabled.HasValue) college.JiraIntegrationEnabled = request.JiraIntegrationEnabled.Value;
-
-        await _context.SaveChangesAsync();
-        return NoContent();
-    }
-
-    [HttpPost("compliance/sign-off")]
-    public async Task<IActionResult> SignOffCompliance([FromBody] SignOffComplianceRequest request)
-    {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var departments = await _context.Departments
-            .Where(d => d.CollegeId == collegeId && !d.IsDeleted)
-            .ToListAsync();
-        var utcNow = DateTime.UtcNow;
-        var userId = _tenantContext.UserId;
-
-        foreach (var dept in departments)
-        {
-            dept.IsSarAttested = true;
-            dept.SarAttestedAtUtc = utcNow;
-            dept.SarAttestedByUserId = userId;
+            return ".png";
         }
 
-        await _context.SaveChangesAsync();
-        return Ok(new { success = true, attestedDepartmentsCount = departments.Count, signedAtUtc = utcNow });
-    }
-
-    [HttpGet("compliance/dossier")]
-    public async Task<ActionResult<InstitutionalDossierDto>> GetInstitutionalDossier()
-    {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var college = await _context.CollegeTenants
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.Id == collegeId && !c.IsDeleted);
-
-        if (college == null) return NotFound();
-
-        var depts = await _context.Departments
-            .Include(d => d.HodUser)
-            .Where(d => d.CollegeId == collegeId && !d.IsDeleted)
-            .OrderBy(d => d.Code)
-            .ToListAsync();
-
-        var allUsers = await _context.Users
-            .Where(u => u.CollegeId == collegeId && !u.IsDeleted)
-            .ToListAsync();
-
-        var vivaEvaluations = await _context.VivaEvaluations
-            .Include(v => v.ProjectTeam)
-            .Where(v => v.CollegeId == collegeId && !v.IsDeleted)
-            .ToListAsync();
-
-        var deptSummaries = depts.Select(d =>
+        if (bytes.Length >= 3 &&
+            bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
         {
-            var deptEvals = vivaEvaluations.Where(v => v.ProjectTeam != null && v.ProjectTeam.DepartmentId == d.Id).ToList();
-            var deptAttainment = deptEvals.Any()
-                ? Math.Round(deptEvals.Average(e => e.SharedTotalScore > 0 ? Math.Min(100m, Math.Max(0m, e.SharedTotalScore)) : 0m), 1)
-                : 0m;
-            var deptStudents = allUsers.Count(u => u.DepartmentId == d.Id && u.Role == UserRole.Student);
+            return ".jpg";
+        }
 
-            return new DepartmentAttainmentSummaryDto
-            {
-                DepartmentCode = d.Code,
-                DepartmentName = d.Name,
-                HodName = d.HodUser?.FullName,
-                StudentCount = deptStudents > 0 ? deptStudents : d.IntakeQuota,
-                AttainmentPct = deptAttainment,
-                IsSarAttested = d.IsSarAttested,
-                SarAttestedAtUtc = d.SarAttestedAtUtc
-            };
-        }).ToList();
-
-        var totalStudents = allUsers.Count(u => u.Role == UserRole.Student);
-        var totalFaculty = allUsers.Count(u => u.Role == UserRole.Faculty || u.Role == UserRole.HOD);
-        var attestedCount = deptSummaries.Count(d => d.IsSarAttested);
-        var overallAttainment = vivaEvaluations.Any()
-            ? Math.Round(vivaEvaluations.Average(e => e.SharedTotalScore > 0 ? Math.Min(100m, Math.Max(0m, e.SharedTotalScore)) : 0m), 1)
-            : 0m;
-
-        var (_, _, callerName) = await ResolveCallerIdentityAsync();
-
-        return Ok(new InstitutionalDossierDto
+        if (bytes.Length >= 12 &&
+            bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F' &&
+            bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P')
         {
-            CollegeName = college.Name,
-            TenantCode = college.TenantCode,
-            SsoDomain = college.SsoDomain,
-            AffiliatedUniversity = college.AffiliatedUniversity ?? "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV)",
-            AcademicYear = "2026–2027",
-            TotalDepartments = depts.Count,
-            TotalStudents = totalStudents,
-            TotalFaculty = totalFaculty,
-            OverallAttainmentPct = overallAttainment,
-            IsAttested = attestedCount == depts.Count && depts.Count > 0,
-            AttestedAtUtc = depts.FirstOrDefault(d => d.SarAttestedAtUtc.HasValue)?.SarAttestedAtUtc,
-            AttestedBy = $"{callerName} (College Administrator)",
-            Departments = deptSummaries
-        });
+            return ".webp";
+        }
+
+        return null;
     }
 
     #endregion

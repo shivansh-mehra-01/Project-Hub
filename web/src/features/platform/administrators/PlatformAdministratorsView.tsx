@@ -25,7 +25,7 @@ import { usePlatformData, PlatformAdminUserRecord } from "../data/platformDataSt
 import { showToast } from "@/lib/toast";
 
 export const PlatformAdministratorsView: React.FC = () => {
-  const { adminUsers, inviteAdminUser, updateAdminUser, revokeAdminSessions, addAuditLog } = usePlatformData();
+  const { adminUsers, inviteAdminUser, updateAdminUser, revokeAdminSessions } = usePlatformData();
 
   useDashboardHeader({
     title: "Platform Administrators",
@@ -79,7 +79,7 @@ export const PlatformAdministratorsView: React.FC = () => {
     setShowInviteModal(true);
   };
 
-  const handleSendInvite = (e: React.FormEvent) => {
+  const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = inviteName.trim();
     const email = inviteEmail.trim().toLowerCase();
@@ -94,62 +94,33 @@ export const PlatformAdministratorsView: React.FC = () => {
       return;
     }
 
-    // Check duplicate
-    const exists = adminUsers.some((u) => u.email.toLowerCase() === email);
-    if (exists) {
-      setInviteError("An administrator account with this email address already exists.");
-      return;
+    try {
+      await inviteAdminUser(email, name, inviteRole);
+      setShowInviteModal(false);
+    } catch (err: any) {
+      setInviteError(err?.message || "Failed to send invitation.");
     }
-
-    inviteAdminUser(email, name, inviteRole);
-    addAuditLog({
-      action: "PLATFORM_ADMIN_INVITED",
-      user: "Dev Startup Admin",
-      userEmail: "admin@collabex.in",
-      affectedResource: `Operator: ${name} (${email})`,
-      details: `Platform operator invited with predefined role '${inviteRole}'. MFA enforced on initial login.`,
-      result: "Success",
-      category: "Administrator Management",
-      ipAddress: "127.0.0.1",
-    });
-
-    showToast(`Invitation sent to ${email} with role '${inviteRole}'.`, "success");
-    setShowInviteModal(false);
   };
 
-  const handleConfirmRevokeSessions = () => {
+  const handleConfirmRevokeSessions = async () => {
     if (!adminToRevokeSessions) return;
-    revokeAdminSessions(adminToRevokeSessions.id);
-    addAuditLog({
-      action: "ADMIN_SESSIONS_REVOKED",
-      user: "Dev Startup Admin",
-      userEmail: "admin@collabex.in",
-      affectedResource: `Operator: ${adminToRevokeSessions.name} (${adminToRevokeSessions.email})`,
-      details: `All active sessions revoked for ${adminToRevokeSessions.email}.`,
-      result: "Success",
-      category: "Authentication",
-      ipAddress: "127.0.0.1",
-    });
-    showToast(`Active sessions revoked for ${adminToRevokeSessions.name}.`, "warning");
-    setAdminToRevokeSessions(null);
+    try {
+      await revokeAdminSessions(adminToRevokeSessions.id);
+      setAdminToRevokeSessions(null);
+    } catch (err: any) {
+      showToast(err?.message || "Failed to revoke sessions.", "error");
+    }
   };
 
-  const handleConfirmToggleStatus = () => {
+  const handleConfirmToggleStatus = async () => {
     if (!adminToToggleStatus) return;
     const targetStatus = adminToToggleStatus.status === "Active" ? "Suspended" : "Active";
-    updateAdminUser(adminToToggleStatus.id, { status: targetStatus });
-    addAuditLog({
-      action: targetStatus === "Suspended" ? "ADMIN_SUSPENDED" : "ADMIN_REACTIVATED",
-      user: "Dev Startup Admin",
-      userEmail: "admin@collabex.in",
-      affectedResource: `Operator: ${adminToToggleStatus.name} (${adminToToggleStatus.email})`,
-      details: `Operator account status changed to ${targetStatus}.`,
-      result: "Success",
-      category: "Administrator Management",
-      ipAddress: "127.0.0.1",
-    });
-    showToast(`${adminToToggleStatus.name} has been ${targetStatus.toLowerCase()}.`, targetStatus === "Suspended" ? "warning" : "success");
-    setAdminToToggleStatus(null);
+    try {
+      await updateAdminUser(adminToToggleStatus.id, { status: targetStatus });
+      setAdminToToggleStatus(null);
+    } catch (err: any) {
+      showToast(err?.message || "Failed to update operator status.", "error");
+    }
   };
 
   return (

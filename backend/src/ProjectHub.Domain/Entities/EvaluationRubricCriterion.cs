@@ -15,7 +15,6 @@ public class EvaluationRubricCriterion : BaseEntity, ITenantEntity
     public decimal MaxMarks { get; set; }
     public decimal WeightPercentage { get; set; }
     public int DisplayOrder { get; set; }
-    public string? NbaPoMapping { get; set; }
     public string? BloomTaxonomyLevel { get; set; }
 
     // Navigations
