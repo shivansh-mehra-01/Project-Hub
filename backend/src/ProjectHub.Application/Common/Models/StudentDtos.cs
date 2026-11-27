@@ -10,6 +10,7 @@ public record TeamMemberDto
     public string EnrollmentCode { get; init; } = string.Empty;
     public bool IsTeamLead { get; init; }
     public string ModuleResponsibility { get; init; } = string.Empty;
+    public List<string> Skills { get; init; } = new();
 }
 
 public record SprintTaskDto
@@ -214,7 +215,7 @@ public record StudentIdentitySummaryDto
     public string FullName { get; init; } = string.Empty;
     public string EnrollmentCode { get; init; } = string.Empty;
     public string Usn => EnrollmentCode;
-    public string CollegeCode { get; init; } = "SISTEC";
+    public string CollegeCode { get; init; } = string.Empty;
     public string DepartmentCode { get; init; } = "CSE";
     public string Email { get; init; } = string.Empty;
     public string CollegeName { get; init; } = string.Empty;
@@ -304,25 +305,8 @@ public record StudentDashboardDto
 }
 
 // =========================================================================
-// PHASE 3: PROJECT DISCOVERY, PROBLEM BANK & IDEA REGISTRATION DTOs
+// PHASE 3: PROJECT DISCOVERY & IDEA REGISTRATION DTOs
 // =========================================================================
-
-public record ProblemBankStatementDto
-{
-    public Guid Id { get; init; }
-    public string Title { get; init; } = string.Empty;
-    public string Abstract { get; init; } = string.Empty;
-    public string SdgCode { get; init; } = string.Empty;
-    public List<string> Prerequisites { get; init; } = new();
-    public int MaxTeamCapacity { get; init; } = 4;
-    public bool IsAllocated { get; init; }
-    public Guid ProposedByFacultyId { get; init; }
-    public string FacultyName { get; init; } = string.Empty;
-    public string DepartmentName { get; init; } = string.Empty;
-    public string DepartmentCode { get; init; } = string.Empty;
-    public string AcademicTrackName { get; init; } = string.Empty;
-    public DateTime CreatedAtUtc { get; init; }
-}
 
 public record ArchivedProjectSummaryDto
 {
@@ -349,7 +333,6 @@ public record CreateProjectIdeaRequest
     public string SdgCode { get; init; } = string.Empty;
     public Guid? GuideUserId { get; init; }
     public Guid? AcademicTrackId { get; init; }
-    public Guid? AdoptedProblemBankId { get; init; }
 }
 
 public record UpdateProjectIdeaRequest
@@ -436,11 +419,25 @@ public record EligiblePeerDto
 
 public record CreateStudentTeamRequest
 {
+    public string? TeamName { get; init; }
     public string Title { get; init; } = string.Empty;
     public string Abstract { get; init; } = string.Empty;
     public string? DomainTag { get; init; }
     public string? SdgCode { get; init; }
     public Guid? AcademicTrackId { get; init; }
+    public string? CreatorRole { get; init; }
+    public string? RequiredSkillsCsv { get; init; }
+    public bool PublishImmediately { get; init; } = false;
+}
+
+public record UpdateTeamDetailsRequest
+{
+    public string? TeamName { get; init; }
+    public string? Title { get; init; }
+    public string? Abstract { get; init; }
+    public string? DomainTag { get; init; }
+    public string? RequiredSkillsCsv { get; init; }
+    public string? CreatorRole { get; init; }
 }
 
 public record SendTeamInvitationRequest
@@ -487,8 +484,13 @@ public record StudentTeamRosterDto
 {
     public Guid TeamId { get; init; }
     public string TeamCode { get; init; } = string.Empty;
+    public string? TeamName { get; init; }
     public string Title { get; init; } = string.Empty;
     public string Abstract { get; init; } = string.Empty;
+    public string DomainTag { get; init; } = string.Empty;
+    public bool IsPublished { get; init; }
+    public DateTime? PublishedAtUtc { get; init; }
+    public List<string> RequiredSkills { get; init; } = new();
     public ProjectHub.Domain.Enums.ProjectStatus Status { get; init; }
     public bool IsRosterLocked { get; init; }
     public bool IsCallerLead { get; init; }
@@ -497,6 +499,7 @@ public record StudentTeamRosterDto
     public int CurrentMemberCount => Members.Count;
     public List<TeamMemberDto> Members { get; init; } = new();
     public List<TeamInvitationDto> PendingInvitations { get; init; } = new();
+    public List<TeamJoinRequestDto> IncomingJoinRequests { get; init; } = new();
 
     // Phase 5: Guide Details
     public Guid? GuideUserId { get; init; }
@@ -588,4 +591,61 @@ public record RejectGuidePreferenceRequest
     [Required]
     [StringLength(500, MinimumLength = 5, ErrorMessage = "Rejection reason must be between 5 and 500 characters.")]
     public string Reason { get; init; } = string.Empty;
+}
+
+public record TeamJoinRequestDto
+{
+    public Guid Id { get; init; }
+    public Guid ProjectTeamId { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string? TeamName { get; init; }
+    public string ProjectTitle { get; init; } = string.Empty;
+    public Guid StudentUserId { get; init; }
+    public string StudentName { get; init; } = string.Empty;
+    public string StudentUsn { get; init; } = string.Empty;
+    public List<string> StudentSkills { get; init; } = new();
+    public string DesiredRole { get; init; } = string.Empty;
+    public string? Message { get; init; }
+    public JoinRequestStatus Status { get; init; }
+    public DateTime CreatedAtUtc { get; init; }
+    public DateTime? RespondedAtUtc { get; init; }
+    public string? ResponseNotes { get; init; }
+}
+
+public record PublishedTeamSummaryDto
+{
+    public Guid TeamId { get; init; }
+    public string TeamCode { get; init; } = string.Empty;
+    public string? TeamName { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public string Abstract { get; init; } = string.Empty;
+    public string DomainTag { get; init; } = string.Empty;
+    public Guid AcademicTrackId { get; init; }
+    public string AcademicTrackName { get; init; } = string.Empty;
+    public int? SemesterNumber { get; init; }
+    public int MinTeamSize { get; init; }
+    public int MaxTeamSize { get; init; }
+    public int CurrentMemberCount { get; init; }
+    public int AvailableSlots => Math.Max(0, MaxTeamSize - CurrentMemberCount);
+    public List<string> RequiredSkills { get; init; } = new();
+    public List<TeamMemberDto> Members { get; init; } = new();
+    public Guid? MyJoinRequestId { get; init; }
+    public JoinRequestStatus? MyJoinRequestStatus { get; init; }
+    public DateTime? PublishedAtUtc { get; init; }
+}
+
+public record CreateJoinRequestDto
+{
+    [Required]
+    [StringLength(120, MinimumLength = 2)]
+    public string DesiredRole { get; init; } = string.Empty;
+
+    [StringLength(500)]
+    public string? Message { get; init; }
+}
+
+public record RespondJoinRequestDto
+{
+    [StringLength(500)]
+    public string? Notes { get; init; }
 }

@@ -310,6 +310,28 @@ public class HodController : ControllerBase
             })
             .ToListAsync();
 
+        var semesterBatches = await _context.StudentAcademicEnrollments
+            .AsNoTracking()
+            .Include(e => e.CurrentSemesterTerm)
+            .Where(e => e.CollegeId == collegeId &&
+                        e.DepartmentId == deptId &&
+                        e.AcademicStatus == AcademicStatus.Active &&
+                        !e.IsDeleted &&
+                        e.CurrentSemesterTerm != null)
+            .Select(e => new { e.CurrentSemesterTerm!.SemesterNumber, e.AdmissionBatch })
+            .ToListAsync();
+
+        var batchMappings = semesterBatches
+            .Where(x => !string.IsNullOrWhiteSpace(x.AdmissionBatch))
+            .GroupBy(x => x.SemesterNumber)
+            .Select(g => new SemesterBatchMappingDto
+            {
+                SemesterNumber = g.Key,
+                AdmissionBatch = string.Join(", ", g.Select(x => x.AdmissionBatch).Distinct().OrderBy(b => b))
+            })
+            .OrderBy(x => x.SemesterNumber)
+            .ToList();
+
         return Ok(new HodAcademicContextDto
         {
             DepartmentId = dept.Id,
@@ -319,7 +341,8 @@ public class HodController : ControllerBase
             CourseProgramName = dept.CourseProgram?.Name,
             AvailableSessions = sessions,
             AvailableSemesters = availableSemesters,
-            AvailableOfferings = offerings
+            AvailableOfferings = offerings,
+            SemesterBatches = batchMappings
         });
     }
 
@@ -328,39 +351,34 @@ public class HodController : ControllerBase
     {
         var collegeId = _tenantContext.CollegeId!.Value;
         var deptId = await ResolveDepartmentIdAsync();
+
         var tracks = await _context.AcademicTracks
             .Include(t => t.Department)
-            .Where(t => t.CollegeId == collegeId && (t.DepartmentId == deptId || t.DepartmentId == null) && !t.IsDeleted)
+            .Include(t => t.SemesterTerm)
+            .Include(t => t.SubjectOffering)
+            .Include(t => t.CoordinatorUser)
+            .Where(t => t.CollegeId == collegeId && t.DepartmentId == deptId && !t.IsDeleted)
             .OrderByDescending(t => t.AcademicYear)
-            .Select(t => new CollegeTrackDto
-            {
-                Id = t.Id,
-                CollegeId = t.CollegeId,
-                DepartmentId = t.DepartmentId,
-                DepartmentCode = t.Department != null ? t.Department.Code : null,
-                AcademicSessionId = t.AcademicSessionId,
-                CourseProgramId = t.CourseProgramId,
-                SemesterTermId = t.SemesterTermId,
-                SubjectOfferingId = t.SubjectOfferingId,
-                CurriculumSchemeId = t.CurriculumSchemeId,
-                ParticipationMode = t.ParticipationMode,
-                EnrolmentMode = t.EnrolmentMode,
-                AllowCrossBranchTeams = t.AllowCrossBranchTeams,
-                Name = t.Name,
-                AcademicYear = t.AcademicYear,
-                AllowInterdisciplinaryTeams = t.AllowInterdisciplinaryTeams,
-                IsActive = t.IsActive,
-                ProposalDeadlineUtc = t.ProposalDeadlineUtc,
-                FinalSubmissionDeadlineUtc = t.FinalSubmissionDeadlineUtc,
-                GuideWeightPct = t.GuideWeightPct,
-                MidTermWeightPct = t.MidTermWeightPct,
-                FinalVivaWeightPct = t.FinalVivaWeightPct,
-                SharedProjectRubricPct = t.SharedProjectRubricPct,
-                IndividualStudentRubricPct = t.IndividualStudentRubricPct
-            })
+            .ThenByDescending(t => t.CreatedAtUtc)
             .ToListAsync();
 
-        return Ok(tracks);
+        var trackIds = tracks.Select(t => t.Id).ToList();
+        var teamStats = await _context.ProjectTeams
+            .Where(pt => pt.CollegeId == collegeId && pt.DepartmentId == deptId && trackIds.Contains(pt.AcademicTrackId) && !pt.IsDeleted)
+            .GroupBy(pt => pt.AcademicTrackId)
+            .Select(g => new
+            {
+                TrackId = g.Key,
+                Total = g.Count(),
+                Active = g.Count(pt => pt.Status == ProjectStatus.ActiveBuild || pt.Status == ProjectStatus.AtRisk || pt.Status == ProjectStatus.ReadyForViva || pt.Status == ProjectStatus.PendingHOD || pt.Status == ProjectStatus.PendingGuide || pt.Status == ProjectStatus.PendingCoordinator)
+            })
+            .ToDictionaryAsync(x => x.TrackId);
+
+        return Ok(tracks.Select(t =>
+        {
+            var stats = teamStats.GetValueOrDefault(t.Id);
+            return MapTrackDto(t, stats?.Total ?? 0, stats?.Active ?? 0);
+        }).ToList());
     }
 
     [HttpPost("tracks")]
@@ -473,6 +491,77 @@ public class HodController : ControllerBase
             subjectOfferingId = request.SubjectOfferingId.Value;
         }
 
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return BadRequest(new { message = "Track name is required." });
+        }
+
+        if (request.RegistrationOpensUtc.HasValue && request.ProposalDeadlineUtc.HasValue &&
+            request.RegistrationOpensUtc.Value >= request.ProposalDeadlineUtc.Value)
+        {
+            return BadRequest(new { message = "Registration deadline must be after the registration opening date." });
+        }
+
+        if (request.ProposalDeadlineUtc.HasValue && request.FinalSubmissionDeadlineUtc.HasValue &&
+            request.ProposalDeadlineUtc.Value >= request.FinalSubmissionDeadlineUtc.Value)
+        {
+            return BadRequest(new { message = "Proposal deadline must be earlier than the final submission deadline." });
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ProjectType))
+        {
+            var pt = request.ProjectType.Trim();
+            var isMinorType = pt.Equals("Minor 1", StringComparison.OrdinalIgnoreCase) || pt.Equals("Minor 2", StringComparison.OrdinalIgnoreCase);
+            var isMajorType = pt.Equals("Major 1", StringComparison.OrdinalIgnoreCase) || pt.Equals("Major 2", StringComparison.OrdinalIgnoreCase);
+            if (isMinorType && semNumber is not (5 or 6))
+            {
+                return BadRequest(new { message = $"{pt} is only compatible with 5th or 6th Semester." });
+            }
+            if (isMajorType && semNumber is not (7 or 8))
+            {
+                return BadRequest(new { message = $"{pt} is only compatible with 7th or 8th Semester." });
+            }
+        }
+
+        Guid? coordinatorUserId = null;
+        if (request.CoordinatorUserId.HasValue && request.CoordinatorUserId.Value != Guid.Empty)
+        {
+            var coordinator = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u =>
+                u.Id == request.CoordinatorUserId.Value &&
+                u.CollegeId == collegeId &&
+                u.DepartmentId == deptId &&
+                (u.Role == UserRole.Faculty || u.Role == UserRole.HOD) &&
+                u.IsActive &&
+                !u.IsDeleted);
+            if (coordinator == null)
+            {
+                return BadRequest(new { message = "Selected faculty coordinator is not an active member of your department." });
+            }
+            coordinatorUserId = coordinator.Id;
+        }
+
+        var normalizedName = request.Name.Trim();
+        var normalizedYear = request.AcademicYear.Trim();
+        var duplicateExists = await _context.AcademicTracks
+            .AnyAsync(t => t.CollegeId == collegeId &&
+                           t.DepartmentId == deptId &&
+                           t.AcademicYear == normalizedYear &&
+                           t.Name.ToLower() == normalizedName.ToLower() &&
+                           !t.IsDeleted);
+        if (duplicateExists)
+        {
+            return Conflict(new { message = $"A track named '{normalizedName}' already exists for academic year {normalizedYear} in your department." });
+        }
+
+        var minSize = request.ParticipationMode == ParticipationMode.Individual ? 1 : request.MinTeamSize;
+        var maxSize = request.ParticipationMode == ParticipationMode.Individual ? 1 : request.MaxTeamSize;
+        if (minSize < 1 || maxSize < minSize || maxSize > 10)
+        {
+            return BadRequest(new { message = "Team size bounds must satisfy 1 <= MinTeamSize <= MaxTeamSize <= 10." });
+        }
+
+        var status = request.LaunchImmediately ? AcademicTrackStatus.Open : AcademicTrackStatus.Draft;
+
         var track = new AcademicTrack
         {
             CollegeId = collegeId,
@@ -484,12 +573,19 @@ public class HodController : ControllerBase
             CurriculumSchemeId = request.CurriculumSchemeId,
             ParticipationMode = request.ParticipationMode,
             EnrolmentMode = request.EnrolmentMode,
+            MinTeamSize = minSize,
+            MaxTeamSize = maxSize,
             AllowCrossBranchTeams = request.AllowCrossBranchTeams,
             AllowInterdisciplinaryTeams = request.AllowInterdisciplinaryTeams,
-            Name = request.Name.Trim(),
-            AcademicYear = request.AcademicYear.Trim(),
+            Name = normalizedName,
+            Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
+            AcademicYear = normalizedYear,
+            Status = status,
+            IsActive = status == AcademicTrackStatus.Open,
+            RegistrationOpensUtc = request.RegistrationOpensUtc,
             ProposalDeadlineUtc = request.ProposalDeadlineUtc,
             FinalSubmissionDeadlineUtc = request.FinalSubmissionDeadlineUtc,
+            CoordinatorUserId = coordinatorUserId,
             GuideWeightPct = request.GuideWeightPct,
             MidTermWeightPct = request.MidTermWeightPct,
             FinalVivaWeightPct = request.FinalVivaWeightPct,
@@ -497,28 +593,229 @@ public class HodController : ControllerBase
             IndividualStudentRubricPct = request.IndividualStudentRubricPct
         };
 
-        track.ValidateWeights();
+        try
+        {
+            track.ValidateWeights();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
         await _context.AcademicTracks.AddAsync(track);
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = "HOD_CREATE_TRACK",
+            TargetTenantId = collegeId,
+            TargetEntity = "AcademicTrack",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new { trackId = track.Id, departmentId = deptId, name = track.Name, status = track.Status.ToString() }),
+            OccurredAtUtc = DateTime.UtcNow
+        });
         await _context.SaveChangesAsync();
 
-        return Ok(new CollegeTrackDto
+        var createdTrack = await _context.AcademicTracks
+            .Include(t => t.Department)
+            .Include(t => t.SemesterTerm)
+            .Include(t => t.SubjectOffering)
+            .Include(t => t.CoordinatorUser)
+            .FirstAsync(t => t.Id == track.Id);
+
+        return Ok(MapTrackDto(createdTrack, 0, 0));
+    }
+
+    [HttpPut("tracks/{trackId:guid}")]
+    public async Task<ActionResult<CollegeTrackDto>> UpdateDepartmentTrack(Guid trackId, [FromBody] UpdateDepartmentTrackRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+
+        var track = await _context.AcademicTracks
+            .Include(t => t.Department)
+            .Include(t => t.SemesterTerm)
+            .Include(t => t.SubjectOffering)
+            .FirstOrDefaultAsync(t => t.Id == trackId && t.CollegeId == collegeId && t.DepartmentId == deptId && !t.IsDeleted);
+
+        if (track == null) return NotFound(new { message = "Department project track not found." });
+
+        if (!string.IsNullOrWhiteSpace(request.Name))
         {
-            Id = track.Id,
-            CollegeId = track.CollegeId,
-            DepartmentId = track.DepartmentId,
-            DepartmentCode = dept?.Code,
-            AcademicSessionId = track.AcademicSessionId,
-            CourseProgramId = track.CourseProgramId,
-            SemesterTermId = track.SemesterTermId,
-            SubjectOfferingId = track.SubjectOfferingId,
-            ParticipationMode = track.ParticipationMode,
-            EnrolmentMode = track.EnrolmentMode,
-            AllowCrossBranchTeams = track.AllowCrossBranchTeams,
-            Name = track.Name,
-            AcademicYear = track.AcademicYear,
-            AllowInterdisciplinaryTeams = track.AllowInterdisciplinaryTeams,
-            IsActive = track.IsActive
+            var normalizedName = request.Name.Trim();
+            var duplicate = await _context.AcademicTracks
+                .AnyAsync(t => t.Id != trackId && t.CollegeId == collegeId && t.DepartmentId == deptId &&
+                               t.AcademicYear == track.AcademicYear && t.Name.ToLower() == normalizedName.ToLower() && !t.IsDeleted);
+            if (duplicate)
+            {
+                return Conflict(new { message = $"A track named '{normalizedName}' already exists for academic year {track.AcademicYear}." });
+            }
+            track.Name = normalizedName;
+        }
+
+        if (request.Description != null)
+        {
+            track.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        }
+
+        track.ParticipationMode = request.ParticipationMode;
+        track.EnrolmentMode = request.EnrolmentMode;
+
+        if (track.ParticipationMode == ParticipationMode.Individual)
+        {
+            track.MinTeamSize = 1;
+            track.MaxTeamSize = 1;
+        }
+        else
+        {
+            track.MinTeamSize = request.MinTeamSize;
+            track.MaxTeamSize = request.MaxTeamSize;
+            if (track.MinTeamSize < 1 || track.MaxTeamSize < track.MinTeamSize || track.MaxTeamSize > 10)
+            {
+                return BadRequest(new { message = "Team size bounds must satisfy 1 <= MinTeamSize <= MaxTeamSize <= 10." });
+            }
+        }
+
+        track.AllowCrossBranchTeams = request.AllowCrossBranchTeams;
+        track.AllowInterdisciplinaryTeams = request.AllowInterdisciplinaryTeams;
+        if (request.ProposalDeadlineUtc.HasValue) track.ProposalDeadlineUtc = request.ProposalDeadlineUtc;
+        if (request.FinalSubmissionDeadlineUtc.HasValue) track.FinalSubmissionDeadlineUtc = request.FinalSubmissionDeadlineUtc;
+
+        if (track.ProposalDeadlineUtc.HasValue && track.FinalSubmissionDeadlineUtc.HasValue &&
+            track.ProposalDeadlineUtc.Value >= track.FinalSubmissionDeadlineUtc.Value)
+        {
+            return BadRequest(new { message = "Proposal deadline must be earlier than the final submission deadline." });
+        }
+
+        track.GuideWeightPct = request.GuideWeightPct;
+        track.MidTermWeightPct = request.MidTermWeightPct;
+        track.FinalVivaWeightPct = request.FinalVivaWeightPct;
+        track.SharedProjectRubricPct = request.SharedProjectRubricPct;
+        track.IndividualStudentRubricPct = request.IndividualStudentRubricPct;
+
+        try
+        {
+            track.ValidateWeights();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = "HOD_UPDATE_TRACK",
+            TargetTenantId = collegeId,
+            TargetEntity = "AcademicTrack",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new { trackId = track.Id, departmentId = deptId, name = track.Name }),
+            OccurredAtUtc = DateTime.UtcNow
         });
+        await _context.SaveChangesAsync();
+
+        var totalTeams = await _context.ProjectTeams.CountAsync(pt => pt.AcademicTrackId == track.Id && !pt.IsDeleted);
+        return Ok(MapTrackDto(track, totalTeams, totalTeams));
+    }
+
+    [HttpPost("tracks/{trackId:guid}/launch")]
+    public Task<ActionResult<CollegeTrackDto>> LaunchDepartmentTrack(Guid trackId)
+        => TransitionTrackStatusAsync(trackId, AcademicTrackStatus.Open, "HOD_LAUNCH_TRACK",
+            allowedFrom: new[] { AcademicTrackStatus.Draft, AcademicTrackStatus.Paused });
+
+    [HttpPost("tracks/{trackId:guid}/pause")]
+    public Task<ActionResult<CollegeTrackDto>> PauseDepartmentTrack(Guid trackId)
+        => TransitionTrackStatusAsync(trackId, AcademicTrackStatus.Paused, "HOD_PAUSE_TRACK",
+            allowedFrom: new[] { AcademicTrackStatus.Open });
+
+    [HttpPost("tracks/{trackId:guid}/resume")]
+    public Task<ActionResult<CollegeTrackDto>> ResumeDepartmentTrack(Guid trackId)
+        => TransitionTrackStatusAsync(trackId, AcademicTrackStatus.Open, "HOD_RESUME_TRACK",
+            allowedFrom: new[] { AcademicTrackStatus.Paused });
+
+    [HttpPost("tracks/{trackId:guid}/close")]
+    public Task<ActionResult<CollegeTrackDto>> CloseDepartmentTrack(Guid trackId)
+        => TransitionTrackStatusAsync(trackId, AcademicTrackStatus.Closed, "HOD_CLOSE_TRACK",
+            allowedFrom: new[] { AcademicTrackStatus.Draft, AcademicTrackStatus.Open, AcademicTrackStatus.Paused });
+
+    private async Task<ActionResult<CollegeTrackDto>> TransitionTrackStatusAsync(
+        Guid trackId,
+        AcademicTrackStatus targetStatus,
+        string auditAction,
+        AcademicTrackStatus[] allowedFrom)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+
+        var track = await _context.AcademicTracks
+            .Include(t => t.Department)
+            .Include(t => t.SemesterTerm)
+            .Include(t => t.SubjectOffering)
+            .FirstOrDefaultAsync(t => t.Id == trackId && t.CollegeId == collegeId && t.DepartmentId == deptId && !t.IsDeleted);
+
+        if (track == null) return NotFound(new { message = "Department project track not found." });
+
+        if (!allowedFrom.Contains(track.Status))
+        {
+            return BadRequest(new { message = $"Cannot transition track from {track.Status} to {targetStatus}." });
+        }
+
+        track.Status = targetStatus;
+        track.IsActive = targetStatus == AcademicTrackStatus.Open;
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = auditAction,
+            TargetTenantId = collegeId,
+            TargetEntity = "AcademicTrack",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new { trackId = track.Id, departmentId = deptId, status = targetStatus.ToString() }),
+            OccurredAtUtc = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync();
+
+        var totalTeams = await _context.ProjectTeams.CountAsync(pt => pt.AcademicTrackId == track.Id && !pt.IsDeleted);
+        return Ok(MapTrackDto(track, totalTeams, totalTeams));
+    }
+
+    private static CollegeTrackDto MapTrackDto(AcademicTrack t, int teamCount, int activeTeamCount)
+    {
+        return new CollegeTrackDto
+        {
+            Id = t.Id,
+            CollegeId = t.CollegeId,
+            DepartmentId = t.DepartmentId,
+            DepartmentCode = t.Department?.Code,
+            AcademicSessionId = t.AcademicSessionId,
+            CourseProgramId = t.CourseProgramId,
+            SemesterTermId = t.SemesterTermId,
+            SemesterNumber = t.SemesterTerm?.SemesterNumber,
+            SemesterName = t.SemesterTerm?.SemesterName,
+            SubjectOfferingId = t.SubjectOfferingId,
+            SubjectCode = t.SubjectOffering?.SubjectCode,
+            SubjectName = t.SubjectOffering?.SubjectName,
+            CurriculumSchemeId = t.CurriculumSchemeId,
+            ParticipationMode = t.ParticipationMode,
+            EnrolmentMode = t.EnrolmentMode,
+            MinTeamSize = t.ParticipationMode == ParticipationMode.Individual ? 1 : t.MinTeamSize,
+            MaxTeamSize = t.ParticipationMode == ParticipationMode.Individual ? 1 : t.MaxTeamSize,
+            AllowCrossBranchTeams = t.AllowCrossBranchTeams,
+            Name = t.Name,
+            Description = t.Description,
+            AcademicYear = t.AcademicYear,
+            AllowInterdisciplinaryTeams = t.AllowInterdisciplinaryTeams,
+            IsActive = t.IsActive,
+            Status = t.Status,
+            TeamCount = teamCount,
+            ActiveTeamCount = activeTeamCount,
+            RegistrationOpensUtc = t.RegistrationOpensUtc,
+            ProposalDeadlineUtc = t.ProposalDeadlineUtc,
+            FinalSubmissionDeadlineUtc = t.FinalSubmissionDeadlineUtc,
+            CoordinatorUserId = t.CoordinatorUserId,
+            CoordinatorName = t.CoordinatorUser?.FullName,
+            GuideWeightPct = t.GuideWeightPct,
+            MidTermWeightPct = t.MidTermWeightPct,
+            FinalVivaWeightPct = t.FinalVivaWeightPct,
+            SharedProjectRubricPct = t.SharedProjectRubricPct,
+            IndividualStudentRubricPct = t.IndividualStudentRubricPct
+        };
     }
 
     [HttpGet("projects")]
@@ -923,10 +1220,33 @@ public class HodController : ControllerBase
     {
         var collegeId = _tenantContext.CollegeId!.Value;
         var deptId = await ResolveDepartmentIdAsync();
-        var faculty = await _context.Users.FirstOrDefaultAsync(u => u.Id == facultyId && u.CollegeId == collegeId && u.DepartmentId == deptId && !u.IsDeleted);
+        var faculty = await _context.Users.FirstOrDefaultAsync(u =>
+            u.Id == facultyId &&
+            u.CollegeId == collegeId &&
+            u.DepartmentId == deptId &&
+            !u.IsDeleted);
         if (faculty == null) return NotFound(new { message = "Faculty not found in department." });
 
+        if (faculty.Role != UserRole.Faculty && faculty.Role != UserRole.HOD)
+        {
+            return BadRequest(new { message = "Only eligible faculty members in this department can be appointed as Project Coordinator." });
+        }
+
+        if (!faculty.IsActive)
+        {
+            return BadRequest(new { message = "Inactive faculty accounts cannot be appointed as Project Coordinator." });
+        }
+
         faculty.IsProjectCoordinator = request.IsProjectCoordinator;
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = "TOGGLE_PROJECT_COORDINATOR",
+            TargetTenantId = collegeId,
+            TargetEntity = "UserAccount",
+            MetadataJson = $"{{\"FacultyId\":\"{faculty.Id}\",\"DepartmentId\":\"{deptId}\",\"IsProjectCoordinator\":{(request.IsProjectCoordinator ? "true" : "false")}}}",
+            OccurredAtUtc = DateTime.UtcNow
+        });
         await _context.SaveChangesAsync();
 
         return NoContent();
@@ -1437,5 +1757,325 @@ public class HodController : ControllerBase
             TrackStats = trackStats,
             DomainDistribution = domainStats
         });
+    }
+
+    [HttpGet("students")]
+    public async Task<ActionResult<List<HodDepartmentStudentDto>>> GetDepartmentStudents(
+        [FromQuery] string? search,
+        [FromQuery] int? semesterNumber,
+        [FromQuery] string? status)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+
+        var studentsQuery = _context.Users
+            .AsNoTracking()
+            .Where(u => u.CollegeId == collegeId &&
+                        u.DepartmentId == deptId &&
+                        u.Role == UserRole.Student &&
+                        !u.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            studentsQuery = studentsQuery.Where(u =>
+                u.FullName.ToLower().Contains(term) ||
+                u.Email.ToLower().Contains(term) ||
+                (u.EnrollmentOrEmployeeCode != null && u.EnrollmentOrEmployeeCode.ToLower().Contains(term)));
+        }
+
+        var students = await studentsQuery
+            .OrderBy(u => u.FullName)
+            .ToListAsync();
+
+        var studentIds = students.Select(s => s.Id).ToList();
+
+        var enrollments = await _context.StudentAcademicEnrollments
+            .AsNoTracking()
+            .Include(e => e.CourseProgram)
+            .Include(e => e.CurrentSemesterTerm)
+            .Where(e => e.CollegeId == collegeId && studentIds.Contains(e.StudentUserId) && !e.IsDeleted)
+            .ToListAsync();
+
+        var memberships = await _context.TeamMembers
+            .AsNoTracking()
+            .Include(m => m.ProjectTeam)
+            .Where(m => m.CollegeId == collegeId && studentIds.Contains(m.UserId) && !m.IsDeleted && m.ProjectTeam != null && !m.ProjectTeam.IsDeleted)
+            .ToListAsync();
+
+        var enrollmentByStudent = enrollments
+            .GroupBy(e => e.StudentUserId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(e => e.AcademicStatus == AcademicStatus.Active ? 0 : 1)
+                      .ThenByDescending(e => e.UpdatedAtUtc)
+                      .First());
+
+        var teamByStudent = memberships
+            .GroupBy(m => m.UserId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.CreatedAtUtc).First().ProjectTeam!);
+
+        var result = students.Select(s =>
+        {
+            enrollmentByStudent.TryGetValue(s.Id, out var enr);
+            teamByStudent.TryGetValue(s.Id, out var team);
+            return new HodDepartmentStudentDto
+            {
+                Id = s.Id,
+                FullName = s.FullName,
+                Email = s.Email,
+                StudentNumber = s.EnrollmentOrEmployeeCode ?? string.Empty,
+                IsActive = s.IsActive,
+                IsActivated = s.IsActivated,
+                ProgramName = enr?.CourseProgram?.Name,
+                CurrentSemesterNumber = enr?.CurrentSemesterTerm?.SemesterNumber,
+                CurrentSemesterName = enr?.CurrentSemesterTerm?.SemesterName,
+                AcademicStatus = enr?.AcademicStatus.ToString() ?? "Not Enrolled",
+                AdmissionBatch = enr?.AdmissionBatch,
+                ActiveTeamCode = team?.TeamCode,
+                ActiveTeamTitle = team?.Title
+            };
+        });
+
+        if (semesterNumber.HasValue)
+        {
+            result = result.Where(r => r.CurrentSemesterNumber == semesterNumber.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, "ALL", StringComparison.OrdinalIgnoreCase))
+        {
+            result = result.Where(r => string.Equals(r.AcademicStatus, status, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return Ok(result.ToList());
+    }
+
+    [HttpPut("students/{studentId:guid}/enrollment")]
+    public async Task<ActionResult<HodDepartmentStudentDto>> UpdateStudentEnrollment(
+        Guid studentId,
+        [FromBody] UpdateStudentSemesterRequest request)
+    {
+        if (request.SemesterNumber < 1 || request.SemesterNumber > 12)
+        {
+            return BadRequest(new { message = "SemesterNumber must be between 1 and 12." });
+        }
+
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+
+        var student = await _context.Users
+            .FirstOrDefaultAsync(u => u.Id == studentId &&
+                                      u.CollegeId == collegeId &&
+                                      u.DepartmentId == deptId &&
+                                      u.Role == UserRole.Student &&
+                                      !u.IsDeleted);
+
+        if (student == null)
+        {
+            return NotFound(new { message = "Student not found in your department." });
+        }
+
+        var term = await ResolveOrCreateSemesterTermAsync(collegeId, deptId, request.SemesterNumber);
+        var programId = await ResolveDepartmentCourseProgramIdAsync(collegeId, deptId);
+        if (programId == Guid.Empty)
+        {
+            return BadRequest(new { message = "No Course Program is configured for this college/department." });
+        }
+
+        var enrollment = await _context.StudentAcademicEnrollments
+            .FirstOrDefaultAsync(e => e.CollegeId == collegeId && e.StudentUserId == studentId && !e.IsDeleted);
+
+        if (enrollment == null)
+        {
+            var currentYear = DateTime.UtcNow.Year;
+            enrollment = new StudentAcademicEnrollment
+            {
+                CollegeId = collegeId,
+                StudentUserId = studentId,
+                CourseProgramId = programId,
+                DepartmentId = deptId,
+                CurrentSemesterTermId = term.Id,
+                AdmissionBatch = string.IsNullOrWhiteSpace(request.AdmissionBatch) ? $"{currentYear}-{currentYear + 4}" : request.AdmissionBatch.Trim(),
+                AcademicStatus = request.AcademicStatus
+            };
+            await _context.StudentAcademicEnrollments.AddAsync(enrollment);
+        }
+        else
+        {
+            enrollment.DepartmentId = deptId;
+            enrollment.CourseProgramId = programId;
+            enrollment.CurrentSemesterTermId = term.Id;
+            enrollment.AcademicStatus = request.AcademicStatus;
+            if (!string.IsNullOrWhiteSpace(request.AdmissionBatch))
+            {
+                enrollment.AdmissionBatch = request.AdmissionBatch.Trim();
+            }
+        }
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            ActorEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "hod",
+            Action = "HOD_UPDATE_STUDENT_ENROLLMENT",
+            TargetEntity = $"Student:{student.EnrollmentOrEmployeeCode ?? student.Email}",
+            TargetTenantId = collegeId,
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                studentId = student.Id,
+                departmentId = deptId,
+                semesterNumber = request.SemesterNumber,
+                academicStatus = request.AcademicStatus.ToString()
+            }),
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+
+        var program = await _context.CoursePrograms.AsNoTracking().FirstOrDefaultAsync(p => p.Id == programId);
+        return Ok(new HodDepartmentStudentDto
+        {
+            Id = student.Id,
+            FullName = student.FullName,
+            Email = student.Email,
+            StudentNumber = student.EnrollmentOrEmployeeCode ?? string.Empty,
+            IsActive = student.IsActive,
+            IsActivated = student.IsActivated,
+            ProgramName = program?.Name,
+            CurrentSemesterNumber = term.SemesterNumber,
+            CurrentSemesterName = term.SemesterName,
+            AcademicStatus = enrollment.AcademicStatus.ToString(),
+            AdmissionBatch = enrollment.AdmissionBatch
+        });
+    }
+
+    [HttpPost("students/bulk-enroll")]
+    public async Task<IActionResult> BulkEnrollStudents([FromBody] BulkEnrollStudentsRequest request)
+    {
+        if (request.StudentIds == null || request.StudentIds.Count == 0)
+        {
+            return BadRequest(new { message = "Select at least one student to enroll." });
+        }
+        if (request.SemesterNumber < 1 || request.SemesterNumber > 12)
+        {
+            return BadRequest(new { message = "SemesterNumber must be between 1 and 12." });
+        }
+
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+
+        var students = await _context.Users
+            .Where(u => u.CollegeId == collegeId &&
+                        u.DepartmentId == deptId &&
+                        u.Role == UserRole.Student &&
+                        request.StudentIds.Contains(u.Id) &&
+                        !u.IsDeleted)
+            .ToListAsync();
+
+        if (students.Count == 0)
+        {
+            return NotFound(new { message = "No matching students found in your department." });
+        }
+
+        var term = await ResolveOrCreateSemesterTermAsync(collegeId, deptId, request.SemesterNumber);
+        var programId = await ResolveDepartmentCourseProgramIdAsync(collegeId, deptId);
+        if (programId == Guid.Empty)
+        {
+            return BadRequest(new { message = "No Course Program is configured for this college/department." });
+        }
+
+        var foundIds = students.Select(s => s.Id).ToList();
+        var existingEnrollments = await _context.StudentAcademicEnrollments
+            .Where(e => e.CollegeId == collegeId && foundIds.Contains(e.StudentUserId) && !e.IsDeleted)
+            .ToDictionaryAsync(e => e.StudentUserId);
+
+        var currentYear = DateTime.UtcNow.Year;
+        foreach (var student in students)
+        {
+            if (existingEnrollments.TryGetValue(student.Id, out var existing))
+            {
+                existing.DepartmentId = deptId;
+                existing.CourseProgramId = programId;
+                existing.CurrentSemesterTermId = term.Id;
+                existing.AcademicStatus = request.AcademicStatus;
+            }
+            else
+            {
+                await _context.StudentAcademicEnrollments.AddAsync(new StudentAcademicEnrollment
+                {
+                    CollegeId = collegeId,
+                    StudentUserId = student.Id,
+                    CourseProgramId = programId,
+                    DepartmentId = deptId,
+                    CurrentSemesterTermId = term.Id,
+                    AdmissionBatch = $"{currentYear}-{currentYear + 4}",
+                    AcademicStatus = request.AcademicStatus
+                });
+            }
+        }
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            ActorEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "hod",
+            Action = "HOD_BULK_ENROLL_STUDENTS",
+            TargetEntity = $"Department:{deptId}",
+            TargetTenantId = collegeId,
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                count = students.Count,
+                semesterNumber = request.SemesterNumber,
+                academicStatus = request.AcademicStatus.ToString()
+            }),
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+        return Ok(new { updatedCount = students.Count, semesterNumber = term.SemesterNumber, semesterName = term.SemesterName });
+    }
+
+    private async Task<SemesterTerm> ResolveOrCreateSemesterTermAsync(Guid collegeId, Guid deptId, int semesterNumber)
+    {
+        var activeSession = await _context.AcademicSessions
+            .Where(s => s.CollegeId == collegeId && !s.IsDeleted && s.IsActive)
+            .OrderByDescending(s => s.StartDate)
+            .FirstOrDefaultAsync();
+
+        var term = await _context.SemesterTerms.FirstOrDefaultAsync(t =>
+            t.CollegeId == collegeId &&
+            t.DepartmentId == deptId &&
+            (activeSession == null || t.AcademicSessionId == activeSession.Id) &&
+            t.SemesterNumber == semesterNumber &&
+            !t.IsDeleted);
+
+        if (term != null) return term;
+
+        term = new SemesterTerm
+        {
+            CollegeId = collegeId,
+            DepartmentId = deptId,
+            AcademicSessionId = activeSession?.Id,
+            SemesterNumber = semesterNumber,
+            SemesterName = $"Semester {semesterNumber}",
+            Parity = (semesterNumber % 2 == 1) ? SemesterParity.Odd : SemesterParity.Even,
+            IsActive = true
+        };
+        await _context.SemesterTerms.AddAsync(term);
+        await _context.SaveChangesAsync();
+        return term;
+    }
+
+    private async Task<Guid> ResolveDepartmentCourseProgramIdAsync(Guid collegeId, Guid deptId)
+    {
+        var dept = await _context.Departments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == deptId && d.CollegeId == collegeId && !d.IsDeleted);
+        if (dept?.CourseProgramId.HasValue == true)
+        {
+            return dept.CourseProgramId.Value;
+        }
+        return await _context.CoursePrograms.AsNoTracking()
+            .Where(p => p.CollegeId == collegeId && p.IsActive && !p.IsDeleted)
+            .OrderBy(p => p.Code == "BTECH" ? 0 : 1)
+            .Select(p => p.Id)
+            .FirstOrDefaultAsync();
     }
 }

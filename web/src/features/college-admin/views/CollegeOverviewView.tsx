@@ -22,6 +22,11 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
+import { PageErrorState, PageLoadingState } from "@/design-system/patterns/PageStates";
+import { Badge } from "@/design-system/components/Badge";
+import { Button } from "@/design-system/components/Button";
 import { collegeApi } from "@/lib/api/collegeApi";
 import { CollegeAnnouncementDto, CollegeOverviewDto } from "@/lib/api/types";
 import { ApiConnectionBanner } from "../components/ApiConnectionBanner";
@@ -52,8 +57,10 @@ export const CollegeOverviewView: React.FC = () => {
     try {
       const items = await collegeApi.getAnnouncements();
       setAnnouncements(Array.isArray(items) ? items : []);
-    } catch (err: any) {
-      setAnnouncementsError(err?.message || "Failed to load platform announcements.");
+    } catch (err: unknown) {
+      setAnnouncementsError(
+        err instanceof Error ? err.message : "Failed to load platform announcements."
+      );
     } finally {
       setAnnouncementsLoading(false);
     }
@@ -65,10 +72,11 @@ export const CollegeOverviewView: React.FC = () => {
     try {
       const ovRes = await collegeApi.getOverview();
       setOverview(ovRes);
-    } catch (err: any) {
-      console.error("Failed to load college overview data:", err);
+    } catch (err: unknown) {
       setApiError(
-        err?.message || "Failed to load live institutional metrics from Colabex backend."
+        err instanceof Error
+          ? err.message
+          : "Failed to load live institutional metrics from Colabex backend."
       );
     } finally {
       setLoading(false);
@@ -76,9 +84,45 @@ export const CollegeOverviewView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    loadData();
-    loadAnnouncements();
-  }, [loadData, loadAnnouncements]);
+    let active = true;
+    collegeApi
+      .getOverview()
+      .then((ovRes) => {
+        if (active) setOverview(ovRes);
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setApiError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load live institutional metrics from Colabex backend."
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    collegeApi
+      .getAnnouncements()
+      .then((items) => {
+        if (active) setAnnouncements(Array.isArray(items) ? items : []);
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setAnnouncementsError(
+            err instanceof Error ? err.message : "Failed to load platform announcements."
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setAnnouncementsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const departments = overview?.departmentSummaries ?? [];
   const actionItems = overview?.operationalActionItems ?? [];
@@ -92,28 +136,41 @@ export const CollegeOverviewView: React.FC = () => {
   const vacantDepartmentsCount = overview?.vacantDepartmentsCount ?? 0;
 
   return (
-    <div className="space-y-6 pb-8 font-sans bg-[#f8fafc]">
+    <div className="space-y-6 pb-8 font-sans">
+      <PageHeader
+        title={overview?.collegeName || "Institutional Overview"}
+        badge={
+          overview?.activeSession ? (
+            <Badge variant="success" size="sm" dot>
+              AY {overview.activeSession.label}
+            </Badge>
+          ) : overview ? (
+            <Badge variant="warning" size="sm">
+              Session Not Configured
+            </Badge>
+          ) : undefined
+        }
+        description={
+          overview?.currentSemesterLabel
+            ? `Active Term: ${overview.currentSemesterLabel}`
+            : "Campus executive metrics, department leadership, and institutional configuration."
+        }
+        actions={
+          <Link href="/college/settings">
+            <Button size="sm" variant="secondary">
+              College Settings
+            </Button>
+          </Link>
+        }
+      />
+
       {apiError && (
         <ApiConnectionBanner onRetry={loadData} message={apiError} isRetrying={loading} />
       )}
 
-      {/* Loading Skeleton */}
+      {/* Loading State */}
       {loading && !overview && (
-        <div className="space-y-6" aria-label="Loading institutional overview">
-          <div className="h-16 rounded-xl border border-slate-200 bg-white animate-pulse" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[0, 1, 2, 3].map((idx) => (
-              <div
-                key={idx}
-                className="h-32 rounded-xl border border-slate-200 bg-white animate-pulse"
-              />
-            ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            <div className="lg:col-span-7 h-72 rounded-xl border border-slate-200 bg-white animate-pulse" />
-            <div className="lg:col-span-5 h-72 rounded-xl border border-slate-200 bg-white animate-pulse" />
-          </div>
-        </div>
+        <PageLoadingState message="Loading institutional overview..." />
       )}
 
       {overview && (
@@ -206,10 +263,10 @@ export const CollegeOverviewView: React.FC = () => {
                 </p>
               </div>
               <Link
-                href="/college/courses"
+                href="/college/students"
                 className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 inline-flex items-center gap-1"
               >
-                View Academic Structure <ArrowRight className="h-3 w-3" />
+                Manage Students <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
 
@@ -392,15 +449,10 @@ export const CollegeOverviewView: React.FC = () => {
                   </table>
                 </div>
               ) : (
-                <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200 space-y-2">
-                  <p>No departments configured for this institution yet.</p>
-                  <Link
-                    href="/college/courses"
-                    className="inline-flex items-center gap-1 font-semibold text-emerald-800 hover:text-emerald-900"
-                  >
-                    Configure Programs & Departments <ArrowRight className="h-3 w-3" />
-                  </Link>
-                </div>
+                <EmptyState
+                  title="No departments configured"
+                  description="No departments are configured for this institution yet."
+                />
               )}
 
               <div className="flex items-center justify-end pt-2 border-t border-slate-100 text-xs">
@@ -622,9 +674,10 @@ export const CollegeOverviewView: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center text-xs text-slate-500">
-                  No recent institutional audit events recorded.
-                </div>
+                <EmptyState
+                  title="No recent audit events"
+                  description="No recent institutional audit events recorded."
+                />
               )}
             </div>
         </>
@@ -666,16 +719,7 @@ export const CollegeOverviewView: React.FC = () => {
         </div>
 
         {announcementsError ? (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 flex items-center justify-between gap-3 text-xs">
-            <span className="text-rose-800 font-medium">{announcementsError}</span>
-            <button
-              type="button"
-              onClick={loadAnnouncements}
-              className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold cursor-pointer shrink-0"
-            >
-              Retry
-            </button>
-          </div>
+          <PageErrorState error={announcementsError} onRetry={loadAnnouncements} />
         ) : announcementsLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3" aria-label="Loading platform announcements">
             {[0, 1, 2].map((idx) => (
@@ -683,12 +727,10 @@ export const CollegeOverviewView: React.FC = () => {
             ))}
           </div>
         ) : announcements.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center space-y-1">
-            <p className="text-xs font-semibold text-slate-700">No platform announcements</p>
-            <p className="text-[11px] text-slate-500">
-              Published notices targeted to your college will appear here automatically.
-            </p>
-          </div>
+          <EmptyState
+            title="No platform announcements"
+            description="Published notices targeted to your college will appear here automatically."
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {announcements.slice(0, 3).map((item) => (

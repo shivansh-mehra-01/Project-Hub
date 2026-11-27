@@ -52,13 +52,13 @@ blob-report/
 coverage/
 
 # ------------------------------------------------------------------------------
-# Environment & Secrets (Local development defaults tracked for 1-click startup)
+# Environment & Secrets (Never commit local .env files; use *.example templates)
 # ------------------------------------------------------------------------------
+.env
 .env.*.local
+web/.env
+web/.env.local
 web/.env.*.local
-!.env
-!web/.env
-!web/.env.local
 !web/.env.example
 !.env.example
 

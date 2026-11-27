@@ -1,8 +1,10 @@
 "use client";
 
 import React from "react";
-import { X, Megaphone, Calendar, User } from "lucide-react";
+import { Megaphone, Calendar, User } from "lucide-react";
 import { CollegeAnnouncementDto } from "@/lib/api/types";
+import { Modal } from "@/design-system/components/Modal";
+import { Button } from "@/design-system/components/Button";
 
 export function getAnnouncementPriorityBadge(priority: string): string {
   switch (priority) {
@@ -51,18 +53,14 @@ export const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = (
   announcement,
   onClose,
 }) => {
-  if (!announcement) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="college-announcement-modal-title"
-    >
-      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-5 space-y-4 border border-slate-200">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-2 min-w-0">
+    <Modal
+      isOpen={Boolean(announcement)}
+      onClose={onClose}
+      maxWidth="lg"
+      title={
+        announcement ? (
+          <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span
                 className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${getAnnouncementCategoryBadge(
@@ -79,52 +77,40 @@ export const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = (
                 {announcement.priority} Priority
               </span>
             </div>
-            <h3
-              id="college-announcement-modal-title"
-              className="text-base font-bold text-slate-900 leading-snug"
-            >
+            <span className="block text-base font-bold text-slate-900 leading-snug">
               {announcement.title}
-            </h3>
-            <div className="flex items-center gap-3 flex-wrap text-[11px] text-slate-500">
-              <span className="inline-flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                {formatAnnouncementDate(announcement.publishDateUtc)}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <User className="w-3.5 h-3.5 text-slate-400" />
-                {announcement.createdByName || "Super Admin"}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Megaphone className="w-3.5 h-3.5 text-slate-400" />
-                {announcement.targetAudience}
-              </span>
-            </div>
+            </span>
+          </div>
+        ) : undefined
+      }
+      footer={
+        <Button size="sm" variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      {announcement && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 flex-wrap text-[11px] text-slate-500">
+            <span className="inline-flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+              {formatAnnouncementDate(announcement.publishDateUtc)}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <User className="w-3.5 h-3.5 text-slate-400" />
+              {announcement.createdByName || "Super Admin"}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Megaphone className="w-3.5 h-3.5 text-slate-400" />
+              {announcement.targetAudience}
+            </span>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close announcement"
-            className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 leading-relaxed whitespace-pre-wrap max-h-[50vh] overflow-y-auto">
+            {announcement.fullMessage}
+          </div>
         </div>
-
-        <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 leading-relaxed whitespace-pre-wrap max-h-[50vh] overflow-y-auto">
-          {announcement.fullMessage}
-        </div>
-
-        <div className="flex items-center justify-end pt-2 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3.5 py-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-md cursor-pointer"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 };

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -26,6 +27,8 @@ public class AuthController : ControllerBase
     private readonly IEmailOutboxService _emailOutbox;
     private readonly IWebHostEnvironment _environment;
     private readonly ITenantContext _tenantContext;
+    private readonly IConfiguration _configuration;
+    private readonly IDataProtector _mfaProtector;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
@@ -35,6 +38,8 @@ public class AuthController : ControllerBase
         IEmailOutboxService emailOutbox,
         IWebHostEnvironment environment,
         ITenantContext tenantContext,
+        IConfiguration configuration,
+        IDataProtectionProvider dataProtectionProvider,
         ILogger<AuthController> logger)
     {
         _context = context;
@@ -43,7 +48,32 @@ public class AuthController : ControllerBase
         _emailOutbox = emailOutbox;
         _environment = environment;
         _tenantContext = tenantContext;
+        _configuration = configuration;
+        _mfaProtector = dataProtectionProvider.CreateProtector("Colabex.MfaSecret");
         _logger = logger;
+    }
+
+    private const string MfaSecretPrefix = "dp:";
+
+    private string ProtectMfaSecret(string rawSecret) =>
+        $"{MfaSecretPrefix}{_mfaProtector.Protect(rawSecret)}";
+
+    private string? UnprotectMfaSecret(string? storedSecret, out bool isLegacyPlaintext)
+    {
+        if (string.IsNullOrWhiteSpace(storedSecret))
+        {
+            isLegacyPlaintext = false;
+            return null;
+        }
+
+        if (storedSecret.StartsWith(MfaSecretPrefix, StringComparison.Ordinal))
+        {
+            isLegacyPlaintext = false;
+            return _mfaProtector.Unprotect(storedSecret[MfaSecretPrefix.Length..]);
+        }
+
+        isLegacyPlaintext = true;
+        return storedSecret;
     }
 
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
@@ -137,25 +167,26 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Email and password are required." });
         }
 
+        if (request.Password.Length > PasswordPolicyValidator.MaximumLength)
+        {
+            return Unauthorized(new { message = "Invalid email or password." });
+        }
+
         var rawEmail = request.Email.Trim().ToLowerInvariant();
         var normalizedEmail = NormalizeEmail(request.Email);
-        var reverseAlias = rawEmail == "collegeadmin@sistec.ac.in" ? "principal@sistec.ac.in" : normalizedEmail;
         _tenantContext.IsAuthLookup = true;
 
         var user = await _context.Users
             .IgnoreQueryFilters()
             .Include(u => u.College)
             .Include(u => u.Department)
-            .FirstOrDefaultAsync(u => (u.Email == rawEmail || u.Email == normalizedEmail || u.Email == reverseAlias) && !u.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(u => (u.Email == rawEmail || u.Email == normalizedEmail) && !u.IsDeleted, cancellationToken);
 
-        if (user == null || !user.IsActive)
+        if (user == null || !user.IsActive ||
+            (user.Role != UserRole.SuperAdmin && user.College != null && !user.College.IsActive) ||
+            !user.IsActivated || string.IsNullOrWhiteSpace(user.PasswordHash))
         {
-            return Unauthorized(new { message = "Invalid email credentials or account is inactive." });
-        }
-
-        if (user.Role != UserRole.SuperAdmin && user.College != null && !user.College.IsActive)
-        {
-            return Unauthorized(new { message = "Institutional workspace subscription is inactive or suspended." });
+            return Unauthorized(new { message = "Invalid email or password." });
         }
 
         if (user.LockoutEndUtc.HasValue && user.LockoutEndUtc.Value > DateTime.UtcNow)
@@ -164,11 +195,6 @@ public class AuthController : ControllerBase
             {
                 message = "Account is temporarily locked due to repeated failed sign-in attempts. Please try again later."
             });
-        }
-
-        if (!user.IsActivated || string.IsNullOrWhiteSpace(user.PasswordHash))
-        {
-            return BadRequest(new { message = "Account password not set yet. Click 'Forgot password?' to set your password." });
         }
 
         if (!PasswordHelper.VerifyPassword(request.Password, user.PasswordHash))
@@ -208,6 +234,19 @@ public class AuthController : ControllerBase
         user.LastLoginAtUtc = DateTime.UtcNow;
         user.PasswordResetOtpHashed = null;
         user.PasswordResetOtpExpiresAtUtc = null;
+
+        if (PasswordHelper.NeedsRehash(user.PasswordHash))
+        {
+            try
+            {
+                user.PasswordHash = PasswordHelper.HashPassword(request.Password);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Non-blocking password rehash failed for user {UserId}.", user.Id);
+            }
+        }
 
         if (user.MfaEnabled && !string.IsNullOrWhiteSpace(user.MfaSecret))
         {
@@ -261,9 +300,21 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid refresh token." });
         }
 
-        // Reuse detection: if token was already rotated or revoked, revoke entire token family immediately
+        // Reuse detection: allow a short grace window for concurrent BFF refresh races before revoking the family
         if (existingRecord.UsedAtUtc.HasValue || existingRecord.RevokedAtUtc.HasValue)
         {
+            var graceSeconds = Math.Max(0, _configuration.GetValue<int?>("Auth:RefreshRaceGraceSeconds") ?? 15);
+            if (!existingRecord.RevokedAtUtc.HasValue &&
+                existingRecord.UsedAtUtc.HasValue &&
+                (DateTime.UtcNow - existingRecord.UsedAtUtc.Value).TotalSeconds < graceSeconds)
+            {
+                return Unauthorized(new
+                {
+                    code = "refresh_race",
+                    message = "Refresh token was recently rotated by a concurrent request. Please retry."
+                });
+            }
+
             await _sessionSecurity.RevokeTokenFamilyAsync(existingRecord.TokenFamilyId, "RefreshTokenReuseDetected", cancellationToken);
             _context.PlatformAuditLogs.Add(new PlatformAuditLog
             {
@@ -628,19 +679,14 @@ public class AuthController : ControllerBase
             .Include(u => u.College)
             .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
 
-        // Anti-enumeration protection: return generic success without revealing non-existence or disabled state
-        if (user == null || !user.IsActive)
+        // Anti-enumeration protection: return generic success without revealing non-existence, disabled, or suspended state
+        if (user == null || !user.IsActive || (user.College != null && !user.College.IsActive))
         {
             return Ok(new RequestPasswordOtpResponse
             {
                 Success = true,
                 Message = "If this institutional email is registered and active, a 6-digit verification code has been dispatched. Code expires in 15 minutes."
             });
-        }
-
-        if (user.College != null && !user.College.IsActive)
-        {
-            return BadRequest(new { message = "Campus workspace subscription is inactive or suspended. Contact your college administration." });
         }
 
         if (user.PasswordResetOtpExpiresAtUtc.HasValue && user.PasswordResetOtpExpiresAtUtc.Value > DateTime.UtcNow)
@@ -668,7 +714,9 @@ public class AuthController : ControllerBase
 
         _logger.LogInformation("Password reset OTP queued for {Email}", email);
 
-        string? devOtp = _environment.IsDevelopment() ? otp : null;
+        string? devOtp = _environment.IsDevelopment() && _configuration.GetValue<bool>("Auth:ExposeDevOtp")
+            ? otp
+            : null;
 
         return Ok(new RequestPasswordOtpResponse
         {
@@ -706,19 +754,9 @@ public class AuthController : ControllerBase
             .Include(u => u.Department)
             .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
 
-        if (user == null)
+        if (user == null || !user.IsActive || (user.College != null && !user.College.IsActive))
         {
             return BadRequest(new { message = "Invalid verification code or email address." });
-        }
-
-        if (!user.IsActive)
-        {
-            return BadRequest(new { message = "This account has been deactivated. Please contact your institutional administrator." });
-        }
-
-        if (user.College != null && !user.College.IsActive)
-        {
-            return BadRequest(new { message = "Campus workspace subscription is inactive or suspended. Contact your college administration." });
         }
 
         if (user.PasswordResetOtpAttempts >= 5)
@@ -998,7 +1036,9 @@ public class AuthController : ControllerBase
         if (user == null) return Unauthorized();
 
         var secret = TotpHelper.GenerateSecret();
-        user.MfaSecret = secret;
+        _tenantContext.CollegeId = user.CollegeId;
+        if (user.Role == UserRole.SuperAdmin) _tenantContext.IsSuperAdmin = true;
+        user.MfaSecret = ProtectMfaSecret(secret);
         user.MfaEnabled = false;
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -1019,7 +1059,19 @@ public class AuthController : ControllerBase
         var user = await _context.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted && u.IsActive, cancellationToken);
         if (user == null) return Unauthorized();
 
-        if (!TotpHelper.VerifyCode(user.MfaSecret, request.Code))
+        string? plainSecret;
+        bool isLegacyPlaintext;
+        try
+        {
+            plainSecret = UnprotectMfaSecret(user.MfaSecret, out isLegacyPlaintext);
+        }
+        catch (CryptographicException ex)
+        {
+            _logger.LogError(ex, "Failed to decrypt MFA secret for user {UserId}.", user.Id);
+            return BadRequest(new { message = "MFA enrollment secret could not be decrypted. Please re-enroll MFA." });
+        }
+
+        if (!TotpHelper.VerifyCode(plainSecret, request.Code))
         {
             return BadRequest(new { message = "Invalid TOTP verification code." });
         }
@@ -1034,6 +1086,12 @@ public class AuthController : ControllerBase
             hashedCodes.Add(PasswordHelper.HashPassword(formatted));
         }
 
+        _tenantContext.CollegeId = user.CollegeId;
+        if (user.Role == UserRole.SuperAdmin) _tenantContext.IsSuperAdmin = true;
+        if (isLegacyPlaintext && !string.IsNullOrWhiteSpace(plainSecret))
+        {
+            user.MfaSecret = ProtectMfaSecret(plainSecret);
+        }
         user.MfaEnabled = true;
         user.MfaRecoveryCodesJson = JsonSerializer.Serialize(hashedCodes);
         user.SecurityStamp = Guid.NewGuid().ToString("N");
@@ -1070,7 +1128,26 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Account is not eligible for MFA verification." });
         }
 
-        var verified = TotpHelper.VerifyCode(user.MfaSecret, request.Code);
+        if (user.LockoutEndUtc.HasValue && user.LockoutEndUtc.Value > DateTime.UtcNow)
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                message = "Account is temporarily locked due to repeated failed sign-in attempts. Please try again later."
+            });
+        }
+
+        string? plainSecret = null;
+        bool isLegacyPlaintext = false;
+        try
+        {
+            plainSecret = UnprotectMfaSecret(user.MfaSecret, out isLegacyPlaintext);
+        }
+        catch (CryptographicException ex)
+        {
+            _logger.LogError(ex, "Failed to decrypt MFA secret for user {UserId}. DataProtection keys may be missing.", user.Id);
+        }
+
+        var verified = !string.IsNullOrWhiteSpace(plainSecret) && TotpHelper.VerifyCode(plainSecret, request.Code);
         if (!verified && !string.IsNullOrWhiteSpace(user.MfaRecoveryCodesJson))
         {
             var storedHashes = JsonSerializer.Deserialize<List<string>>(user.MfaRecoveryCodesJson) ?? new List<string>();
@@ -1083,12 +1160,39 @@ public class AuthController : ControllerBase
             }
         }
 
+        _tenantContext.CollegeId = user.CollegeId;
+        if (user.Role == UserRole.SuperAdmin) _tenantContext.IsSuperAdmin = true;
+
         if (!verified)
         {
+            user.AccessFailedCount++;
+            if (user.AccessFailedCount >= 5)
+            {
+                user.LockoutEndUtc = DateTime.UtcNow.AddMinutes(15);
+                user.AccessFailedCount = 0;
+                _context.PlatformAuditLogs.Add(new PlatformAuditLog
+                {
+                    Id = Guid.NewGuid(),
+                    ActorUserId = user.Id,
+                    ActorEmail = user.Email,
+                    Action = "Account Lockout Triggered",
+                    TargetEntity = $"UserAccount: {user.Id}",
+                    IpAddress = GetClientIp(),
+                    OccurredAtUtc = DateTime.UtcNow,
+                    MetadataJson = JsonSerializer.Serialize(new { reason = "MaxFailedMfaAttempts", lockoutMinutes = 15 })
+                });
+            }
+            await _context.SaveChangesAsync(cancellationToken);
             return Unauthorized(new { message = "Invalid authenticator or recovery code." });
         }
 
-        _tenantContext.CollegeId = user.CollegeId;
+        user.AccessFailedCount = 0;
+        user.LockoutEndUtc = null;
+        if (isLegacyPlaintext && !string.IsNullOrWhiteSpace(plainSecret))
+        {
+            user.MfaSecret = ProtectMfaSecret(plainSecret);
+        }
+
         var authResponse = await CreateSessionAndTokensAsync(user, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
 

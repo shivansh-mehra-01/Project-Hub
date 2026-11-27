@@ -501,6 +501,8 @@ export interface UpdateUserStatusRequest {
   isActive: boolean;
 }
 
+export type AcademicTrackStatus = "Draft" | "Open" | "Paused" | "Closed";
+
 export interface CollegeTrackDto {
   id: string;
   collegeId: string;
@@ -509,17 +511,30 @@ export interface CollegeTrackDto {
   academicSessionId?: string;
   courseProgramId?: string;
   semesterTermId?: string;
+  semesterNumber?: number;
+  semesterName?: string;
   subjectOfferingId?: string;
+  subjectCode?: string;
+  subjectName?: string;
   curriculumSchemeId?: string;
   participationMode?: ParticipationMode;
   enrolmentMode?: EnrolmentMode;
+  minTeamSize?: number;
+  maxTeamSize?: number;
   allowCrossBranchTeams?: boolean;
   name: string;
+  description?: string;
   academicYear: string;
   allowInterdisciplinaryTeams: boolean;
   isActive: boolean;
+  status?: AcademicTrackStatus;
+  teamCount?: number;
+  activeTeamCount?: number;
+  registrationOpensUtc?: string;
   proposalDeadlineUtc?: string;
   finalSubmissionDeadlineUtc?: string;
+  coordinatorUserId?: string;
+  coordinatorName?: string;
   guideWeightPct: number;
   midTermWeightPct: number;
   finalVivaWeightPct: number;
@@ -688,6 +703,8 @@ export interface DepartmentStudentResultDto {
 
 export interface CreateDepartmentTrackRequest {
   name?: string;
+  projectType?: string;
+  description?: string;
   academicYear?: string;
   academicSessionId?: string;
   courseProgramId?: string;
@@ -698,8 +715,31 @@ export interface CreateDepartmentTrackRequest {
   customSubjectName?: string;
   credits?: number;
   curriculumSchemeId?: string;
+  coordinatorUserId?: string;
   participationMode?: ParticipationMode;
   enrolmentMode?: EnrolmentMode;
+  minTeamSize?: number;
+  maxTeamSize?: number;
+  launchImmediately?: boolean;
+  allowCrossBranchTeams?: boolean;
+  allowInterdisciplinaryTeams?: boolean;
+  registrationOpensUtc?: string;
+  proposalDeadlineUtc?: string;
+  finalSubmissionDeadlineUtc?: string;
+  guideWeightPct?: number;
+  midTermWeightPct?: number;
+  finalVivaWeightPct?: number;
+  sharedProjectRubricPct?: number;
+  individualStudentRubricPct?: number;
+}
+
+export interface UpdateDepartmentTrackRequest {
+  name?: string;
+  description?: string;
+  participationMode?: ParticipationMode;
+  enrolmentMode?: EnrolmentMode;
+  minTeamSize?: number;
+  maxTeamSize?: number;
   allowCrossBranchTeams?: boolean;
   allowInterdisciplinaryTeams?: boolean;
   proposalDeadlineUtc?: string;
@@ -709,6 +749,34 @@ export interface CreateDepartmentTrackRequest {
   finalVivaWeightPct?: number;
   sharedProjectRubricPct?: number;
   individualStudentRubricPct?: number;
+}
+
+export interface HodDepartmentStudentDto {
+  id: string;
+  fullName: string;
+  email: string;
+  studentNumber: string;
+  isActive: boolean;
+  isActivated: boolean;
+  programName?: string | null;
+  currentSemesterNumber?: number | null;
+  currentSemesterName?: string | null;
+  academicStatus: string;
+  admissionBatch?: string | null;
+  activeTeamCode?: string | null;
+  activeTeamTitle?: string | null;
+}
+
+export interface UpdateStudentSemesterRequest {
+  semesterNumber: number;
+  academicStatus?: "Active" | "Promoted" | "Detained" | "Graduated" | "Withdrawn";
+  admissionBatch?: string;
+}
+
+export interface BulkEnrollStudentsRequest {
+  studentIds: string[];
+  semesterNumber: number;
+  academicStatus?: "Active" | "Promoted" | "Detained" | "Graduated" | "Withdrawn";
 }
 
 export interface ProjectProposalDto {
@@ -870,6 +938,7 @@ export interface AssignedDefenseTeamMemberDto {
   enrollmentCode: string;
   isTeamLead: boolean;
   moduleResponsibility: string;
+  skills?: string[];
 }
 
 export interface AssignedDefenseTeamDto {
@@ -886,32 +955,6 @@ export interface AssignedDefenseTeamDto {
   scheduledAtUtc?: string;
   roomOrLink?: string;
   members: AssignedDefenseTeamMemberDto[];
-}
-
-export interface ProblemBankStatement {
-  id: string;
-  collegeId: string;
-  departmentId: string;
-  academicTrackId: string;
-  proposedByFacultyId: string;
-  title: string;
-  abstract: string;
-  sdgCode: string;
-  prerequisitesCsv?: string;
-  maxTeamCapacity: number;
-  isAllocated: boolean;
-  allocatedTeamId?: string;
-  createdAtUtc: string;
-}
-
-export interface CreateProblemStatementRequest {
-  departmentId: string;
-  academicTrackId: string;
-  title: string;
-  abstract: string;
-  sdgCode: string;
-  prerequisitesCsv?: string;
-  maxTeamCapacity?: number;
 }
 
 export interface StudentScoreInput {
@@ -937,6 +980,7 @@ export interface TeamMemberDto {
   enrollmentCode: string;
   isTeamLead: boolean;
   moduleResponsibility: string;
+  skills?: string[];
 }
 
 export interface SprintTaskDto {
@@ -1195,23 +1239,7 @@ export interface StudentPortfolioDto {
   verifiedArtifacts: ArtifactSlotDto[];
 }
 
-// --- Phase 3: Project Discovery, Problem Bank & Idea Registration DTOs ---
-
-export interface ProblemBankStatementDto {
-  id: string;
-  title: string;
-  abstract: string;
-  sdgCode: string;
-  prerequisites: string[];
-  maxTeamCapacity: number;
-  isAllocated: boolean;
-  proposedByFacultyId: string;
-  facultyName: string;
-  departmentName: string;
-  departmentCode: string;
-  academicTrackName: string;
-  createdAtUtc: string;
-}
+// --- Phase 3: Project Discovery & Idea Registration DTOs ---
 
 export interface ArchivedProjectSummaryDto {
   teamId: string;
@@ -1236,7 +1264,6 @@ export interface CreateProjectIdeaRequest {
   sdgCode: string;
   guideUserId?: string;
   academicTrackId?: string;
-  adoptedProblemBankId?: string;
 }
 
 export interface UpdateProjectIdeaRequest {
@@ -1493,6 +1520,11 @@ export interface MasterCatalogOverviewDto {
   schemes: string[];
 }
 
+export interface SemesterBatchMappingDto {
+  semesterNumber: number;
+  admissionBatch: string;
+}
+
 export interface HodAcademicContextDto {
   departmentId: string;
   departmentName: string;
@@ -1502,6 +1534,7 @@ export interface HodAcademicContextDto {
   availableSessions: AcademicSessionDto[];
   availableSemesters: SemesterTermDto[];
   availableOfferings: SubjectOfferingDto[];
+  semesterBatches?: SemesterBatchMappingDto[];
 }
 
 // --- Account Management DTOs ---
@@ -1607,11 +1640,65 @@ export interface EligiblePeerDto {
 }
 
 export interface CreateStudentTeamRequest {
+  teamName?: string;
   title: string;
   abstract: string;
   domainTag?: string;
   sdgCode?: string;
   academicTrackId?: string;
+  creatorRole?: string;
+  requiredSkillsCsv?: string;
+  publishImmediately?: boolean;
+}
+
+export interface UpdateTeamDetailsRequest {
+  teamName?: string;
+  title?: string;
+  abstract?: string;
+  domainTag?: string;
+  requiredSkillsCsv?: string;
+  creatorRole?: string;
+}
+
+export type JoinRequestStatus = "Pending" | "Accepted" | "Rejected" | "Cancelled";
+
+export interface TeamJoinRequestDto {
+  id: string;
+  projectTeamId: string;
+  teamCode: string;
+  teamName?: string;
+  projectTitle: string;
+  studentUserId: string;
+  studentName: string;
+  studentUsn: string;
+  studentSkills: string[];
+  desiredRole: string;
+  message?: string;
+  status: JoinRequestStatus;
+  createdAtUtc: string;
+  respondedAtUtc?: string;
+  responseNotes?: string;
+}
+
+export interface PublishedTeamSummaryDto {
+  teamId: string;
+  teamCode: string;
+  teamName?: string;
+  title: string;
+  abstract: string;
+  domainTag: string;
+  academicTrackId: string;
+  academicTrackName: string;
+  semesterNumber?: number;
+  minTeamSize: number;
+  maxTeamSize: number;
+  currentMemberCount: number;
+  availableSlots: number;
+  requiredSkills: string[];
+  members: TeamMemberDto[];
+  myJoinRequestId?: string;
+  myJoinRequestStatus?: JoinRequestStatus;
+  publishedAtUtc?: string;
 }
 
 export interface SendTeamInvitationRequest {
@@ -1655,8 +1742,13 @@ export interface TransferTeamLeadRequest {
 export interface StudentTeamRosterDto {
   teamId: string;
   teamCode: string;
+  teamName?: string;
   title: string;
   abstract: string;
+  domainTag?: string;
+  isPublished?: boolean;
+  publishedAtUtc?: string;
+  requiredSkills?: string[];
   status: string;
   isRosterLocked: boolean;
   isCallerLead: boolean;
@@ -1665,6 +1757,7 @@ export interface StudentTeamRosterDto {
   currentMemberCount: number;
   members: TeamMemberDto[];
   pendingInvitations: TeamInvitationDto[];
+  incomingJoinRequests?: TeamJoinRequestDto[];
   guideUserId?: string;
   guideName?: string;
   preferredGuideUserId?: string;
@@ -2165,15 +2258,31 @@ export interface StudentAcademicRecordDto {
   allowPublicPortfolio: boolean;
 }
 
+export interface PendingPortfolioProjectDto {
+  projectTeamId: string;
+  projectTitle: string;
+  teamCode: string;
+  trackName: string;
+  academicYear: string;
+  roleDescription: string;
+  isTeamLead: boolean;
+  guideName: string;
+  status: string;
+  repositoryUrl?: string;
+}
+
 export interface VerifiedStudentPortfolioDto {
   studentUserId: string;
   studentName: string;
   enrollmentNumber: string;
   departmentName: string;
   collegeName: string;
+  programName?: string;
+  currentSemesterNumber?: number;
   allowPublicPortfolio: boolean;
   publicPortfolioShareUrl: string;
   projects: StudentAcademicRecordDto[];
+  pendingVerificationProjects?: PendingPortfolioProjectDto[];
 }
 
 export interface UpdatePortfolioVisibilityRequest {

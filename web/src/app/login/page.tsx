@@ -487,48 +487,9 @@ export default function LoginPage() {
                     Forgot password?
                   </button>
                 </div>
-
-                {/* Quick Role Fill for Testing */}
-                <div className="pt-3 border-t border-slate-200/80 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                      Quick Test Login (Tap Role)
-                    </span>
-                    {selectedTestRole && (
-                      <span className="text-[11px] font-medium text-[#047857]">
-                        Filled: {selectedTestRole}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {testRoleAccounts.map((acc) => {
-                      const Icon = acc.icon;
-                      const isSelected = selectedTestRole === acc.label;
-                      return (
-                        <button
-                          key={acc.role}
-                          type="button"
-                          onClick={() => {
-                            setEmail(acc.email);
-                            setPassword(acc.password);
-                            setEmailError("");
-                            setSelectedTestRole(acc.label);
-                          }}
-                          className={cn(
-                            "flex flex-col items-center justify-center gap-1 py-2 px-2 rounded-lg border text-[11px] font-medium transition-colors cursor-pointer",
-                            isSelected
-                              ? "border-[#047857] bg-emerald-50 text-[#047857]"
-                              : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50/40 hover:text-slate-900"
-                          )}
-                          title={`${acc.email} / ${acc.password}`}
-                        >
-                          <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                          <span className="truncate w-full text-center">{acc.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <p className="text-xs text-slate-500 text-center pt-1">
+                  First time? Use &apos;Forgot password&apos; to set your password.
+                </p>
               </form>
             </div>
           )}

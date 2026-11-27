@@ -208,11 +208,24 @@ public record CollegeTrackDto
     public EnrolmentMode EnrolmentMode { get; init; } = EnrolmentMode.SelfJoin;
     public bool AllowCrossBranchTeams { get; init; }
     public string Name { get; init; } = string.Empty;
+    public string? Description { get; init; }
     public string AcademicYear { get; init; } = string.Empty;
     public bool AllowInterdisciplinaryTeams { get; init; }
+    public AcademicTrackStatus Status { get; init; } = AcademicTrackStatus.Open;
     public bool IsActive { get; init; }
+    public int MinTeamSize { get; init; } = 2;
+    public int MaxTeamSize { get; init; } = 4;
+    public int TeamCount { get; init; }
+    public int ActiveTeamCount { get; init; }
+    public int? SemesterNumber { get; init; }
+    public string? SemesterName { get; init; }
+    public string? SubjectCode { get; init; }
+    public string? SubjectName { get; init; }
+    public DateTime? RegistrationOpensUtc { get; init; }
     public DateTime? ProposalDeadlineUtc { get; init; }
     public DateTime? FinalSubmissionDeadlineUtc { get; init; }
+    public Guid? CoordinatorUserId { get; init; }
+    public string? CoordinatorName { get; init; }
     public int GuideWeightPct { get; init; }
     public int MidTermWeightPct { get; init; }
     public int FinalVivaWeightPct { get; init; }
@@ -572,7 +585,7 @@ public record RosterImportPreviewRowDto
     public string Email { get; init; } = string.Empty;
     public string DepartmentCode { get; init; } = string.Empty;
     public string? SecondaryValue { get; init; } // StudentNumber or Designation
-    public string Action { get; init; } = "invalid"; // "create" | "update" | "invalid"
+    public string Action { get; init; } = "invalid"; // "create" | "update" | "unchanged" | "invalid"
     public List<string> Errors { get; init; } = new();
 }
 
@@ -584,6 +597,7 @@ public record RosterImportPreviewDto
     public int InvalidCount { get; init; }
     public int CreateCount { get; init; }
     public int UpdateCount { get; init; }
+    public int UnchangedCount { get; init; }
     public int DuplicateCount { get; init; }
     public List<string> HeaderErrors { get; init; } = new();
     public List<RosterImportPreviewRowDto> Rows { get; init; } = new();

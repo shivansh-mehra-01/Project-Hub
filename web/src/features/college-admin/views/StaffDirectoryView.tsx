@@ -2,21 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  Users,
   Plus,
-  Pencil,
-  Trash2,
   Search,
-  KeyRound,
   CheckCircle2,
-  Loader2,
-  UserCheck,
-  UserX,
-  Mail,
-  Building2,
-  ShieldCheck,
-  Shield,
-  GraduationCap,
   Upload,
   Download,
   FileSpreadsheet,
@@ -27,14 +15,21 @@ import {
   History,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
+import {
+  PageLoadingState,
+  ConfirmationDialog,
+} from "@/design-system/patterns/PageStates";
+import { TablePagination } from "@/design-system/patterns/TablePagination";
 import { Modal } from "@/design-system/components/Modal";
 import { Button } from "@/design-system/components/Button";
 import { Input } from "@/design-system/components/Input";
 import { Select } from "@/design-system/components/Select";
 import { collegeApi } from "@/lib/api/collegeApi";
+import { showToast } from "@/lib/toast";
 import {
   CollegeStaffDto,
-  CourseProgramDto,
   CreateCollegeStaffRequest,
   UpdateCollegeStaffRequest,
   DepartmentDto,
@@ -54,12 +49,6 @@ import {
   ROSTER_CSV_HEADERS,
 } from "./rosterCsvHelpers";
 import {
-  generateStudentCsvTemplate,
-  ParsedStudentRow,
-  parseStudentCsv,
-  STUDENT_CSV_HEADERS,
-} from "./studentCsvHelpers";
-import {
   formatStaffDepartmentDisplay,
   formatStaffDesignationDisplay,
   formatStaffRoleLabel,
@@ -71,10 +60,11 @@ export const StaffDirectoryView: React.FC = () => {
   const [apiError, setApiError] = useState<string | null>(null);
   const [users, setUsers] = useState<CollegeStaffDto[]>([]);
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
-  const [programs, setPrograms] = useState<CourseProgramDto[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("All");
   const [departmentFilter, setDepartmentFilter] = useState<string>("All");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Add User Modal State
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -119,16 +109,10 @@ export const StaffDirectoryView: React.FC = () => {
   const [staffServerPreview, setStaffServerPreview] = useState<RosterImportPreviewDto | null>(null);
   const [isPreviewingStaff, setIsPreviewingStaff] = useState(false);
 
-  // Students.csv Import Modal State
-  const [showStudentCsvModal, setShowStudentCsvModal] = useState(false);
-  const [studentCsvText, setStudentCsvText] = useState("");
-  const [studentCsvHeaders, setStudentCsvHeaders] = useState<string[]>([]);
-  const [studentCsvHeaderError, setStudentCsvHeaderError] = useState<string | null>(null);
-  const [parsedStudentRows, setParsedStudentRows] = useState<ParsedStudentRow[]>([]);
-  const [studentCsvError, setStudentCsvError] = useState<string | null>(null);
-  const [studentServerPreview, setStudentServerPreview] = useState<RosterImportPreviewDto | null>(null);
-  const [isPreviewingStudents, setIsPreviewingStudents] = useState(false);
-  const [isImportingStudents, setIsImportingStudents] = useState(false);
+  // Status Toggle Confirmation State
+  const [userToToggleStatus, setUserToToggleStatus] = useState<CollegeStaffDto | null>(null);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+
   const [isImporting, setIsImporting] = useState(false);
 
   // Roster Import History Modal State
@@ -136,42 +120,59 @@ export const StaffDirectoryView: React.FC = () => {
   const [importHistory, setImportHistory] = useState<RosterImportHistoryDto[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Toast
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   useDashboardHeader({
     title: "Faculty & Staff",
   });
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
 
   const loadData = async () => {
     try {
       setLoading(true);
       setApiError(null);
-      const [userRes, deptRes, progRes] = await Promise.all([
+      const [userRes, deptRes] = await Promise.all([
         collegeApi.getStaffUsers(),
         collegeApi.getDepartments(),
-        collegeApi.getCoursePrograms(),
       ]);
 
       const collegeStaff = (userRes || []).filter((u) => u.role !== "SuperAdmin");
       setUsers(collegeStaff);
       setDepartments(deptRes || []);
-      setPrograms(progRes || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load staff directory:", err);
-      setApiError(err?.message || "Failed to connect to backend service. Staff accounts unavailable.");
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to connect to backend service. Staff accounts unavailable.";
+      setApiError(message);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    Promise.all([collegeApi.getStaffUsers(), collegeApi.getDepartments()])
+      .then(([userRes, deptRes]) => {
+        if (!active) return;
+        const collegeStaff = (userRes || []).filter((u) => u.role !== "SuperAdmin");
+        setUsers(collegeStaff);
+        setDepartments(deptRes || []);
+        setApiError(null);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        console.error("Failed to load staff directory:", err);
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to connect to backend service. Staff accounts unavailable.";
+        setApiError(message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleOpenAddUser = () => {
@@ -199,12 +200,15 @@ export const StaffDirectoryView: React.FC = () => {
       };
 
       await collegeApi.createStaffUser(payload);
-      showToast(`User ${payload.fullName} provisioned. Account activation dispatched to ${payload.email}.`);
+      showToast(
+        `User ${payload.fullName} provisioned. Account activation dispatched to ${payload.email}.`,
+        "success"
+      );
       setShowAddUserModal(false);
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      showToast(err?.message || "Error provisioning staff account.");
+      showToast(err instanceof Error ? err.message : "Error provisioning staff account.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -234,12 +238,12 @@ export const StaffDirectoryView: React.FC = () => {
       };
 
       await collegeApi.updateStaffUser(editingUser.id, payload);
-      showToast(`Updated account details for ${payload.fullName}.`);
+      showToast(`Updated account details for ${payload.fullName}.`, "success");
       setShowEditUserModal(false);
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      showToast(err?.message || "Error updating account.");
+      showToast(err instanceof Error ? err.message : "Error updating account.", "error");
     } finally {
       setUpdating(false);
     }
@@ -247,7 +251,7 @@ export const StaffDirectoryView: React.FC = () => {
 
   const handleDeleteUser = (user: CollegeStaffDto) => {
     if (isLastActiveCollegeAdmin(user, users)) {
-      showToast("Cannot delete the last active College Admin.");
+      showToast("Cannot delete the last active College Admin.", "error");
       return;
     }
     setUserToDelete(user);
@@ -260,31 +264,44 @@ export const StaffDirectoryView: React.FC = () => {
     try {
       await collegeApi.deleteStaffUser(targetUser.id);
       setUserToDelete(null);
-      showToast(`Removed ${targetUser.fullName} from directory.`);
+      showToast(`Removed ${targetUser.fullName} from directory.`, "success");
       await loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      showToast(err?.message || "Error removing user account.");
+      showToast(err instanceof Error ? err.message : "Error removing user account.", "error");
     } finally {
       setIsDeletingUser(false);
     }
   };
 
-  const handleToggleStatus = async (user: CollegeStaffDto) => {
+  const handleToggleStatus = (user: CollegeStaffDto) => {
     if (user.isActive && isLastActiveCollegeAdmin(user, users)) {
-      showToast("Cannot deactivate the last active College Admin.");
+      showToast("Cannot deactivate the last active College Admin.", "error");
       return;
     }
+    setUserToToggleStatus(user);
+  };
+
+  const confirmToggleStatus = async () => {
+    if (!userToToggleStatus) return;
+    const targetUser = userToToggleStatus;
+    const newStatus = !targetUser.isActive;
+    setIsTogglingStatus(true);
     try {
-      const newStatus = !user.isActive;
-      await collegeApi.updateUserStatus(user.id, { isActive: newStatus });
-      showToast(`Account for ${user.fullName} is now ${newStatus ? "Active" : "Deactivated"}.`);
-      setUsers((prev) =>
-        prev.map((u) => (u.id === user.id ? { ...u, isActive: newStatus } : u))
+      await collegeApi.updateUserStatus(targetUser.id, { isActive: newStatus });
+      setUserToToggleStatus(null);
+      showToast(
+        `Account for ${targetUser.fullName} is now ${newStatus ? "Active" : "Deactivated"}.`,
+        "success"
       );
-    } catch (err: any) {
+      setUsers((prev) =>
+        prev.map((u) => (u.id === targetUser.id ? { ...u, isActive: newStatus } : u))
+      );
+    } catch (err: unknown) {
       console.error(err);
-      showToast("Failed to update user status.");
+      showToast(err instanceof Error ? err.message : "Failed to update user status.", "error");
+    } finally {
+      setIsTogglingStatus(false);
     }
   };
 
@@ -306,7 +323,7 @@ export const StaffDirectoryView: React.FC = () => {
           res?.message ||
           "Password reset verification code could not be delivered. Please check institutional mail settings.";
         setResetError(failureMsg);
-        showToast(failureMsg);
+        showToast(failureMsg, "error");
         return;
       }
 
@@ -315,14 +332,15 @@ export const StaffDirectoryView: React.FC = () => {
         email: targetResetUser.email,
         expiresAtUtc: res.expiresAtUtc,
       });
-      showToast(`6-digit password reset code dispatched to ${targetResetUser.email}.`);
-    } catch (err: any) {
+      showToast(`6-digit password reset code dispatched to ${targetResetUser.email}.`, "success");
+    } catch (err: unknown) {
       console.error(err);
       const failureMsg =
-        err?.message ||
-        "Failed to dispatch password reset verification code. Please check institutional mail settings.";
+        err instanceof Error
+          ? err.message
+          : "Failed to dispatch password reset verification code. Please check institutional mail settings.";
       setResetError(failureMsg);
-      showToast(failureMsg);
+      showToast(failureMsg, "error");
     } finally {
       setIsResetting(false);
     }
@@ -376,8 +394,10 @@ export const StaffDirectoryView: React.FC = () => {
       if (preview.headerErrors.length > 0) {
         setBulkImportError(preview.headerErrors.join(" "));
       }
-    } catch (err: any) {
-      setBulkImportError(err?.message || "Failed to validate faculty roster on server.");
+    } catch (err: unknown) {
+      setBulkImportError(
+        err instanceof Error ? err.message : "Failed to validate faculty roster on server."
+      );
     } finally {
       setIsPreviewingStaff(false);
     }
@@ -420,18 +440,20 @@ export const StaffDirectoryView: React.FC = () => {
       setBulkImportError(null);
       await loadData();
       showToast(
-        `Roster import complete: ${res.successfullyCreated} created, ${res.successfullyUpdated} updated.`
+        `Roster import complete: ${res.successfullyCreated} created, ${res.successfullyUpdated} updated.`,
+        "success"
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Bulk roster import failed:", err);
-      const apiErrors: string[] | undefined = err?.data?.errors;
+      const errObj = err as { data?: { errors?: string[] }; message?: string } | null;
+      const apiErrors: string[] | undefined = errObj?.data?.errors;
       if (apiErrors && apiErrors.length > 0) {
         setParsedRows((prev) => applyBackendRowErrors(prev, apiErrors));
       }
       setBulkImportError(
         apiErrors && apiErrors.length > 0
           ? apiErrors.join(" ")
-          : err?.message || "Failed to execute bulk faculty roster import."
+          : errObj?.message || "Failed to execute bulk faculty roster import."
       );
     } finally {
       setIsImporting(false);
@@ -459,14 +481,61 @@ export const StaffDirectoryView: React.FC = () => {
     return matchesSearch && matchesRole && matchesDept;
   });
 
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredUsers.slice(start, start + pageSize);
+  }, [filteredUsers, currentPage, pageSize]);
+
+  const handleOpenImportHistory = async () => {
+    setShowImportHistoryModal(true);
+    setLoadingHistory(true);
+    try {
+      const res = await collegeApi.getRosterImportHistory();
+      setImportHistory(res || []);
+    } catch {
+      setImportHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-12 font-sans bg-[#f8fafc]">
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-800 text-white text-xs font-semibold rounded-lg shadow-lg">
-          <CheckCircle2 className="h-4 w-4" strokeWidth={1.75} />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+      <PageHeader
+        title="Faculty & Staff Directory"
+        description="Manage institutional faculty, HOD, and college administrator accounts, AICTE cadres, and Faculty.csv roster imports."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleOpenImportHistory}
+              leftIcon={<History className="h-4 w-4 text-slate-500" />}
+            >
+              Import History
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowBulkImportModal(true)}
+              leftIcon={<Upload className="h-4 w-4 text-slate-500" />}
+            >
+              Import Faculty.csv
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleOpenAddUser}
+              leftIcon={<Plus className="h-4 w-4" />}
+            >
+              Add Staff Member
+            </Button>
+          </div>
+        }
+      />
 
       {apiError && (
         <ApiConnectionBanner onRetry={loadData} message={apiError} isRetrying={loading} />
@@ -508,16 +577,24 @@ export const StaffDirectoryView: React.FC = () => {
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <input
                 type="text"
+                aria-label="Search staff by name, email, or employee ID"
                 placeholder="Search staff by name, email, or ID..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-700"
               />
             </div>
 
             <select
+              aria-label="Filter by role"
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
             >
               <option value="All">All Roles</option>
@@ -527,8 +604,12 @@ export const StaffDirectoryView: React.FC = () => {
             </select>
 
             <select
+              aria-label="Filter by department"
               value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
+              onChange={(e) => {
+                setDepartmentFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
             >
               <option value="All">All Departments</option>
@@ -537,75 +618,32 @@ export const StaffDirectoryView: React.FC = () => {
               ))}
             </select>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={async () => {
-                setShowImportHistoryModal(true);
-                setLoadingHistory(true);
-                try {
-                  const res = await collegeApi.getRosterImportHistory();
-                  setImportHistory(res || []);
-                } catch {
-                  setImportHistory([]);
-                } finally {
-                  setLoadingHistory(false);
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-            >
-              <History className="h-4 w-4 text-slate-500" />
-              <span>Import History</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setStudentCsvText("");
-                setStudentCsvHeaders([]);
-                setStudentCsvHeaderError(null);
-                setParsedStudentRows([]);
-                setStudentServerPreview(null);
-                setStudentCsvError(null);
-                setShowStudentCsvModal(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-            >
-              <Upload className="h-4 w-4 text-slate-500" />
-              <span>Import Students.csv</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowBulkImportModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-            >
-              <Upload className="h-4 w-4 text-slate-500" />
-              <span>Import Faculty.csv</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleOpenAddUser}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-800 rounded-lg hover:bg-emerald-900 cursor-pointer shadow-xs"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add Staff Member</span>
-            </button>
-          </div>
         </div>
 
         {/* Table Body */}
         {loading ? (
-          <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin mr-2 text-emerald-800" />
-            Loading staff directory...
-          </div>
+          <PageLoadingState message="Loading staff directory..." className="py-12" />
         ) : filteredUsers.length === 0 ? (
-          <div className="p-12 text-center text-xs text-slate-500">
-            No staff records found matching your filters.
-          </div>
+          <EmptyState
+            title="No staff records found"
+            description="No staff accounts match your current search or filter criteria."
+            actionLabel={
+              searchQuery || roleFilter !== "All" || departmentFilter !== "All"
+                ? "Clear Filters"
+                : "Add Staff Member"
+            }
+            onAction={
+              searchQuery || roleFilter !== "All" || departmentFilter !== "All"
+                ? () => {
+                    setSearchQuery("");
+                    setRoleFilter("All");
+                    setDepartmentFilter("All");
+                    setCurrentPage(1);
+                  }
+                : handleOpenAddUser
+            }
+            className="py-12"
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -621,7 +659,7 @@ export const StaffDirectoryView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredUsers.map((u) => {
+                {paginatedUsers.map((u) => {
                   const designationDisplay = formatStaffDesignationDisplay(u);
                   const departmentDisplay = formatStaffDepartmentDisplay(u);
                   const lastActiveAdmin = isLastActiveCollegeAdmin(u, users);
@@ -720,6 +758,18 @@ export const StaffDirectoryView: React.FC = () => {
             </table>
           </div>
         )}
+        {!loading && filteredUsers.length > 0 && (
+          <TablePagination
+            currentPage={currentPage}
+            totalItems={filteredUsers.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setCurrentPage(1);
+            }}
+          />
+        )}
       </div>
 
       {/* Add User Modal */}
@@ -749,7 +799,7 @@ export const StaffDirectoryView: React.FC = () => {
           <Select
             label="System Role"
             value={newRole}
-            onChange={(e: any) => setNewRole(e.target.value)}
+            onChange={(e) => setNewRole(e.target.value as RoleType)}
             options={[
               { label: "Faculty", value: "Faculty" },
               { label: "Head of Department (HOD)", value: "HOD" },
@@ -761,7 +811,7 @@ export const StaffDirectoryView: React.FC = () => {
             <Select
               label="AICTE Cadre / Designation"
               value={newDesignation}
-              onChange={(e: any) => setNewDesignation(e.target.value)}
+              onChange={(e) => setNewDesignation(e.target.value as FacultyDesignation)}
               options={[
                 { label: "Professor", value: "Professor" },
                 { label: "Associate Professor", value: "AssociateProfessor" },
@@ -834,7 +884,7 @@ export const StaffDirectoryView: React.FC = () => {
           <Select
             label="System Role"
             value={editRole}
-            onChange={(e: any) => setEditRole(e.target.value)}
+            onChange={(e) => setEditRole(e.target.value as RoleType)}
             options={[
               { label: "Faculty", value: "Faculty" },
               { label: "Head of Department (HOD)", value: "HOD" },
@@ -846,7 +896,7 @@ export const StaffDirectoryView: React.FC = () => {
             <Select
               label="AICTE Cadre / Designation"
               value={editDesignation || ""}
-              onChange={(e: any) => setEditDesignation(e.target.value as FacultyDesignation)}
+              onChange={(e) => setEditDesignation(e.target.value as FacultyDesignation)}
               options={[
                 { label: "-- Select Cadre / Designation --", value: "" },
                 { label: "Professor", value: "Professor" },
@@ -1221,259 +1271,43 @@ export const StaffDirectoryView: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Remove Staff Account Confirmation Modal */}
-      <Modal
+      {/* Remove Staff Account Confirmation Dialog */}
+      <ConfirmationDialog
         isOpen={!!userToDelete}
         onClose={() => !isDeletingUser && setUserToDelete(null)}
+        onConfirm={confirmDeleteUser}
         title="Remove Staff Account"
-        description="This action removes the staff member from the active institutional directory."
-        size="md"
+        description={
+          userToDelete
+            ? `Are you sure you want to remove "${userToDelete.fullName}" (${userToDelete.role}) from the active institutional directory?`
+            : ""
+        }
+        confirmText="Remove Staff Account"
+        variant="danger"
+        isLoading={isDeletingUser}
       >
-        <div className="space-y-4 pt-2">
-          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
-            <p className="font-semibold">
-              Are you sure you want to remove &ldquo;{userToDelete?.fullName}&rdquo; ({userToDelete?.role})?
-            </p>
-            <p className="mt-1 text-rose-700">
-              The account will be revoked immediately. Historical audit entries and course allocations will remain preserved for statutory compliance.
-            </p>
-          </div>
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={isDeletingUser}
-              onClick={() => setUserToDelete(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              size="sm"
-              disabled={isDeletingUser}
-              onClick={confirmDeleteUser}
-            >
-              {isDeletingUser ? "Removing..." : "Remove Staff Account"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">
+          The account will be revoked immediately. Historical audit entries and course allocations will remain preserved for statutory compliance.
+        </p>
+      </ConfirmationDialog>
 
-      {/* Students.csv Bulk Import Modal */}
-      <Modal
-        isOpen={showStudentCsvModal}
-        onClose={() => !isImportingStudents && setShowStudentCsvModal(false)}
-        title="Import Student Roster (Students.csv)"
-        description="Provision approved student roster records with StudentNumber, DepartmentCode, Program, and AdmissionYear."
-        size="lg"
-      >
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs">
-            <span className="text-slate-600">
-              Required: <code className="font-mono font-semibold">StudentName, Email, StudentNumber, DepartmentCode</code>
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                const csv = generateStudentCsvTemplate(departments);
-                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "Students.csv";
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              className="inline-flex items-center gap-1 font-semibold text-emerald-800 hover:text-emerald-900 cursor-pointer shrink-0"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>Download Template</span>
-            </button>
-          </div>
-
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (!f) return;
-              const reader = new FileReader();
-              reader.onload = (ev) => {
-                const text = String(ev.target?.result || "");
-                setStudentCsvText(text);
-                setStudentCsvError(null);
-                setStudentServerPreview(null);
-                const res = parseStudentCsv(text, departments, programs);
-                setStudentCsvHeaders(res.headers);
-                setStudentCsvHeaderError(res.headerError);
-                setParsedStudentRows(res.rows);
-              };
-              reader.readAsText(f);
-            }}
-            className="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-200 file:text-xs file:font-semibold file:bg-white file:text-slate-700 hover:file:bg-slate-50"
-          />
-
-          <textarea
-            rows={4}
-            value={studentCsvText}
-            onChange={(e) => {
-              const text = e.target.value;
-              setStudentCsvText(text);
-              setStudentCsvError(null);
-              setStudentServerPreview(null);
-              if (!text.trim()) {
-                setParsedStudentRows([]);
-                setStudentCsvHeaderError(null);
-                return;
-              }
-              const res = parseStudentCsv(text, departments, programs);
-              setStudentCsvHeaders(res.headers);
-              setStudentCsvHeaderError(res.headerError);
-              setParsedStudentRows(res.rows);
-            }}
-            placeholder={"StudentName,Email,StudentNumber,DepartmentCode,Program,AdmissionYear,CurrentSemester"}
-            className="w-full p-2.5 text-xs font-mono border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-700"
-          />
-
-          {(studentCsvHeaderError || studentCsvError) && (
-            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">
-              {studentCsvHeaderError || studentCsvError}
-            </div>
-          )}
-
-          {parsedStudentRows.length > 0 && (
-            <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100 text-xs">
-              {parsedStudentRows.map((r) => (
-                <div key={r.rowNumber} className="p-2.5 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="font-semibold text-slate-900">
-                      Row {r.rowNumber}: {r.studentName} ({r.studentNumber})
-                    </span>
-                    <span className="block text-[11px] text-slate-500">
-                      {r.email} • {r.departmentCode}
-                    </span>
-                  </div>
-                  {r.isValid ? (
-                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold shrink-0">
-                      Valid
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-semibold text-rose-700 shrink-0">
-                      {r.validationError}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {studentServerPreview && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 flex flex-wrap items-center gap-3">
-              <span className="font-semibold text-slate-900">Server Verification:</span>
-              <span className="text-emerald-700 font-semibold">{studentServerPreview.createCount} Create</span>
-              <span className="text-blue-700 font-semibold">{studentServerPreview.updateCount} Update</span>
-              <span className={studentServerPreview.invalidCount > 0 ? "text-rose-700 font-semibold" : "text-slate-500"}>
-                {studentServerPreview.invalidCount} Invalid
-              </span>
-              {studentServerPreview.duplicateCount > 0 && (
-                <span className="text-amber-700 font-semibold">{studentServerPreview.duplicateCount} Duplicate</span>
-              )}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={isImportingStudents || isPreviewingStudents}
-              onClick={() => setShowStudentCsvModal(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={isPreviewingStudents || isImportingStudents || Boolean(studentCsvHeaderError) || parsedStudentRows.length === 0}
-              onClick={async () => {
-                setIsPreviewingStudents(true);
-                setStudentCsvError(null);
-                try {
-                  const preview = await collegeApi.previewBulkStudents({
-                    csvHeaders: studentCsvHeaders.length > 0 ? studentCsvHeaders : [...STUDENT_CSV_HEADERS],
-                    studentRows: parsedStudentRows.map((r) => ({
-                      studentName: r.studentName,
-                      email: r.email,
-                      studentNumber: r.studentNumber,
-                      departmentCode: r.departmentCode,
-                      program: r.program,
-                      admissionYear: r.admissionYear,
-                      currentSemester: r.currentSemester,
-                    })),
-                  });
-                  setStudentServerPreview(preview);
-                  if (preview.headerErrors.length > 0) {
-                    setStudentCsvError(preview.headerErrors.join(" "));
-                  } else if (preview.invalidCount > 0) {
-                    const errs = preview.rows.filter((x) => x.action === "invalid").flatMap((x) => x.errors.map((e) => `Row ${x.rowNumber}: ${e}`));
-                    if (errs.length > 0) setStudentCsvError(errs.join(" "));
-                  }
-                } catch (err: any) {
-                  setStudentCsvError(err?.message || "Failed to verify student roster on server.");
-                } finally {
-                  setIsPreviewingStudents(false);
-                }
-              }}
-            >
-              {isPreviewingStudents ? "Verifying..." : "Verify on Server"}
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              disabled={
-                isImportingStudents ||
-                Boolean(studentCsvHeaderError) ||
-                parsedStudentRows.length === 0 ||
-                parsedStudentRows.some((r) => !r.isValid)
-              }
-              onClick={async () => {
-                setIsImportingStudents(true);
-                setStudentCsvError(null);
-                try {
-                  const res = await collegeApi.bulkUploadStudents({
-                    csvHeaders: studentCsvHeaders.length > 0 ? studentCsvHeaders : [...STUDENT_CSV_HEADERS],
-                    studentRows: parsedStudentRows.map((r) => ({
-                      studentName: r.studentName,
-                      email: r.email,
-                      studentNumber: r.studentNumber,
-                      departmentCode: r.departmentCode,
-                      program: r.program,
-                      admissionYear: r.admissionYear,
-                      currentSemester: r.currentSemester,
-                    })),
-                  });
-                  setShowStudentCsvModal(false);
-                  setStudentServerPreview(null);
-                  await loadData();
-                  showToast(`Students.csv imported: ${res.successfullyCreated} created, ${res.successfullyUpdated} updated.`);
-                } catch (err: any) {
-                  const errs: string[] | undefined = err?.data?.errors;
-                  setStudentCsvError(errs && errs.length > 0 ? errs.join(" ") : err?.message || "Student roster import failed.");
-                } finally {
-                  setIsImportingStudents(false);
-                }
-              }}
-            >
-              {isImportingStudents ? "Importing..." : `Confirm & Import ${parsedStudentRows.length} Student(s)`}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {/* Activate / Deactivate Staff Account Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={!!userToToggleStatus}
+        onClose={() => !isTogglingStatus && setUserToToggleStatus(null)}
+        onConfirm={confirmToggleStatus}
+        title={userToToggleStatus?.isActive ? "Deactivate Staff Account" : "Activate Staff Account"}
+        description={
+          userToToggleStatus
+            ? userToToggleStatus.isActive
+              ? `Deactivating "${userToToggleStatus.fullName}" (${userToToggleStatus.role}) will prevent sign-in while preserving historical records.`
+              : `Reactivating "${userToToggleStatus.fullName}" (${userToToggleStatus.role}) will restore institutional portal access.`
+            : ""
+        }
+        confirmText={userToToggleStatus?.isActive ? "Deactivate Account" : "Activate Account"}
+        variant={userToToggleStatus?.isActive ? "warning" : "primary"}
+        isLoading={isTogglingStatus}
+      />
 
       {/* Roster Import History Modal */}
       <Modal
@@ -1485,14 +1319,13 @@ export const StaffDirectoryView: React.FC = () => {
       >
         <div className="space-y-3">
           {loadingHistory ? (
-            <div className="py-8 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-800" />
-              <span>Loading import history...</span>
-            </div>
+            <PageLoadingState message="Loading import history..." className="py-8" />
           ) : importHistory.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500">
-              No roster imports have been recorded yet.
-            </div>
+            <EmptyState
+              title="No roster imports recorded"
+              description="No Faculty.csv or Students.csv roster imports have been recorded yet."
+              className="py-8"
+            />
           ) : (
             <div className="max-h-80 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100 text-xs">
               {importHistory.map((item) => (

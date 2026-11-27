@@ -29,9 +29,9 @@ public interface IAppDbContext
     DbSet<UserSession> UserSessions { get; }
     DbSet<RefreshTokenRecord> RefreshTokenRecords { get; }
     DbSet<AcademicTrack> AcademicTracks { get; }
-    DbSet<ProblemBankStatement> ProblemBankStatements { get; }
     DbSet<ProjectTeam> ProjectTeams { get; }
     DbSet<TeamMember> TeamMembers { get; }
+    DbSet<TeamJoinRequest> TeamJoinRequests { get; }
     DbSet<SprintTask> SprintTasks { get; }
     DbSet<ProjectMilestone> ProjectMilestones { get; }
     DbSet<MilestoneReviewHistory> MilestoneReviewHistories { get; }

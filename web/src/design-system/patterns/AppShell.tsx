@@ -5,30 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
-  Building2,
   Calendar,
-  CheckCircle2,
-  ChevronDown,
   ChevronRight,
   ChevronsUpDown,
-  Compass,
-  FileCheck2,
-  FolderGit2,
-  GraduationCap,
-  LayoutDashboard,
   Layers,
   LogOut,
   Menu,
-  RotateCcw,
   Search,
-  Sliders,
-  User,
-  UserCog,
-  Users2,
   X,
-  Shield,
-  ShieldAlert,
-  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CollabexLogo } from "@/components/brand/CollabexLogo";
@@ -179,11 +163,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState("Gandhi Nagar (Main)");
-
-  // Close mobile drawer on route navigation
-  useEffect(() => {
-    setIsMobileDrawerOpen(false);
-  }, [pathname]);
 
   // Drawer Escape key listener and body scroll lock
   useEffect(() => {
@@ -363,35 +342,61 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   const breadcrumbsInfo = getBreadcrumbs(pathname, effectiveRole);
   const displayTitle = pageTitle || breadcrumbsInfo.pageTitle;
-  const displayBreadcrumb = breadcrumb || breadcrumbsInfo.breadcrumb;
+  const rawBreadcrumb = breadcrumb || breadcrumbsInfo.breadcrumb;
+  const displayBreadcrumb =
+    rawBreadcrumb && rawBreadcrumb !== displayTitle ? rawBreadcrumb : undefined;
   const currentActiveTab = activeTab;
+
+  const profileHref =
+    effectiveRole === "SuperAdmin"
+      ? "/platform/account/profile"
+      : effectiveRole === "Student" || effectiveRole === "TeamLead"
+        ? "/student/profile"
+        : "/account";
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPendingDrawer, setShowPendingDrawer] = useState(false);
 
-  const SUPER_ADMIN_SECTIONS = [
-    "WORKSPACE",
-    "MANAGEMENT",
-    "OPERATIONS",
-    "ACCOUNT",
-  ] as const;
-
-  const primaryItems = navItems.filter((i) => i.section !== "COORDINATOR" && i.label !== "Profile" && i.label !== "My Profile");
+  const primaryItems = navItems.filter(
+    (i) => i.section !== "COORDINATOR" && i.label !== "Profile" && i.label !== "My Profile"
+  );
   const coordinatorItems = navItems.filter((i) => i.section === "COORDINATOR");
-  const profileItem = navItems.find((i) => i.label === "Profile" || i.label === "My Profile");
+
+  const ROOT_NAV_PATHS = new Set([
+    "/student",
+    "/faculty",
+    "/hod",
+    "/college",
+    "/platform/dashboard",
+  ]);
+
+  const isNavItemActive = (item: SidebarNavItem): boolean => {
+    const isProfileItem = item.label === "Profile" || item.label === "My Profile";
+    if (currentActiveTab === item.label || pathname === item.href) {
+      return true;
+    }
+    if (
+      !ROOT_NAV_PATHS.has(item.href) &&
+      pathname.startsWith(`${item.href}/`)
+    ) {
+      return true;
+    }
+    if (
+      isProfileItem &&
+      (currentActiveTab === "Account" ||
+        pathname === "/account" ||
+        pathname === "/platform/account/profile" ||
+        pathname === "/student/profile")
+    ) {
+      return true;
+    }
+    return false;
+  };
 
   const renderNavItem = (item: SidebarNavItem) => {
     const Icon = item.icon;
-    const isProfileItem = item.label === "Profile" || item.label === "My Profile";
     const isLogoutItem = item.label === "Logout" || item.href === "/platform/logout";
-    const isActive =
-      currentActiveTab === item.label ||
-      pathname === item.href ||
-      (isProfileItem &&
-        (currentActiveTab === "Account" ||
-          pathname === "/account" ||
-          pathname === "/platform/account/profile" ||
-          pathname === "/student/profile"));
+    const isActive = isNavItemActive(item);
 
     if (isLogoutItem) {
       return (
@@ -399,7 +404,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
           key={item.label}
           type="button"
           onClick={() => setShowLogoutModal(true)}
-          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left"
+          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
         >
           <Icon className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={1.75} />
           <span className="truncate">{item.label}</span>
@@ -412,8 +417,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
         key={item.label}
         href={item.href}
         prefetch={true}
+        aria-current={isActive ? "page" : undefined}
         className={cn(
-          "group flex items-center gap-3 px-3 py-2 text-[13px] font-medium rounded-xl transition-all duration-150 relative select-none",
+          "group flex items-center gap-3 px-3 py-2 text-[13px] font-medium rounded-xl transition-all duration-150 relative select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400",
           isActive
             ? "bg-emerald-600 text-white font-semibold shadow-xs shadow-emerald-950/30 border border-emerald-500/30"
             : "text-slate-300/90 hover:bg-white/[0.07] hover:text-white"
@@ -445,16 +451,8 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   const renderMobileNavItem = (item: SidebarNavItem) => {
     const Icon = item.icon;
-    const isProfileItem = item.label === "Profile" || item.label === "My Profile";
     const isLogoutItem = item.label === "Logout" || item.href === "/platform/logout";
-    const isActive =
-      currentActiveTab === item.label ||
-      pathname === item.href ||
-      (isProfileItem &&
-        (currentActiveTab === "Account" ||
-          pathname === "/account" ||
-          pathname === "/platform/account/profile" ||
-          pathname === "/student/profile"));
+    const isActive = isNavItemActive(item);
 
     if (isLogoutItem) {
       return (
@@ -465,7 +463,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
             setIsMobileDrawerOpen(false);
             setShowLogoutModal(true);
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 min-h-[44px] text-xs font-medium rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left"
+          className="w-full flex items-center gap-3 px-3 py-2.5 min-h-[44px] text-xs font-medium rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
         >
           <Icon className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={1.75} />
           <span className="truncate">{item.label}</span>
@@ -478,9 +476,10 @@ const AppShellInner: React.FC<AppShellProps> = ({
         key={item.label}
         href={item.href}
         prefetch={true}
+        aria-current={isActive ? "page" : undefined}
         onClick={() => setIsMobileDrawerOpen(false)}
         className={cn(
-          "group flex items-center gap-3 px-3 py-2.5 min-h-[44px] text-[13px] font-medium rounded-xl transition-all duration-150",
+          "group flex items-center gap-3 px-3 py-2.5 min-h-[44px] text-[13px] font-medium rounded-xl transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400",
           isActive
             ? "bg-emerald-600 text-white font-semibold shadow-xs shadow-emerald-950/30 border border-emerald-500/30"
             : "text-slate-300 hover:bg-white/[0.07] hover:text-white"
@@ -505,11 +504,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
         )}
       </Link>
     );
-  };
-
-  const handleLogout = () => {
-    logout();
-    router.replace("/login");
   };
 
   // Back-Forward Cache (bfcache) protection:
@@ -633,11 +627,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 Platform Console
               </div>
               {primaryItems.map(renderNavItem)}
-              {profileItem && (
-                <div className="pt-2 mt-2 border-t border-white/[0.08]">
-                  {renderNavItem(profileItem)}
-                </div>
-              )}
             </div>
           ) : (
             <>
@@ -654,12 +643,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
                   {coordinatorItems.map(renderNavItem)}
                 </>
               )}
-
-              {profileItem && (
-                <div className="pt-2 mt-1">
-                  {renderNavItem(profileItem)}
-                </div>
-              )}
             </>
           )}
         </nav>
@@ -668,10 +651,13 @@ const AppShellInner: React.FC<AppShellProps> = ({
         <div className="p-3 border-t border-white/[0.08] bg-[#111827]">
           {/* User Profile Mini Block */}
           <Link
-            href={effectiveRole === "SuperAdmin" ? "/platform/account/profile" : "/account"}
+            href={profileHref}
             className={cn(
               "px-3 py-2.5 mb-2 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center gap-2.5 hover:bg-white/[0.08] transition-colors group cursor-pointer",
-              (pathname === "/platform/account/profile" || pathname === "/account") && "border-brand-primary/50 bg-white/[0.08]"
+              (pathname === "/platform/account/profile" ||
+                pathname === "/account" ||
+                pathname === "/student/profile") &&
+                "border-brand-primary/50 bg-white/[0.08]"
             )}
             title="My Profile & Security Settings"
           >
@@ -926,8 +912,12 @@ const AppShellInner: React.FC<AppShellProps> = ({
               </button>
             </div>
 
-            {/* Role & User Context Banner */}
-            <div className="px-4 py-3 bg-white/[0.03] border-b border-white/[0.06] flex items-center justify-between">
+            {/* Role & User Context Banner (links to profile) */}
+            <Link
+              href={profileHref}
+              onClick={() => setIsMobileDrawerOpen(false)}
+              className="px-4 py-3 bg-white/[0.03] border-b border-white/[0.06] flex items-center justify-between hover:bg-white/[0.06] transition-colors"
+            >
               <div className="min-w-0 pr-2">
                 <p suppressHydrationWarning className="text-xs font-semibold text-white truncate">{displayPersonaName}</p>
                 <p suppressHydrationWarning className="text-[10px] text-slate-400 font-mono truncate">
@@ -940,7 +930,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
               >
                 {getAvatarInitials(displayPersonaName)}
               </div>
-            </div>
+            </Link>
 
             {/* Navigation Tabs */}
             <nav className="flex-1 px-3 py-3 space-y-2 overflow-y-auto">
@@ -950,11 +940,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
                     Platform Console
                   </div>
                   {primaryItems.map(renderMobileNavItem)}
-                  {profileItem && (
-                    <div className="pt-2 mt-2 border-t border-white/[0.08]">
-                      {renderMobileNavItem(profileItem)}
-                    </div>
-                  )}
                 </div>
               ) : (
                 <>
@@ -970,12 +955,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
                       </div>
                       {coordinatorItems.map(renderMobileNavItem)}
                     </>
-                  )}
-
-                  {profileItem && (
-                    <div className="pt-2 mt-1 border-t border-white/[0.06]">
-                      {renderMobileNavItem(profileItem)}
-                    </div>
                   )}
                 </>
               )}

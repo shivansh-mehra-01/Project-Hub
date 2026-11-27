@@ -83,7 +83,7 @@ public sealed class EmailOutboxWorker : BackgroundService
         var leaseSeconds = Math.Clamp(_configuration.GetValue<int?>("Email:Worker:LeaseSeconds") ?? 60, 10, 600);
 
         List<Guid> claimedIds;
-        using (var claimScope = _scopeFactory.CreateScope())
+        using (var claimScope = CreateSystemScope())
         {
             var db = claimScope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
             var utcNow = DateTime.UtcNow;
@@ -173,7 +173,7 @@ public sealed class EmailOutboxWorker : BackgroundService
         EmailOutboxMessage? message;
         string secret;
 
-        using (var readScope = _scopeFactory.CreateScope())
+        using (var readScope = CreateSystemScope())
         {
             var db = readScope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
             var outboxService = readScope.ServiceProvider.GetRequiredService<IEmailOutboxService>();
@@ -245,9 +245,17 @@ public sealed class EmailOutboxWorker : BackgroundService
         }
     }
 
+    private IServiceScope CreateSystemScope()
+    {
+        var scope = _scopeFactory.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenantContext.IsAuthLookup = true;
+        return scope;
+    }
+
     private async Task MarkSentAsync(Guid outboxId, CancellationToken cancellationToken)
     {
-        using var scope = _scopeFactory.CreateScope();
+        using var scope = CreateSystemScope();
         var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
         var entity = await db.EmailOutboxMessages.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.Id == outboxId, cancellationToken);
         if (entity == null) return;
@@ -267,7 +275,7 @@ public sealed class EmailOutboxWorker : BackgroundService
 
     private async Task MarkExpiredAsync(Guid outboxId, CancellationToken cancellationToken)
     {
-        using var scope = _scopeFactory.CreateScope();
+        using var scope = CreateSystemScope();
         var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
         var entity = await db.EmailOutboxMessages.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.Id == outboxId, cancellationToken);
         if (entity == null) return;
@@ -283,7 +291,7 @@ public sealed class EmailOutboxWorker : BackgroundService
 
     private async Task RecordFailureAsync(Guid outboxId, string sanitizedError, bool forceTerminal, CancellationToken cancellationToken)
     {
-        using var scope = _scopeFactory.CreateScope();
+        using var scope = CreateSystemScope();
         var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
         var entity = await db.EmailOutboxMessages.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.Id == outboxId, cancellationToken);
         if (entity == null) return;

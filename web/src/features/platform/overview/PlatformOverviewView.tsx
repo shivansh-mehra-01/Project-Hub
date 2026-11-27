@@ -9,13 +9,8 @@ import {
   LifeBuoy,
   AlertTriangle,
   ArrowRight,
-  ShieldCheck,
   Clock,
   Activity,
-  AlertCircle,
-  Megaphone,
-  User,
-  Check,
   Ban,
   RotateCcw,
   Server,
@@ -25,6 +20,10 @@ import {
   Mail,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
+import { PageLoadingState } from "@/design-system/patterns/PageStates";
+import { Button } from "@/design-system/components/Button";
 import { usePlatformData } from "../data/platformDataStore";
 import { showToast } from "@/lib/toast";
 
@@ -37,6 +36,7 @@ export const PlatformOverviewView: React.FC = () => {
     alerts,
     auditLogs,
     updateCollege,
+    isLoadingPlatformData,
   } = usePlatformData();
 
   useDashboardHeader({
@@ -114,12 +114,36 @@ export const PlatformOverviewView: React.FC = () => {
     showToast(`Tenant provisioning re-initiated for ${collegeName}. Database schema verified.`, "success");
   };
 
+  if (
+    isLoadingPlatformData &&
+    colleges.length === 0 &&
+    onboardingRequests.length === 0 &&
+    tickets.length === 0
+  ) {
+    return <PageLoadingState message="Loading platform overview..." />;
+  }
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      <PageHeader
+        title="Platform Overview"
+        description="Ecosystem adoption, college onboarding queue, institutional support, and core service health."
+        actions={
+          <Link href="/platform/colleges/new">
+            <Button size="sm" variant="primary" leftIcon={<Building2 className="h-3.5 w-3.5" />}>
+              Onboard College
+            </Button>
+          </Link>
+        }
+      />
+
       {/* 5 SUMMARY METRICS CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         {/* Card 1: Total Colleges */}
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between">
+        <Link
+          href="/platform/colleges"
+          className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between hover:border-slate-300 hover:shadow-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40"
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Total Colleges</span>
             <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200/60 flex items-center justify-center text-slate-600">
@@ -130,12 +154,15 @@ export const PlatformOverviewView: React.FC = () => {
             <div className="text-2xl font-bold tabular-nums text-slate-900 tracking-tight">
               {totalCollegesCount}
             </div>
-            <p className="text-[10px] text-slate-400 font-medium mt-0.5">RGPV affiliated institutions</p>
+            <p className="text-[10px] text-slate-400 font-medium mt-0.5">Affiliated institutions</p>
           </div>
-        </div>
+        </Link>
 
         {/* Card 2: Active Colleges */}
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between">
+        <Link
+          href="/platform/colleges?status=Active"
+          className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between hover:border-slate-300 hover:shadow-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40"
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Active Colleges</span>
             <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
@@ -148,10 +175,13 @@ export const PlatformOverviewView: React.FC = () => {
             </div>
             <p className="text-[10px] text-emerald-600 font-medium mt-0.5">Operational tenants</p>
           </div>
-        </div>
+        </Link>
 
         {/* Card 3: Pending Applications */}
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between">
+        <Link
+          href="/platform/colleges?status=Pending+Review"
+          className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between hover:border-slate-300 hover:shadow-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40"
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Pending Applications</span>
             <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
@@ -164,10 +194,13 @@ export const PlatformOverviewView: React.FC = () => {
             </div>
             <p className="text-[10px] text-blue-600 font-medium mt-0.5">Awaiting review</p>
           </div>
-        </div>
+        </Link>
 
         {/* Card 4: Suspended Colleges */}
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between">
+        <Link
+          href="/platform/colleges?status=Suspended"
+          className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between hover:border-slate-300 hover:shadow-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40"
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Suspended Colleges</span>
             <div className="w-7 h-7 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
@@ -180,10 +213,13 @@ export const PlatformOverviewView: React.FC = () => {
             </div>
             <p className="text-[10px] text-rose-600 font-medium mt-0.5">Access disabled</p>
           </div>
-        </div>
+        </Link>
 
         {/* Card 5: Open Support Tickets */}
-        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1">
+        <Link
+          href="/platform/support-health?tab=tickets"
+          className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1 hover:border-slate-300 hover:shadow-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40"
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Open Tickets</span>
             <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
@@ -196,7 +232,7 @@ export const PlatformOverviewView: React.FC = () => {
             </div>
             <p className="text-[10px] text-amber-700 font-medium mt-0.5">College requests</p>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Aggregate Volume Notice (Accurate Aggregation) */}
@@ -237,11 +273,12 @@ export const PlatformOverviewView: React.FC = () => {
             </div>
 
             {onboardingRequests.filter((r) => r.reviewStatus === "Under Review").length === 0 ? (
-              <div className="py-8 text-center text-slate-500 text-xs">
-                <CheckCircle2 className="w-7 h-7 text-emerald-500 mx-auto mb-1.5 opacity-80" />
-                <p className="font-semibold text-slate-800">No applications awaiting review</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">All college onboarding submissions have been reviewed.</p>
-              </div>
+              <EmptyState
+                icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+                title="No applications awaiting review"
+                description="All college onboarding submissions have been reviewed."
+                className="border-0 bg-transparent py-6"
+              />
             ) : (
               <div className="space-y-2.5">
                 {onboardingRequests
@@ -256,7 +293,7 @@ export const PlatformOverviewView: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-slate-900 truncate">{req.institutionName}</span>
                           <span className="text-[10px] font-mono px-1.5 py-0.2 bg-white text-slate-600 border border-slate-200 rounded">
-                            {req.collegeCode || "RGPV-CODE"}
+                            {req.collegeCode || "PENDING"}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500">
@@ -330,11 +367,12 @@ export const PlatformOverviewView: React.FC = () => {
             </div>
 
             {openTicketsCount === 0 ? (
-              <div className="py-8 text-center text-slate-500 text-xs">
-                <CheckCircle2 className="w-7 h-7 text-emerald-500 mx-auto mb-1.5 opacity-80" />
-                <p className="font-semibold text-slate-800">Support queue is clear</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">No open tickets from affiliated colleges.</p>
-              </div>
+              <EmptyState
+                icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+                title="Support queue is clear"
+                description="No open tickets from affiliated colleges."
+                className="border-0 bg-transparent py-6"
+              />
             ) : (
               <div className="space-y-2.5">
                 {tickets
@@ -469,7 +507,12 @@ export const PlatformOverviewView: React.FC = () => {
 
             <div className="space-y-3">
               {auditLogs.length === 0 ? (
-                <p className="text-xs text-slate-400 py-4 text-center">No recent administrative events recorded.</p>
+                <EmptyState
+                  icon={<Clock className="w-5 h-5 text-slate-400" />}
+                  title="No recent activities"
+                  description="No recent administrative events recorded."
+                  className="border-0 bg-transparent py-6"
+                />
               ) : (
                 auditLogs.slice(0, 4).map((activity) => (
                   <div key={activity.id} className="text-xs space-y-0.5">

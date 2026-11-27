@@ -3336,7 +3336,7 @@ public class CollegeAdminFinalizationTests : IClassFixture<CustomWebApplicationF
             var result = await response.Content.ReadFromJsonAsync<BulkStudentUploadResultDto>();
             Assert.NotNull(result);
             Assert.Equal(0, result.SuccessfullyCreated);
-            Assert.Equal(1, result.SuccessfullyUpdated);
+            Assert.Equal(attempt == 1 ? 1 : 0, result.SuccessfullyUpdated);
             Assert.Equal(0, result.FailedCount);
         }
 

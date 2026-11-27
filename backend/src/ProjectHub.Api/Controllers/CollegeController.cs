@@ -1782,6 +1782,48 @@ public class CollegeController : ControllerBase
         return Ok(users);
     }
 
+    [HttpGet("students")]
+    public async Task<ActionResult<List<CollegeStaffDto>>> GetStudents([FromQuery] string? search)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var query = _context.Users
+            .Include(u => u.Department)
+            .Where(u => u.CollegeId == collegeId && !u.IsDeleted && u.Role == UserRole.Student);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(u =>
+                u.FullName.ToLower().Contains(term) ||
+                u.Email.ToLower().Contains(term) ||
+                (u.EnrollmentOrEmployeeCode != null && u.EnrollmentOrEmployeeCode.ToLower().Contains(term)));
+        }
+
+        var students = await query
+            .OrderBy(u => u.FullName)
+            .Select(u => new CollegeStaffDto
+            {
+                Id = u.Id,
+                FullName = u.FullName,
+                Email = u.Email,
+                Role = u.Role,
+                Designation = u.Designation,
+                DelegatedResponsibility = u.DelegatedResponsibility,
+                DepartmentId = u.DepartmentId,
+                DepartmentCode = u.Department != null ? u.Department.Code : null,
+                DepartmentName = u.Department != null ? u.Department.Name : null,
+                EmployeeCode = u.EnrollmentOrEmployeeCode,
+                IsActive = u.IsActive,
+                IsActivated = u.IsActivated,
+                CreatedAtUtc = u.CreatedAtUtc,
+                LastLoginAtUtc = u.LastLoginAtUtc
+            })
+            .ToListAsync();
+
+        return Ok(students);
+    }
+
     [HttpPost("users")]
     public async Task<ActionResult<CollegeStaffDto>> CreateStaffUser([FromBody] CreateCollegeStaffRequest request)
     {
@@ -2142,7 +2184,9 @@ public class CollegeController : ControllerBase
     private sealed record StudentImportUpdatePlan(
         Guid UserId,
         string FullName,
-        Guid DepartmentId);
+        Guid DepartmentId,
+        int? CurrentSemesterTermId,
+        Guid? CourseProgramId);
 
     private sealed class StaffImportValidationResult
     {
@@ -2395,6 +2439,7 @@ public class CollegeController : ControllerBase
             InvalidCount = result.PreviewRows.Count(r => r.Action == "invalid"),
             CreateCount = result.PreviewRows.Count(r => r.Action == "create"),
             UpdateCount = result.PreviewRows.Count(r => r.Action == "update"),
+            UnchangedCount = result.PreviewRows.Count(r => r.Action == "unchanged"),
             DuplicateCount = result.DuplicateCount,
             HeaderErrors = result.HeaderErrors,
             Rows = result.PreviewRows
@@ -2595,6 +2640,8 @@ public class CollegeController : ControllerBase
         var existingUsers = await _context.Users
             .AsNoTracking()
             .IgnoreQueryFilters()
+            .Include(u => u.Department)
+            .Include(u => u.AcademicEnrollments)
             .Where(u => !u.IsDeleted)
             .ToListAsync();
 
@@ -2740,7 +2787,60 @@ public class CollegeController : ControllerBase
                 }
                 else
                 {
-                    if (existingByMail.DepartmentId != dept!.Id && dept.IntakeQuota > 0)
+                    // Student exists with matching email and StudentNumber.
+                    // Determine if any profile or academic data has changed.
+                    bool nameChanged = !string.Equals(existingByMail.FullName, fullName, StringComparison.Ordinal);
+                    bool deptChanged = existingByMail.DepartmentId != dept!.Id;
+                    var existingDeptCourseProgramId = existingByMail.Department?.CourseProgramId;
+                    var resolvedProgId = matchedProg?.Id ?? existingDeptCourseProgramId;
+
+                    SemesterTerm? resolvedTerm = null;
+                    if (row.CurrentSemester.HasValue)
+                    {
+                        var termMatches = semesterTerms
+                            .Where(t => t.DepartmentId == dept.Id &&
+                                        t.SemesterNumber == row.CurrentSemester.Value &&
+                                        (activeSession == null || t.AcademicSessionId == activeSession.Id))
+                            .ToList();
+                        if (termMatches.Count > 1)
+                        {
+                            rowErrors.Add($"Ambiguous SemesterTerm: multiple active terms match Semester {row.CurrentSemester.Value} in department '{dept.Code}'.");
+                        }
+                        else
+                        {
+                            resolvedTerm = termMatches.FirstOrDefault();
+                        }
+                    }
+
+                    bool programChanged = deptChanged
+                        || (resolvedProgId.HasValue && existingDeptCourseProgramId.HasValue
+                            && existingDeptCourseProgramId.Value != resolvedProgId.Value);
+
+                    var existingDeptEnrollment = existingByMail.AcademicEnrollments
+                        .FirstOrDefault(e => e.DepartmentId == dept.Id && !e.IsDeleted);
+                    bool semesterChanged = row.CurrentSemester.HasValue
+                        && existingDeptEnrollment != null
+                        && resolvedTerm != null
+                        && resolvedTerm.Id != existingDeptEnrollment.CurrentSemesterTermId;
+
+                    if (rowErrors.Count == 0 && !nameChanged && !deptChanged && !programChanged && !semesterChanged)
+                    {
+                        // Data is unchanged — report as unchanged; no profile or enrollment modifications needed.
+                        previewRows.Add(new RosterImportPreviewRowDto
+                        {
+                            RowNumber = rowNum,
+                            FullName = fullName,
+                            Email = normalizedEmail,
+                            DepartmentCode = dept.Code,
+                            SecondaryValue = studentNumber,
+                            Action = "unchanged",
+                            Errors = new List<string>()
+                        });
+                        continue;
+                    }
+
+                    // Data has changed — treat as an update.
+                    if (rowErrors.Count == 0 && deptChanged && dept.IntakeQuota > 0)
                     {
                         var currentCount = currentStudentCountsByDept.GetValueOrDefault(dept.Id, 0);
                         var pendingAdd = projectedAdditionsByDept.GetValueOrDefault(dept.Id, 0);
@@ -2756,8 +2856,10 @@ public class CollegeController : ControllerBase
 
                     if (rowErrors.Count == 0)
                     {
-                        // Enrollment and semester progression remain untouched on re-import.
-                        studentUpdates.Add(new StudentImportUpdatePlan(existingByMail.Id, fullName, dept.Id));
+                        studentUpdates.Add(new StudentImportUpdatePlan(existingByMail.Id, fullName, dept.Id,
+                            row.CurrentSemester,
+                            resolvedProgId));
+
                         previewRows.Add(new RosterImportPreviewRowDto
                         {
                             RowNumber = rowNum,
@@ -2834,12 +2936,27 @@ public class CollegeController : ControllerBase
             usersToAdd.Add(newStudent);
             activationDispatches.Add((newStudent.Email, newStudent.FullName, rawToken));
 
-            var matchedTerm = row.CurrentSemester.HasValue
-                ? semesterTerms.FirstOrDefault(t =>
-                    t.DepartmentId == dept.Id &&
-                    t.SemesterNumber == row.CurrentSemester.Value &&
-                    (activeSession == null || t.AcademicSessionId == activeSession.Id))
-                : semesterTerms.FirstOrDefault(t => t.DepartmentId == dept.Id);
+            SemesterTerm? matchedTerm = null;
+            if (rowErrors.Count == 0 && dept != null)
+            {
+                var termCandidates = row.CurrentSemester.HasValue
+                    ? semesterTerms.Where(t =>
+                        t.DepartmentId == dept.Id &&
+                        t.SemesterNumber == row.CurrentSemester.Value &&
+                        (activeSession == null || t.AcademicSessionId == activeSession.Id)).ToList()
+                    : semesterTerms.Where(t =>
+                        t.DepartmentId == dept.Id &&
+                        (activeSession == null || t.AcademicSessionId == activeSession.Id)).ToList();
+
+                if (termCandidates.Count > 1)
+                {
+                    rowErrors.Add($"Ambiguous SemesterTerm: multiple active terms match department '{dept.Code}'{(row.CurrentSemester.HasValue ? $" Semester {row.CurrentSemester.Value}" : "")}.");
+                }
+                else
+                {
+                    matchedTerm = termCandidates.FirstOrDefault();
+                }
+            }
 
             var resolvedProgramId = matchedProg?.Id ?? dept.CourseProgramId ?? programs.FirstOrDefault()?.Id;
             if (resolvedProgramId.HasValue && matchedTerm != null)
@@ -2897,6 +3014,7 @@ public class CollegeController : ControllerBase
             InvalidCount = result.PreviewRows.Count(r => r.Action == "invalid"),
             CreateCount = result.PreviewRows.Count(r => r.Action == "create"),
             UpdateCount = result.PreviewRows.Count(r => r.Action == "update"),
+            UnchangedCount = result.PreviewRows.Count(r => r.Action == "unchanged"),
             DuplicateCount = result.DuplicateCount,
             HeaderErrors = result.HeaderErrors,
             Rows = result.PreviewRows
@@ -3566,54 +3684,11 @@ public class CollegeController : ControllerBase
     }
 
     [HttpPost("tracks")]
-    public async Task<ActionResult<CollegeTrackDto>> CreateCollegeTrackSession([FromBody] CreateCollegeTrackRequest request)
+    public ActionResult<CollegeTrackDto> CreateCollegeTrackSession([FromBody] CreateCollegeTrackRequest request)
     {
-        var collegeId = _tenantContext.CollegeId!.Value;
-
-        var track = new AcademicTrack
+        return StatusCode(StatusCodes.Status403Forbidden, new
         {
-            CollegeId = collegeId,
-            DepartmentId = null, // Overarching college session
-            AcademicSessionId = request.AcademicSessionId,
-            CourseProgramId = request.CourseProgramId,
-            SemesterTermId = request.SemesterTermId,
-            SubjectOfferingId = request.SubjectOfferingId,
-            CurriculumSchemeId = request.CurriculumSchemeId,
-            ParticipationMode = request.ParticipationMode,
-            EnrolmentMode = request.EnrolmentMode,
-            AllowCrossBranchTeams = request.AllowCrossBranchTeams,
-            Name = request.Name.Trim(),
-            AcademicYear = request.AcademicYear.Trim(),
-            AllowInterdisciplinaryTeams = request.AllowInterdisciplinaryTeams,
-            ProposalDeadlineUtc = request.ProposalDeadlineUtc,
-            FinalSubmissionDeadlineUtc = request.FinalSubmissionDeadlineUtc,
-            GuideWeightPct = request.GuideWeightPct,
-            MidTermWeightPct = request.MidTermWeightPct,
-            FinalVivaWeightPct = request.FinalVivaWeightPct,
-            SharedProjectRubricPct = request.SharedProjectRubricPct,
-            IndividualStudentRubricPct = request.IndividualStudentRubricPct
-        };
-
-        track.ValidateWeights();
-        await _context.AcademicTracks.AddAsync(track);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetTracks), new { id = track.Id }, new CollegeTrackDto
-        {
-            Id = track.Id,
-            CollegeId = track.CollegeId,
-            DepartmentId = track.DepartmentId,
-            AcademicSessionId = track.AcademicSessionId,
-            CourseProgramId = track.CourseProgramId,
-            SemesterTermId = track.SemesterTermId,
-            SubjectOfferingId = track.SubjectOfferingId,
-            ParticipationMode = track.ParticipationMode,
-            EnrolmentMode = track.EnrolmentMode,
-            AllowCrossBranchTeams = track.AllowCrossBranchTeams,
-            Name = track.Name,
-            AcademicYear = track.AcademicYear,
-            AllowInterdisciplinaryTeams = track.AllowInterdisciplinaryTeams,
-            IsActive = track.IsActive
+            message = "Department project tracks are initialized and owned by the Department HOD via /api/hod/tracks."
         });
     }
 

@@ -469,45 +469,6 @@ test.describe("Faculty / Guide Module — End-to-End Browser Journeys & Workstre
     expect(dupRes.status()).toBe(409);
   });
 
-  // Journey 7 — Problem Bank Creation and Scope
-  test("Journey 7 — Problem Bank Creation and Department Scoping", async ({
-    page,
-    request,
-  }) => {
-    await authenticatePersona(page, request);
-
-    // 1. Open Problem Bank directly
-    await page.goto(`${BASE_URL}/faculty/problem-bank`);
-    await expect(
-      page.getByRole("heading", { name: /Department Problem Bank/i })
-    ).toBeVisible({ timeout: 10000 });
-
-    // 2. Click Propose Statement button
-    const proposeBtn = page.getByRole("button", {
-      name: /Propose Statement|Submit Problem/i,
-    });
-    if (await proposeBtn.isVisible()) {
-      await proposeBtn.click();
-
-      // 3. Fill in statement
-      const testTitle = `AI Grid Optimizer E2E ${Date.now()}`;
-      await page.fill('input[placeholder*="Autonomous Microgrid"]', testTitle);
-      await page.fill(
-        'textarea[placeholder*="statement"]',
-        "Automated Playwright E2E challenge description."
-      );
-
-      // Submit
-      const submitBtn = page.getByRole("button", {
-        name: /Submit for Department Review|Create/i,
-      });
-      if (await submitBtn.isVisible()) {
-        await submitBtn.click();
-        await expect(page.getByText(testTitle)).toBeVisible({ timeout: 5000 });
-      }
-    }
-  });
-
   // Journey 8 — Coordinator Delegation, Separation and Mutations (Workstream B5)
   test("Journey 8 — Coordinator Delegation, Separation and Mutation Workflows", async ({
     page,

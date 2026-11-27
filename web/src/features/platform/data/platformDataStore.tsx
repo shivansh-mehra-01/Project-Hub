@@ -2196,123 +2196,23 @@ const INITIAL_PLATFORM_SERVICES: PlatformServiceRecord[] = [
   },
 ];
 
-const INITIAL_INTEGRATIONS: IntegrationConnectorRecord[] = [
-  { id: "int-01", name: "Google Workspace Directory Sync", category: "Google Workspace", status: "Connected", provider: "Google Cloud Platform", healthLatencyMs: 42, lastSyncTimestamp: "2026-11-21 15:00:00", details: "OAuth 2.0 & Admin SDK Directory Sync for @sistec.ac.in, @lnct.ac.in", activeScopes: ["https://www.googleapis.com/auth/admin.directory.user.readonly", "email", "profile"] },
-  { id: "int-02", name: "Microsoft 365 / Azure Active Directory", category: "Microsoft 365", status: "Connected", provider: "Microsoft Entra ID", healthLatencyMs: 68, lastSyncTimestamp: "2026-11-21 14:30:00", details: "Graph API SAML 2.0 SSO and SCIM Directory Provisioning", activeScopes: ["User.Read.All", "Directory.Read.All"] },
-  { id: "int-03", name: "Amazon SES Transactional Email", category: "Email / SMTP", status: "Connected", provider: "AWS SES (ap-south-1)", healthLatencyMs: 18, lastSyncTimestamp: "2026-11-21 15:35:10", details: "DKIM, SPF & DMARC authenticated; 99.4% delivery rate past 30 days", activeScopes: ["ses:SendRawEmail", "ses:SendEmail"] },
-  { id: "int-04", name: "Razorpay Enterprise Payment Gateway", category: "Payment Gateway", status: "Connected", provider: "Razorpay India", healthLatencyMs: 84, lastSyncTimestamp: "2026-11-21 15:40:00", details: "Handles institutional license renewals, GST invoices & UPI/NEFT reconciliation", activeScopes: ["payments:read", "invoices:write", "refunds:write"] },
-  { id: "int-05", name: "Amazon S3 Vault Storage", category: "Cloud Storage", status: "Connected", provider: "AWS S3 Multi-Region", healthLatencyMs: 22, lastSyncTimestamp: "2026-11-21 15:42:00", details: "Stores encrypted project synopses, presentations, and final thesis PDFs with SHA-256 validation", activeScopes: ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"] },
-  { id: "int-06", name: "SMS Gateway (Fast2SMS / DLT)", category: "SMS Gateway", status: "Connected", provider: "Fast2SMS India (DLT Registered)", healthLatencyMs: 110, lastSyncTimestamp: "2026-11-21 12:00:00", details: "Dispatches 24-hr OTP authentication codes to authorized deans and evaluators", activeScopes: ["dlt:send_otp"] },
-];
+const INITIAL_INTEGRATIONS: IntegrationConnectorRecord[] = [];
 
 // =============================================================================
-// SYSTEM HEALTH & MONITORING SEED
+// SYSTEM HEALTH & MONITORING SEED (Empty — runtime data comes from backend APIs)
 // =============================================================================
-const INITIAL_SERVICES: ServiceHealthRecord[] = [
-  {
-    serviceName: "Backend API",
-    category: "Backend API",
-    status: "Healthy",
-    latencyMs: 16,
-    uptime90d: 99.99,
-    lastChecked: "Just now",
-    details: "Core REST API gateway handling authenticated student and faculty portal endpoints.",
-  },
-  {
-    serviceName: "Database",
-    category: "Database",
-    status: "Healthy",
-    latencyMs: 2.4,
-    uptime90d: 99.98,
-    lastChecked: "Just now",
-    details: "Primary relational database storing project repositories, teams, and academic schemas.",
-  },
-  {
-    serviceName: "Authentication",
-    category: "Authentication",
-    status: "Healthy",
-    latencyMs: 12,
-    uptime90d: 100.0,
-    lastChecked: "Just now",
-    details: "Central identity provider, SAML SSO assertions, and token issuance service.",
-  },
-  {
-    serviceName: "File Storage",
-    category: "File Storage",
-    status: "Not Configured",
-    latencyMs: 0,
-    uptime90d: 0,
-    lastChecked: "Local disk fallback active",
-    details: "Central secure object repository. Local disk fallback active; external S3 file vault not configured.",
-  },
-  {
-    serviceName: "Background Workers",
-    category: "Background Workers",
-    status: "Not Configured",
-    latencyMs: 0,
-    uptime90d: 0,
-    lastChecked: "In-process execution active",
-    details: "In-process task execution active. Dedicated distributed worker cluster not configured.",
-  },
-  {
-    serviceName: "Email Service",
-    category: "Email Service",
-    status: "Not Configured",
-    latencyMs: 0,
-    uptime90d: 0,
-    lastChecked: "Console logger active",
-    details: "Development mock logger active. Production transactional SMTP gateway not configured.",
-  },
-];
-
 const INITIAL_ALERTS: PlatformAlertRecord[] = [];
 
-const INITIAL_INCIDENTS_HISTORY: PlatformIncidentRecord[] = [
-  {
-    id: "inc-01",
-    title: "Email Gateway Transient Rate Limit Delays",
-    affectedService: "Email Service",
-    startTime: "2026-11-08 14:10:00 IST",
-    recoveryTime: "2026-11-08 14:22:00 IST",
-    duration: "12 minutes",
-    date: "Nov 08, 2026",
-    impact: "Outbound project submission notifications queued temporarily during peak evaluation hour.",
-    resolutionSummary: "Upstream dispatch throttle resolved; all queued notification emails delivered.",
-    rootCause: "Transient gateway queue backlog.",
-    status: "Resolved",
-  },
-  {
-    id: "inc-02",
-    title: "Scheduled Database Minor Maintenance Window",
-    affectedService: "Database",
-    startTime: "2026-10-28 02:00:00 IST",
-    recoveryTime: "2026-10-28 02:18:00 IST",
-    duration: "18 minutes",
-    date: "Oct 28, 2026",
-    impact: "Platform entered scheduled read-only maintenance mode. Zero capstone data loss.",
-    resolutionSummary: "Database engine security patch applied successfully; all connections restored.",
-    rootCause: "Scheduled multi-AZ database engine security patch application.",
-    status: "Resolved",
-  },
-];
-
 const INITIAL_BACKUP_STATUS: PlatformBackupStatusRecord = {
-  lastBackupTime: "Today at 04:00 AM IST (2026-11-22 04:00:00)",
-  backupStatus: "Healthy",
-  backupSize: "42.8 GB",
-  retentionPolicy: "30 daily snapshots + 12 monthly immutable archives",
-  lastRestoreTestTime: "2026-11-15 03:30 AM IST (7 days ago)",
-  restoreVerificationStatus: "Integrity Pass — 100% Data Parity Verified",
-  restoreDrillFrequency: "Weekly automated sandbox restoration & checksum test",
+  lastBackupTime: "Not Configured",
+  backupStatus: "Not Configured" as PlatformBackupStatusRecord["backupStatus"],
+  backupSize: "—",
+  retentionPolicy: "External pg_dump & volume snapshots",
+  lastRestoreTestTime: "—",
+  restoreVerificationStatus: "Pending Test",
+  restoreDrillFrequency: "—",
   activeAlertsCount: 0,
 };
-
-const INITIAL_BACKGROUND_JOBS: BackgroundJobRecord[] = [
-  { id: "job-rls-scan-88", jobName: "Nightly Cross-Tenant RLS Boundary Scan", queue: "default", status: "Completed", targetTenant: "All Active Schemas", executionDurationMs: 1400, startedAt: "2026-11-21 02:00:00", retryCount: 0 },
-  { id: "job-log-sweep-42", jobName: "Friday Logbook Weekly Deadline Enforcer", queue: "notifications", status: "Completed", targetTenant: "LNCT (Dept CSE)", executionDurationMs: 820, startedAt: "2026-11-20 23:59:59", retryCount: 0 },
-  { id: "job-backup-snap-01", jobName: "Automated PostgreSQL Snapshot & Integrity Verification", queue: "default", status: "Completed", targetTenant: "Primary RDS Cluster", executionDurationMs: 8400, startedAt: "2026-11-21 04:00:00", retryCount: 0 },
-  { id: "job-rpt-sched-19", jobName: "Monthly Platform Institutional Utilization Digest", queue: "scheduled-reports", status: "Completed", targetTenant: "All Institutional Principals", executionDurationMs: 4100, startedAt: "2026-11-01 06:00:00", retryCount: 0 },
-];
 
 // =============================================================================
 // SUPPORT TICKETS & ANNOUNCEMENTS SEED
@@ -2949,9 +2849,7 @@ export const PlatformDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [payments] = useState<PaymentTransactionRecord[]>([]);
   const [refunds] = useState<RefundRecord[]>([]);
-  const [discountCoupons] = useState<DiscountCouponRecord[]>([
-    { id: "c-rgpv10", code: "RGPV-PILOT-2026", discountType: "Percentage", discountValue: 100, validFrom: "2026-01-01", validUntil: "2027-12-31", usageCount: 4, maxUsageLimit: 50, applicablePlans: ["Pilot License"], status: "Active" },
-  ]);
+  const [discountCoupons] = useState<DiscountCouponRecord[]>([]);
   const [adminUsers, setAdminUsers] = useState<PlatformAdminUserRecord[]>([]);
   const [securityApprovals, setSecurityApprovals] = useState<SecurityApprovalRequestRecord[]>(INITIAL_SECURITY_APPROVALS);
   const [roles] = useState<RolePermissionRecord[]>(INITIAL_ROLES);

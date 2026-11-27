@@ -7,17 +7,17 @@ import {
   AlertCircle,
   Clock,
   Users,
-  ShieldCheck,
   CheckCircle2,
   ArrowRight,
-  ChevronRight,
-  Sparkles,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { PageErrorState, PageLoadingState } from "@/design-system/patterns/PageStates";
 import { Badge } from "@/design-system/components/Badge";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/design-system/components/Card";
 import { Button } from "@/design-system/components/Button";
-import { hodApi, getAuthToken, HodDashboardDto, HodProjectDto } from "@/lib/api";
+import { showToast } from "@/lib/toast";
+import { hodApi, HodDashboardDto, HodProjectDto, CollegeTrackDto } from "@/lib/api";
 import { HodMetricCard } from "../components/HodMetricCard";
 
 export const HodOverviewView: React.FC = () => {
@@ -29,28 +29,21 @@ export const HodOverviewView: React.FC = () => {
 
   const [dashboard, setDashboard] = useState<HodDashboardDto | null>(null);
   const [projects, setProjects] = useState<HodProjectDto[]>([]);
+  const [tracks, setTracks] = useState<CollegeTrackDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [cutoffDate, setCutoffDate] = useState("");
   const [savingCutoff, setSavingCutoff] = useState(false);
   const [cutoffError, setCutoffError] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
   const loadData = useCallback(async () => {
-    if (!getAuthToken()) {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
-      const [dashRes, projRes] = await Promise.allSettled([
+      setError(null);
+      const [dashRes, projRes, tracksRes] = await Promise.allSettled([
         hodApi.getDashboard(),
         hodApi.getProjects(),
+        hodApi.getTracks(),
       ]);
 
       if (dashRes.status === "fulfilled" && dashRes.value) {
@@ -60,20 +53,59 @@ export const HodOverviewView: React.FC = () => {
             ? new Date(dashRes.value.evaluationCutoffDateUtc).toISOString().slice(0, 10)
             : ""
         );
+      } else if (dashRes.status === "rejected") {
+        throw dashRes.reason;
       }
       if (projRes.status === "fulfilled" && projRes.value) {
         setProjects(projRes.value);
       }
-    } catch (err) {
-      console.warn("Failed to load HOD overview:", err);
+      if (tracksRes.status === "fulfilled" && tracksRes.value) {
+        setTracks(tracksRes.value);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load department overview.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let active = true;
+    Promise.allSettled([
+      hodApi.getDashboard(),
+      hodApi.getProjects(),
+      hodApi.getTracks(),
+    ])
+      .then(([dashRes, projRes, tracksRes]) => {
+        if (!active) return;
+        if (dashRes.status === "fulfilled" && dashRes.value) {
+          setDashboard(dashRes.value);
+          setCutoffDate(
+            dashRes.value.evaluationCutoffDateUtc
+              ? new Date(dashRes.value.evaluationCutoffDateUtc).toISOString().slice(0, 10)
+              : ""
+          );
+        } else if (dashRes.status === "rejected") {
+          setError(
+            dashRes.reason instanceof Error
+              ? dashRes.reason.message
+              : "Failed to load department overview."
+          );
+        }
+        if (projRes.status === "fulfilled" && projRes.value) {
+          setProjects(projRes.value);
+        }
+        if (tracksRes.status === "fulfilled" && tracksRes.value) {
+          setTracks(tracksRes.value);
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Total pending decisions count
   const totalPendingDecisions = useMemo(() => {
@@ -139,46 +171,69 @@ export const HodOverviewView: React.FC = () => {
     }));
   }, [projects]);
 
+  if (loading && !dashboard) {
+    return <PageLoadingState message="Loading department overview..." />;
+  }
+
   return (
     <div className="space-y-6">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-medium text-white shadow-xl border border-white/10 animate-in fade-in slide-in-from-top-2 duration-200">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
+      <PageHeader
+        title={
+          dashboard?.departmentName
+            ? `Department of ${dashboard.departmentName}`
+            : "Department Overview"
+        }
+        badge={
+          <Badge variant="neutral" size="sm">
+            {dashboard?.departmentCode || "CSE"}
+          </Badge>
+        }
+        description={`AY 2025–2026 • ${dashboard?.totalStudentsEnrolled || 0} Undergraduates Enrolled • ${dashboard?.availableMentors || 0} Faculty Mentors`}
+        actions={
+          <>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => router.push("/hod/projects/tracks")}
+            >
+              Project Tracks
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => router.push("/hod/approvals")}
+              leftIcon={<AlertCircle className="h-3.5 w-3.5" />}
+            >
+              Review Approvals
+            </Button>
+          </>
+        }
+      />
+
+      <PageErrorState error={error} onRetry={() => void loadData()} />
+
+      {!loading && tracks.filter((t) => (t.status ?? (t.isActive ? "Open" : "Closed")) === "Open").length === 0 && (
+        <Card className="border-amber-200 bg-amber-50/70">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-amber-950">
+                No department project track is currently open
+              </p>
+              <p className="text-[11px] text-amber-800 mt-0.5">
+                Initialize and launch a Minor, Major, or Individual project track so students can start their projects.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => router.push("/hod/projects/start-window")}
+              rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+            >
+              Start Project Window
+            </Button>
+          </CardContent>
+        </Card>
       )}
-
-      {/* Page Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shrink-0" />
-            <h1 className="text-base sm:text-lg font-bold font-heading text-slate-900 tracking-tight truncate">
-              Department of {dashboard?.departmentName || "Computer Science & Engineering"}
-            </h1>
-            <Badge variant="neutral" size="sm">
-              {dashboard?.departmentCode || "CSE"}
-            </Badge>
-          </div>
-          <p className="text-xs text-slate-500 font-medium">
-            Academic Session: <span className="font-semibold text-slate-800">AY 2025–2026</span> •{" "}
-            {dashboard?.totalStudentsEnrolled || 0} Undergraduates Enrolled •{" "}
-            {dashboard?.availableMentors || 0} Faculty Mentors
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => router.push("/hod/approvals")}
-            leftIcon={<AlertCircle className="h-3.5 w-3.5" />}
-          >
-            Review Approvals
-          </Button>
-        </div>
-      </div>
 
       {/* 4 Operational KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -189,15 +244,17 @@ export const HodOverviewView: React.FC = () => {
           subtitle={`Of ${dashboard?.totalTeams ?? projects.length} Total Registered`}
           icon={FolderGit2}
           variant="emerald"
+          onClick={() => router.push("/hod/projects?status=ActiveBuild")}
         />
 
         {/* 2. Pending Approvals */}
         <HodMetricCard
           label="Pending Approvals"
           value={totalPendingDecisions}
-          subtitle="Proposals, Unlocks &amp; Overrides"
+          subtitle="Proposals, Unlocks & Overrides"
           icon={AlertCircle}
           variant={totalPendingDecisions > 0 ? "amber" : "neutral"}
+          onClick={() => router.push("/hod/approvals")}
         />
 
         {/* 3. At-Risk Projects */}
@@ -207,6 +264,7 @@ export const HodOverviewView: React.FC = () => {
           subtitle="Missed Logs ≥ 2 Weeks"
           icon={Clock}
           variant={(dashboard?.atRiskTeams ?? 0) > 0 ? "rose" : "neutral"}
+          onClick={() => router.push("/hod/projects?onlyAtRisk=true")}
         />
 
         {/* 4. Projects Without Guide */}
@@ -216,6 +274,7 @@ export const HodOverviewView: React.FC = () => {
           subtitle="Requires Mentor Allocation"
           icon={Users}
           variant={(dashboard?.projectsWithoutGuide ?? 0) > 0 ? "amber" : "neutral"}
+          onClick={() => router.push("/hod/projects?onlyWithoutGuide=true")}
         />
       </div>
 
@@ -348,10 +407,11 @@ export const HodOverviewView: React.FC = () => {
           )}
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="space-y-1 flex-1 max-w-xs">
-              <label className="text-xs font-semibold text-slate-700 block">
+              <label htmlFor="hod-eval-cutoff-date" className="text-xs font-semibold text-slate-700 block">
                 Evaluation Cutoff Date
               </label>
               <input
+                id="hod-eval-cutoff-date"
                 type="date"
                 value={cutoffDate}
                 onChange={(e) => setCutoffDate(e.target.value)}
@@ -369,9 +429,9 @@ export const HodOverviewView: React.FC = () => {
                   try {
                     const updated = await hodApi.updateEvaluationCutoff(`${cutoffDate}T23:59:59Z`);
                     setDashboard(updated);
-                    showToast("Department evaluation cutoff updated.");
-                  } catch (err: any) {
-                    setCutoffError(err?.data?.message || err?.message || "Failed to update evaluation cutoff.");
+                    showToast("Department evaluation cutoff updated.", "success");
+                  } catch (err: unknown) {
+                    setCutoffError(err instanceof Error ? err.message : "Failed to update evaluation cutoff.");
                   } finally {
                     setSavingCutoff(false);
                   }
@@ -391,9 +451,9 @@ export const HodOverviewView: React.FC = () => {
                       const updated = await hodApi.updateEvaluationCutoff(null);
                       setDashboard(updated);
                       setCutoffDate("");
-                      showToast("Department evaluation cutoff cleared.");
-                    } catch (err: any) {
-                      setCutoffError(err?.data?.message || err?.message || "Failed to clear evaluation cutoff.");
+                      showToast("Department evaluation cutoff cleared.", "success");
+                    } catch (err: unknown) {
+                      setCutoffError(err instanceof Error ? err.message : "Failed to clear evaluation cutoff.");
                     } finally {
                       setSavingCutoff(false);
                     }

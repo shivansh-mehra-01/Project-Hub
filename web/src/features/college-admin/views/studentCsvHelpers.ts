@@ -18,6 +18,8 @@ function normalizeProgram(raw: string): string {
   return s;
 }
 
+export { applyBackendRowErrors } from "./rosterCsvHelpers.ts";
+export { MAX_ROSTER_ROWS } from "./rosterCsvHelpers.ts";
 export const STUDENT_CSV_HEADERS = [
   "StudentName",
   "Email",

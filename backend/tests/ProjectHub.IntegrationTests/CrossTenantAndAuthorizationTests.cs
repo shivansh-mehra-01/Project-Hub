@@ -179,7 +179,7 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
             Email = "principal@lnct.ac.in",
             Password = "Pass@1234"
         });
-        Assert.Equal(HttpStatusCode.BadRequest, loginRes.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, loginRes.StatusCode);
     }
 
     [Fact]
@@ -214,7 +214,7 @@ public class CrossTenantAndAuthorizationTests : IClassFixture<CustomWebApplicati
             Email = "principal@bmsce.ac.in",
             Password = "Pass@1234"
         });
-        Assert.Equal(HttpStatusCode.BadRequest, loginRes.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, loginRes.StatusCode);
     }
 
     [Fact]

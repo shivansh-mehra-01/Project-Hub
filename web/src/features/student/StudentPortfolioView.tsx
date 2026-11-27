@@ -1,599 +1,770 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  GraduationCap,
   Award,
-  ExternalLink,
-  QrCode,
-  CheckCircle2,
-  Share2,
-  Copy,
-  ArrowRight,
-  GitBranch,
-  Sparkles,
-  Lock,
-  Globe,
+  BookOpen,
+  Calendar,
   Check,
-  AlertCircle,
-  HelpCircle,
+  CheckCircle2,
+  Clock,
+  Copy,
+  ExternalLink,
+  FileText,
+  FolderGit2,
+  Globe,
   ShieldCheck,
+  UserCheck,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
-import { Button } from "@/design-system/components/Button";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { PageErrorState, PageLoadingState } from "@/design-system/patterns/PageStates";
 import { Badge } from "@/design-system/components/Badge";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
+import { Button } from "@/design-system/components/Button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/design-system/components/Card";
 import { Modal } from "@/design-system/components/Modal";
-import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { studentApi } from "@/lib/api/studentApi";
-import { VerifiedStudentPortfolioDto, StudentAcademicRecordDto } from "@/lib/api/types";
+import { showToast } from "@/lib/toast";
+import {
+  PendingPortfolioProjectDto,
+  StudentAcademicRecordDto,
+  VerifiedStudentPortfolioDto,
+  VivaOutcome,
+} from "@/lib/api/types";
+
+function formatOutcome(outcome: VivaOutcome): {
+  label: string;
+  variant: "success" | "warning" | "danger" | "neutral";
+} {
+  switch (outcome) {
+    case "Pass":
+      return { label: "Passed", variant: "success" };
+    case "ReViva":
+      return { label: "Re-Defense Required", variant: "warning" };
+    case "Fail":
+      return { label: "Not Cleared", variant: "danger" };
+    case "Pending":
+      return { label: "Pending", variant: "neutral" };
+    default:
+      return { label: String(outcome), variant: "neutral" };
+  }
+}
+
+function formatDate(iso?: string): string {
+  if (!iso) return "";
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 export const StudentPortfolioView: React.FC = () => {
   useDashboardHeader({
     title: "Portfolio",
   });
 
-  const {
-    currentPersona,
-    teams,
-    continueProjectToNextTrack,
-  } = useProjectHubStore();
+  const [portfolio, setPortfolio] = useState<VerifiedStudentPortfolioDto | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [verifiedPortfolio, setVerifiedPortfolio] = useState<VerifiedStudentPortfolioDto | null>(null);
-  const [portfolioLoading, setPortfolioLoading] = useState(false);
-  const [portfolioVisibility, setPortfolioVisibility] = useState(false);
+  const [allowPublic, setAllowPublic] = useState(false);
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
-  const [selectedRecordForModal, setSelectedRecordForModal] = useState<StudentAcademicRecordDto | null>(null);
+  const [copiedShareUrl, setCopiedShareUrl] = useState(false);
 
-  const [showCertificateModal, setShowCertificateModal] = useState(false);
-  const [showContinuityModal, setShowContinuityModal] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [detailRecord, setDetailRecord] = useState<StudentAcademicRecordDto | null>(null);
+  const [credentialRecord, setCredentialRecord] = useState<StudentAcademicRecordDto | null>(null);
+
+  const loadPortfolio = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await studentApi.getVerifiedPortfolio();
+      setPortfolio(data);
+      setAllowPublic(Boolean(data.allowPublicPortfolio));
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Unable to load your academic portfolio right now.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
-    setPortfolioLoading(true);
     studentApi
       .getVerifiedPortfolio()
       .then((data) => {
-        if (active && data) {
-          setVerifiedPortfolio(data);
-          setPortfolioVisibility(data.allowPublicPortfolio);
+        if (!active) return;
+        setPortfolio(data);
+        setAllowPublic(Boolean(data.allowPublicPortfolio));
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setError(
+            err instanceof Error && err.message
+              ? err.message
+              : "Unable to load your academic portfolio right now."
+          );
         }
       })
-      .catch(() => {
-        // Fallback to store
-      })
       .finally(() => {
-        if (active) setPortfolioLoading(false);
+        if (active) setLoading(false);
       });
-
     return () => {
       active = false;
     };
   }, []);
 
   const handleToggleVisibility = async () => {
+    if (!portfolio || updatingVisibility) return;
+    const nextValue = !allowPublic;
+    setUpdatingVisibility(true);
     try {
-      setUpdatingVisibility(true);
-      const newVisibility = !portfolioVisibility;
-      const res = await studentApi.updatePortfolioVisibility({ allowPublicPortfolio: newVisibility });
-      setPortfolioVisibility(res.allowPublicPortfolio);
-      setToastMessage(res.message || (newVisibility ? "Public portfolio enabled." : "Portfolio set to private."));
-      setTimeout(() => setToastMessage(null), 4000);
-    } catch (err: unknown) {
-      setToastMessage(err instanceof Error ? err.message : "Failed to update portfolio visibility.");
-      setTimeout(() => setToastMessage(null), 4000);
+      await studentApi.updatePortfolioVisibility({ allowPublicPortfolio: nextValue });
+      setAllowPublic(nextValue);
+      setPortfolio((prev) =>
+        prev ? { ...prev, allowPublicPortfolio: nextValue } : prev
+      );
+      showToast(
+        nextValue
+          ? "Public portfolio link enabled."
+          : "Portfolio set to private.",
+        "success"
+      );
+    } catch {
+      showToast("Could not update portfolio visibility. Please try again.", "error");
     } finally {
       setUpdatingVisibility(false);
     }
   };
 
-  const studentUsn = verifiedPortfolio?.enrollmentNumber || currentPersona.enrollmentNumber || "";
-
-  const isTeamLead =
-    currentPersona.role === "TeamLead" ||
-    teams.some((t) => t.members?.some((m) => m.isLead && m.name === currentPersona.name));
-
-  // Find Minor Project team from live store only (never fabricate mock seed teams)
-  const minorTeam =
-    teams.find(
-      (t) =>
-        t.trackName === "Minor Project" ||
-        t.members?.some((m) => m.name === currentPersona.name || (studentUsn && m.enrollmentNumber === studentUsn))
-    ) ||
-    teams[0];
-
-  // Find linked Major Project team if continued
-  const majorTeam = teams.find(
-    (t) =>
-      t.trackName === "Major Phase-I" &&
-      (Boolean(t.projectLineageId && t.projectLineageId === minorTeam?.projectLineageId) || t.teamCode?.includes("MAJ"))
-  );
-
-  const handleCopyLink = () => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://collabex.io";
-    const shareUrl = verifiedPortfolio?.publicPortfolioShareUrl
-      ? `${origin}${verifiedPortfolio.publicPortfolioShareUrl}`
-      : `${origin}/verify/${studentUsn}`;
-    navigator.clipboard?.writeText(shareUrl);
-    setCopied(true);
-    setToastMessage(`Transcript link copied! ${portfolioVisibility ? "Public sharing is active." : "Note: Public consent is currently private."}`);
-    setTimeout(() => setToastMessage(null), 4000);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleOpenCredential = () => {
-    setShowCertificateModal(true);
-  };
-
-  const handleExecuteContinuity = () => {
-    if (minorTeam?.id) {
-      continueProjectToNextTrack(minorTeam.id, "Major Phase-I");
+  const handleCopyShareUrl = async () => {
+    if (!portfolio?.publicPortfolioShareUrl) return;
+    try {
+      await navigator.clipboard.writeText(portfolio.publicPortfolioShareUrl);
+      setCopiedShareUrl(true);
+      setTimeout(() => setCopiedShareUrl(false), 2000);
+    } catch {
+      showToast("Unable to copy link to clipboard.", "error");
     }
-    setShowContinuityModal(false);
-    setToastMessage("Project continuity established! Major Phase-I active in Workspace.");
-    setTimeout(() => setToastMessage(null), 5000);
   };
+
+  if (loading) {
+    return <PageLoadingState message="Loading your verified academic portfolio..." />;
+  }
+
+  if (error || !portfolio) {
+    return (
+      <PageErrorState
+        error={error ?? "An unexpected error occurred while loading your academic records."}
+        onRetry={() => void loadPortfolio()}
+      />
+    );
+  }
+
+  const verifiedProjects = portfolio.projects ?? [];
+  const pendingProjects: PendingPortfolioProjectDto[] =
+    portfolio.pendingVerificationProjects ?? [];
+  const hasAnyProjects = verifiedProjects.length > 0 || pendingProjects.length > 0;
+
+  const academicSubtitleParts = [
+    portfolio.programName,
+    portfolio.departmentName,
+    portfolio.currentSemesterNumber
+      ? `Semester ${portfolio.currentSemesterNumber}`
+      : null,
+    portfolio.collegeName,
+  ].filter((part): part is string => Boolean(part && part.trim()));
 
   return (
     <>
       <div className="space-y-6">
-        {/* Toast Feedback */}
-        {toastMessage && (
-          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-medium flex items-center justify-between shadow-xs animate-in fade-in duration-200">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span>{toastMessage}</span>
+        <PageHeader
+          title="Academic Portfolio"
+          description="Verified project records, credentials, and public showcase settings."
+        />
+        {/* Verified Academic Identity Header */}
+        <Card>
+          <CardContent className="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                  {portfolio.studentName}
+                </h2>
+                {portfolio.enrollmentNumber && (
+                  <Badge variant="neutral" size="sm">
+                    <span className="font-mono">{portfolio.enrollmentNumber}</span>
+                  </Badge>
+                )}
+              </div>
+              {academicSubtitleParts.length > 0 && (
+                <p className="text-sm text-slate-600">
+                  {academicSubtitleParts.join(" • ")}
+                </p>
+              )}
             </div>
-            <Link
-              href="/student"
-              className="text-emerald-700 underline font-semibold hover:text-emerald-900 cursor-pointer text-xs"
-            >
-              Open Workspace &rarr;
-            </Link>
-          </div>
+
+            {verifiedProjects.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs">
+                  <Globe className="h-3.5 w-3.5 text-slate-500" />
+                  <span className="font-medium text-slate-700">
+                    Public Showcase
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={allowPublic}
+                    disabled={updatingVisibility}
+                    onClick={() => void handleToggleVisibility()}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                      allowPublic ? "bg-emerald-600" : "bg-slate-300"
+                    } ${updatingVisibility ? "opacity-60 cursor-wait" : ""}`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+                        allowPublic ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {allowPublic && portfolio.publicPortfolioShareUrl && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={
+                      copiedShareUrl ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )
+                    }
+                    onClick={() => void handleCopyShareUrl()}
+                  >
+                    {copiedShareUrl ? "Copied Link" : "Copy Public Link"}
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Empty State */}
+        {!hasAnyProjects && (
+          <Card className="border-dashed">
+            <CardContent className="py-14 px-6 flex flex-col items-center text-center max-w-lg mx-auto space-y-4">
+              <div className="h-14 w-14 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center">
+                <Award className="h-7 w-7" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-base font-semibold text-slate-900">
+                  No completed projects in your portfolio yet
+                </h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Completed and department-verified projects will appear here automatically.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Profile Card Header */}
-        <div className="p-6 rounded-xl border border-[#E2E8F0] bg-white shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-full bg-brand-primary-tint border border-brand-primary-border text-brand-primary flex items-center justify-center font-bold text-xl">
-              {currentPersona.name
-                .split(" ")
-                .map((n) => n[0])
-                .join("")
-                .slice(0, 2)}
-            </div>
-            <div className="space-y-1">
+        {/* Verified Academic Projects */}
+        {verifiedProjects.length > 0 && (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-[#0F172A]">{currentPersona.name}</h2>
-                <Badge variant="success" size="sm" dot>
-                  Institutional Verified
-                </Badge>
-              </div>
-              <div className="text-xs text-[#64748B]">
-                B.Tech in Computer Science &amp; Engineering • Sagar Institute of Science and Technology
-              </div>
-              <div className="text-xs text-[#475569] tabular-nums">
-                Enrollment USN: <span className="font-mono">{studentUsn}</span> • CGPA: 8.74
+                <ShieldCheck className="h-4 w-4 text-emerald-700" />
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Verified Academic Projects ({verifiedProjects.length})
+                </h3>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              size="sm"
-              variant={portfolioVisibility ? "primary" : "secondary"}
-              onClick={handleToggleVisibility}
-              disabled={updatingVisibility}
-              leftIcon={portfolioVisibility ? <Globe className="h-3.5 w-3.5 text-white" /> : <Lock className="h-3.5 w-3.5 text-slate-500" />}
-            >
-              {updatingVisibility ? "Updating..." : portfolioVisibility ? "Public Consent: ON" : "Public Consent: OFF"}
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleCopyLink}
-              leftIcon={<Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />}
-            >
-              {copied ? "Link Copied!" : "Share Verified Transcript"}
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={handleOpenCredential}
-              leftIcon={<QrCode className="h-3.5 w-3.5" strokeWidth={1.75} />}
-            >
-              View QR Credential
-            </Button>
-          </div>
-        </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {verifiedProjects.map((record) => {
+                const outcome = formatOutcome(record.finalOutcome);
+                const verifiedDate = formatDate(record.verifiedAtUtc);
 
-        {/* Longitudinal Projects Timeline */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-[#0F172A] font-heading">Degree Capstone Projects</h3>
-            <span className="text-xs text-[#64748B]">Multi-Track Continuous Engineering</span>
-          </div>
-
-          {/* Phase 10: Authoritative Verified Institutional Records from Database */}
-          {verifiedPortfolio?.projects && verifiedPortfolio.projects.length > 0 && (
-            <div className="space-y-4">
-              {verifiedPortfolio.projects.map((proj) => (
-                <Card key={proj.id} className="border border-emerald-300 bg-white shadow-xs">
-                  <CardHeader className="pb-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
-                          {proj.academicYear} • {proj.trackName}
-                        </span>
-                        <span className="text-[11px] font-mono text-slate-500">
-                          Team: {proj.teamCode}
-                        </span>
+                return (
+                  <Card
+                    key={record.id}
+                    className="flex flex-col justify-between hover:border-emerald-200 transition-colors"
+                  >
+                    <CardHeader className="space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant="neutral" size="sm">
+                            {record.trackName}
+                          </Badge>
+                          {record.academicYear && (
+                            <span className="text-xs font-medium text-slate-500">
+                              {record.academicYear}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="success" size="sm">
+                            Verified
+                          </Badge>
+                          <Badge variant={outcome.variant} size="sm">
+                            {outcome.label}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={proj.finalOutcome === "Pass" ? "success" : "danger"} size="sm" dot>
-                          {proj.finalOutcome}: {proj.finalComputedMark.toFixed(1)} / 100
-                        </Badge>
-                        <Badge variant="success" size="sm">
-                          Institutional Sealed Record
-                        </Badge>
+
+                      <div>
+                        <CardTitle className="text-base text-slate-900 leading-snug">
+                          {record.projectTitle}
+                        </CardTitle>
+                        {record.projectAbstract && (
+                          <CardDescription className="mt-1.5 line-clamp-2 text-xs text-slate-600">
+                            {record.projectAbstract}
+                          </CardDescription>
+                        )}
                       </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-4 pt-0">
+                      <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200/80 text-xs">
+                        <div>
+                          <span className="text-slate-500 block">Your Role</span>
+                          <span className="font-medium text-slate-900">
+                            {record.roleDescription || (record.isTeamLead ? "Team Lead" : "Member")}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block">Verified Score</span>
+                          <span className="font-semibold text-emerald-700">
+                            {record.finalComputedMark.toFixed(1)} / 100
+                          </span>
+                        </div>
+                        {record.guideName && (
+                          <div>
+                            <span className="text-slate-500 block">Faculty Guide</span>
+                            <span className="font-medium text-slate-900">
+                              {record.guideName}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-slate-500 block">
+                            {verifiedDate ? "Verified On" : "Team Code"}
+                          </span>
+                          <span className="font-medium text-slate-900 font-mono">
+                            {verifiedDate || record.teamCode}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                        <div className="flex items-center gap-3 text-xs">
+                          {record.verifiedRepositoryUrl && (
+                            <a
+                              href={record.verifiedRepositoryUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-slate-600 hover:text-emerald-700 font-medium"
+                            >
+                              <FolderGit2 className="h-3.5 w-3.5" />
+                              <span>Repository</span>
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                          {record.verifiedDemoUrl && (
+                            <a
+                              href={record.verifiedDemoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-slate-600 hover:text-emerald-700 font-medium"
+                            >
+                              <Globe className="h-3.5 w-3.5" />
+                              <span>Demo</span>
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 ml-auto">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            leftIcon={<FileText className="h-3.5 w-3.5" />}
+                            onClick={() => setCredentialRecord(record)}
+                          >
+                            Credential
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            leftIcon={<BookOpen className="h-3.5 w-3.5" />}
+                            onClick={() => setDetailRecord(record)}
+                          >
+                            View Details
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Completed Projects Pending Final Verification */}
+        {pendingProjects.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-600" />
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Completed — Verification Pending ({pendingProjects.length})
+                </h3>
+              </div>
+              <span className="text-xs text-slate-500">
+                Awaiting final closure and department verification
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {pendingProjects.map((project) => (
+                <Card
+                  key={project.projectTeamId}
+                  className="bg-slate-50/60 border-slate-200"
+                >
+                  <CardHeader className="pb-3 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        {project.trackName && (
+                          <Badge variant="neutral" size="sm">
+                            {project.trackName}
+                          </Badge>
+                        )}
+                        {project.academicYear && (
+                          <span className="text-xs text-slate-500">
+                            {project.academicYear}
+                          </span>
+                        )}
+                      </div>
+                      <Badge variant="warning" size="sm">
+                        Verification Pending
+                      </Badge>
                     </div>
-                    <CardTitle className="pt-2 text-sm">{proj.projectTitle}</CardTitle>
-                    <CardDescription>{proj.projectAbstract}</CardDescription>
+                    <CardTitle className="text-sm font-semibold text-slate-900">
+                      {project.projectTitle}
+                    </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4 text-xs">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
-                      <div>
-                        <span className="text-[#64748B]">Role:</span>
-                        <div className="font-bold text-[#0F172A]">
-                          {proj.roleDescription} {proj.isTeamLead ? "(Team Lead)" : ""}
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-[#64748B]">Individual Score:</span>
-                        <div className="font-bold text-[#0F172A] font-mono tabular-nums">
-                          {proj.individualContributionScore.toFixed(1)} pts
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-[#64748B]">Faculty Guide:</span>
-                        <div className="font-bold text-[#0F172A]">{proj.guideName}</div>
-                      </div>
-                      <div>
-                        <span className="text-[#64748B]">Verified Date:</span>
-                        <div className="font-bold text-slate-700">
-                          {new Date(proj.verifiedAtUtc).toLocaleDateString()}
-                        </div>
-                      </div>
+                  <CardContent className="pt-0 text-xs text-slate-600 space-y-2">
+                    <div className="flex flex-wrap gap-x-5 gap-y-1">
+                      <span>
+                        <strong className="text-slate-700">Role:</strong>{" "}
+                        {project.roleDescription}
+                      </span>
+                      {project.guideName && (
+                        <span>
+                          <strong className="text-slate-700">Guide:</strong>{" "}
+                          {project.guideName}
+                        </span>
+                      )}
+                      {project.teamCode && (
+                        <span>
+                          <strong className="text-slate-700">Team:</strong>{" "}
+                          <code className="font-mono">{project.teamCode}</code>
+                        </span>
+                      )}
                     </div>
-
-                    {/* Verified Artifacts & Credentials */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {proj.verifiedRepositoryUrl && (
-                          <a
-                            href={proj.verifiedRepositoryUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-colors"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            <span>Institutional Codebase</span>
-                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                          </a>
-                        )}
-                        {proj.verifiedDemoUrl && (
-                          <a
-                            href={proj.verifiedDemoUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-colors"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            <span>Live Deployment</span>
-                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                          </a>
-                        )}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        onClick={() => {
-                          setSelectedRecordForModal(proj);
-                          setShowCertificateModal(true);
-                        }}
-                        leftIcon={<QrCode className="h-3.5 w-3.5" strokeWidth={1.75} />}
+                    {project.repositoryUrl && (
+                      <a
+                        href={project.repositoryUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-slate-600 hover:text-emerald-700 font-medium"
                       >
-                        View Verified Certificate
-                      </Button>
-                    </div>
+                        <FolderGit2 className="h-3.5 w-3.5" />
+                        <span>Repository</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
                   </CardContent>
                 </Card>
               ))}
             </div>
-          )}
-
-          {/* Project 1: Minor Project Sem 6 */}
-          <Card className="border border-[#E2E8F0] shadow-xs">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
-                    Year 3 • Minor Project (Semester 6)
-                  </span>
-                  <span className="text-[11px] font-mono text-slate-500">
-                    Lineage: {minorTeam?.projectLineageId || "lin-2026-cs-01"}
-                  </span>
-                </div>
-                <Badge variant="success" size="sm" dot>
-                  Defense Score: 44.5/50 (89%)
-                </Badge>
-              </div>
-              <CardTitle className="pt-2 text-sm">{minorTeam?.title || "Degree Capstone Project"}</CardTitle>
-              <CardDescription>{minorTeam?.abstract || "Continuous engineering degree capstone project."}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
-                <div>
-                  <span className="text-[#64748B]">Role:</span>
-                  <div className="font-bold text-[#0F172A]">Team Lead &amp; Firmware Engineer</div>
-                </div>
-                <div>
-                  <span className="text-[#64748B]">Individual Contribution:</span>
-                  <div className="font-bold text-[#0F172A] tabular-nums">40% of Project Workload</div>
-                </div>
-                <div>
-                  <span className="text-[#64748B]">Faculty Guide:</span>
-                  <div className="font-bold text-[#0F172A]">{minorTeam?.guideName || "Prof. S. K. Verma"}</div>
-                </div>
-                <div>
-                  <span className="text-[#64748B]">Target SDG:</span>
-                  <div className="font-bold text-emerald-700">SDG {minorTeam?.sdgNumber || 7} (Clean Energy)</div>
-                </div>
-              </div>
-
-              {/* Dynamic Project Continuity Action */}
-              <div className="p-3.5 rounded-lg border border-emerald-200 bg-emerald-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 font-heading">
-                    <GitBranch className="h-4 w-4 text-emerald-700" />
-                    <span>Project Continuity Pipeline</span>
-                  </div>
-                  <p className="text-[11px] text-emerald-800">
-                    Carries forward verified team roster (3 members), Faculty Guide ({minorTeam?.guideName || "Prof. S. K. Verma"}), and repository endpoints into Major Project Phase-I.
-                  </p>
-                </div>
-
-                {isTeamLead && !majorTeam && (
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => setShowContinuityModal(true)}
-                    className="shrink-0"
-                    rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
-                  >
-                    Continue into Next Track &rarr;
-                  </Button>
-                )}
-
-                {majorTeam && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="success" size="sm" dot>
-                      Major Phase-I Active
-                    </Badge>
-                    <Link
-                      href="/student"
-                      className="text-xs font-semibold text-emerald-700 hover:underline flex items-center gap-1"
-                    >
-                      <span>Open Workspace</span>
-                      <ArrowRight className="h-3 w-3" />
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Project 2: Major Project Sem 7-8 */}
-          {majorTeam ? (
-            <Card className="border border-emerald-300 bg-emerald-50/20 shadow-xs">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
-                      Year 4 • Major Project Phase-I (Semester 7)
-                    </span>
-                    <span className="text-[11px] font-mono text-slate-500">
-                      Lineage ID: {majorTeam.projectLineageId}
-                    </span>
-                  </div>
-                  <Badge variant="info" size="sm" dot>
-                    Active Build Phase
-                  </Badge>
-                </div>
-                <CardTitle className="pt-2 text-sm text-[#0F172A]">{majorTeam.title}</CardTitle>
-                <CardDescription>
-                  {majorTeam.abstract || "Continued capstone project build phase."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-white rounded-lg border border-[#E2E8F0]">
-                  <div>
-                    <span className="text-[#64748B]">Assigned Mentor:</span>
-                    <div className="font-bold text-[#0F172A]">{majorTeam.guideName}</div>
-                  </div>
-                  <div>
-                    <span className="text-[#64748B]">Team Code:</span>
-                    <div className="font-mono font-bold text-brand-primary">{majorTeam.teamCode}</div>
-                  </div>
-                  <div>
-                    <span className="text-[#64748B]">Repository Link:</span>
-                    <div className="font-mono text-[11px] text-[#475569] truncate">
-                      {majorTeam.githubUrl ? majorTeam.githubUrl.replace(/^https?:\/\//, "") : "No repository linked"}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[#64748B]">Team Lead:</span>
-                    <div className="font-bold text-[#0F172A]">Shivansh Mehra</div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-1">
-                  <Link href="/student">
-                    <Button size="sm" variant="secondary" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
-                      Go to Major Project Workspace
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-dashed bg-[#F8FAFC]/50">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#64748B] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
-                    Year 4 • Major Project (Semester 7 &amp; 8)
-                  </span>
-                  <Badge variant="neutral" size="sm">
-                    Upcoming (July 2026)
-                  </Badge>
-                </div>
-                <CardTitle className="pt-2 text-sm text-[#475569]">
-                  Full Capstone System &amp; IEEE Publication Stage
-                </CardTitle>
-                <CardDescription>
-                  Full-year major capstone phase for system deployment and final viva evaluation.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          )}
-        </div>
+          </section>
+        )}
       </div>
 
-      {/* Continuity Confirmation Modal */}
+      {/* Project Detail Modal */}
       <Modal
-        isOpen={showContinuityModal}
-        onClose={() => setShowContinuityModal(false)}
-        title="Continue Project into Major Project Phase-I"
-        description="Establish academic continuity for Minor Project 2026-CS-MIN-01 into the upcoming Semester 7 track."
+        isOpen={Boolean(detailRecord)}
+        onClose={() => setDetailRecord(null)}
+        title={detailRecord?.projectTitle ?? "Project Details"}
+        description={
+          detailRecord
+            ? [detailRecord.trackName, detailRecord.academicYear, detailRecord.teamCode]
+                .filter(Boolean)
+                .join(" • ")
+            : undefined
+        }
         footer={
           <div className="flex items-center justify-end gap-2 w-full">
-            <Button variant="ghost" size="sm" onClick={() => setShowContinuityModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" size="sm" onClick={handleExecuteContinuity}>
-              Confirm &amp; Provision Next Track
+            {detailRecord && (
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<Award className="h-3.5 w-3.5" />}
+                onClick={() => {
+                  const target = detailRecord;
+                  setDetailRecord(null);
+                  setCredentialRecord(target);
+                }}
+              >
+                View Credential
+              </Button>
+            )}
+            <Button variant="primary" size="sm" onClick={() => setDetailRecord(null)}>
+              Close
             </Button>
           </div>
         }
       >
-        <div className="space-y-4 text-xs">
-          <div className="p-3.5 rounded-lg border border-emerald-200 bg-emerald-50/60 space-y-2">
-            <div className="font-bold text-emerald-950 flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-emerald-700" />
-              <span>Preserved Project Lineage &amp; Configuration:</span>
+        {detailRecord && (
+          <div className="space-y-4 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="success" size="sm">
+                Verified Academic Record
+              </Badge>
+              <Badge variant={formatOutcome(detailRecord.finalOutcome).variant} size="sm">
+                {formatOutcome(detailRecord.finalOutcome).label}
+              </Badge>
+              {detailRecord.isTeamLead && (
+                <Badge variant="neutral" size="sm">
+                  Team Lead
+                </Badge>
+              )}
             </div>
-            <ul className="space-y-1.5 text-emerald-900 font-medium">
-              <li className="flex items-center gap-2">
-                <Check className="h-3.5 w-3.5 text-emerald-700" />
-                <span>Roster Carried Forward: Shivansh Mehra (Lead), Aarav Sharma, Diya Patel</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3.5 w-3.5 text-emerald-700" />
-                <span>Designated Faculty Guide: Prof. S. K. Verma</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3.5 w-3.5 text-emerald-700" />
-                <span>Lineage ID: <code className="font-mono font-bold">lin-2026-cs-01</code></span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3.5 w-3.5 text-emerald-700" />
-                <span>Connected VCS Repository: {minorTeam?.githubUrl ? minorTeam.githubUrl.replace(/^https?:\/\//, "") : "No repository linked"}</span>
-              </li>
-            </ul>
+
+            {detailRecord.projectAbstract && (
+              <div className="space-y-1">
+                <h4 className="font-semibold text-slate-900">Project Summary</h4>
+                <p className="text-slate-600 leading-relaxed">
+                  {detailRecord.projectAbstract}
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+              <div>
+                <span className="text-slate-500 block">Role / Contribution</span>
+                <span className="font-medium text-slate-900">
+                  {detailRecord.roleDescription}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Faculty Guide</span>
+                <span className="font-medium text-slate-900">
+                  {detailRecord.guideName || "Not recorded"}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Team Defense Score</span>
+                <span className="font-medium text-slate-900">
+                  {detailRecord.sharedTotalScore.toFixed(1)} /{" "}
+                  {detailRecord.sharedMaxScore.toFixed(1)}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Final Computed Mark</span>
+                <span className="font-semibold text-emerald-700">
+                  {detailRecord.finalComputedMark.toFixed(1)} / 100
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Department</span>
+                <span className="font-medium text-slate-900">
+                  {detailRecord.departmentName}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Verified Date</span>
+                <span className="font-medium text-slate-900">
+                  {formatDate(detailRecord.verifiedAtUtc) || "Verified"}
+                </span>
+              </div>
+            </div>
+
+            {detailRecord.rubricCriteriaBreakdown.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-slate-900">
+                  Evaluation Rubric Breakdown
+                </h4>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
+                  {detailRecord.rubricCriteriaBreakdown.map((item, idx) => (
+                    <div
+                      key={`${item.criterionCode}-${idx}`}
+                      className="px-3 py-2 flex items-center justify-between"
+                    >
+                      <span className="text-slate-700">{item.title}</span>
+                      <span className="font-mono font-medium text-slate-900">
+                        {item.awardedMarks} / {item.maxMarks}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(detailRecord.verifiedRepositoryUrl ||
+              detailRecord.verifiedDemoUrl ||
+              detailRecord.finalReportFileName) && (
+              <div className="space-y-1.5">
+                <h4 className="font-semibold text-slate-900">
+                  Verified Artifacts & Links
+                </h4>
+                <div className="flex flex-wrap gap-3">
+                  {detailRecord.verifiedRepositoryUrl && (
+                    <a
+                      href={detailRecord.verifiedRepositoryUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-emerald-700 hover:underline font-medium"
+                    >
+                      <FolderGit2 className="h-3.5 w-3.5" />
+                      <span>Repository</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                  {detailRecord.verifiedDemoUrl && (
+                    <a
+                      href={detailRecord.verifiedDemoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-emerald-700 hover:underline font-medium"
+                    >
+                      <Globe className="h-3.5 w-3.5" />
+                      <span>Live Demo</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                  {detailRecord.finalReportFileName && (
+                    <span className="inline-flex items-center gap-1.5 text-slate-700">
+                      <FileText className="h-3.5 w-3.5 text-slate-500" />
+                      <span>{detailRecord.finalReportFileName}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {detailRecord.verificationHash && (
+              <div className="p-2.5 rounded bg-slate-100 border border-slate-200 font-mono text-[11px] text-slate-600 break-all">
+                Verification Hash: {detailRecord.verificationHash}
+              </div>
+            )}
           </div>
-          <p className="text-[#64748B] text-[11px] leading-relaxed">
-            Provisioning will create a linked Phase-I workspace under team code{" "}
-            <strong className="font-mono text-slate-800">2026-CS-MAJ-1-01</strong>, enabling your team to immediately define Phase-I architecture benchmarks without re-registering.
-          </p>
-        </div>
+        )}
       </Modal>
 
-      {/* Verified Certificate Modal with QR */}
+      {/* Verified Credential Modal */}
       <Modal
-        isOpen={showCertificateModal}
-        onClose={() => {
-          setShowCertificateModal(false);
-          setSelectedRecordForModal(null);
-        }}
-        title="Institutional Academic Credential"
-        description="Tamper-proof verifiable digital transcript issued by SISTec Department of CSE."
+        isOpen={Boolean(credentialRecord)}
+        onClose={() => setCredentialRecord(null)}
+        title="Verified Academic Credential"
+        description={
+          credentialRecord
+            ? `${credentialRecord.collegeName || "Institution"} • ${credentialRecord.departmentName}`
+            : undefined
+        }
         footer={
           <div className="flex items-center justify-end w-full">
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => {
-                setShowCertificateModal(false);
-                setSelectedRecordForModal(null);
-              }}
+              onClick={() => setCredentialRecord(null)}
             >
               Close
             </Button>
           </div>
         }
       >
-        <div className="p-6 bg-white border-2 border-emerald-100 rounded-xl space-y-4 text-center">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold tracking-widest text-brand-primary uppercase">
-              Official University Transcript Record
-            </span>
-            <h4 className="text-base font-bold text-[#0F172A]">
-              {selectedRecordForModal
-                ? `${selectedRecordForModal.trackName} Engineering Certificate`
-                : "Minor Project Engineering Certificate"}
-            </h4>
-            <p className="text-xs text-[#64748B]">
-              This certifies that <strong>{selectedRecordForModal?.studentName || "Shivansh Mehra"}</strong> (USN:{" "}
-              {selectedRecordForModal?.enrollmentNumber || studentUsn}) has successfully defended{" "}
-              {selectedRecordForModal?.projectTitle || "Minor Project Phase-1"} with a score of{" "}
-              <strong>
-                {selectedRecordForModal
-                  ? `${selectedRecordForModal.finalComputedMark.toFixed(1)}/100 (${selectedRecordForModal.finalOutcome})`
-                  : "44.5/50 (89%)"}
-              </strong>
-              .
-            </p>
-          </div>
+        {credentialRecord && (
+          <div className="p-5 bg-white border border-emerald-200 rounded-xl space-y-4">
+            <div className="text-center space-y-1.5">
+              <span className="text-[10px] font-bold tracking-widest text-emerald-700 uppercase">
+                Official Academic Project Record
+              </span>
+              <h4 className="text-base font-bold text-slate-900">
+                {credentialRecord.trackName}
+                {credentialRecord.academicYear
+                  ? ` (${credentialRecord.academicYear})`
+                  : ""}
+              </h4>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                This certifies that <strong>{credentialRecord.studentName}</strong>
+                {credentialRecord.enrollmentNumber
+                  ? ` (${credentialRecord.enrollmentNumber})`
+                  : ""}{" "}
+                completed <strong>{credentialRecord.projectTitle}</strong> as{" "}
+                <strong>{credentialRecord.roleDescription}</strong> with an
+                outcome of{" "}
+                <strong>
+                  {formatOutcome(credentialRecord.finalOutcome).label} (
+                  {credentialRecord.finalComputedMark.toFixed(1)}/100)
+                </strong>
+                .
+              </p>
+            </div>
 
-          <div className="p-4 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] inline-block mx-auto max-w-sm">
-            <div className="h-32 w-32 bg-white border border-[#CBD5E1] p-2 flex items-center justify-center mx-auto">
-              <div className="grid grid-cols-6 gap-1 w-full h-full p-1 bg-white">
-                {Array.from({ length: 36 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`rounded-xs ${
-                      i % 2 === 0 || i % 7 === 0 ? "bg-[#0F172A]" : "bg-transparent"
-                    }`}
-                  />
-                ))}
+            <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+              <div className="flex items-center gap-2">
+                <UserCheck className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                <div>
+                  <span className="text-slate-500 block text-[11px]">Guide</span>
+                  <span className="font-medium text-slate-900">
+                    {credentialRecord.guideName || "Assigned Faculty"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                <div>
+                  <span className="text-slate-500 block text-[11px]">Verified</span>
+                  <span className="font-medium text-slate-900">
+                    {formatDate(credentialRecord.verifiedAtUtc) || "Verified"}
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="font-mono text-[10px] text-[#64748B] mt-2 break-all">
-              Verification Hash:{" "}
-              {selectedRecordForModal?.verificationHash || "0x047857...sistec"} • Attainment Attested
+
+            {credentialRecord.verificationHash && (
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 font-mono text-[11px] text-slate-600 break-all text-center">
+                Verification Hash: {credentialRecord.verificationHash}
+              </div>
+            )}
+
+            <div className="text-[11px] text-slate-600 flex items-center justify-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              <span>
+                Verified by {credentialRecord.departmentName}
+                {credentialRecord.collegeName
+                  ? ` • ${credentialRecord.collegeName}`
+                  : ""}
+              </span>
             </div>
           </div>
-
-          <div className="text-[11px] text-[#64748B] flex items-center justify-center gap-1.5">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Digitally signed and sealed by Department Leadership • {selectedRecordForModal?.departmentName || "CSE"}</span>
-          </div>
-        </div>
+        )}
       </Modal>
     </>
   );

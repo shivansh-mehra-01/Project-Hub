@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function AdminAuditPage() {
-  redirect("/platform/audit");
+  redirect("/platform/security-audit");
 }

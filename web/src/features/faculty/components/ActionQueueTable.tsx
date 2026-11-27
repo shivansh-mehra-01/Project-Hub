@@ -2,6 +2,7 @@ import React from "react";
 import { ActionQueueItemDto } from "@/lib/api/types";
 import { Badge } from "@/design-system/components/Badge";
 import { Button } from "@/design-system/components/Button";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { FileCheck, FileText, Calendar, ArrowRight } from "lucide-react";
 
 export interface ActionQueueTableProps {
@@ -32,15 +33,12 @@ export const ActionQueueTable: React.FC<ActionQueueTableProps> = ({
 
   if (items.length === 0) {
     return (
-      <div className="text-center py-12 px-4">
-        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
-          <FileCheck className="w-6 h-6" />
-        </div>
-        <h4 className="text-sm font-semibold text-[#0F172A]">Action Queue Clear</h4>
-        <p className="text-xs text-[#64748B] mt-1 max-w-sm mx-auto">
-          All weekly progress logbooks and student project proposals have been reviewed.
-        </p>
-      </div>
+      <EmptyState
+        icon={<FileCheck className="w-5 h-5 text-emerald-600" />}
+        title="Action Queue Clear"
+        description="All weekly progress logbooks and student project proposals have been reviewed."
+        className="border-0 bg-transparent rounded-none py-10"
+      />
     );
   }
 

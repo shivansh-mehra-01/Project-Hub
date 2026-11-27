@@ -126,7 +126,7 @@ export const PendingActionsDrawer: React.FC<PendingActionsDrawerProps> = ({
       time: "2 hours ago",
       badge: "Verification Required",
       badgeVariant: "warning" as const,
-      path: "/platform/institutions?tab=requests",
+      path: "/platform/colleges?status=Pending+Review",
     },
     {
       id: "pa-2",
@@ -136,7 +136,7 @@ export const PendingActionsDrawer: React.FC<PendingActionsDrawerProps> = ({
       time: "1 day ago",
       badge: "Payment Action",
       badgeVariant: "danger" as const,
-      path: "/platform/business/subscriptions",
+      path: "/platform/colleges",
     },
     {
       id: "pa-3",
@@ -146,7 +146,7 @@ export const PendingActionsDrawer: React.FC<PendingActionsDrawerProps> = ({
       time: "Yesterday",
       badge: "Security Review",
       badgeVariant: "neutral" as const,
-      path: "/platform/security",
+      path: "/platform/security-audit",
     },
   ];
 
@@ -164,13 +164,14 @@ export const PendingActionsDrawer: React.FC<PendingActionsDrawerProps> = ({
     >
       <div className="space-y-3 text-xs">
         {pendingItems.map((item) => (
-          <div
+          <button
             key={item.id}
+            type="button"
             onClick={() => {
               onClose();
               onNavigate(item.path);
             }}
-            className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-brand-primary hover:shadow-xs transition-all cursor-pointer space-y-1.5 group"
+            className="w-full text-left p-3.5 rounded-xl border border-slate-200 bg-white hover:border-brand-primary hover:shadow-xs transition-all cursor-pointer space-y-1.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">
@@ -188,7 +189,7 @@ export const PendingActionsDrawer: React.FC<PendingActionsDrawerProps> = ({
                 {item.badge}
               </span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </SlideOverDrawer>

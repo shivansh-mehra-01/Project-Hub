@@ -463,6 +463,37 @@ public class CoordinatorController : ControllerBase
         return Ok(teams);
     }
 
+    [HttpGet("faculty")]
+    public async Task<ActionResult<List<object>>> GetDepartmentFaculty()
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var (coordDeptId, deptError) = await ResolveCoordinatorDepartmentAsync();
+        if (deptError != null) return StatusCode(StatusCodes.Status403Forbidden, new { message = deptError });
+
+        var query = _context.Users
+            .Where(u => u.CollegeId == collegeId && (u.Role == UserRole.Faculty || u.Role == UserRole.HOD) && !u.IsDeleted && u.IsActive);
+
+        if (!_tenantContext.IsSuperAdmin && coordDeptId.HasValue)
+        {
+            query = query.Where(u => u.DepartmentId == coordDeptId.Value);
+        }
+
+        var faculty = await query
+            .OrderBy(u => u.FullName)
+            .Select(u => new
+            {
+                id = u.Id,
+                fullName = u.FullName,
+                designation = u.Designation,
+                currentMentoredTeams = u.GuidedTeams.Count(t => !t.IsDeleted && t.Status != ProjectStatus.Archived),
+                maxMentorTeams = u.MaxMentorTeams,
+                isAvailable = u.GuidedTeams.Count(t => !t.IsDeleted && t.Status != ProjectStatus.Archived) < u.MaxMentorTeams
+            })
+            .ToListAsync();
+
+        return Ok(faculty);
+    }
+
     [HttpPost("teams/{teamId}/assign-guide")]
     public async Task<IActionResult> AssignGuide(Guid teamId, [FromBody] AssignGuideRequest request)
     {
@@ -930,7 +961,7 @@ public class CoordinatorController : ControllerBase
             .Include(d => d.College)
             .FirstOrDefaultAsync(d => (targetDeptId == null || d.Id == targetDeptId.Value) && d.CollegeId == collegeId && !d.IsDeleted, cancellationToken);
 
-        var collegeName = dept?.College?.Name ?? "Sagar Institute of Science and Technology (SISTec Bhopal)";
+        var collegeName = dept?.College?.Name ?? string.Empty;
         var deptName = dept?.Name ?? "Computer Science & Engineering";
         var deptCode = dept?.Code ?? "CSE";
 

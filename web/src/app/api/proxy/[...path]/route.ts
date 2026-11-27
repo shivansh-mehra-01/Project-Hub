@@ -7,6 +7,8 @@ import {
   setAuthCookies,
   validateCsrfOrigin,
 } from "@/lib/bff/authCookies";
+import { getClientForwardingHeaders } from "@/lib/bff/forwardedHeaders";
+import { executeSingleFlightRefresh } from "@/lib/bff/refreshSingleFlight";
 
 async function handleProxy(
   req: NextRequest,
@@ -24,7 +26,7 @@ async function handleProxy(
   const accessToken = req.cookies.get(ACCESS_COOKIE)?.value;
   const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value;
 
-  const forwardHeaders = new Headers();
+  const forwardHeaders = new Headers(getClientForwardingHeaders(req));
   const contentType = req.headers.get("content-type");
   if (contentType) forwardHeaders.set("Content-Type", contentType);
   const accept = req.headers.get("accept");
@@ -42,28 +44,28 @@ async function handleProxy(
   });
 
   let updatedTokens: { token: string; refreshToken: string } | null = null;
+  let refreshWasRace = false;
 
   if (backendRes.status === 401 && refreshToken) {
-    const refreshRes = await fetch(`${getBackendApiUrl()}/api/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    }).catch(() => null);
+    const refreshResult = await executeSingleFlightRefresh(
+      refreshToken,
+      getBackendApiUrl(),
+      getClientForwardingHeaders(req)
+    );
 
-    if (refreshRes?.ok) {
-      const refreshData = await refreshRes.json();
-      if (refreshData.token && refreshData.refreshToken) {
-        updatedTokens = {
-          token: refreshData.token,
-          refreshToken: refreshData.refreshToken,
-        };
-        forwardHeaders.set("Authorization", `Bearer ${refreshData.token}`);
-        backendRes = await fetch(targetUrl, {
-          method,
-          headers: forwardHeaders,
-          body: bodyBuffer,
-        });
-      }
+    if (refreshResult.ok && refreshResult.data?.token && refreshResult.data?.refreshToken) {
+      updatedTokens = {
+        token: refreshResult.data.token,
+        refreshToken: refreshResult.data.refreshToken,
+      };
+      forwardHeaders.set("Authorization", `Bearer ${refreshResult.data.token}`);
+      backendRes = await fetch(targetUrl, {
+        method,
+        headers: forwardHeaders,
+        body: bodyBuffer,
+      });
+    } else if (refreshResult.isRace) {
+      refreshWasRace = true;
     }
   }
 
@@ -85,7 +87,7 @@ async function handleProxy(
 
   if (updatedTokens) {
     setAuthCookies(res, updatedTokens.token, updatedTokens.refreshToken);
-  } else if (backendRes.status === 401) {
+  } else if (backendRes.status === 401 && !refreshWasRace) {
     clearAuthCookies(res);
   }
 

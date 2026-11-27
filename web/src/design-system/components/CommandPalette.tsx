@@ -6,13 +6,9 @@ import {
   Search,
   X,
   ArrowRight,
-  RotateCcw,
   LogOut,
-  User,
-  UserCheck,
 } from "lucide-react";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
-import { RoleType } from "@/mocks/store-types";
 import { getCommandPaletteItems, getRouteIcon } from "@/navigation";
 
 export interface CommandPaletteProps {
@@ -43,8 +39,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
   const router = useRouter();
   const {
     currentPersona,
-    switchPersona,
-    resetToDefaults,
     teams,
     departments,
     facultyRoster,
@@ -52,6 +46,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     logout,
   } = useProjectHubStore();
   const [query, setQuery] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const handleClose = React.useCallback(() => {
+    setQuery("");
+    setSelectedIndex(0);
+    onClose();
+  }, [onClose]);
 
   // Keyboard shortcut listener for Cmd+K / Ctrl+K & Escape
   useEffect(() => {
@@ -59,16 +60,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         if (isOpen) {
-          onClose();
+          handleClose();
         }
       } else if (e.key === "Escape" && isOpen) {
-        onClose();
+        handleClose();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleClose]);
 
   // Retrieve strictly role-scoped navigation routes, actions, and entities from centralized navigation engine
   const baseItems = useMemo(() => {
@@ -104,13 +105,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     }
   }, [isOpen, baseItems, router]);
 
-  // Clear query on command palette close
-  useEffect(() => {
-    if (!isOpen) {
-      setQuery("");
-    }
-  }, [isOpen]);
-
   // All React Hooks have executed unconditionally above; now safely exit if palette is closed
   if (!isOpen) return null;
 
@@ -126,7 +120,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
         if (item.path) {
           router.push(item.path);
         }
-        onClose();
+        handleClose();
       },
     })),
 
@@ -139,7 +133,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       action: () => {
         logout();
         router.replace("/login");
-        onClose();
+        handleClose();
       },
     },
   ];
@@ -153,6 +147,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       )
     : allItems;
 
+  const activeIndex =
+    searchFilteredItems.length > 0
+      ? Math.min(selectedIndex, searchFilteredItems.length - 1)
+      : 0;
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (searchFilteredItems.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev + 1) % searchFilteredItems.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((prev) =>
+        (prev - 1 + searchFilteredItems.length) % searchFilteredItems.length
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const target = searchFilteredItems[activeIndex];
+      if (target) target.action();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-black/60 backdrop-blur-xs select-none">
       <div className="relative w-full max-w-xl rounded-2xl border border-white/10 bg-[#111827] text-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -163,7 +179,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
             type="text"
             autoFocus
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelectedIndex(0);
+            }}
+            onKeyDown={handleInputKeyDown}
             placeholder="Search screens, actions, or jump to... (Esc to exit)"
             className="flex-1 bg-transparent text-sm text-white placeholder-slate-400 focus:outline-hidden font-sans"
           />
@@ -200,12 +220,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                     </div>
                     {groupItems.map((item) => {
                       const Icon = item.icon;
+                      const isSelected = searchFilteredItems[activeIndex]?.id === item.id;
                       return (
                         <button
                           key={item.id}
                           type="button"
                           onClick={item.action}
-                          className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left hover:bg-white/[0.06] hover:text-emerald-300 transition-colors cursor-pointer group"
+                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left transition-colors cursor-pointer group ${
+                            isSelected
+                              ? "bg-white/[0.08] text-emerald-300"
+                              : "hover:bg-white/[0.06] hover:text-emerald-300"
+                          }`}
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="h-7 w-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:bg-emerald-500/10 group-hover:border-emerald-500/20 group-hover:text-emerald-400 text-slate-400 transition-colors">

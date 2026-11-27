@@ -109,6 +109,8 @@ To verify a production build:
 npm --prefix web run build
 ```
 
+For production deployment (least-privilege PostgreSQL roles, Dockerfiles, reverse-proxy `X-Forwarded-For` configuration, and backups), see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ---
 
 ## 📁 Repository Structure

@@ -35,10 +35,23 @@ export const FacultyStatCard: React.FC<FacultyStatCardProps> = ({
 
   return (
     <Card
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       className={cn(
         "transition-all duration-200",
         variantStyles[variant],
-        onClick && "cursor-pointer hover:shadow-md hover:border-slate-300"
+        onClick &&
+          "cursor-pointer hover:shadow-md hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40"
       )}
       onClick={onClick}
     >

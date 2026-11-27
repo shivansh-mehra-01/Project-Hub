@@ -1,0 +1,22 @@
+# Caddy Reverse Proxy Example for Colabex / Project Hub
+# Architecture:
+#   Internet -> Caddy (Automatic HTTPS) -> Next.js BFF (internal) -> ASP.NET Core API (internal)
+#
+# CRITICAL SECURITY NOTES:
+# 1. Next.js MUST NOT be exposed directly to the internet.
+# 2. Caddy's default trusted_proxies is unset, so Caddy OVERWRITES X-Forwarded-For with the
+#    direct TCP client IP rather than trusting client-supplied headers.
+# 3. The API's direct peer is the Next.js server, so ForwardedHeaders:KnownProxies/KnownNetworks
+#    on the API must list the Next.js IP or Docker subnet (NOT Caddy).
+
+app.yourdomain.edu {
+    request_body {
+        max_size 30MB
+    }
+
+    reverse_proxy web:3000 {
+        header_up Host {http.request.host}
+        header_up X-Forwarded-For {http.request.remote.host}
+        header_up X-Forwarded-Proto https
+    }
+}

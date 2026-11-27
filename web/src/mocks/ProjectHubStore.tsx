@@ -54,44 +54,7 @@ export interface FacultyRosterItem {
   guidedCount: number;
 }
 
-export const initialFacultyRoster: FacultyRosterItem[] = [
-  {
-    id: "usr-fac-verma",
-    name: "Prof. S. K. Verma",
-    email: "faculty@sistec.ac.in",
-    designation: "Associate Professor",
-    isProjectCoordinator: false,
-    maxTeams: 4,
-    guidedCount: 2,
-  },
-  {
-    id: "usr-fac-nair",
-    name: "Prof. Priya Nair",
-    email: "coordinator@sistec.ac.in",
-    designation: "Assistant Professor",
-    isProjectCoordinator: true,
-    maxTeams: 4,
-    guidedCount: 2,
-  },
-  {
-    id: "usr-fac-rawat",
-    name: "Dr. Amit Rawat",
-    email: "amit.rawat@sistec.ac.in",
-    designation: "Professor",
-    isProjectCoordinator: false,
-    maxTeams: 5,
-    guidedCount: 3,
-  },
-  {
-    id: "usr-fac-sharma-f",
-    name: "Dr. Manisha Sharma",
-    email: "manisha.sharma@sistec.ac.in",
-    designation: "Associate Professor",
-    isProjectCoordinator: true,
-    maxTeams: 4,
-    guidedCount: 1,
-  },
-];
+export const initialFacultyRoster: FacultyRosterItem[] = [];
 
 interface ProjectHubStoreContextType {
   currentPersona: UserPersona;
@@ -746,10 +709,36 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     // Persona switching is disabled in production mode; role is strictly server-authoritative via HttpOnly BFF session.
   };
 
+  const runOptimisticMutation = <T,>(
+    apiCall: () => Promise<T>,
+    rollback: () => void,
+    successMessage: string | null,
+    successType: "success" | "info" = "success",
+    fallbackErrorMessage: string = "Action failed on server. Changes were reverted."
+  ) => {
+    apiCall()
+      .then(() => {
+        if (successMessage) {
+          showToast(successMessage, successType);
+        }
+      })
+      .catch((err: unknown) => {
+        rollback();
+        const msg =
+          err instanceof Error && err.message ? err.message : fallbackErrorMessage;
+        showToast(msg, "error");
+      });
+  };
+
   const toggleFacultyCoordinator = (facultyId: string) => {
+    const prevRoster = facultyRoster;
+    const prevPersona = currentPersona;
+    const f = facultyRoster.find((item) => item.id === facultyId);
+    const nextCoord = !(f?.isProjectCoordinator ?? false);
+
     setFacultyRoster((prev) =>
-      prev.map((f) =>
-        f.id === facultyId ? { ...f, isProjectCoordinator: !f.isProjectCoordinator } : f
+      prev.map((item) =>
+        item.id === facultyId ? { ...item, isProjectCoordinator: !item.isProjectCoordinator } : item
       )
     );
 
@@ -765,15 +754,23 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     });
 
     if (getAuthToken()) {
-      const f = facultyRoster.find((item) => item.id === facultyId);
-      hodApi
-        .toggleCoordinator(facultyId, { isProjectCoordinator: !(f?.isProjectCoordinator ?? false) })
-        .catch(() => {});
+      runOptimisticMutation(
+        () => hodApi.toggleCoordinator(facultyId, { isProjectCoordinator: nextCoord }),
+        () => {
+          setFacultyRoster(prevRoster);
+          setCurrentPersona(prevPersona);
+        },
+        "Project Coordinator appointment updated.",
+        "info",
+        "Failed to update Project Coordinator appointment."
+      );
+      return;
     }
     showToast("Project Coordinator appointment updated.", "info");
   };
 
   const approveProposal = (teamId: string, role: RoleType) => {
+    const prevTeams = teams;
     setTeams((prev) =>
       prev.map((t) => {
         if (t.id !== teamId) return t;
@@ -796,27 +793,39 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     );
 
     if (getAuthToken()) {
-      if (role === "HOD") {
-        hodApi.endorseProposal(teamId).catch(() => {});
-      } else {
-        facultyApi.endorseProposal(teamId).catch(() => {});
-      }
+      runOptimisticMutation(
+        () => (role === "HOD" ? hodApi.endorseProposal(teamId) : facultyApi.endorseProposal(teamId)),
+        () => setTeams(prevTeams),
+        "Project proposal approved and advanced to next stage.",
+        "success",
+        "Failed to approve project proposal."
+      );
+      return;
     }
     showToast("Project proposal approved and advanced to next stage.", "success");
   };
 
   const rejectProposal = (teamId: string, remarks: string) => {
+    const prevTeams = teams;
     setTeams((prev) =>
       prev.map((t) => (t.id === teamId ? { ...t, state: "Draft", health: "NeedsReview" } : t))
     );
 
     if (getAuthToken()) {
-      hodApi.returnProposal(teamId, remarks).catch(() => {});
+      runOptimisticMutation(
+        () => hodApi.returnProposal(teamId, remarks),
+        () => setTeams(prevTeams),
+        "Proposal returned for revision with notes.",
+        "info",
+        "Failed to return proposal."
+      );
+      return;
     }
     showToast("Proposal returned for revision with notes.", "info");
   };
 
   const assignGuide = (teamId: string, guideId: string) => {
+    const prevTeams = teams;
     const guide = facultyRoster.find((f) => f.id === guideId);
     setTeams((prev) =>
       prev.map((t) =>
@@ -832,7 +841,14 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     );
 
     if (getAuthToken()) {
-      coordinatorApi.assignGuide(teamId, { guideUserId: guideId }).catch(() => {});
+      runOptimisticMutation(
+        () => coordinatorApi.assignGuide(teamId, { guideUserId: guideId }),
+        () => setTeams(prevTeams),
+        "Faculty guide assigned to project team.",
+        "success",
+        "Failed to assign faculty guide."
+      );
+      return;
     }
     showToast("Faculty guide assigned to project team.", "success");
   };
@@ -844,6 +860,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   };
 
   const updateTaskStatus = (taskId: string, newStatus: TaskStatusType) => {
+    const prevTeams = teams;
     setTeams((prev) =>
       prev.map((t) => ({
         ...t,
@@ -852,11 +869,16 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     );
 
     if (getAuthToken()) {
-      studentApi
-        .updateTask(taskId, {
-          status: newStatus as any,
-        })
-        .catch(() => {});
+      runOptimisticMutation(
+        () =>
+          studentApi.updateTask(taskId, {
+            status: newStatus as any,
+          }),
+        () => setTeams(prevTeams),
+        null,
+        "info",
+        "Failed to update sprint task status."
+      );
     }
   };
 
@@ -867,6 +889,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     assigneeName: string,
     dueDate: string
   ) => {
+    const prevTeams = teams;
     const newTask: TaskItem = {
       id: `tsk-${Date.now()}`,
       teamId,
@@ -882,13 +905,19 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     );
 
     if (getAuthToken()) {
-      studentApi
-        .createTask({
-          title,
-          categoryTag: tag || "General",
-          dueDateUtc: dueDate ? new Date(dueDate).toISOString() : undefined,
-        })
-        .catch(() => {});
+      runOptimisticMutation(
+        () =>
+          studentApi.createTask({
+            title,
+            categoryTag: tag || "General",
+            dueDateUtc: dueDate ? new Date(dueDate).toISOString() : undefined,
+          }),
+        () => setTeams(prevTeams),
+        "Sprint task created.",
+        "success",
+        "Failed to create sprint task."
+      );
+      return;
     }
     showToast("Sprint task created.", "success");
   };
@@ -900,6 +929,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     plannedNextWeek: string,
     hours: number
   ) => {
+    const prevTeams = teams;
     const newLog: WeeklyLog = {
       id: `log-${Date.now()}`,
       teamId,
@@ -919,20 +949,27 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     );
 
     if (getAuthToken()) {
-      studentApi
-        .submitLog({
-          weekNumber: 6,
-          accomplishmentsSummary: accomplishments,
-          blockersSummary: blockers,
-          hoursLogged: hours || 12,
-          gitCommitCount: 4,
-        })
-        .catch(() => {});
+      runOptimisticMutation(
+        () =>
+          studentApi.submitLog({
+            weekNumber: 6,
+            accomplishmentsSummary: accomplishments,
+            blockersSummary: blockers,
+            hoursLogged: hours || 12,
+            gitCommitCount: 4,
+          }),
+        () => setTeams(prevTeams),
+        "Friday progress log submitted for mentor sign-off.",
+        "success",
+        "Failed to submit weekly log."
+      );
+      return;
     }
     showToast("Friday progress log submitted for mentor sign-off.", "success");
   };
 
   const reviewWeeklyLog = (logId: string, status: GuideReviewStatusType, remarks: string) => {
+    const prevTeams = teams;
     setTeams((prev) =>
       prev.map((t) => ({
         ...t,
@@ -943,7 +980,14 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     );
 
     if (getAuthToken()) {
-      facultyApi.verifyLog(logId, { remarks }).catch(() => {});
+      runOptimisticMutation(
+        () => facultyApi.verifyLog(logId, { remarks }),
+        () => setTeams(prevTeams),
+        "Weekly log verified and signed.",
+        "success",
+        "Failed to verify weekly log."
+      );
+      return;
     }
     showToast("Weekly log verified and signed.", "success");
   };
@@ -953,6 +997,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     scores: Record<string, number>,
     feedback: string
   ) => {
+    const prevEvaluations = evaluations;
     setEvaluations((prev) =>
       prev.map((ev) =>
         ev.id === evalId
@@ -969,23 +1014,29 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
 
     if (getAuthToken()) {
       const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
-      facultyApi
-        .submitVivaEvaluation({
-          projectTeamId: evalId,
-          checkpointType: "MidTermReview",
-          sharedRubricScoresJson: JSON.stringify(scores),
-          sharedTotalScore: totalScore,
-          generalRemarks: feedback,
-          studentScores: [
-            {
-              studentUserId: "20000000-0000-0000-0000-000000000005",
-              moduleOwnershipScore: 35,
-              vivaQaScore: 35,
-              logDisciplineScore: 20,
-            },
-          ],
-        })
-        .catch(() => {});
+      runOptimisticMutation(
+        () =>
+          facultyApi.submitVivaEvaluation({
+            projectTeamId: evalId,
+            checkpointType: "MidTermReview",
+            sharedRubricScoresJson: JSON.stringify(scores),
+            sharedTotalScore: totalScore,
+            generalRemarks: feedback,
+            studentScores: [
+              {
+                studentUserId: "20000000-0000-0000-0000-000000000005",
+                moduleOwnershipScore: 35,
+                vivaQaScore: 35,
+                logDisciplineScore: 20,
+              },
+            ],
+          }),
+        () => setEvaluations(prevEvaluations),
+        "Viva evaluation submitted with 60/40 blended scoring.",
+        "success",
+        "Failed to submit viva evaluation."
+      );
+      return;
     }
     showToast("Viva evaluation submitted with 60/40 blended scoring.", "success");
   };
@@ -1025,18 +1076,25 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   };
 
   const updateCycle = (cycleData: Partial<ProjectCycle>) => {
+    const prevCycle = cycle;
     setCycle((prev) => ({
       ...prev,
       ...cycleData,
     }));
 
     if (getAuthToken()) {
-      collegeApi
-        .createTrack({
-          name: cycleData.type ? `${cycleData.type} Project Track` : "Academic Session",
-          academicYear: cycleData.academicYear || "2026-2027",
-        })
-        .catch(() => {});
+      runOptimisticMutation(
+        () =>
+          collegeApi.createTrack({
+            name: cycleData.type ? `${cycleData.type} Project Track` : "Academic Session",
+            academicYear: cycleData.academicYear || "2026-2027",
+          }),
+        () => setCycle(prevCycle),
+        "Academic track session configured.",
+        "success",
+        "Failed to configure academic track session."
+      );
+      return;
     }
     showToast("Academic track session configured.", "success");
   };
@@ -1089,22 +1147,30 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
       criterion3Attainment: 80.0,
       hodSignOffStatus: "Pending Sign-Off",
     };
+    const prevDepartments = departments;
     setDepartments((prev) => [...prev, newDept]);
 
     if (getAuthToken()) {
-      collegeApi
-        .createDepartment({
-          name,
-          code: code.toUpperCase(),
-          intakeQuota: studentCount,
-          courseProgramId,
-        })
-        .catch(() => {});
+      runOptimisticMutation(
+        () =>
+          collegeApi.createDepartment({
+            name,
+            code: code.toUpperCase(),
+            intakeQuota: studentCount,
+            courseProgramId,
+          }),
+        () => setDepartments(prevDepartments),
+        `Department ${code.toUpperCase()} added to campus.`,
+        "success",
+        `Failed to add department ${code.toUpperCase()}.`
+      );
+      return;
     }
     showToast(`Department ${code.toUpperCase()} added to campus.`, "success");
   };
 
   const addCourseProgram = (prog: Omit<CourseProgram, "id" | "collegeId">) => {
+    const prevPrograms = coursePrograms;
     const newProg: CourseProgram = {
       id: `prog-${Date.now()}`,
       collegeId: college.id,
@@ -1112,14 +1178,20 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     };
     setCoursePrograms((prev) => [...prev, newProg]);
     if (getAuthToken()) {
-      collegeApi
-        .createCourseProgram({
-          code: prog.code,
-          name: prog.name,
-          level: prog.level,
-          totalSemesters: prog.totalSemesters,
-        })
-        .catch(() => {});
+      runOptimisticMutation(
+        () =>
+          collegeApi.createCourseProgram({
+            code: prog.code,
+            name: prog.name,
+            level: prog.level,
+            totalSemesters: prog.totalSemesters,
+          }),
+        () => setCoursePrograms(prevPrograms),
+        `Program ${prog.code} added.`,
+        "success",
+        `Failed to add program ${prog.code}.`
+      );
+      return;
     }
     showToast(`Program ${prog.code} added.`, "success");
   };
@@ -1143,6 +1215,7 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   };
 
   const addSemesterTerm = (term: Omit<SemesterTerm, "id" | "collegeId">) => {
+    const prevTerms = semesterTerms;
     const newTerm: SemesterTerm = {
       id: `sem-${Date.now()}`,
       collegeId: college.id,
@@ -1150,20 +1223,27 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     };
     setSemesterTerms((prev) => [...prev, newTerm]);
     if (getAuthToken()) {
-      collegeApi
-        .createSemesterTerm({
-          departmentId: term.departmentId,
-          academicSessionId: term.academicSessionId,
-          semesterNumber: term.semesterNumber,
-          semesterName: term.semesterName,
-          parity: term.parity,
-        })
-        .catch(() => {});
+      runOptimisticMutation(
+        () =>
+          collegeApi.createSemesterTerm({
+            departmentId: term.departmentId,
+            academicSessionId: term.academicSessionId,
+            semesterNumber: term.semesterNumber,
+            semesterName: term.semesterName,
+            parity: term.parity,
+          }),
+        () => setSemesterTerms(prevTerms),
+        `${term.semesterName} configured.`,
+        "success",
+        `Failed to configure ${term.semesterName}.`
+      );
+      return;
     }
     showToast(`${term.semesterName} configured.`, "success");
   };
 
   const addSubjectOffering = (offering: Omit<SubjectOffering, "id" | "collegeId">) => {
+    const prevOfferings = subjectOfferings;
     const newOffering: SubjectOffering = {
       id: `off-${Date.now()}`,
       collegeId: college.id,
@@ -1171,17 +1251,23 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     };
     setSubjectOfferings((prev) => [...prev, newOffering]);
     if (getAuthToken()) {
-      collegeApi
-        .createSubjectOffering({
-          semesterTermId: offering.semesterTermId,
-          subjectCode: offering.subjectCode,
-          subjectName: offering.subjectName,
-          subjectType: offering.subjectType,
-          credits: offering.credits,
-          internalMaxMarks: offering.internalMaxMarks,
-          externalMaxMarks: offering.externalMaxMarks,
-        })
-        .catch(() => {});
+      runOptimisticMutation(
+        () =>
+          collegeApi.createSubjectOffering({
+            semesterTermId: offering.semesterTermId,
+            subjectCode: offering.subjectCode,
+            subjectName: offering.subjectName,
+            subjectType: offering.subjectType,
+            credits: offering.credits,
+            internalMaxMarks: offering.internalMaxMarks,
+            externalMaxMarks: offering.externalMaxMarks,
+          }),
+        () => setSubjectOfferings(prevOfferings),
+        `Subject ${offering.subjectCode} registered.`,
+        "success",
+        `Failed to register subject ${offering.subjectCode}.`
+      );
+      return;
     }
     showToast(`Subject ${offering.subjectCode} registered.`, "success");
   };
@@ -1189,85 +1275,20 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
   const importRgpvCatalog = async (
     universityCode: string = "RGPV",
     programCodes?: string[],
-    branchCodes?: string[]
+    _branchCodes?: string[]
   ) => {
-    if (getAuthToken()) {
-      try {
-        const res = await collegeApi.importUniversityCatalog({
-          universityCode,
-          programCodes,
-        });
-        showToast(res.message, "success");
-        return res;
-      } catch (err: unknown) {
-        console.warn("API import fallback to mock state:", err);
-      }
+    try {
+      const res = await collegeApi.importUniversityCatalog({
+        universityCode,
+        programCodes,
+      });
+      showToast(res.message, "success");
+      return res;
+    } catch (err: unknown) {
+      const msg = err instanceof Error && err.message ? err.message : "Failed to import university catalog.";
+      showToast(msg, "error");
+      throw err;
     }
-
-    // Client-side fallback import
-    const defaultPrograms: CourseProgram[] = [
-      { id: "prog-btech-01", collegeId: college.id, code: "BTECH", name: "Bachelor of Technology", level: "UG", totalSemesters: 8, isActive: true },
-      { id: "prog-mtech-01", collegeId: college.id, code: "MTECH", name: "Master of Technology", level: "PG", totalSemesters: 4, isActive: true },
-      { id: "prog-mba-01", collegeId: college.id, code: "MBA", name: "Master of Business Administration", level: "PG", totalSemesters: 4, isActive: true },
-      { id: "prog-mca-01", collegeId: college.id, code: "MCA", name: "Master of Computer Applications", level: "PG", totalSemesters: 4, isActive: true },
-    ];
-
-    const rgpvBranches = [
-      { code: "CSE", name: "Computer Science & Engineering" },
-      { code: "IT", name: "Information Technology" },
-      { code: "EC", name: "Electronics & Communication Engineering" },
-      { code: "EE", name: "Electrical Engineering" },
-      { code: "EX", name: "Electrical & Electronics Engineering" },
-      { code: "ME", name: "Mechanical Engineering" },
-      { code: "CE", name: "Civil Engineering" },
-      { code: "AIML", name: "CSE (AI & Machine Learning)" },
-      { code: "CS-DS", name: "CSE (Data Science)" },
-      { code: "CS-CS", name: "CSE (Cyber Security)" },
-      { code: "CS-IoT", name: "CSE (Internet of Things)" },
-      { code: "CSBS", name: "Computer Science & Business Systems" },
-    ];
-
-    const activePrograms = (programCodes && programCodes.length > 0)
-      ? defaultPrograms.filter((p) => programCodes.includes(p.code))
-      : defaultPrograms;
-
-    const filteredBranches = (branchCodes && branchCodes.length > 0)
-      ? rgpvBranches.filter((b) => branchCodes.includes(b.code))
-      : rgpvBranches;
-
-    setCoursePrograms(activePrograms);
-
-    setDepartments((prev) => {
-      const existingCodes = new Set(prev.map((d) => d.code));
-      const newlyAdded: Department[] = filteredBranches
-        .filter((b) => !existingCodes.has(b.code))
-        .map((b) => ({
-          id: `dept-${b.code.toLowerCase()}-${Date.now()}`,
-          collegeId: college.id,
-          courseProgramId: "prog-btech-01",
-          courseProgramName: "Bachelor of Technology",
-          code: b.code,
-          name: b.name,
-          studentCount: 120,
-          facultyCount: 10,
-          criterion3Attainment: 80.0,
-          hodSignOffStatus: "Pending Sign-Off",
-        }));
-      return [...prev, ...newlyAdded];
-    });
-
-    const msg = `Successfully loaded RGPV Master Catalog (${activePrograms.length} Programs, ${filteredBranches.length} Selected Branches, CBCS/AICTE-Flex).`;
-    showToast(msg, "success");
-
-    return {
-      universityCode,
-      universityName: "Rajiv Gandhi Proudyogiki Vishwavidyalaya",
-      programsImported: activePrograms.length,
-      departmentsCreated: filteredBranches.length,
-      semesterTermsCreated: 8,
-      subjectOfferingsCreated: 3,
-      message: msg,
-    };
   };
 
   const configureAcademicSession = async (data: {
@@ -1275,48 +1296,32 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     examCutoffDateUtc?: string;
     allowInterdisciplinaryTeams?: boolean;
   }) => {
-    if (getAuthToken()) {
-      try {
-        const res = await collegeApi.configureSession({
-          academicYear: data.academicYear,
-          examCutoffDateUtc: data.examCutoffDateUtc,
-          allowInterdisciplinaryTeams: data.allowInterdisciplinaryTeams ?? true,
-          isActive: true,
-        });
-        setAcademicSessions((prev) => [
-          {
-            id: res.id,
-            collegeId: res.collegeId,
-            label: res.label,
-            startDate: res.startDate,
-            endDate: res.endDate,
-            examCutoffDateUtc: res.examCutoffDateUtc,
-            allowInterdisciplinaryTeams: res.allowInterdisciplinaryTeams ?? true,
-            isActive: res.isActive,
-          },
-          ...prev.filter((s) => s.id !== res.id),
-        ]);
-        showToast(`Institutional Academic Session ${res.label} opened successfully.`, "success");
-        return;
-      } catch (err: unknown) {
-        console.warn("API configure session fallback to local state:", err);
-      }
-    }
-
-    setAcademicSessions((prev) => [
-      {
-        id: prev[0]?.id || "sess-local-01",
-        collegeId: college.id,
-        label: data.academicYear,
-        startDate: prev[0]?.startDate || "2026-07-01T00:00:00Z",
-        endDate: prev[0]?.endDate || "2027-06-30T23:59:59Z",
-        examCutoffDateUtc: data.examCutoffDateUtc || "2027-05-31T23:59:59Z",
+    try {
+      const res = await collegeApi.configureSession({
+        academicYear: data.academicYear,
+        examCutoffDateUtc: data.examCutoffDateUtc,
         allowInterdisciplinaryTeams: data.allowInterdisciplinaryTeams ?? true,
         isActive: true,
-      },
-      ...prev.slice(1),
-    ]);
-    showToast(`Institutional Academic Session ${data.academicYear} configured.`, "success");
+      });
+      setAcademicSessions((prev) => [
+        {
+          id: res.id,
+          collegeId: res.collegeId,
+          label: res.label,
+          startDate: res.startDate,
+          endDate: res.endDate,
+          examCutoffDateUtc: res.examCutoffDateUtc,
+          allowInterdisciplinaryTeams: res.allowInterdisciplinaryTeams ?? true,
+          isActive: res.isActive,
+        },
+        ...prev.filter((s) => s.id !== res.id),
+      ]);
+      showToast(`Institutional Academic Session ${res.label} opened successfully.`, "success");
+    } catch (err: unknown) {
+      const msg = err instanceof Error && err.message ? err.message : "Failed to configure academic session.";
+      showToast(msg, "error");
+      throw err;
+    }
   };
 
   const reassignHOD = (deptId: string, newHodName: string) => {
@@ -1553,15 +1558,22 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     );
 
     if (getAuthToken()) {
-      studentApi
-        .uploadArtifact({
-          slotType: slot as any,
-          fileName,
-          storageKey: `artifacts/${slot.toLowerCase()}/${fileName}`,
-          sha256Checksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          fileSizeBytes: 1048576,
-        })
-        .catch(() => {});
+      const prevTeamsSnapshot = teams;
+      runOptimisticMutation(
+        () =>
+          studentApi.uploadArtifact({
+            slotType: slot as any,
+            fileName,
+            storageKey: `artifacts/${slot.toLowerCase()}/${fileName}`,
+            sha256Checksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            fileSizeBytes: 1048576,
+          }),
+        () => setTeams(prevTeamsSnapshot),
+        `${slot} document uploaded to secure vault.`,
+        "success",
+        `Failed to upload ${slot} document.`
+      );
+      return;
     }
     showToast(`${slot} document uploaded to secure vault.`, "success");
   };
@@ -1587,8 +1599,10 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
         if (res.id) artifactId = res.id;
         if (res.storageKey) storageKey = res.storageKey;
         if (res.sha256Checksum) sha256Checksum = res.sha256Checksum;
-      } catch (err) {
-        console.warn("Artifact upload API failed, updating client cache:", err);
+      } catch (err: unknown) {
+        const msg = err instanceof Error && err.message ? err.message : `Failed to upload ${slot} document.`;
+        showToast(msg, "error");
+        return;
       }
     }
 
@@ -1653,8 +1667,10 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     if (getAuthToken() && targetArtifact?.id) {
       try {
         await facultyApi.reviewArtifact(targetArtifact.id, { isApproved, reviewerNote });
-      } catch (err) {
-        console.warn("Artifact review API failed, updating client cache:", err);
+      } catch (err: unknown) {
+        const msg = err instanceof Error && err.message ? err.message : `Failed to review deliverable ${slot}.`;
+        showToast(msg, "error");
+        return;
       }
     }
 
@@ -1741,13 +1757,24 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     });
 
     if (getAuthToken()) {
-      studentApi
-        .continueLineage({
-          targetAcademicTrackId: "30000000-0000-0000-0000-000000000001",
-          newTitle: `${existingTeam.title} (${nextTrack})`,
-          newAbstract: existingTeam.abstract || "Continuation build.",
-        })
-        .catch(() => {});
+      const prevTeamsSnapshot = teams;
+      const prevLogsSnapshot = auditLogs;
+      runOptimisticMutation(
+        () =>
+          studentApi.continueLineage({
+            targetAcademicTrackId: "30000000-0000-0000-0000-000000000001",
+            newTitle: `${existingTeam.title} (${nextTrack})`,
+            newAbstract: existingTeam.abstract || "Continuation build.",
+          }),
+        () => {
+          setTeams(prevTeamsSnapshot);
+          setAuditLogs(prevLogsSnapshot);
+        },
+        `Project continued into ${nextTrack} with lineage continuity.`,
+        "success",
+        "Failed to continue project into next track."
+      );
+      return newTeam;
     }
     showToast(`Project continued into ${nextTrack} with lineage continuity.`, "success");
     return newTeam;
@@ -1778,19 +1805,30 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     });
 
     if (getAuthToken()) {
-      coordinatorApi
-        .createException({
-          departmentId: "10000000-0000-0000-0000-000000000001",
-          projectTeamId: override.teamId,
-          actionType:
-            override.type === "ReassignGuide"
-              ? "ReassignGuide"
-              : override.type === "RemoveMember"
-              ? "RemoveDroppedMember"
-              : "AmendLockedRoster",
-          reason: override.reason,
-        })
-        .catch(() => {});
+      const prevExceptions = exceptionAuditLogs;
+      const prevLogs = auditLogs;
+      runOptimisticMutation(
+        () =>
+          coordinatorApi.createException({
+            departmentId: "10000000-0000-0000-0000-000000000001",
+            projectTeamId: override.teamId,
+            actionType:
+              override.type === "ReassignGuide"
+                ? "ReassignGuide"
+                : override.type === "RemoveMember"
+                ? "RemoveDroppedMember"
+                : "AmendLockedRoster",
+            reason: override.reason,
+          }),
+        () => {
+          setExceptionAuditLogs(prevExceptions);
+          setAuditLogs(prevLogs);
+        },
+        "Exception request submitted for HOD review.",
+        "info",
+        "Failed to submit exception request."
+      );
+      return;
     }
     showToast("Exception request submitted for HOD review.", "info");
   };
@@ -1841,11 +1879,24 @@ export const ProjectHubStoreProvider: React.FC<{ children: React.ReactNode }> = 
     });
 
     if (getAuthToken()) {
-      if (decision === "Approved") {
-        hodApi.approveException(overrideId).catch(() => {});
-      } else {
-        hodApi.rejectException(overrideId, remarks).catch(() => {});
-      }
+      const prevExceptions = exceptionAuditLogs;
+      const prevTeamsSnapshot = teams;
+      const prevLogs = auditLogs;
+      runOptimisticMutation(
+        () =>
+          decision === "Approved"
+            ? hodApi.approveException(overrideId)
+            : hodApi.rejectException(overrideId, remarks),
+        () => {
+          setExceptionAuditLogs(prevExceptions);
+          setTeams(prevTeamsSnapshot);
+          setAuditLogs(prevLogs);
+        },
+        `Exception override ${decision.toLowerCase()}.`,
+        "success",
+        `Failed to ${decision.toLowerCase()} exception override.`
+      );
+      return;
     }
     showToast(`Exception override ${decision.toLowerCase()}.`, "success");
   };

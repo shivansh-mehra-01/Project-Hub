@@ -8,12 +8,18 @@ namespace ProjectHub.Infrastructure.Security;
 public static partial class PasswordPolicyValidator
 {
     public const int MinimumLength = 12;
+    public const int MaximumLength = 128;
 
     public static string? Validate(string? password)
     {
         if (string.IsNullOrWhiteSpace(password) || password.Length < MinimumLength)
         {
             return $"Password must be at least {MinimumLength} characters in length.";
+        }
+
+        if (password.Length > MaximumLength)
+        {
+            return $"Password must not exceed {MaximumLength} characters.";
         }
 
         if (!UppercaseRegex().IsMatch(password))

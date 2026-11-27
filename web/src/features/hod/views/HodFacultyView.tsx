@@ -16,7 +16,7 @@ import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
 import { Button } from "@/design-system/components/Button";
 import { EmptyState } from "@/design-system/patterns/EmptyState";
-import { hodApi, getAuthToken, FacultyWorkloadDto } from "@/lib/api";
+import { hodApi, ApiError, FacultyWorkloadDto } from "@/lib/api";
 import { HodMetricCard } from "../components/HodMetricCard";
 import { HodConfirmationDialog } from "../components/HodConfirmationDialog";
 
@@ -27,6 +27,7 @@ export const HodFacultyView: React.FC = () => {
 
   const [faculty, setFaculty] = useState<FacultyWorkloadDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<{ status?: number; message: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Stepper mutation tracking: facultyId being updated
@@ -46,17 +47,19 @@ export const HodFacultyView: React.FC = () => {
   };
 
   const loadFaculty = useCallback(async () => {
-    if (!getAuthToken()) {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
+      setLoadError(null);
       const data = await hodApi.getFaculty();
-      if (data) setFaculty(data);
-    } catch (err) {
-      console.warn("Failed to load department faculty:", err);
+      setFaculty(Array.isArray(data) ? data : []);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        setLoadError({ status: err.status, message: err.message });
+      } else {
+        setLoadError({
+          message: err instanceof Error ? err.message : "Unable to load department faculty directory.",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -362,8 +365,38 @@ export const HodFacultyView: React.FC = () => {
           </table>
         </div>
 
-        {/* Empty State */}
-        {faculty.length === 0 && !loading && (
+        {/* Loading / Error / Empty States */}
+        {loading && (
+          <div className="p-8 text-center text-xs text-slate-500">
+            Loading department faculty directory...
+          </div>
+        )}
+
+        {!loading && loadError && (
+          <div className="p-8">
+            <div
+              role="alert"
+              className="rounded-xl border border-rose-200 bg-rose-50/70 p-6 text-center space-y-3"
+            >
+              <AlertTriangle className="h-6 w-6 text-rose-600 mx-auto" />
+              <div className="text-sm font-semibold text-rose-900">
+                {loadError.status === 401 || loadError.status === 403
+                  ? "Unauthorized Access to Department Faculty Directory"
+                  : "Unable to Load Department Faculty Directory"}
+              </div>
+              <p className="text-xs text-rose-700 max-w-md mx-auto">
+                {loadError.message}
+              </p>
+              <div>
+                <Button variant="secondary" size="sm" onClick={loadFaculty}>
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!loading && !loadError && faculty.length === 0 && (
           <div className="p-8">
             <EmptyState
               title="No Faculty Members in Department"

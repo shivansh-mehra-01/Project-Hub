@@ -1582,13 +1582,23 @@ public class StudentController : ControllerBase
         if (team == null) return NotFound(new { message = "Active project team not found." });
 
         await using var stream = file.OpenReadStream();
-        var (storageKey, checksum, fileSizeBytes) = await _fileStorageService.SaveAsync(
-            team.CollegeId,
-            team.Id,
-            slotType.ToString(),
-            file.FileName,
-            stream,
-            cancellationToken);
+        string storageKey;
+        string checksum;
+        long fileSizeBytes;
+        try
+        {
+            (storageKey, checksum, fileSizeBytes) = await _fileStorageService.SaveAsync(
+                team.CollegeId,
+                team.Id,
+                slotType.ToString(),
+                file.FileName,
+                stream,
+                cancellationToken);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
 
         var artifact = await _context.TeamArtifacts
             .FirstOrDefaultAsync(a => a.ProjectTeamId == team.Id && a.SlotType == slotType && !a.IsDeleted, cancellationToken);
@@ -1679,109 +1689,8 @@ public class StudentController : ControllerBase
     }
 
     // =========================================================================
-    // PHASE 3: PROJECT DISCOVERY, PROBLEM BANK & IDEA REGISTRATION
+    // PHASE 3: PROJECT DISCOVERY & IDEA REGISTRATION
     // =========================================================================
-
-    [HttpGet("problem-bank")]
-    public async Task<ActionResult<List<ProblemBankStatementDto>>> GetProblemBank(
-        [FromQuery] string? domain,
-        [FromQuery] string? sdg,
-        [FromQuery] string? search)
-    {
-        var studentId = _tenantContext.UserId!.Value;
-        var collegeId = _tenantContext.CollegeId!.Value;
-
-        var student = await _context.Users.FirstOrDefaultAsync(u => u.Id == studentId && u.CollegeId == collegeId && !u.IsDeleted);
-        if (student == null) return Unauthorized();
-
-        var query = _context.ProblemBankStatements
-            .Include(p => p.ProposedByFaculty)
-            .Include(p => p.Department)
-            .Include(p => p.AcademicTrack)
-            .Where(p => p.CollegeId == collegeId && !p.IsAllocated && !p.IsDeleted);
-
-        if (student.DepartmentId.HasValue)
-        {
-            query = query.Where(p => p.DepartmentId == student.DepartmentId.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(sdg))
-        {
-            var sdgTrim = sdg.Trim().ToUpperInvariant();
-            query = query.Where(p => p.SdgCode.ToUpper().Contains(sdgTrim));
-        }
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var s = search.Trim().ToLower();
-            query = query.Where(p => p.Title.ToLower().Contains(s) || p.Abstract.ToLower().Contains(s));
-        }
-
-        var statements = await query
-            .OrderByDescending(p => p.CreatedAtUtc)
-            .Select(p => new ProblemBankStatementDto
-            {
-                Id = p.Id,
-                Title = p.Title,
-                Abstract = p.Abstract,
-                SdgCode = p.SdgCode,
-                Prerequisites = string.IsNullOrWhiteSpace(p.PrerequisitesCsv)
-                    ? new List<string>()
-                    : p.PrerequisitesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
-                MaxTeamCapacity = p.MaxTeamCapacity,
-                IsAllocated = p.IsAllocated,
-                ProposedByFacultyId = p.ProposedByFacultyId,
-                FacultyName = p.ProposedByFaculty != null ? p.ProposedByFaculty.FullName : "Faculty Mentor",
-                DepartmentName = p.Department != null ? p.Department.Name : "Engineering",
-                DepartmentCode = p.Department != null ? p.Department.Code : "ENG",
-                AcademicTrackName = p.AcademicTrack != null ? p.AcademicTrack.Name : "Project Track",
-                CreatedAtUtc = p.CreatedAtUtc
-            })
-            .ToListAsync();
-
-        if (!string.IsNullOrWhiteSpace(domain))
-        {
-            var d = domain.Trim().ToLower();
-            statements = statements.Where(s =>
-                s.Title.ToLower().Contains(d) ||
-                s.Abstract.ToLower().Contains(d) ||
-                s.Prerequisites.Any(p => p.ToLower().Contains(d))).ToList();
-        }
-
-        return Ok(statements);
-    }
-
-    [HttpGet("problem-bank/{id}")]
-    public async Task<ActionResult<ProblemBankStatementDto>> GetProblemBankStatement(Guid id)
-    {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var p = await _context.ProblemBankStatements
-            .Include(x => x.ProposedByFaculty)
-            .Include(x => x.Department)
-            .Include(x => x.AcademicTrack)
-            .FirstOrDefaultAsync(x => x.Id == id && x.CollegeId == collegeId && !x.IsDeleted);
-
-        if (p == null) return NotFound(new { message = "Problem statement not found." });
-
-        return Ok(new ProblemBankStatementDto
-        {
-            Id = p.Id,
-            Title = p.Title,
-            Abstract = p.Abstract,
-            SdgCode = p.SdgCode,
-            Prerequisites = string.IsNullOrWhiteSpace(p.PrerequisitesCsv)
-                ? new List<string>()
-                : p.PrerequisitesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
-            MaxTeamCapacity = p.MaxTeamCapacity,
-            IsAllocated = p.IsAllocated,
-            ProposedByFacultyId = p.ProposedByFacultyId,
-            FacultyName = p.ProposedByFaculty != null ? p.ProposedByFaculty.FullName : "Faculty Mentor",
-            DepartmentName = p.Department != null ? p.Department.Name : "Engineering",
-            DepartmentCode = p.Department != null ? p.Department.Code : "ENG",
-            AcademicTrackName = p.AcademicTrack != null ? p.AcademicTrack.Name : "Project Track",
-            CreatedAtUtc = p.CreatedAtUtc
-        });
-    }
 
     [HttpGet("faculty-guides")]
     public async Task<ActionResult<List<FacultyGuideSummaryDto>>> GetFacultyGuides()
@@ -2085,19 +1994,7 @@ public class StudentController : ControllerBase
         };
         await _context.TeamMembers.AddAsync(leadMember);
 
-        // 9. If problem bank statement adopted, link it
-        if (request.AdoptedProblemBankId.HasValue)
-        {
-            var statement = await _context.ProblemBankStatements
-                .FirstOrDefaultAsync(p => p.Id == request.AdoptedProblemBankId.Value && p.CollegeId == collegeId && !p.IsDeleted);
-            if (statement != null && !statement.IsAllocated)
-            {
-                statement.IsAllocated = true;
-                statement.AllocatedTeamId = newTeam.Id;
-            }
-        }
-
-        // 10. Audit log
+        // 9. Audit log
         var audit = new PlatformAuditLog
         {
             ActorUserId = studentId,
@@ -2640,14 +2537,14 @@ public class StudentController : ControllerBase
         {
             StudentId = user.Id,
             FullName = user.FullName,
-            EnrollmentCode = user.EnrollmentOrEmployeeCode,
-            CollegeName = user.College?.Name ?? "ProjectHub Institution",
-            DepartmentName = user.Department?.Name ?? "Computer Science & Engineering",
-            ProjectTitle = team?.Title ?? "Smart IoT Energy Monitoring & Anomaly Detection",
-            TeamCode = team?.TeamCode ?? "2026-CS-MIN-01",
-            ModuleResponsibility = member?.ModuleResponsibility ?? "Edge Firmware & Telemetry Pipeline",
-            DomainTag = team?.DomainTag ?? "IoT & Cloud Infrastructure",
-            SdgCode = team?.SdgCode ?? "SDG-7",
+            EnrollmentCode = user.EnrollmentOrEmployeeCode ?? string.Empty,
+            CollegeName = user.College?.Name ?? string.Empty,
+            DepartmentName = user.Department?.Name ?? string.Empty,
+            ProjectTitle = team?.Title ?? string.Empty,
+            TeamCode = team?.TeamCode ?? string.Empty,
+            ModuleResponsibility = member?.ModuleResponsibility ?? string.Empty,
+            DomainTag = team?.DomainTag ?? string.Empty,
+            SdgCode = team?.SdgCode ?? string.Empty,
             RepoUrl = team?.RepoUrl,
             TotalHoursLogged = totalHours,
             TotalCommits = totalCommits,
@@ -3377,6 +3274,85 @@ public class StudentController : ControllerBase
 
     /// <summary>
     /// TEAM-001: Explicitly create a new project team in Draft state with the authenticated caller as initial Team Lead.
+    [HttpGet("tracks")]
+    public async Task<ActionResult<List<CollegeTrackDto>>> GetAvailableTracks(CancellationToken cancellationToken)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var studentId = _tenantContext.UserId!.Value;
+
+        var student = await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == studentId && u.CollegeId == collegeId && !u.IsDeleted, cancellationToken);
+
+        if (student == null) return Unauthorized();
+        if (!student.DepartmentId.HasValue) return Ok(new List<CollegeTrackDto>());
+
+        var tracks = await _context.AcademicTracks
+            .AsNoTracking()
+            .Include(t => t.Department)
+            .Include(t => t.SemesterTerm)
+            .Include(t => t.SubjectOffering)
+            .Where(t => t.CollegeId == collegeId &&
+                        t.DepartmentId == student.DepartmentId.Value &&
+                        t.Status == AcademicTrackStatus.Open &&
+                        t.IsActive &&
+                        !t.IsDeleted)
+            .OrderByDescending(t => t.AcademicYear)
+            .ThenBy(t => t.Name)
+            .ToListAsync(cancellationToken);
+
+        var enrollment = await _context.StudentAcademicEnrollments
+            .AsNoTracking()
+            .Include(e => e.CurrentSemesterTerm)
+            .FirstOrDefaultAsync(e => e.StudentUserId == studentId && e.CollegeId == collegeId && e.AcademicStatus == AcademicStatus.Active && !e.IsDeleted, cancellationToken);
+
+        var studentSemesterNumber = enrollment?.CurrentSemesterTerm?.SemesterNumber;
+        if (studentSemesterNumber.HasValue)
+        {
+            tracks = tracks
+                .Where(t => t.SemesterTerm == null || t.SemesterTerm.SemesterNumber == studentSemesterNumber.Value)
+                .ToList();
+        }
+
+        return Ok(tracks.Select(t => new CollegeTrackDto
+        {
+            Id = t.Id,
+            CollegeId = t.CollegeId,
+            DepartmentId = t.DepartmentId,
+            DepartmentCode = t.Department?.Code,
+            AcademicSessionId = t.AcademicSessionId,
+            CourseProgramId = t.CourseProgramId,
+            SemesterTermId = t.SemesterTermId,
+            SemesterNumber = t.SemesterTerm?.SemesterNumber,
+            SemesterName = t.SemesterTerm?.SemesterName,
+            SubjectOfferingId = t.SubjectOfferingId,
+            SubjectCode = t.SubjectOffering?.SubjectCode,
+            SubjectName = t.SubjectOffering?.SubjectName,
+            CurriculumSchemeId = t.CurriculumSchemeId,
+            ParticipationMode = t.ParticipationMode,
+            EnrolmentMode = t.EnrolmentMode,
+            AllowCrossBranchTeams = t.AllowCrossBranchTeams,
+            Name = t.Name,
+            Description = t.Description,
+            AcademicYear = t.AcademicYear,
+            AllowInterdisciplinaryTeams = t.AllowInterdisciplinaryTeams,
+            IsActive = t.IsActive,
+            Status = t.Status,
+            MinTeamSize = t.ParticipationMode == ParticipationMode.Individual ? 1 : t.MinTeamSize,
+            MaxTeamSize = t.ParticipationMode == ParticipationMode.Individual ? 1 : t.MaxTeamSize,
+            RegistrationOpensUtc = t.RegistrationOpensUtc,
+            ProposalDeadlineUtc = t.ProposalDeadlineUtc,
+            FinalSubmissionDeadlineUtc = t.FinalSubmissionDeadlineUtc,
+            GuideWeightPct = t.GuideWeightPct,
+            MidTermWeightPct = t.MidTermWeightPct,
+            FinalVivaWeightPct = t.FinalVivaWeightPct,
+            SharedProjectRubricPct = t.SharedProjectRubricPct,
+            IndividualStudentRubricPct = t.IndividualStudentRubricPct
+        }).ToList());
+    }
+
+    /// <summary>
+    /// Creates a new project team for the student.
     /// </summary>
     [HttpPost("teams")]
     public async Task<ActionResult<StudentTeamRosterDto>> CreateTeam([FromBody] CreateStudentTeamRequest request, CancellationToken cancellationToken)
@@ -3391,6 +3367,7 @@ public class StudentController : ControllerBase
 
         // 1. Verify active enrollment
         var enrollment = await _context.StudentAcademicEnrollments
+            .Include(e => e.CurrentSemesterTerm)
             .FirstOrDefaultAsync(e => e.StudentUserId == studentId && e.CollegeId == collegeId && e.AcademicStatus == AcademicStatus.Active && !e.IsDeleted, cancellationToken);
         if (enrollment == null)
         {
@@ -3418,6 +3395,14 @@ public class StudentController : ControllerBase
         {
             return BadRequest(new { message = "Project title cannot exceed 200 characters." });
         }
+        if (!string.IsNullOrWhiteSpace(request.TeamName) && request.TeamName.Trim().Length > 120)
+        {
+            return BadRequest(new { message = "Team name cannot exceed 120 characters." });
+        }
+        if (!string.IsNullOrWhiteSpace(request.CreatorRole) && request.CreatorRole.Trim().Length > 120)
+        {
+            return BadRequest(new { message = "Contribution role cannot exceed 120 characters." });
+        }
         if (string.IsNullOrWhiteSpace(request.Abstract) || request.Abstract.Trim().Length < 20)
         {
             return BadRequest(new { message = "Project abstract is mandatory and must be at least 20 characters long." });
@@ -3434,33 +3419,69 @@ public class StudentController : ControllerBase
         }
 
         // 4. Resolve track within the student's department
-        Guid trackId = request.AcademicTrackId ?? Guid.Empty;
-        if (trackId == Guid.Empty)
+        var studentSem = enrollment.CurrentSemesterTerm?.SemesterNumber;
+        AcademicTrack? selectedTrack = null;
+        if (!request.AcademicTrackId.HasValue || request.AcademicTrackId.Value == Guid.Empty)
         {
-            var defaultTrack = await _context.AcademicTracks
-                .FirstOrDefaultAsync(t => t.CollegeId == collegeId && t.DepartmentId == student.DepartmentId.Value && t.IsActive && !t.IsDeleted, cancellationToken);
-            if (defaultTrack != null) trackId = defaultTrack.Id;
+            var openTracks = await _context.AcademicTracks
+                .Include(t => t.SemesterTerm)
+                .Where(t => t.CollegeId == collegeId &&
+                            t.DepartmentId == student.DepartmentId.Value &&
+                            t.Status == AcademicTrackStatus.Open &&
+                            t.IsActive &&
+                            !t.IsDeleted)
+                .ToListAsync(cancellationToken);
+
+            selectedTrack = openTracks.FirstOrDefault(t =>
+                !studentSem.HasValue || t.SemesterTerm == null || t.SemesterTerm.SemesterNumber == studentSem.Value);
         }
         else
         {
-            var trackExists = await _context.AcademicTracks
-                .AnyAsync(t => t.Id == trackId && t.CollegeId == collegeId && t.DepartmentId == student.DepartmentId.Value && t.IsActive && !t.IsDeleted, cancellationToken);
-            if (!trackExists)
+            selectedTrack = await _context.AcademicTracks
+                .Include(t => t.SemesterTerm)
+                .FirstOrDefaultAsync(t => t.Id == request.AcademicTrackId.Value &&
+                                          t.CollegeId == collegeId &&
+                                          t.DepartmentId == student.DepartmentId.Value &&
+                                          !t.IsDeleted, cancellationToken);
+            if (selectedTrack == null)
             {
                 return BadRequest(new { message = "The selected academic track is invalid or does not belong to your department." });
             }
+            if (selectedTrack.Status != AcademicTrackStatus.Open || !selectedTrack.IsActive)
+            {
+                return BadRequest(new { message = $"This project track is currently {selectedTrack.Status} and not accepting new projects." });
+            }
+            if (studentSem.HasValue && selectedTrack.SemesterTerm != null && selectedTrack.SemesterTerm.SemesterNumber != studentSem.Value)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You are not eligible to create a team in a project window for another semester." });
+            }
         }
 
-        if (trackId == Guid.Empty)
+        if (selectedTrack == null)
         {
-            return BadRequest(new { message = "No active academic project track is configured for your department." });
+            return BadRequest(new { message = "No open academic project track is configured for your department." });
         }
+
+        if (selectedTrack.RegistrationOpensUtc.HasValue && DateTime.UtcNow < selectedTrack.RegistrationOpensUtc.Value)
+        {
+            return BadRequest(new { message = "Registration for this project window has not opened yet." });
+        }
+
+        if (selectedTrack.ProposalDeadlineUtc.HasValue && DateTime.UtcNow > selectedTrack.ProposalDeadlineUtc.Value)
+        {
+            return BadRequest(new { message = "The proposal submission deadline for this project track has passed." });
+        }
+
+        Guid trackId = selectedTrack.Id;
 
         // 5. Generate team code
         var deptCode = student.Department.Code;
         var year = DateTime.UtcNow.Year;
         var count = await _context.ProjectTeams.CountAsync(t => t.CollegeId == collegeId && t.DepartmentId == student.DepartmentId, cancellationToken);
         var teamCode = $"{year}-{deptCode}-PRJ-{(count + 1):D2}";
+
+        var isIndividualTrack = selectedTrack.ParticipationMode == ParticipationMode.Individual;
+        var publishNow = request.PublishImmediately && !isIndividualTrack;
 
         // 6. Persist team
         var newTeam = new ProjectTeam
@@ -3469,10 +3490,14 @@ public class StudentController : ControllerBase
             DepartmentId = student.DepartmentId ?? Guid.Empty,
             AcademicTrackId = trackId,
             TeamCode = teamCode,
+            TeamName = string.IsNullOrWhiteSpace(request.TeamName) ? null : request.TeamName.Trim(),
             Title = request.Title.Trim(),
             Abstract = request.Abstract.Trim(),
             DomainTag = domain,
             SdgCode = sdg,
+            RequiredSkillsCsv = string.IsNullOrWhiteSpace(request.RequiredSkillsCsv) ? null : request.RequiredSkillsCsv.Trim(),
+            IsPublished = publishNow,
+            PublishedAtUtc = publishNow ? DateTime.UtcNow : null,
             Status = ProjectStatus.Draft,
             IsRosterLocked = false
         };
@@ -3485,7 +3510,7 @@ public class StudentController : ControllerBase
             UserId = studentId,
             ProjectTeamId = newTeam.Id,
             IsTeamLead = true,
-            ModuleResponsibility = "Team Lead & Project Architect",
+            ModuleResponsibility = string.IsNullOrWhiteSpace(request.CreatorRole) ? "Team Lead & Project Architect" : request.CreatorRole.Trim(),
             IsActive = true,
             JoinedAtUtc = DateTime.UtcNow
         };
@@ -3499,7 +3524,7 @@ public class StudentController : ControllerBase
             Action = "TEAM_CREATED",
             TargetTenantId = collegeId,
             TargetEntity = "ProjectTeam",
-            MetadataJson = JsonSerializer.Serialize(new { teamId = newTeam.Id, teamCode = newTeam.TeamCode, title = newTeam.Title }),
+            MetadataJson = JsonSerializer.Serialize(new { teamId = newTeam.Id, teamCode = newTeam.TeamCode, title = newTeam.Title, isPublished = newTeam.IsPublished }),
             OccurredAtUtc = DateTime.UtcNow
         }, cancellationToken);
 
@@ -3512,8 +3537,13 @@ public class StudentController : ControllerBase
         {
             TeamId = newTeam.Id,
             TeamCode = newTeam.TeamCode,
+            TeamName = newTeam.TeamName,
             Title = newTeam.Title,
             Abstract = newTeam.Abstract,
+            DomainTag = newTeam.DomainTag,
+            IsPublished = newTeam.IsPublished,
+            PublishedAtUtc = newTeam.PublishedAtUtc,
+            RequiredSkills = ParseCsvList(newTeam.RequiredSkillsCsv),
             Status = newTeam.Status,
             IsRosterLocked = newTeam.IsRosterLocked,
             IsCallerLead = true,
@@ -3527,10 +3557,12 @@ public class StudentController : ControllerBase
                     FullName = student.FullName,
                     EnrollmentCode = student.EnrollmentOrEmployeeCode,
                     IsTeamLead = true,
-                    ModuleResponsibility = leadMember.ModuleResponsibility
+                    ModuleResponsibility = leadMember.ModuleResponsibility,
+                    Skills = ParseCsvList(student.SkillsCsv)
                 }
             },
-            PendingInvitations = new()
+            PendingInvitations = new(),
+            IncomingJoinRequests = new()
         });
     }
 
@@ -3559,7 +3591,8 @@ public class StudentController : ControllerBase
                 FullName = m.User?.FullName ?? string.Empty,
                 EnrollmentCode = m.User?.EnrollmentOrEmployeeCode ?? string.Empty,
                 IsTeamLead = m.IsTeamLead,
-                ModuleResponsibility = m.ModuleResponsibility
+                ModuleResponsibility = m.ModuleResponsibility,
+                Skills = ParseCsvList(m.User?.SkillsCsv)
             })
             .ToList();
 
@@ -3590,12 +3623,42 @@ public class StudentController : ControllerBase
             })
             .ToListAsync(cancellationToken);
 
+        var incomingJoinRequests = isLead
+            ? (await _context.TeamJoinRequests
+                .Include(r => r.StudentUser)
+                .Where(r => r.ProjectTeamId == team.Id && r.Status == JoinRequestStatus.Pending && !r.IsDeleted)
+                .OrderByDescending(r => r.CreatedAtUtc)
+                .ToListAsync(cancellationToken))
+                .Select(r => new TeamJoinRequestDto
+                {
+                    Id = r.Id,
+                    ProjectTeamId = r.ProjectTeamId,
+                    TeamCode = team.TeamCode,
+                    TeamName = team.TeamName,
+                    ProjectTitle = team.Title,
+                    StudentUserId = r.StudentUserId,
+                    StudentName = r.StudentUser?.FullName ?? string.Empty,
+                    StudentUsn = r.StudentUser?.EnrollmentOrEmployeeCode ?? string.Empty,
+                    StudentSkills = ParseCsvList(r.StudentUser?.SkillsCsv),
+                    DesiredRole = r.DesiredRole,
+                    Message = r.Message,
+                    Status = r.Status,
+                    CreatedAtUtc = r.CreatedAtUtc
+                })
+                .ToList()
+            : new List<TeamJoinRequestDto>();
+
         return Ok(new StudentTeamRosterDto
         {
             TeamId = team.Id,
             TeamCode = team.TeamCode,
+            TeamName = team.TeamName,
             Title = team.Title,
             Abstract = team.Abstract,
+            DomainTag = team.DomainTag,
+            IsPublished = team.IsPublished,
+            PublishedAtUtc = team.PublishedAtUtc,
+            RequiredSkills = ParseCsvList(team.RequiredSkillsCsv),
             Status = team.Status,
             IsRosterLocked = team.IsRosterLocked,
             IsCallerLead = isLead,
@@ -3603,6 +3666,7 @@ public class StudentController : ControllerBase
             MaxTeamSize = maxSize,
             Members = members,
             PendingInvitations = pendingInvites,
+            IncomingJoinRequests = incomingJoinRequests,
             GuideUserId = team.GuideUserId,
             GuideName = team.GuideUser?.FullName,
             PreferredGuideUserId = team.PreferredGuideUserId,
@@ -4599,12 +4663,55 @@ public class StudentController : ControllerBase
 
         if (student == null) return NotFound(new { message = "Student profile not found." });
 
+        var enrollment = await _context.StudentAcademicEnrollments
+            .Include(e => e.Department)
+            .Include(e => e.CourseProgram)
+            .Include(e => e.CurrentSemesterTerm)
+            .FirstOrDefaultAsync(e => e.StudentUserId == studentId && e.CollegeId == collegeId && e.AcademicStatus == AcademicStatus.Active && !e.IsDeleted);
+
         var records = await _context.StudentAcademicRecords
-            .Where(r => r.StudentUserId == studentId && r.CollegeId == collegeId && !r.IsDeleted)
+            .Where(r => r.StudentUserId == studentId && r.CollegeId == collegeId && !r.IsDeleted && r.IsVerified)
             .OrderByDescending(r => r.VerifiedAtUtc)
             .ToListAsync();
 
         var allowPublic = records.Any(r => r.AllowPublicPortfolio);
+        var verifiedTeamIds = records.Select(r => r.ProjectTeamId).ToHashSet();
+
+        var completedMemberships = await _context.TeamMembers
+            .Include(m => m.ProjectTeam!)
+                .ThenInclude(t => t.AcademicTrack)
+            .Include(m => m.ProjectTeam!)
+                .ThenInclude(t => t.GuideUser)
+            .Where(m =>
+                !m.IsDeleted &&
+                m.IsActive &&
+                m.UserId == studentId &&
+                m.CollegeId == collegeId &&
+                m.ProjectTeam != null &&
+                !m.ProjectTeam.IsDeleted &&
+                m.ProjectTeam.CollegeId == collegeId &&
+                (m.ProjectTeam.Status == ProjectStatus.Completed || m.ProjectTeam.Status == ProjectStatus.Archived))
+            .OrderByDescending(m => m.ProjectTeam!.UpdatedAtUtc)
+            .ToListAsync();
+
+        var pendingProjects = completedMemberships
+            .Where(m => !verifiedTeamIds.Contains(m.ProjectTeamId))
+            .Select(m => new PendingPortfolioProjectDto
+            {
+                ProjectTeamId = m.ProjectTeamId,
+                ProjectTitle = m.ProjectTeam!.Title,
+                TeamCode = m.ProjectTeam.TeamCode,
+                TrackName = m.ProjectTeam.AcademicTrack?.Name ?? string.Empty,
+                AcademicYear = m.ProjectTeam.AcademicTrack?.AcademicYear ?? string.Empty,
+                RoleDescription = !string.IsNullOrWhiteSpace(m.ModuleResponsibility)
+                    ? m.ModuleResponsibility
+                    : (m.IsTeamLead ? "Team Lead" : "Team Member"),
+                IsTeamLead = m.IsTeamLead,
+                GuideName = m.ProjectTeam.GuideUser?.FullName ?? string.Empty,
+                Status = m.ProjectTeam.Status.ToString(),
+                RepositoryUrl = m.ProjectTeam.RepoUrl
+            })
+            .ToList();
 
         var projectDtos = records.Select(r =>
         {
@@ -4652,18 +4759,23 @@ public class StudentController : ControllerBase
             };
         }).ToList();
 
-        var shareUrl = $"https://collabex.io/verify/{student.EnrollmentOrEmployeeCode}";
+        var shareUrl = !string.IsNullOrWhiteSpace(student.EnrollmentOrEmployeeCode)
+            ? $"https://collabex.io/verify/{student.EnrollmentOrEmployeeCode}"
+            : string.Empty;
 
         return Ok(new VerifiedStudentPortfolioDto
         {
             StudentUserId = student.Id,
             StudentName = student.FullName,
             EnrollmentNumber = student.EnrollmentOrEmployeeCode ?? string.Empty,
-            DepartmentName = student.Department?.Name ?? "Computer Science & Engineering",
-            CollegeName = student.College?.Name ?? "SISTec",
+            DepartmentName = student.Department?.Name ?? enrollment?.Department?.Name ?? string.Empty,
+            CollegeName = student.College?.Name ?? string.Empty,
+            ProgramName = enrollment?.CourseProgram?.Name,
+            CurrentSemesterNumber = enrollment?.CurrentSemesterTerm?.SemesterNumber,
             AllowPublicPortfolio = allowPublic,
             PublicPortfolioShareUrl = shareUrl,
-            Projects = projectDtos
+            Projects = projectDtos,
+            PendingVerificationProjects = pendingProjects
         });
     }
 
@@ -4689,6 +4801,7 @@ public class StudentController : ControllerBase
 
     [HttpGet("portfolio/{enrollmentNumber}/public")]
     [AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("PublicPortfolioLimit")]
     public async Task<ActionResult<PublicStudentPortfolioDto>> GetPublicStudentPortfolio(string enrollmentNumber, [FromQuery] string? collegeCode = null)
     {
         var code = enrollmentNumber?.Trim().ToUpperInvariant();
@@ -4710,7 +4823,7 @@ public class StudentController : ControllerBase
 
         if (records.Count == 0)
         {
-            return NotFound(new { message = $"No verified academic project records found for enrollment code '{code}'." });
+            return NotFound(new { message = "Public portfolio not found." });
         }
 
         // Prevent cross-college data merging if multiple institutions share the same enrollment code
@@ -4720,11 +4833,11 @@ public class StudentController : ControllerBase
             return BadRequest(new { message = "Multiple institutions match this enrollment number. Please specify the 'collegeCode' query parameter." });
         }
 
-        // Check if student has granted public visibility
+        // Check if student has granted public visibility (return same 404 to prevent portfolio existence enumeration)
         var isPublic = records.Any(r => r.AllowPublicPortfolio);
         if (!isPublic)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = "This student's academic project portfolio is set to private visibility in accordance with institutional data protection policies." });
+            return NotFound(new { message = "Public portfolio not found." });
         }
 
         var sample = records[0];
@@ -4766,6 +4879,11 @@ public class StudentController : ControllerBase
             .FirstOrDefaultAsync(r => r.Id == recordId && r.CollegeId == collegeId && !r.IsDeleted);
 
         if (r == null) return NotFound(new { message = "Academic record not found." });
+
+        if (!r.IsVerified && _tenantContext.Role == UserRole.Student)
+        {
+            return NotFound(new { message = "Verified academic record not found." });
+        }
 
         if (r.StudentUserId != studentId && _tenantContext.Role == UserRole.Student)
         {
@@ -4815,4 +4933,566 @@ public class StudentController : ControllerBase
             AllowPublicPortfolio = r.AllowPublicPortfolio
         });
     }
+
+    // =========================================================================
+    // TEAM PUBLISHING, EXPLORE TEAMS & JOIN REQUEST LIFECYCLE
+    // =========================================================================
+
+    [HttpPut("teams/current")]
+    public async Task<ActionResult<StudentTeamRosterDto>> UpdateCurrentTeamDetails(
+        [FromBody] UpdateTeamDetailsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var studentId = _tenantContext.UserId!.Value;
+        var team = await GetCurrentStudentTeamAsync(studentId);
+        if (team == null)
+        {
+            return NotFound(new { message = "You are not currently in an active project team." });
+        }
+
+        var leadMember = team.Members.FirstOrDefault(m => m.UserId == studentId && m.IsTeamLead && m.IsActive && !m.IsDeleted);
+        if (leadMember == null)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Only the team publisher/leader can update team details." });
+        }
+
+        if (team.IsRosterLocked || team.Status != ProjectStatus.Draft)
+        {
+            return BadRequest(new { message = "Team details cannot be modified after submission or roster lock." });
+        }
+
+        if (request.Title != null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length < 5)
+            {
+                return BadRequest(new { message = "Project title must be at least 5 characters long." });
+            }
+            team.Title = request.Title.Trim();
+        }
+
+        if (request.Abstract != null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Abstract) || request.Abstract.Trim().Length < 20)
+            {
+                return BadRequest(new { message = "Project description must be at least 20 characters long." });
+            }
+            team.Abstract = request.Abstract.Trim();
+        }
+
+        if (request.TeamName != null)
+        {
+            team.TeamName = string.IsNullOrWhiteSpace(request.TeamName) ? null : request.TeamName.Trim();
+        }
+
+        if (request.DomainTag != null && !string.IsNullOrWhiteSpace(request.DomainTag))
+        {
+            team.DomainTag = request.DomainTag.Trim();
+        }
+
+        if (request.RequiredSkillsCsv != null)
+        {
+            team.RequiredSkillsCsv = string.IsNullOrWhiteSpace(request.RequiredSkillsCsv) ? null : request.RequiredSkillsCsv.Trim();
+        }
+
+        if (request.CreatorRole != null && !string.IsNullOrWhiteSpace(request.CreatorRole))
+        {
+            leadMember.ModuleResponsibility = request.CreatorRole.Trim();
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return await GetCurrentTeamRoster(cancellationToken);
+    }
+
+    [HttpPost("teams/current/publish")]
+    public async Task<ActionResult<StudentTeamRosterDto>> PublishCurrentTeam(CancellationToken cancellationToken)
+    {
+        var studentId = _tenantContext.UserId!.Value;
+        var team = await GetCurrentStudentTeamAsync(studentId);
+        if (team == null)
+        {
+            return NotFound(new { message = "You are not currently in an active project team." });
+        }
+
+        var isLead = team.Members.Any(m => m.UserId == studentId && m.IsTeamLead && m.IsActive && !m.IsDeleted);
+        if (!isLead)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Only the team creator/leader can publish the team." });
+        }
+
+        if (team.IsRosterLocked || team.Status != ProjectStatus.Draft)
+        {
+            return BadRequest(new { message = "Only draft teams with an unlocked roster can be published for team formation." });
+        }
+
+        if (team.AcademicTrack?.ParticipationMode == ParticipationMode.Individual)
+        {
+            return BadRequest(new { message = "Individual project tracks cannot be published for team formation." });
+        }
+
+        team.IsPublished = true;
+        team.PublishedAtUtc ??= DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return await GetCurrentTeamRoster(cancellationToken);
+    }
+
+    [HttpGet("teams/explore")]
+    public async Task<ActionResult<List<PublishedTeamSummaryDto>>> ExplorePublishedTeams(
+        [FromQuery] Guid? trackId,
+        [FromQuery] string? search,
+        [FromQuery] string? skill,
+        CancellationToken cancellationToken)
+    {
+        var studentId = _tenantContext.UserId!.Value;
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var student = await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == studentId && u.CollegeId == collegeId && !u.IsDeleted, cancellationToken);
+        if (student == null) return Unauthorized();
+        if (!student.DepartmentId.HasValue) return Ok(new List<PublishedTeamSummaryDto>());
+
+        var enrollment = await _context.StudentAcademicEnrollments
+            .AsNoTracking()
+            .Include(e => e.CurrentSemesterTerm)
+            .FirstOrDefaultAsync(e => e.StudentUserId == studentId && e.CollegeId == collegeId && e.AcademicStatus == AcademicStatus.Active && !e.IsDeleted, cancellationToken);
+        if (enrollment == null) return Ok(new List<PublishedTeamSummaryDto>());
+
+        var studentSemester = enrollment.CurrentSemesterTerm?.SemesterNumber;
+        var now = DateTime.UtcNow;
+
+        var query = _context.ProjectTeams
+            .AsNoTracking()
+            .Include(t => t.AcademicTrack)
+                .ThenInclude(tr => tr!.SemesterTerm)
+            .Include(t => t.Members.Where(m => m.IsActive && !m.IsDeleted))
+                .ThenInclude(m => m.User)
+            .Where(t => t.CollegeId == collegeId &&
+                        t.DepartmentId == student.DepartmentId.Value &&
+                        t.IsPublished &&
+                        !t.IsRosterLocked &&
+                        t.Status == ProjectStatus.Draft &&
+                        !t.IsDeleted &&
+                        t.AcademicTrack != null &&
+                        t.AcademicTrack.Status == AcademicTrackStatus.Open &&
+                        t.AcademicTrack.IsActive &&
+                        !t.AcademicTrack.IsDeleted &&
+                        t.AcademicTrack.ParticipationMode == ParticipationMode.Team);
+
+        if (trackId.HasValue && trackId.Value != Guid.Empty)
+        {
+            query = query.Where(t => t.AcademicTrackId == trackId.Value);
+        }
+
+        var teams = await query
+            .OrderByDescending(t => t.PublishedAtUtc ?? t.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        teams = teams
+            .Where(t =>
+                (!studentSemester.HasValue || t.AcademicTrack!.SemesterTerm == null || t.AcademicTrack.SemesterTerm.SemesterNumber == studentSemester.Value) &&
+                (!t.AcademicTrack!.RegistrationOpensUtc.HasValue || now >= t.AcademicTrack.RegistrationOpensUtc.Value) &&
+                (!t.AcademicTrack.ProposalDeadlineUtc.HasValue || now <= t.AcademicTrack.ProposalDeadlineUtc.Value))
+            .ToList();
+
+        var myRequests = await _context.TeamJoinRequests
+            .AsNoTracking()
+            .Where(r => r.CollegeId == collegeId && r.StudentUserId == studentId && !r.IsDeleted)
+            .OrderByDescending(r => r.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        var myRequestByTeam = myRequests
+            .GroupBy(r => r.ProjectTeamId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var summaries = teams.Select(t =>
+        {
+            var (minSize, maxSize) = ResolveTrackCapacity(t.AcademicTrack);
+            var activeMembers = t.Members
+                .Where(m => m.IsActive && !m.IsDeleted)
+                .Select(m => new TeamMemberDto
+                {
+                    UserId = m.UserId,
+                    FullName = m.User?.FullName ?? string.Empty,
+                    EnrollmentCode = m.User?.EnrollmentOrEmployeeCode ?? string.Empty,
+                    IsTeamLead = m.IsTeamLead,
+                    ModuleResponsibility = m.ModuleResponsibility,
+                    Skills = ParseCsvList(m.User?.SkillsCsv)
+                })
+                .ToList();
+
+            myRequestByTeam.TryGetValue(t.Id, out var myReq);
+            return new PublishedTeamSummaryDto
+            {
+                TeamId = t.Id,
+                TeamCode = t.TeamCode,
+                TeamName = t.TeamName,
+                Title = t.Title,
+                Abstract = t.Abstract,
+                DomainTag = t.DomainTag,
+                AcademicTrackId = t.AcademicTrackId,
+                AcademicTrackName = t.AcademicTrack?.Name ?? string.Empty,
+                SemesterNumber = t.AcademicTrack?.SemesterTerm?.SemesterNumber,
+                MinTeamSize = minSize,
+                MaxTeamSize = maxSize,
+                CurrentMemberCount = activeMembers.Count,
+                RequiredSkills = ParseCsvList(t.RequiredSkillsCsv),
+                Members = activeMembers,
+                MyJoinRequestId = myReq?.Id,
+                MyJoinRequestStatus = myReq?.Status,
+                PublishedAtUtc = t.PublishedAtUtc
+            };
+        });
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var q = search.Trim().ToLowerInvariant();
+            summaries = summaries.Where(s =>
+                s.Title.ToLowerInvariant().Contains(q) ||
+                (s.TeamName?.ToLowerInvariant().Contains(q) ?? false) ||
+                s.TeamCode.ToLowerInvariant().Contains(q) ||
+                s.DomainTag.ToLowerInvariant().Contains(q));
+        }
+
+        if (!string.IsNullOrWhiteSpace(skill))
+        {
+            var sk = skill.Trim().ToLowerInvariant();
+            summaries = summaries.Where(s =>
+                s.RequiredSkills.Any(r => r.ToLowerInvariant().Contains(sk)) ||
+                s.Members.Any(m => m.ModuleResponsibility.ToLowerInvariant().Contains(sk)));
+        }
+
+        return Ok(summaries.ToList());
+    }
+
+    [HttpPost("teams/{teamId:guid}/join-requests")]
+    public async Task<ActionResult<TeamJoinRequestDto>> CreateJoinRequest(
+        Guid teamId,
+        [FromBody] CreateJoinRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var studentId = _tenantContext.UserId!.Value;
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        if (string.IsNullOrWhiteSpace(request.DesiredRole) || request.DesiredRole.Trim().Length < 2)
+        {
+            return BadRequest(new { message = "Please specify the role you want to contribute to the team." });
+        }
+
+        var student = await _context.Users
+            .FirstOrDefaultAsync(u => u.Id == studentId && u.CollegeId == collegeId && !u.IsDeleted, cancellationToken);
+        if (student == null || !student.DepartmentId.HasValue)
+        {
+            return BadRequest(new { message = "Your student profile must belong to an academic department." });
+        }
+
+        var enrollment = await _context.StudentAcademicEnrollments
+            .Include(e => e.CurrentSemesterTerm)
+            .FirstOrDefaultAsync(e => e.StudentUserId == studentId && e.CollegeId == collegeId && e.AcademicStatus == AcademicStatus.Active && !e.IsDeleted, cancellationToken);
+        if (enrollment == null)
+        {
+            return BadRequest(new { message = "You must have an active semester enrollment to request joining a team." });
+        }
+
+        var alreadyInActiveTeam = await _context.TeamMembers
+            .Include(m => m.ProjectTeam)
+            .AnyAsync(m => m.UserId == studentId && m.IsActive && !m.IsDeleted &&
+                           m.ProjectTeam != null && !m.ProjectTeam.IsDeleted &&
+                           m.ProjectTeam.Status != ProjectStatus.Archived &&
+                           m.ProjectTeam.Status != ProjectStatus.Completed, cancellationToken);
+        if (alreadyInActiveTeam)
+        {
+            return Conflict(new { message = "You already belong to an active project team." });
+        }
+
+        var team = await _context.ProjectTeams
+            .Include(t => t.AcademicTrack)
+                .ThenInclude(tr => tr!.SemesterTerm)
+            .Include(t => t.Members.Where(m => m.IsActive && !m.IsDeleted))
+            .FirstOrDefaultAsync(t => t.Id == teamId && t.CollegeId == collegeId && !t.IsDeleted, cancellationToken);
+        if (team == null)
+        {
+            return NotFound(new { message = "Project team not found." });
+        }
+
+        if (team.DepartmentId != student.DepartmentId.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "You can only request to join teams in your own department." });
+        }
+
+        if (!team.IsPublished || team.IsRosterLocked || team.Status != ProjectStatus.Draft)
+        {
+            return BadRequest(new { message = "This team is not currently open for join requests." });
+        }
+
+        if (team.AcademicTrack == null || team.AcademicTrack.Status != AcademicTrackStatus.Open || !team.AcademicTrack.IsActive)
+        {
+            return BadRequest(new { message = "The project window for this team is currently closed." });
+        }
+
+        if (team.AcademicTrack.ParticipationMode == ParticipationMode.Individual)
+        {
+            return BadRequest(new { message = "Individual project tracks do not accept team join requests." });
+        }
+
+        var studentSem = enrollment.CurrentSemesterTerm?.SemesterNumber;
+        if (studentSem.HasValue && team.AcademicTrack.SemesterTerm != null && team.AcademicTrack.SemesterTerm.SemesterNumber != studentSem.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "This team belongs to a different semester project window." });
+        }
+
+        var now = DateTime.UtcNow;
+        if (team.AcademicTrack.RegistrationOpensUtc.HasValue && now < team.AcademicTrack.RegistrationOpensUtc.Value)
+        {
+            return BadRequest(new { message = "Registration for this project window has not opened yet." });
+        }
+        if (team.AcademicTrack.ProposalDeadlineUtc.HasValue && now > team.AcademicTrack.ProposalDeadlineUtc.Value)
+        {
+            return BadRequest(new { message = "Registration deadline for this project window has passed." });
+        }
+
+        var (_, maxSize) = ResolveTrackCapacity(team.AcademicTrack);
+        if (team.Members.Count(m => m.IsActive && !m.IsDeleted) >= maxSize)
+        {
+            return BadRequest(new { message = $"This team has already reached its maximum capacity of {maxSize} members." });
+        }
+
+        var duplicatePending = await _context.TeamJoinRequests
+            .AnyAsync(r => r.ProjectTeamId == teamId && r.StudentUserId == studentId && r.Status == JoinRequestStatus.Pending && !r.IsDeleted, cancellationToken);
+        if (duplicatePending)
+        {
+            return Conflict(new { message = "You already have a pending join request for this team." });
+        }
+
+        var joinReq = new TeamJoinRequest
+        {
+            CollegeId = collegeId,
+            ProjectTeamId = team.Id,
+            StudentUserId = studentId,
+            DesiredRole = request.DesiredRole.Trim(),
+            Message = string.IsNullOrWhiteSpace(request.Message) ? null : request.Message.Trim(),
+            Status = JoinRequestStatus.Pending
+        };
+
+        await _context.TeamJoinRequests.AddAsync(joinReq, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return Ok(new TeamJoinRequestDto
+        {
+            Id = joinReq.Id,
+            ProjectTeamId = team.Id,
+            TeamCode = team.TeamCode,
+            TeamName = team.TeamName,
+            ProjectTitle = team.Title,
+            StudentUserId = student.Id,
+            StudentName = student.FullName,
+            StudentUsn = student.EnrollmentOrEmployeeCode ?? string.Empty,
+            StudentSkills = ParseCsvList(student.SkillsCsv),
+            DesiredRole = joinReq.DesiredRole,
+            Message = joinReq.Message,
+            Status = joinReq.Status,
+            CreatedAtUtc = joinReq.CreatedAtUtc
+        });
+    }
+
+    [HttpGet("join-requests/mine")]
+    public async Task<ActionResult<List<TeamJoinRequestDto>>> GetMyJoinRequests(CancellationToken cancellationToken)
+    {
+        var studentId = _tenantContext.UserId!.Value;
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var requests = await _context.TeamJoinRequests
+            .AsNoTracking()
+            .Include(r => r.ProjectTeam)
+            .Include(r => r.StudentUser)
+            .Where(r => r.CollegeId == collegeId && r.StudentUserId == studentId && !r.IsDeleted)
+            .OrderByDescending(r => r.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        return Ok(requests.Select(r => new TeamJoinRequestDto
+        {
+            Id = r.Id,
+            ProjectTeamId = r.ProjectTeamId,
+            TeamCode = r.ProjectTeam?.TeamCode ?? string.Empty,
+            TeamName = r.ProjectTeam?.TeamName,
+            ProjectTitle = r.ProjectTeam?.Title ?? string.Empty,
+            StudentUserId = r.StudentUserId,
+            StudentName = r.StudentUser?.FullName ?? string.Empty,
+            StudentUsn = r.StudentUser?.EnrollmentOrEmployeeCode ?? string.Empty,
+            StudentSkills = ParseCsvList(r.StudentUser?.SkillsCsv),
+            DesiredRole = r.DesiredRole,
+            Message = r.Message,
+            Status = r.Status,
+            CreatedAtUtc = r.CreatedAtUtc,
+            RespondedAtUtc = r.RespondedAtUtc,
+            ResponseNotes = r.ResponseNotes
+        }).ToList());
+    }
+
+    [HttpPost("join-requests/{requestId:guid}/cancel")]
+    public async Task<IActionResult> CancelJoinRequest(Guid requestId, CancellationToken cancellationToken)
+    {
+        var studentId = _tenantContext.UserId!.Value;
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var joinReq = await _context.TeamJoinRequests
+            .FirstOrDefaultAsync(r => r.Id == requestId && r.CollegeId == collegeId && !r.IsDeleted, cancellationToken);
+        if (joinReq == null) return NotFound(new { message = "Join request not found." });
+
+        if (joinReq.StudentUserId != studentId)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "You can only cancel your own join requests." });
+        }
+
+        if (joinReq.Status != JoinRequestStatus.Pending)
+        {
+            return BadRequest(new { message = $"Only pending join requests can be cancelled (current status: {joinReq.Status})." });
+        }
+
+        joinReq.Status = JoinRequestStatus.Cancelled;
+        joinReq.RespondedAtUtc = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { success = true, status = joinReq.Status.ToString() });
+    }
+
+    [HttpPost("teams/join-requests/{requestId:guid}/accept")]
+    public async Task<ActionResult<StudentTeamRosterDto>> AcceptJoinRequest(
+        Guid requestId,
+        [FromBody] RespondJoinRequestDto? body,
+        CancellationToken cancellationToken)
+    {
+        var studentId = _tenantContext.UserId!.Value;
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var joinReq = await _context.TeamJoinRequests
+            .Include(r => r.ProjectTeam)
+                .ThenInclude(t => t!.AcademicTrack)
+            .Include(r => r.ProjectTeam)
+                .ThenInclude(t => t!.Members)
+            .FirstOrDefaultAsync(r => r.Id == requestId && r.CollegeId == collegeId && !r.IsDeleted, cancellationToken);
+
+        if (joinReq == null || joinReq.ProjectTeam == null || joinReq.ProjectTeam.IsDeleted)
+        {
+            return NotFound(new { message = "Join request not found." });
+        }
+
+        var team = joinReq.ProjectTeam;
+        var isLead = team.Members.Any(m => m.UserId == studentId && m.IsTeamLead && m.IsActive && !m.IsDeleted);
+        if (!isLead)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Only the team publisher/leader can accept join requests." });
+        }
+
+        if (team.IsRosterLocked || team.Status != ProjectStatus.Draft)
+        {
+            return BadRequest(new { message = "Team roster is locked and cannot accept new members." });
+        }
+
+        if (joinReq.Status != JoinRequestStatus.Pending)
+        {
+            return BadRequest(new { message = $"Join request is already {joinReq.Status}." });
+        }
+
+        var (_, maxSize) = ResolveTrackCapacity(team.AcademicTrack);
+        if (team.Members.Count(m => m.IsActive && !m.IsDeleted) >= maxSize)
+        {
+            return BadRequest(new { message = $"Team capacity ({maxSize} members) has already been reached." });
+        }
+
+        var applicantInTeam = await _context.TeamMembers
+            .Include(m => m.ProjectTeam)
+            .AnyAsync(m => m.UserId == joinReq.StudentUserId && m.IsActive && !m.IsDeleted &&
+                           m.ProjectTeam != null && !m.ProjectTeam.IsDeleted &&
+                           m.ProjectTeam.Status != ProjectStatus.Archived &&
+                           m.ProjectTeam.Status != ProjectStatus.Completed, cancellationToken);
+        if (applicantInTeam)
+        {
+            return Conflict(new { message = "This student has already joined another active project team." });
+        }
+
+        await _context.TeamMembers.AddAsync(new TeamMember
+        {
+            CollegeId = collegeId,
+            ProjectTeamId = team.Id,
+            UserId = joinReq.StudentUserId,
+            IsTeamLead = false,
+            ModuleResponsibility = joinReq.DesiredRole,
+            IsActive = true,
+            JoinedAtUtc = DateTime.UtcNow
+        }, cancellationToken);
+
+        joinReq.Status = JoinRequestStatus.Accepted;
+        joinReq.RespondedByUserId = studentId;
+        joinReq.RespondedAtUtc = DateTime.UtcNow;
+        joinReq.ResponseNotes = string.IsNullOrWhiteSpace(body?.Notes) ? null : body!.Notes!.Trim();
+
+        // Cancel other pending join requests or invitations for this student
+        var otherPendingRequests = await _context.TeamJoinRequests
+            .Where(r => r.Id != joinReq.Id && r.StudentUserId == joinReq.StudentUserId && r.Status == JoinRequestStatus.Pending && !r.IsDeleted)
+            .ToListAsync(cancellationToken);
+        foreach (var other in otherPendingRequests)
+        {
+            other.Status = JoinRequestStatus.Cancelled;
+            other.RespondedAtUtc = DateTime.UtcNow;
+        }
+
+        var otherPendingInvites = await _context.TeamInvitations
+            .Where(i => i.InviteeStudentId == joinReq.StudentUserId && i.Status == InvitationStatus.Pending && !i.IsDeleted)
+            .ToListAsync(cancellationToken);
+        foreach (var inv in otherPendingInvites)
+        {
+            inv.Status = InvitationStatus.Cancelled;
+            inv.RespondedAtUtc = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return await GetCurrentTeamRoster(cancellationToken);
+    }
+
+    [HttpPost("teams/join-requests/{requestId:guid}/reject")]
+    public async Task<ActionResult<StudentTeamRosterDto>> RejectJoinRequest(
+        Guid requestId,
+        [FromBody] RespondJoinRequestDto? body,
+        CancellationToken cancellationToken)
+    {
+        var studentId = _tenantContext.UserId!.Value;
+        var collegeId = _tenantContext.CollegeId!.Value;
+
+        var joinReq = await _context.TeamJoinRequests
+            .Include(r => r.ProjectTeam)
+                .ThenInclude(t => t!.Members)
+            .FirstOrDefaultAsync(r => r.Id == requestId && r.CollegeId == collegeId && !r.IsDeleted, cancellationToken);
+
+        if (joinReq == null || joinReq.ProjectTeam == null || joinReq.ProjectTeam.IsDeleted)
+        {
+            return NotFound(new { message = "Join request not found." });
+        }
+
+        var isLead = joinReq.ProjectTeam.Members.Any(m => m.UserId == studentId && m.IsTeamLead && m.IsActive && !m.IsDeleted);
+        if (!isLead)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Only the team publisher/leader can reject join requests." });
+        }
+
+        if (joinReq.Status != JoinRequestStatus.Pending)
+        {
+            return BadRequest(new { message = $"Join request is already {joinReq.Status}." });
+        }
+
+        joinReq.Status = JoinRequestStatus.Rejected;
+        joinReq.RespondedByUserId = studentId;
+        joinReq.RespondedAtUtc = DateTime.UtcNow;
+        joinReq.ResponseNotes = string.IsNullOrWhiteSpace(body?.Notes) ? null : body!.Notes!.Trim();
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return await GetCurrentTeamRoster(cancellationToken);
+    }
+
+    private static List<string> ParseCsvList(string? csv) =>
+        string.IsNullOrWhiteSpace(csv)
+            ? new List<string>()
+            : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                 .Distinct(StringComparer.OrdinalIgnoreCase)
+                 .ToList();
 }

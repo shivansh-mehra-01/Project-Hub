@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { facultyApi } from "@/lib/api/facultyApi";
 import { ProjectProposalDto } from "@/lib/api/types";
 import { ProposalReviewDrawer } from "../components/ProposalReviewDrawer";
@@ -12,21 +11,20 @@ import {
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/design-system/components/Card";
 import { Badge } from "@/design-system/components/Badge";
 import { Button } from "@/design-system/components/Button";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { TabBar } from "@/design-system/patterns/TabBar";
+import { PageErrorState } from "@/design-system/patterns/PageStates";
 import { showToast } from "@/lib/toast";
 import {
   FileText,
-  RefreshCw,
-  AlertCircle,
   Users,
   CheckCircle2,
   RotateCcw,
   XCircle,
   Eye,
-  ArrowLeft,
 } from "lucide-react";
 
 export const FacultyProposalsView: React.FC = () => {
-  const router = useRouter();
   const [proposals, setProposals] = useState<ProjectProposalDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,40 +98,24 @@ export const FacultyProposalsView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      <PageHeader
+        title="Proposals"
+        description="Review, endorse, return, or reject mentored student project proposals."
+      />
 
-      {error && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-            <span>{error}</span>
-          </div>
-          <Button size="sm" variant="secondary" onClick={loadProposals}>
-            Retry
-          </Button>
-        </div>
-      )}
+      <PageErrorState error={error} onRetry={loadProposals} />
 
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-100 w-fit text-xs font-semibold">
-        {[
-          { key: "PendingGuide", label: "Awaiting Endorsement" },
-          { key: "Draft", label: "Draft / Returned" },
-          { key: "PendingCoordinator", label: "Under Coordinator Review" },
-          { key: "ALL", label: `All Proposals (${proposals.length})` },
-        ].map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setStatusFilter(f.key)}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${
-              statusFilter === f.key
-                ? "bg-white text-[#0F172A] shadow-xs"
-                : "text-[#64748B] hover:text-[#0F172A]"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+      <TabBar
+        ariaLabel="Proposal status filter"
+        activeTab={statusFilter}
+        onChange={setStatusFilter}
+        tabs={[
+          { id: "PendingGuide", label: "Awaiting Endorsement" },
+          { id: "Draft", label: "Draft / Returned" },
+          { id: "PendingCoordinator", label: "Under Coordinator Review" },
+          { id: "ALL", label: "All Proposals", count: proposals.length },
+        ]}
+      />
 
       {/* Proposals List */}
       {isLoading ? (

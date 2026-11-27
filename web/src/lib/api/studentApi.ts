@@ -3,11 +3,11 @@ import {
   ArchivedProjectSummaryDto,
   ArtifactSlotDto,
   CheckSimilarityRequest,
+  CollegeTrackDto,
   ContinueLineageRequest,
   CreateProjectIdeaRequest,
   CreateTaskRequest,
   FacultyGuideSummaryDto,
-  ProblemBankStatementDto,
   ProjectIdeaDto,
   SimilarityCheckResultDto,
   SprintTaskDto,
@@ -24,8 +24,11 @@ import {
   WeeklyLogDto,
   EligiblePeerDto,
   CreateStudentTeamRequest,
+  PublishedTeamSummaryDto,
   SendTeamInvitationRequest,
   TeamInvitationDto,
+  TeamJoinRequestDto,
+  UpdateTeamDetailsRequest,
   RespondInvitationRequest,
   TransferTeamLeadRequest,
   StudentTeamRosterDto,
@@ -45,13 +48,9 @@ export const studentApi = {
 
   getWorkspace: () => apiClient.get<StudentWorkspaceDto>("/api/student/workspace"),
 
-  // Phase 3: Project Discovery & Problem Bank
-  getProblemBank: (params?: { domain?: string; sdg?: string; search?: string }) =>
-    apiClient.get<ProblemBankStatementDto[]>("/api/student/problem-bank", { params }),
+  getAvailableTracks: () => apiClient.get<CollegeTrackDto[]>("/api/student/tracks"),
 
-  getProblemBankStatement: (id: string) =>
-    apiClient.get<ProblemBankStatementDto>(`/api/student/problem-bank/${id}`),
-
+  // Phase 3: Project Discovery
   getArchivedProjects: (params?: { search?: string; domain?: string; sdg?: string }) =>
     apiClient.get<ArchivedProjectSummaryDto[]>("/api/student/projects/archive", { params }),
 
@@ -126,6 +125,30 @@ export const studentApi = {
 
   getCurrentTeamRoster: () =>
     apiClient.get<StudentTeamRosterDto>("/api/student/teams/current"),
+
+  updateCurrentTeamDetails: (data: UpdateTeamDetailsRequest) =>
+    apiClient.put<StudentTeamRosterDto>("/api/student/teams/current", data),
+
+  publishCurrentTeam: () =>
+    apiClient.post<StudentTeamRosterDto>("/api/student/teams/current/publish", {}),
+
+  explorePublishedTeams: (params?: { trackId?: string; search?: string; skill?: string }) =>
+    apiClient.get<PublishedTeamSummaryDto[]>("/api/student/teams/explore", { params }),
+
+  sendJoinRequest: (teamId: string, data: { desiredRole: string; message?: string }) =>
+    apiClient.post<TeamJoinRequestDto>(`/api/student/teams/${teamId}/join-requests`, data),
+
+  getMyJoinRequests: () =>
+    apiClient.get<TeamJoinRequestDto[]>("/api/student/join-requests/mine"),
+
+  cancelJoinRequest: (requestId: string) =>
+    apiClient.post<{ success: boolean; status: string }>(`/api/student/join-requests/${requestId}/cancel`, {}),
+
+  acceptJoinRequest: (requestId: string, notes?: string) =>
+    apiClient.post<StudentTeamRosterDto>(`/api/student/teams/join-requests/${requestId}/accept`, { notes }),
+
+  rejectJoinRequest: (requestId: string, notes?: string) =>
+    apiClient.post<StudentTeamRosterDto>(`/api/student/teams/join-requests/${requestId}/reject`, { notes }),
 
   sendTeamInvitation: (data: SendTeamInvitationRequest) =>
     apiClient.post<TeamInvitationDto>("/api/student/teams/invitations", data),

@@ -63,11 +63,6 @@ export const HodApprovalsView: React.FC = () => {
   };
 
   const loadData = useCallback(async () => {
-    if (!getAuthToken()) {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       const [propRes, excRes, unlRes] = await Promise.allSettled([

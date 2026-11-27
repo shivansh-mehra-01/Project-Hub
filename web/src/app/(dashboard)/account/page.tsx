@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import {
   User,
   ShieldCheck,
@@ -21,6 +23,14 @@ import { authApi, UserProfileDto } from "@/lib/api";
 import { formatRoleLabel } from "@/design-system/components/CommandPalette";
 
 export default function AccountPage() {
+  const router = useRouter();
+  const { currentPersona } = useProjectHubStore();
+
+  useEffect(() => {
+    if (currentPersona?.role === "SuperAdmin") {
+      router.replace("/platform/account/profile");
+    }
+  }, [currentPersona?.role, router]);
 
   const [activeTab, setActiveTab] = useState<"profile" | "security">("profile");
   const [profile, setProfile] = useState<UserProfileDto | null>(null);

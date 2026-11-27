@@ -1,8 +1,11 @@
+using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -149,7 +152,52 @@ builder.Services.AddProjectHubAuthorization();
 // 6. OpenAPI & Documentation
 builder.Services.AddOpenApi("v1");
 
-// 7. Rate Limiting for Security Endpoints (Login & Password Reset brute-force protection)
+// 7. Forwarded Headers & Rate Limiting for Security Endpoints
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+
+    var knownProxies = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? Array.Empty<string>();
+    foreach (var proxy in knownProxies)
+    {
+        if (IPAddress.TryParse(proxy, out var ip))
+        {
+            options.KnownProxies.Add(ip);
+        }
+    }
+
+    var knownNetworks = builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? Array.Empty<string>();
+    foreach (var cidr in knownNetworks)
+    {
+        if (System.Net.IPNetwork.TryParse(cidr, out var network))
+        {
+            options.KnownIPNetworks.Add(network);
+        }
+    }
+});
+
+var rateLimitWindow = TimeSpan.FromSeconds(
+    Math.Max(1, builder.Configuration.GetValue<int?>("RateLimiting:WindowSeconds") ?? 60));
+var loginIpLimit = builder.Configuration.GetValue<int?>("RateLimiting:LoginIpPermitLimit")
+    ?? (builder.Environment.IsDevelopment() ? 200 : 60);
+var loginAccountLimit = builder.Configuration.GetValue<int?>("RateLimiting:LoginAccountPermitLimit")
+    ?? (builder.Environment.IsDevelopment() ? 200 : 10);
+var passwordResetLimit = builder.Configuration.GetValue<int?>("RateLimiting:PasswordResetPermitLimit") ?? 10;
+var rosterSignupLimit = builder.Configuration.GetValue<int?>("RateLimiting:RosterSignupPermitLimit") ?? 10;
+var publicPortfolioLimit = builder.Configuration.GetValue<int?>("RateLimiting:PublicPortfolioPermitLimit") ?? 30;
+
+var loginAccountLimiter = PartitionedRateLimiter.Create<string, string>(emailKey =>
+    RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: emailKey,
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = loginAccountLimit,
+            Window = rateLimitWindow,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0
+        }));
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -158,8 +206,8 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = builder.Environment.IsDevelopment() ? 200 : 10,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = loginIpLimit,
+                Window = rateLimitWindow,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
@@ -168,8 +216,8 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = passwordResetLimit,
+                Window = rateLimitWindow,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
@@ -178,8 +226,8 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = rosterSignupLimit,
+                Window = rateLimitWindow,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
@@ -191,7 +239,17 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 5,
-                Window = TimeSpan.FromMinutes(1),
+                Window = rateLimitWindow,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+    options.AddPolicy("PublicPortfolioLimit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = publicPortfolioLimit,
+                Window = rateLimitWindow,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
@@ -291,6 +349,8 @@ app.Use(async (context, next) =>
 });
 
 // 8. Middleware Pipeline
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
@@ -303,35 +363,120 @@ app.UseCors("AllowFrontend");
 
 app.UseRateLimiter();
 
+// Per-account login rate limiting (chained alongside IP-based LoginLimit)
+app.Use(async (context, next) =>
+{
+    if (HttpMethods.IsPost(context.Request.Method) &&
+        context.Request.Path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase) &&
+        context.Request.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        context.Request.EnableBuffering();
+        string? normalizedEmail = null;
+        try
+        {
+            using var doc = await JsonDocument.ParseAsync(context.Request.Body);
+            if (doc.RootElement.TryGetProperty("email", out var emailProp) && emailProp.ValueKind == JsonValueKind.String)
+            {
+                normalizedEmail = emailProp.GetString()?.Trim().ToLowerInvariant();
+            }
+        }
+        catch
+        {
+            // Ignore malformed JSON; controller will return 400
+        }
+        finally
+        {
+            context.Request.Body.Position = 0;
+        }
+
+        if (!string.IsNullOrEmpty(normalizedEmail))
+        {
+            using var lease = await loginAccountLimiter.AcquireAsync(normalizedEmail, 1, context.RequestAborted);
+            if (!lease.IsAcquired)
+            {
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                return;
+            }
+        }
+    }
+
+    await next();
+});
+
 app.UseAuthentication();
 app.UseTenantResolution();
 app.UseAuthorization();
 
-// OpenAPI Spec & Scalar UI
-app.MapOpenApi("/openapi/v1.json");
-app.MapScalarApiReference("/scalar/v1", options =>
+// OpenAPI Spec & Scalar UI (Development or explicit Docs:Enabled=true only)
+var docsEnabled = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Docs:Enabled");
+if (docsEnabled)
 {
-    options.WithTitle("Collabex API Documentation");
-    options.WithTheme(ScalarTheme.Default);
-});
+    app.MapOpenApi("/openapi/v1.json");
+    app.MapScalarApiReference("/scalar/v1", options =>
+    {
+        options.WithTitle("Collabex API Documentation");
+        options.WithTheme(ScalarTheme.Default);
+    });
+}
 
 // System Endpoints
 app.MapHealthEndpoints();
 app.MapControllers();
 
-// Root Redirect to Scalar UI
-app.MapGet("/", () => Results.Redirect("/scalar/v1"))
-   .ExcludeFromDescription();
+// Root endpoint
+if (docsEnabled)
+{
+    app.MapGet("/", () => Results.Redirect("/scalar/v1"))
+       .ExcludeFromDescription();
+}
+else
+{
+    app.MapGet("/", () => Results.NotFound())
+       .ExcludeFromDescription();
+}
+
+// CLI Mode: Database Migration (`dotnet run -- migrate`)
+if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase) ||
+    args.Contains("--migrate", StringComparer.OrdinalIgnoreCase))
+{
+    var migrationConnStr = builder.Configuration.GetConnectionString("Migrations")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(migrationConnStr))
+    {
+        Console.Error.WriteLine("Migration failed: ConnectionStrings:Migrations or ConnectionStrings:DefaultConnection is required.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+    if (db.Database.IsRelational())
+    {
+        db.Database.SetConnectionString(migrationConnStr);
+        await db.Database.MigrateAsync();
+    }
+    await DbInitializer.SeedMasterCatalogsAsync(db);
+    Console.WriteLine("Database migrations and master catalog seeding completed successfully.");
+    Environment.ExitCode = 0;
+    return;
+}
 
 // CLI Mode: One-Time SuperAdmin Bootstrap (`dotnet run -- bootstrap-superadmin`)
 if (args.Contains("bootstrap-superadmin", StringComparer.OrdinalIgnoreCase) ||
     args.Contains("--bootstrap-superadmin", StringComparer.OrdinalIgnoreCase))
 {
+    var migrationConnStr = builder.Configuration.GetConnectionString("Migrations")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
     var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
     if (db.Database.IsRelational())
     {
+        if (!string.IsNullOrWhiteSpace(migrationConnStr))
+        {
+            db.Database.SetConnectionString(migrationConnStr);
+        }
         await db.Database.MigrateAsync();
     }
     await DbInitializer.SeedMasterCatalogsAsync(db);
@@ -346,6 +491,45 @@ if (args.Contains("bootstrap-superadmin", StringComparer.OrdinalIgnoreCase) ||
     Console.WriteLine(message);
     Environment.ExitCode = success ? 0 : 1;
     return;
+}
+
+// Fail-fast PostgreSQL RLS role check & production configuration warnings in non-Development environments
+if (!app.Environment.IsDevelopment())
+{
+    if (string.Equals(builder.Configuration["AllowedHosts"], "*", StringComparison.Ordinal))
+    {
+        Log.Warning(
+            "SECURITY WARNING: AllowedHosts is set to '*' in {Environment}. Restrict AllowedHosts to your production domain(s).",
+            app.Environment.EnvironmentName);
+    }
+
+    if (string.IsNullOrWhiteSpace(builder.Configuration["Redis:ConnectionString"]))
+    {
+        Log.Warning(
+            "OPERATIONAL WARNING: Redis:ConnectionString is not configured in {Environment}. Session revocation checks will query PostgreSQL on every request.",
+            app.Environment.EnvironmentName);
+    }
+
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+    if (db.Database.IsNpgsql())
+    {
+        var conn = db.Database.GetDbConnection();
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user";
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (await reader.ReadAsync())
+        {
+            var isSuper = reader.GetBoolean(0);
+            var bypassRls = reader.GetBoolean(1);
+            if (isSuper || bypassRls)
+            {
+                throw new InvalidOperationException(
+                    "Security configuration error: Runtime PostgreSQL role must have NOSUPERUSER and NOBYPASSRLS so Row-Level Security (RLS) cannot be bypassed.");
+            }
+        }
+    }
 }
 
 // Database Migration & Master Reference Catalog Initialization (zero demo tenants/users)
@@ -369,6 +553,28 @@ if (app.Environment.IsDevelopment())
     {
         Log.Warning(ex, "Database migration/catalog initialization encountered an issue during startup.");
     }
+}
+
+if (app.Environment.IsDevelopment())
+{
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        foreach (var addr in app.Urls)
+        {
+            if (Uri.TryCreate(addr.Replace("://*", "://0.0.0.0").Replace("://+", "://0.0.0.0"), UriKind.Absolute, out var uri))
+            {
+                var host = uri.Host;
+                var isLoopback = string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+                                 || (IPAddress.TryParse(host, out var ip) && IPAddress.IsLoopback(ip));
+                if (!isLoopback)
+                {
+                    Log.Warning(
+                        "SECURITY WARNING: Application is running in Development environment while listening on non-loopback address {Address}. Set ASPNETCORE_ENVIRONMENT=Production before exposing to any network.",
+                        addr);
+                }
+            }
+        }
+    });
 }
 
 try
