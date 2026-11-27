@@ -4689,6 +4689,7 @@ public class StudentController : ControllerBase
 
     [HttpGet("portfolio/{enrollmentNumber}/public")]
     [AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("PublicPortfolioLimit")]
     public async Task<ActionResult<PublicStudentPortfolioDto>> GetPublicStudentPortfolio(string enrollmentNumber, [FromQuery] string? collegeCode = null)
     {
         var code = enrollmentNumber?.Trim().ToUpperInvariant();
@@ -4710,7 +4711,7 @@ public class StudentController : ControllerBase
 
         if (records.Count == 0)
         {
-            return NotFound(new { message = $"No verified academic project records found for enrollment code '{code}'." });
+            return NotFound(new { message = "Public portfolio not found." });
         }
 
         // Prevent cross-college data merging if multiple institutions share the same enrollment code
@@ -4720,11 +4721,11 @@ public class StudentController : ControllerBase
             return BadRequest(new { message = "Multiple institutions match this enrollment number. Please specify the 'collegeCode' query parameter." });
         }
 
-        // Check if student has granted public visibility
+        // Check if student has granted public visibility (return same 404 to prevent portfolio existence enumeration)
         var isPublic = records.Any(r => r.AllowPublicPortfolio);
         if (!isPublic)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = "This student's academic project portfolio is set to private visibility in accordance with institutional data protection policies." });
+            return NotFound(new { message = "Public portfolio not found." });
         }
 
         var sample = records[0];

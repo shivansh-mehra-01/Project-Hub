@@ -436,6 +436,9 @@ export default function LoginPage() {
                     Forgot password?
                   </button>
                 </div>
+                <p className="text-xs text-slate-500 text-center pt-1">
+                  First time? Use &apos;Forgot password&apos; to set your password.
+                </p>
               </form>
             </div>
           )}

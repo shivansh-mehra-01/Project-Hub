@@ -185,6 +185,7 @@ var loginAccountLimit = builder.Configuration.GetValue<int?>("RateLimiting:Login
     ?? (builder.Environment.IsDevelopment() ? 200 : 10);
 var passwordResetLimit = builder.Configuration.GetValue<int?>("RateLimiting:PasswordResetPermitLimit") ?? 10;
 var rosterSignupLimit = builder.Configuration.GetValue<int?>("RateLimiting:RosterSignupPermitLimit") ?? 10;
+var publicPortfolioLimit = builder.Configuration.GetValue<int?>("RateLimiting:PublicPortfolioPermitLimit") ?? 30;
 
 var loginAccountLimiter = PartitionedRateLimiter.Create<string, string>(emailKey =>
     RateLimitPartition.GetFixedWindowLimiter(
@@ -238,6 +239,16 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 5,
+                Window = rateLimitWindow,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+    options.AddPolicy("PublicPortfolioLimit", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = publicPortfolioLimit,
                 Window = rateLimitWindow,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0

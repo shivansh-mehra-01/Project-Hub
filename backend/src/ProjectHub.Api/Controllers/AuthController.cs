@@ -182,14 +182,11 @@ public class AuthController : ControllerBase
             .Include(u => u.Department)
             .FirstOrDefaultAsync(u => (u.Email == rawEmail || u.Email == normalizedEmail) && !u.IsDeleted, cancellationToken);
 
-        if (user == null || !user.IsActive)
+        if (user == null || !user.IsActive ||
+            (user.Role != UserRole.SuperAdmin && user.College != null && !user.College.IsActive) ||
+            !user.IsActivated || string.IsNullOrWhiteSpace(user.PasswordHash))
         {
-            return Unauthorized(new { message = "Invalid email credentials or account is inactive." });
-        }
-
-        if (user.Role != UserRole.SuperAdmin && user.College != null && !user.College.IsActive)
-        {
-            return Unauthorized(new { message = "Institutional workspace subscription is inactive or suspended." });
+            return Unauthorized(new { message = "Invalid email or password." });
         }
 
         if (user.LockoutEndUtc.HasValue && user.LockoutEndUtc.Value > DateTime.UtcNow)
@@ -198,11 +195,6 @@ public class AuthController : ControllerBase
             {
                 message = "Account is temporarily locked due to repeated failed sign-in attempts. Please try again later."
             });
-        }
-
-        if (!user.IsActivated || string.IsNullOrWhiteSpace(user.PasswordHash))
-        {
-            return BadRequest(new { message = "Account password not set yet. Click 'Forgot password?' to set your password." });
         }
 
         if (!PasswordHelper.VerifyPassword(request.Password, user.PasswordHash))
@@ -687,19 +679,14 @@ public class AuthController : ControllerBase
             .Include(u => u.College)
             .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
 
-        // Anti-enumeration protection: return generic success without revealing non-existence or disabled state
-        if (user == null || !user.IsActive)
+        // Anti-enumeration protection: return generic success without revealing non-existence, disabled, or suspended state
+        if (user == null || !user.IsActive || (user.College != null && !user.College.IsActive))
         {
             return Ok(new RequestPasswordOtpResponse
             {
                 Success = true,
                 Message = "If this institutional email is registered and active, a 6-digit verification code has been dispatched. Code expires in 15 minutes."
             });
-        }
-
-        if (user.College != null && !user.College.IsActive)
-        {
-            return BadRequest(new { message = "Campus workspace subscription is inactive or suspended. Contact your college administration." });
         }
 
         if (user.PasswordResetOtpExpiresAtUtc.HasValue && user.PasswordResetOtpExpiresAtUtc.Value > DateTime.UtcNow)
@@ -767,19 +754,9 @@ public class AuthController : ControllerBase
             .Include(u => u.Department)
             .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
 
-        if (user == null)
+        if (user == null || !user.IsActive || (user.College != null && !user.College.IsActive))
         {
             return BadRequest(new { message = "Invalid verification code or email address." });
-        }
-
-        if (!user.IsActive)
-        {
-            return BadRequest(new { message = "This account has been deactivated. Please contact your institutional administrator." });
-        }
-
-        if (user.College != null && !user.College.IsActive)
-        {
-            return BadRequest(new { message = "Campus workspace subscription is inactive or suspended. Contact your college administration." });
         }
 
         if (user.PasswordResetOtpAttempts >= 5)

@@ -94,7 +94,7 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Login_UnactivatedAccount_ReturnsBadRequestWithActivationPrompt()
+    public async Task Login_UnactivatedAccount_ReturnsGenericUnauthorized()
     {
         // Act: Attempt to login before setting initial password
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
@@ -103,10 +103,10 @@ public class AuthEndpointTests : IClassFixture<CustomWebApplicationFactory>
             Password = "AnyPassword123!"
         });
 
-        // Assert: 400 Bad Request with guidance to use Set/Forgot Password OTP
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // Assert: Generic 401 Unauthorized to prevent account/activation enumeration
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Account password not set yet", content);
+        Assert.Contains("Invalid email or password.", content);
     }
 
     [Fact]
