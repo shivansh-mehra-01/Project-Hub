@@ -629,10 +629,10 @@ public class StudentPhase10Tests : IClassFixture<CustomWebApplicationFactory>
         });
         Assert.Equal(HttpStatusCode.OK, closeResp.StatusCode);
 
-        // 1. Anonymous visitor checks public portfolio while AllowPublicPortfolio == false
+        // 1. Anonymous visitor checks public portfolio while AllowPublicPortfolio == false (404 anti-enumeration)
         _client.DefaultRequestHeaders.Authorization = null; // Unauthenticated
         var deniedResp = await _client.GetAsync($"/api/student/portfolio/{lead.EnrollmentOrEmployeeCode}/public");
-        Assert.Equal(HttpStatusCode.Forbidden, deniedResp.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, deniedResp.StatusCode);
 
         // 2. Student enables public sharing
         var studentToken = GenerateToken(lead.Id, team.CollegeId, team.DepartmentId, UserRole.Student);
