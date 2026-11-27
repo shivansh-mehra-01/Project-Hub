@@ -224,6 +224,7 @@ export const StudentWorkspaceView: React.FC = () => {
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [availableTracks, setAvailableTracks] = useState<CollegeTrackDto[]>([]);
   const [tracksLoading, setTracksLoading] = useState(true);
+  const [inspectingTrack, setInspectingTrack] = useState<CollegeTrackDto | null>(null);
   const [showStartProjectModal, setShowStartProjectModal] = useState(false);
   const [selectedTrackId, setSelectedTrackId] = useState("");
   const [projectTitle, setProjectTitle] = useState("");
@@ -904,20 +905,21 @@ export const StudentWorkspaceView: React.FC = () => {
     );
   }
 
+  const hasNoActiveProject =
+    !dashboardData ||
+    dashboardData.allocationState === "NoActiveEnrollment" ||
+    dashboardData.allocationState === "Unallocated" ||
+    dashboardData.allocationState === "Offseason" ||
+    lifecycleState === "offseason";
+
   return (
     <div className="space-y-6">
-      {/* Semester GPS Stepper */}
-      <StepperGPS
-        currentStep={
-          dashboardData?.allocationState === "Offseason" || lifecycleState === "offseason"
-            ? 1
-            : dashboardData?.allocationState === "Unallocated" || dashboardData?.allocationState === "NoActiveEnrollment"
-            ? 1
-            : lifecycleState === "preapproval"
-            ? 2
-            : 4
-        }
-      />
+      {/* Semester GPS Stepper (only shown once student has an active/draft project) */}
+      {!hasNoActiveProject && (
+        <StepperGPS
+          currentStep={lifecycleState === "preapproval" ? 2 : 4}
+        />
+      )}
 
       {repoSuccess && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
@@ -927,411 +929,302 @@ export const StudentWorkspaceView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* STATE: NO ACTIVE ACADEMIC ENROLLMENT                                      */}
+      {/* NO ACTIVE PROJECT (No enrollment, offseason, or no open tracks)          */}
       {/* ========================================================================= */}
-      {dashboardData?.allocationState === "NoActiveEnrollment" && (
-        <Card className="border-amber-200 bg-amber-50/40 p-8 text-center space-y-4">
-          <div className="h-14 w-14 mx-auto rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
-            <AlertCircle className="h-7 w-7" />
-          </div>
-          <div className="space-y-2 max-w-lg mx-auto">
-            <h3 className="text-lg font-bold text-slate-800">No Active Academic Enrollment Found</h3>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Your student account (<strong>{dashboardData.identity.fullName}</strong> • USN {dashboardData.identity.usn}) is registered at{" "}
-              <strong>{dashboardData.identity.collegeName}</strong>, but there is no active academic semester enrollment record linked for the current academic session.
-            </p>
-          </div>
-          <div className="p-4 bg-white/80 rounded-xl border border-amber-200 max-w-md mx-auto text-left text-xs text-slate-700 space-y-2">
-            <div className="font-semibold text-slate-900">Required Action:</div>
-            <p className="text-slate-600">
-              Contact your <strong>Department Coordinator</strong> ({dashboardData.identity.departmentName}) or the HOD office to confirm your semester admission and section roster.
-            </p>
-          </div>
-          <div className="flex items-center justify-center gap-3 pt-2">
-            <Link href="/student/profile">
-              <Button size="sm" variant="secondary">
-                View Academic Profile
-              </Button>
-            </Link>
-          </div>
-        </Card>
-      )}
+      {hasNoActiveProject &&
+        (dashboardData?.allocationState !== "Unallocated" || (!tracksLoading && availableTracks.length === 0)) && (
+          <Card className="p-10 text-center">
+            <p className="text-sm font-medium text-slate-600">No active project now</p>
+          </Card>
+        )}
 
       {/* ========================================================================= */}
-      {/* STATE: UNALLOCATED STUDENT (ENROLLED BUT NO PROJECT TEAM)                 */}
+      {/* OPEN DEPARTMENT TRACKS (Unallocated student & HOD has launched tracks)   */}
       {/* ========================================================================= */}
-      {dashboardData?.allocationState === "Unallocated" && (
-        <div className="space-y-6">
-          <Card className="p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-slate-900">Project Workspace</h2>
-                  <Badge variant="neutral" size="sm">Unallocated</Badge>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  {dashboardData.activeEnrollment ? `${dashboardData.activeEnrollment.program} • Semester ${dashboardData.activeEnrollment.semester}` : "Active Cohort"}{" "}
-                  • {dashboardData.identity.departmentName}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                <GraduationCap className="h-4 w-4 text-indigo-600 shrink-0" />
-                <span>USN: <strong>{dashboardData.identity.usn}</strong></span>
-              </div>
-            </div>
-
-            <div className="py-8 text-center max-w-lg mx-auto space-y-4">
-              <div className="h-14 w-14 mx-auto rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
-                <Users2 className="h-7 w-7" />
-              </div>
-              <div className="space-y-1.5">
-                <h3 className="text-base font-semibold text-slate-800">You Are Not Assigned to a Project Team</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  You have an active academic enrollment, but have not yet registered or been allocated to a project team for this academic term.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left pt-2">
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-                    <Compass className="h-4 w-4 text-brand-primary shrink-0" />
-                    <span>Browse Problem Bank</span>
-                  </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Explore department problem statements and faculty ideas before team registration.
-                  </p>
-                  <Link href="/student/explore" className="inline-block pt-1">
-                    <span className="text-xs text-brand-primary font-medium hover:underline flex items-center gap-1">
-                      Explore Ideas &rarr;
-                    </span>
-                  </Link>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-                    <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
-                    <span>Update Profile Skills</span>
-                  </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Add your tech stack, GitHub, and bio so teammates and guides can find you.
-                  </p>
-                  <Link href="/student/profile" className="inline-block pt-1">
-                    <span className="text-xs text-brand-primary font-medium hover:underline flex items-center gap-1">
-                      Profile ({dashboardData.profileCompletionPercentage}%) &rarr;
-                    </span>
-                  </Link>
-                </div>
-              </div>
-
-              {!tracksLoading && availableTracks.length === 0 ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 text-left">
-                  <p className="font-semibold">No project track is currently open for your department/semester.</p>
-                  <p className="text-amber-800 mt-1">
-                    Please contact your Department HOD to launch a Minor, Major, or Individual project track before starting a project.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3 text-left">
-                  <div className="text-xs font-semibold text-slate-700">Open Department Project Tracks</div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {availableTracks.map((track) => (
-                      <div
-                        key={track.id}
-                        className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-2"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">{track.name}</div>
-                            <div className="text-[11px] text-slate-500">
-                              {track.academicYear}
-                              {track.semesterNumber ? ` • Sem ${track.semesterNumber}` : ""}
-                              {track.subjectCode ? ` • ${track.subjectCode}` : ""}
-                            </div>
-                          </div>
-                          <Badge variant="success">
-                            {track.participationMode === "Individual"
-                              ? "Individual"
-                              : `Team (${track.minTeamSize ?? 2}–${track.maxTeamSize ?? 4})`}
-                          </Badge>
-                        </div>
-                        {track.description && (
-                          <p className="text-[11px] text-slate-600 line-clamp-2">{track.description}</p>
-                        )}
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="text-[11px] text-slate-500">
-                            {track.proposalDeadlineUtc
-                              ? `Cutoff: ${new Date(track.proposalDeadlineUtc).toLocaleDateString()}`
-                              : "Open for registration"}
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => {
-                              setSelectedTrackId(track.id);
-                              setProjectTitle("");
-                              setProjectAbstract("");
-                              setCreateProjectError(null);
-                              setShowStartProjectModal(true);
-                            }}
-                          >
-                            Start Project
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-center gap-3 pt-3">
-                {availableTracks.length > 0 && (
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => {
-                      setSelectedTrackId(availableTracks[0].id);
-                      setProjectTitle("");
-                      setProjectAbstract("");
-                      setCreateProjectError(null);
-                      setShowStartProjectModal(true);
-                    }}
-                    leftIcon={<Users2 className="h-4 w-4" />}
-                  >
-                    Start New Project
-                  </Button>
-                )}
-                <Link href="/student/explore">
-                  <Button size="sm" variant="secondary" leftIcon={<Compass className="h-4 w-4" />}>
-                    Explore Problem Bank
-                  </Button>
-                </Link>
-              </div>
-
-              <Modal
-                isOpen={showStartProjectModal}
-                onClose={() => setShowStartProjectModal(false)}
-                title="Start Department Project"
-                description="Register your project under an open department track."
+      {dashboardData?.allocationState === "Unallocated" && availableTracks.length > 0 && (
+        <div className="space-y-4">
+          <div className="text-xs font-semibold text-slate-700">Open Department Project Tracks</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {availableTracks.map((track) => (
+              <Card
+                key={track.id}
+                onClick={() => setInspectingTrack(track)}
+                className="cursor-pointer border-emerald-200 bg-emerald-50/30 hover:border-emerald-400 hover:shadow-sm transition-all"
               >
-                <div className="space-y-4">
-                  {createProjectError && (
-                    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                      {createProjectError}
+                <CardContent className="p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">{track.name}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        {track.academicYear}
+                        {track.semesterNumber ? ` • Sem ${track.semesterNumber}` : ""}
+                        {track.subjectCode ? ` • ${track.subjectCode}` : ""}
+                      </div>
                     </div>
+                    <Badge variant="success">
+                      {track.participationMode === "Individual"
+                        ? "Individual"
+                        : `Team (${track.minTeamSize ?? 2}–${track.maxTeamSize ?? 4})`}
+                    </Badge>
+                  </div>
+                  {track.description && (
+                    <p className="text-xs text-slate-600 line-clamp-2">{track.description}</p>
                   )}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Project Track
-                    </label>
-                    <select
-                      value={selectedTrackId}
-                      onChange={(e) => setSelectedTrackId(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
-                    >
-                      {availableTracks.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} ({t.participationMode === "Individual" ? "Individual" : `Team ${t.minTeamSize ?? 2}–${t.maxTeamSize ?? 4}`})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Project Title *
-                    </label>
-                    <Input
-                      value={projectTitle}
-                      onChange={(e) => setProjectTitle(e.target.value)}
-                      placeholder="e.g., Smart Campus Energy Optimizer"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Domain
-                    </label>
-                    <Input
-                      value={projectDomain}
-                      onChange={(e) => setProjectDomain(e.target.value)}
-                      placeholder="e.g., AI / IoT / Systems"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Brief Abstract *
-                    </label>
-                    <Textarea
-                      rows={3}
-                      value={projectAbstract}
-                      onChange={(e) => setProjectAbstract(e.target.value)}
-                      placeholder="Describe the problem statement and proposed solution..."
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="secondary" size="sm" onClick={() => setShowStartProjectModal(false)}>
-                      Cancel
-                    </Button>
+                  <div className="flex items-center justify-between pt-2 border-t border-emerald-100">
+                    <span className="text-[11px] text-slate-500">
+                      {track.proposalDeadlineUtc
+                        ? `Cutoff: ${new Date(track.proposalDeadlineUtc).toLocaleDateString()}`
+                        : "Click to view details & guidelines"}
+                    </span>
                     <Button
-                      variant="primary"
                       size="sm"
-                      disabled={creatingProject}
-                      onClick={async () => {
-                        if (!projectTitle.trim() || !projectAbstract.trim()) {
-                          setCreateProjectError("Project title and brief abstract are required.");
-                          return;
-                        }
-                        try {
-                          setCreatingProject(true);
-                          setCreateProjectError(null);
-                          await studentApi.createTeam({
-                            academicTrackId: selectedTrackId || undefined,
-                            title: projectTitle.trim(),
-                            abstract: projectAbstract.trim(),
-                            domainTag: projectDomain.trim() || "Software",
-                          });
-                          setShowStartProjectModal(false);
-                          window.location.reload();
-                        } catch (err: unknown) {
-                          setCreateProjectError(err instanceof Error ? err.message : "Failed to start project.");
-                        } finally {
-                          setCreatingProject(false);
-                        }
+                      variant="primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedTrackId(track.id);
+                        setProjectTitle("");
+                        setProjectAbstract("");
+                        setCreateProjectError(null);
+                        setShowStartProjectModal(true);
                       }}
                     >
-                      {creatingProject ? "Creating..." : "Create Project"}
+                      Start Project
                     </Button>
                   </div>
-                </div>
-              </Modal>
-
-              <div className="pt-2 text-xs text-slate-400">
-                Team formation, invitation acceptance, and idea submission are open for your department cohort.
-              </div>
-            </div>
-          </Card>
-
-          {/* Phase 4: Incoming Invitations Card for Unallocated Students */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-brand-primary" />
-                <CardTitle className="text-base">Incoming Team Invitations</CardTitle>
-              </div>
-              <Badge variant={receivedInvitations.length > 0 ? "warning" : "neutral"} size="sm">
-                {receivedInvitations.length} Pending
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              {receivedInvitations.length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-400">
-                  <UserPlus className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-                  <p>You have no pending team invitations at this moment.</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Classmates can invite you using your USN <strong>{dashboardData.identity.usn}</strong> once they form a team roster.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {receivedInvitations.map((inv) => (
-                    <div key={inv.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-900 text-sm">{inv.projectTitle || "Project Formulation"}</span>
-                          <span className="font-mono text-xs text-slate-500 font-medium">({inv.teamCode})</span>
-                          <Badge variant="warning" size="sm">Pending Invitation</Badge>
-                        </div>
-                        <p className="text-xs text-slate-600">
-                          {inv.message || `You were invited to join project team ${inv.teamCode}.`}
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          Invited by: <strong className="text-slate-700">{inv.inviterName}</strong>
-                          {inv.expiresAtUtc ? ` • Expires: ${new Date(inv.expiresAtUtc).toLocaleDateString()}` : ""}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleRejectInvitation(inv.id)}
-                        >
-                          Decline
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => handleAcceptInvitation(inv.id)}
-                          leftIcon={<UserCheck className="h-3.5 w-3.5" />}
-                        >
-                          Accept Invitation
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {dashboardData.historicalTeams && dashboardData.historicalTeams.length > 0 && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <History className="h-4 w-4 text-slate-500" />
-                  <CardTitle>Previous Academic Projects</CardTitle>
-                </div>
-                <CardDescription>
-                  Permanent academic record of your completed or archived capstone projects.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {dashboardData.historicalTeams.map((ht) => (
-                    <div key={ht.teamId} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-semibold text-brand-primary">{ht.teamCode}</span>
-                          <Badge variant="neutral" size="sm">{ht.status}</Badge>
-                        </div>
-                        <h4 className="text-sm font-semibold text-slate-800 mt-1">{ht.title}</h4>
-                        <p className="text-xs text-slate-500 mt-0.5">{ht.trackName} • Guide: {ht.guideName || "Department Faculty"}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* STATE 1: OFF-SEASON                                                       */}
-      {/* ========================================================================= */}
-      {((!dashboardData && lifecycleState === "offseason") || dashboardData?.allocationState === "Offseason") && (
-        <Card className="text-center p-8 space-y-4">
-          <div className="h-12 w-12 mx-auto rounded-full bg-brand-primary-tint text-brand-primary border border-brand-primary-border flex items-center justify-center">
-            <Clock className="h-5 w-5" strokeWidth={1.75} />
-          </div>
-          <div className="space-y-1 max-w-md mx-auto">
-            <h3 className="text-base font-bold text-[#0F172A]">
-              {dashboardData?.activeSession?.sessionName || "Semester Project Cycle"} Is Currently in Offseason
-            </h3>
-            <p className="text-xs text-[#64748B] leading-relaxed">
-              Academic project allocations and submission windows are currently inactive. Explore faculty
-              problem statements in the Explore tab or complete your profile skills.
-            </p>
-          </div>
-          <div className="flex items-center justify-center gap-3">
-            <Link href="/student/explore">
-              <Button size="sm" variant="primary">
-                Explore Faculty Problem Bank
-              </Button>
-            </Link>
-            <Link href="/student/profile">
-              <Button size="sm" variant="secondary">
-                Update Profile &amp; Skills
-              </Button>
-            </Link>
-          </div>
+      {/* Incoming invitations (only shown if student actually has pending invitations) */}
+      {dashboardData?.allocationState === "Unallocated" && receivedInvitations.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-brand-primary" />
+              <CardTitle className="text-base">Incoming Team Invitations</CardTitle>
+            </div>
+            <Badge variant="warning" size="sm">
+              {receivedInvitations.length} Pending
+            </Badge>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {receivedInvitations.map((inv) => (
+              <div key={inv.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-900 text-sm">{inv.projectTitle || "Project Formulation"}</span>
+                    <span className="font-mono text-xs text-slate-500 font-medium">({inv.teamCode})</span>
+                    <Badge variant="warning" size="sm">Pending Invitation</Badge>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    {inv.message || `You were invited to join project team ${inv.teamCode}.`}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Invited by: <strong className="text-slate-700">{inv.inviterName}</strong>
+                    {inv.expiresAtUtc ? ` • Expires: ${new Date(inv.expiresAtUtc).toLocaleDateString()}` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button size="sm" variant="secondary" onClick={() => handleRejectInvitation(inv.id)}>
+                    Decline
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => handleAcceptInvitation(inv.id)}
+                    leftIcon={<UserCheck className="h-3.5 w-3.5" />}
+                  >
+                    Accept Invitation
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
         </Card>
       )}
+
+      {/* Track Details & Guidelines Modal */}
+      <Modal
+        isOpen={Boolean(inspectingTrack)}
+        onClose={() => setInspectingTrack(null)}
+        title={inspectingTrack?.name || "Project Track Details"}
+        description={
+          inspectingTrack
+            ? `${inspectingTrack.academicYear}${inspectingTrack.semesterNumber ? ` • Semester ${inspectingTrack.semesterNumber}` : ""}${inspectingTrack.subjectCode ? ` • ${inspectingTrack.subjectCode}` : ""}`
+            : undefined
+        }
+      >
+        {inspectingTrack && (
+          <div className="space-y-4 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="success">
+                {inspectingTrack.participationMode === "Individual"
+                  ? "Individual Project"
+                  : `Team Project (${inspectingTrack.minTeamSize ?? 2}–${inspectingTrack.maxTeamSize ?? 4} members)`}
+              </Badge>
+              {inspectingTrack.subjectName && (
+                <Badge variant="neutral">{inspectingTrack.subjectName}</Badge>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5 space-y-1.5">
+              <div className="font-semibold text-slate-800">Project Guidelines &amp; Objectives</div>
+              <p className="text-slate-600 leading-relaxed whitespace-pre-line">
+                {inspectingTrack.description?.trim()
+                  ? inspectingTrack.description
+                  : "No additional guidelines specified by the department. Submit your project title, domain, and abstract before the proposal cutoff."}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-200 p-3">
+                <div className="text-[11px] text-slate-500">Proposal Cutoff</div>
+                <div className="font-semibold text-slate-800 mt-0.5">
+                  {inspectingTrack.proposalDeadlineUtc
+                    ? new Date(inspectingTrack.proposalDeadlineUtc).toLocaleDateString()
+                    : "No hard cutoff"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-3">
+                <div className="text-[11px] text-slate-500">Final Submission Cutoff</div>
+                <div className="font-semibold text-slate-800 mt-0.5">
+                  {inspectingTrack.finalSubmissionDeadlineUtc
+                    ? new Date(inspectingTrack.finalSubmissionDeadlineUtc).toLocaleDateString()
+                    : "TBA by Department"}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 p-3 space-y-1">
+              <div className="font-semibold text-slate-800">Evaluation Split</div>
+              <div className="text-slate-600">
+                Guide {inspectingTrack.guideWeightPct}% • Mid-Term {inspectingTrack.midTermWeightPct}% • Final Viva {inspectingTrack.finalVivaWeightPct}%
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="secondary" size="sm" onClick={() => setInspectingTrack(null)}>
+                Close
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  const target = inspectingTrack;
+                  setInspectingTrack(null);
+                  setSelectedTrackId(target.id);
+                  setProjectTitle("");
+                  setProjectAbstract("");
+                  setCreateProjectError(null);
+                  setShowStartProjectModal(true);
+                }}
+              >
+                Start Project
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Start Department Project Modal */}
+      <Modal
+        isOpen={showStartProjectModal}
+        onClose={() => setShowStartProjectModal(false)}
+        title="Start Department Project"
+        description="Register your project under an open department track."
+      >
+        <div className="space-y-4">
+          {createProjectError && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {createProjectError}
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Project Track
+            </label>
+            <select
+              value={selectedTrackId}
+              onChange={(e) => setSelectedTrackId(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
+            >
+              {availableTracks.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.participationMode === "Individual" ? "Individual" : `Team ${t.minTeamSize ?? 2}–${t.maxTeamSize ?? 4}`})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Project Title *
+            </label>
+            <Input
+              value={projectTitle}
+              onChange={(e) => setProjectTitle(e.target.value)}
+              placeholder="e.g., Smart Campus Energy Optimizer"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Domain
+            </label>
+            <Input
+              value={projectDomain}
+              onChange={(e) => setProjectDomain(e.target.value)}
+              placeholder="e.g., AI / IoT / Systems"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Brief Abstract *
+            </label>
+            <Textarea
+              rows={3}
+              value={projectAbstract}
+              onChange={(e) => setProjectAbstract(e.target.value)}
+              placeholder="Describe the problem statement and proposed solution..."
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" size="sm" onClick={() => setShowStartProjectModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={creatingProject}
+              onClick={async () => {
+                if (!projectTitle.trim() || !projectAbstract.trim()) {
+                  setCreateProjectError("Project title and brief abstract are required.");
+                  return;
+                }
+                try {
+                  setCreatingProject(true);
+                  setCreateProjectError(null);
+                  await studentApi.createTeam({
+                    academicTrackId: selectedTrackId || undefined,
+                    title: projectTitle.trim(),
+                    abstract: projectAbstract.trim(),
+                    domainTag: projectDomain.trim() || "Software",
+                  });
+                  setShowStartProjectModal(false);
+                  window.location.reload();
+                } catch (err: unknown) {
+                  setCreateProjectError(err instanceof Error ? err.message : "Failed to start project.");
+                } finally {
+                  setCreatingProject(false);
+                }
+              }}
+            >
+              {creatingProject ? "Creating..." : "Create Project"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ========================================================================= */}
       {/* STATE 2: PRE-APPROVAL SETUP                                               */}
