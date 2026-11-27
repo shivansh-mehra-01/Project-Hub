@@ -682,7 +682,9 @@ public class AuthController : ControllerBase
 
         _logger.LogInformation("Password reset OTP queued for {Email}", email);
 
-        string? devOtp = _environment.IsDevelopment() ? otp : null;
+        string? devOtp = _environment.IsDevelopment() && _configuration.GetValue<bool>("Auth:ExposeDevOtp")
+            ? otp
+            : null;
 
         return Ok(new RequestPasswordOtpResponse
         {

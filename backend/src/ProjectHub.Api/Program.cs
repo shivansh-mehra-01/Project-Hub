@@ -518,6 +518,28 @@ if (app.Environment.IsDevelopment())
     }
 }
 
+if (app.Environment.IsDevelopment())
+{
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        foreach (var addr in app.Urls)
+        {
+            if (Uri.TryCreate(addr.Replace("://*", "://0.0.0.0").Replace("://+", "://0.0.0.0"), UriKind.Absolute, out var uri))
+            {
+                var host = uri.Host;
+                var isLoopback = string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+                                 || (IPAddress.TryParse(host, out var ip) && IPAddress.IsLoopback(ip));
+                if (!isLoopback)
+                {
+                    Log.Warning(
+                        "SECURITY WARNING: Application is running in Development environment while listening on non-loopback address {Address}. Set ASPNETCORE_ENVIRONMENT=Production before exposing to any network.",
+                        addr);
+                }
+            }
+        }
+    });
+}
+
 try
 {
     Log.Information("Starting Collabex API (.NET 10 LTS)");
