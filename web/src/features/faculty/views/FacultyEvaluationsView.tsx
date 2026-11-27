@@ -218,33 +218,6 @@ export const FacultyEvaluationsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E2E8F0]">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-[#0F172A]">
-              Viva Defense Examination & Evaluation
-            </h1>
-            <Badge variant="neutral" className="text-xs">
-              Continuous & Final Defense Panels
-            </Badge>
-          </div>
-          <p className="text-xs text-[#64748B] mt-1">
-            Independent evaluation panel scoring with 60:40 team/individual rubric scaling and conflict-of-interest safeguards.
-          </p>
-        </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={loadAssignedTeams}
-          disabled={isLoading}
-          className="self-start sm:self-auto gap-1.5 text-xs"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh Panels
-        </Button>
-      </div>
-
       {/* Team Selector & Metadata Banner */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Team Select Card */}

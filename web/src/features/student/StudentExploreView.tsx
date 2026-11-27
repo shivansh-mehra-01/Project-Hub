@@ -67,8 +67,7 @@ const DOMAIN_OPTIONS = [
 
 export const StudentExploreView: React.FC = () => {
   useDashboardHeader({
-    title: "Project Discovery & Idea Registration",
-    breadcrumb: "Problem Bank • Project Archive • Idea Proposals",
+    title: "Explore",
   });
 
   const [filter, setFilter] = useState<"problems" | "past" | "ideas">("problems");
@@ -754,7 +753,7 @@ export const StudentExploreView: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <div className="p-2.5 bg-white/70 rounded-lg border border-amber-200/60 text-amber-900 italic font-mono text-xs">
+                      <div className="p-2.5 bg-white/70 rounded-lg border border-amber-200/60 text-amber-900 italic text-xs">
                         &ldquo;{idea.latestReviewRemarks}&rdquo;
                       </div>
                       <p className="text-[11px] text-amber-800">
@@ -769,7 +768,7 @@ export const StudentExploreView: React.FC = () => {
                       <span className="text-[11px] text-[#64748B] block">Assigned / Preferred Faculty Guide:</span>
                       <span className="font-semibold text-[#0F172A] block">{idea.guideName || "Not Assigned"}</span>
                       {idea.guideEmail && (
-                        <span className="text-[10px] text-[#64748B] font-mono block">{idea.guideEmail}</span>
+                        <span className="text-[10px] text-[#64748B] block">{idea.guideEmail}</span>
                       )}
                     </div>
 
@@ -1112,7 +1111,7 @@ export const StudentExploreView: React.FC = () => {
         subtitle={`${inspectingProject?.academicYear} • Guided by ${inspectingProject?.guideName}`}
         footer={
           <div className="flex items-center justify-between w-full">
-            <span className="text-xs text-[#64748B] font-mono">Verified Institutional Project Archive</span>
+            <span className="text-xs text-[#64748B]">Verified Project Archive</span>
             <Button size="sm" variant="secondary" onClick={() => setInspectingProject(null)}>
               Close Inspection
             </Button>

@@ -22,8 +22,7 @@ import { HodConfirmationDialog } from "../components/HodConfirmationDialog";
 
 export const HodFacultyView: React.FC = () => {
   useDashboardHeader({
-    title: "Faculty Mentorship & Workload Oversight",
-    breadcrumb: "HOD Console • Faculty Directory",
+    title: "Faculty Directory",
   });
 
   const [faculty, setFaculty] = useState<FacultyWorkloadDto[]>([]);
@@ -160,24 +159,6 @@ export const HodFacultyView: React.FC = () => {
         </div>
       )}
 
-      {/* Header Card */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shrink-0" />
-            <h1 className="text-base sm:text-lg font-bold font-heading text-slate-900 tracking-tight">
-              Faculty Mentorship &amp; Workload Governance
-            </h1>
-            <Badge variant="neutral" size="sm">
-              {faculty.length} Faculty Members
-            </Badge>
-          </div>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Manage departmental faculty mentorship capacity quotas, balance advising workloads, and designate academic Project Coordinators.
-          </p>
-        </div>
-      </div>
-
       {/* Compact Workload Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <HodMetricCard
@@ -216,10 +197,7 @@ export const HodFacultyView: React.FC = () => {
       {/* Faculty Workload Table */}
       <Card className="border-slate-200/80 bg-white overflow-hidden shadow-2xs">
         <CardHeader className="pb-3 border-b border-slate-100">
-          <CardTitle>Department Faculty Directory &amp; Mentorship Quotas</CardTitle>
-          <CardDescription>
-            Individual mentorship caps determine team allocation eligibility. Capacities cannot be reduced below current assigned workloads.
-          </CardDescription>
+          <CardTitle>Faculty Mentorship Quotas</CardTitle>
         </CardHeader>
 
         <div className="overflow-x-auto">

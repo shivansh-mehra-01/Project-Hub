@@ -104,8 +104,8 @@ export const getBreadcrumbs = (pathname: string, role?: RoleType): BreadcrumbInf
   }
 
   return {
-    pageTitle: route.breadcrumbGroup || route.label,
-    breadcrumb: route.breadcrumbTitle,
+    pageTitle: route.label,
+    breadcrumb: undefined,
     group: route.breadcrumbGroup,
   };
 };

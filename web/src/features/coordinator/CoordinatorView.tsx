@@ -475,8 +475,7 @@ export const CoordinatorView: React.FC = () => {
   };
 
   useDashboardHeader({
-    title: "Coordinator Console",
-    breadcrumb: coordinatorDept.code ? `${coordinatorDept.code} Project Coordination` : "Project Coordination",
+    title: "Coordinator",
   });
 
   return (
@@ -502,7 +501,7 @@ export const CoordinatorView: React.FC = () => {
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
-          1. Cycle &amp; Roster Setup
+          Cycle &amp; Roster
         </button>
         <button
           type="button"
@@ -513,7 +512,7 @@ export const CoordinatorView: React.FC = () => {
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
-          2. Team &amp; Guide Allocator
+          Guide Allocation
         </button>
         <button
           type="button"
@@ -524,7 +523,7 @@ export const CoordinatorView: React.FC = () => {
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
-          3. Review &amp; Panel Scheduler
+          Viva Panels
         </button>
         <button
           type="button"
@@ -535,7 +534,7 @@ export const CoordinatorView: React.FC = () => {
               : "text-[#64748B] hover:text-[#0F172A]"
           }`}
         >
-          4. Reports &amp; Exports
+          Reports &amp; Exports
         </button>
       </div>
 
@@ -556,9 +555,6 @@ export const CoordinatorView: React.FC = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Academic Cycle Parameters</CardTitle>
-                <CardDescription>
-                  Configure semester timeline and team size boundaries for Minor Project Sem 6.
-                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3.5">
                 <div className="grid grid-cols-2 gap-3">
@@ -596,10 +592,7 @@ export const CoordinatorView: React.FC = () => {
             <Card>
               <CardHeader className="flex flex-row items-start justify-between pb-2">
                 <div>
-                  <CardTitle>Bulk Student CSV Onboarding</CardTitle>
-                  <CardDescription>
-                    Pre-registers student USNs and institutional emails into the department partition.
-                  </CardDescription>
+                  <CardTitle>Student CSV Onboarding</CardTitle>
                 </div>
                 <Button
                   size="sm"
@@ -654,9 +647,9 @@ export const CoordinatorView: React.FC = () => {
             <Card>
               <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <CardTitle>Active Cohort Student Roster &amp; Verification</CardTitle>
+                  <CardTitle>Student Roster</CardTitle>
                   <CardDescription>
-                    {rosterRecords.length} records active in Computer Science &amp; Engineering. Multi-tenant isolation enforced.
+                    {rosterRecords.length} active records
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
@@ -760,9 +753,6 @@ export const CoordinatorView: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle>Team Allotment Roster</CardTitle>
-              <CardDescription>
-                Assign faculty mentors and verify guide workload thresholds before submitting to HOD.
-              </CardDescription>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
               {teams.length === 0 ? (
@@ -882,10 +872,7 @@ export const CoordinatorView: React.FC = () => {
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <CardTitle>Mid-Semester Viva Review Panels</CardTitle>
-                <CardDescription>
-                  3-faculty panels assigned to classrooms with automated conflict-of-interest prevention.
-                </CardDescription>
+                <CardTitle>Viva Review Panels</CardTitle>
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="success" size="sm" dot>
@@ -972,8 +959,7 @@ export const CoordinatorView: React.FC = () => {
               </div>
               <CardTitle>Master Allotment Excel (.xlsx)</CardTitle>
               <CardDescription>
-                Official university project allotment sheet with student USNs, project abstracts, and
-                guide signatures.
+                Project allotment sheet with student IDs, abstracts, and guide details.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -995,9 +981,9 @@ export const CoordinatorView: React.FC = () => {
               <div className="h-9 w-9 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center mb-2">
                 <FileSpreadsheet className="h-5 w-5" />
               </div>
-              <CardTitle>University Examination Marksheet (.csv)</CardTitle>
+              <CardTitle>Examination Marksheet (.csv)</CardTitle>
               <CardDescription>
-                Consolidated rubric marks formatted strictly for RGPV university examination portal uploads.
+                Consolidated marks formatted for university portal upload.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1019,9 +1005,9 @@ export const CoordinatorView: React.FC = () => {
               <div className="h-9 w-9 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center mb-2">
                 <FileArchive className="h-5 w-5" />
               </div>
-              <CardTitle>Departmental Project Archive Dossier (.zip)</CardTitle>
+              <CardTitle>Project Archive Dossier (.zip)</CardTitle>
               <CardDescription>
-                Complete package containing verified project evaluations, sample reports, and weekly logbooks.
+                Verified evaluations, reports, and weekly logbooks.
               </CardDescription>
             </CardHeader>
             <CardContent>

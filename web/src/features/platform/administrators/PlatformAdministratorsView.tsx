@@ -29,7 +29,6 @@ export const PlatformAdministratorsView: React.FC = () => {
 
   useDashboardHeader({
     title: "Platform Administrators",
-    breadcrumb: "Security & Operations / Operator Accounts",
   });
 
   const [searchQuery, setSearchQuery] = useState("");

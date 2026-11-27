@@ -32,8 +32,7 @@ type SortDirection = "asc" | "desc";
 
 export const HodReportsView: React.FC = () => {
   useDashboardHeader({
-    title: "Department Academic Reports & Tabulation",
-    breadcrumb: "HOD Console • Reports",
+    title: "Academic Reports",
   });
 
   const [results, setResults] = useState<DepartmentStudentResultDto[]>([]);
@@ -233,23 +232,11 @@ export const HodReportsView: React.FC = () => {
         </div>
       )}
 
-      {/* Header Card */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shrink-0" />
-            <h1 className="text-base sm:text-lg font-bold font-heading text-slate-900 tracking-tight">
-              Department Academic Reports &amp; Tabulation
-            </h1>
-            <Badge variant="neutral" size="sm">
-              AY 2025–2026
-            </Badge>
-          </div>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Cumulative continuous assessments and viva voce scores feeding academic transcripts and university tabulation sheets.
-          </p>
-        </div>
-
+      {/* Clean Action Bar */}
+      <div className="flex items-center justify-between gap-3">
+        <Badge variant="neutral" size="sm">
+          AY 2025–2026
+        </Badge>
         <Button
           size="sm"
           variant="secondary"

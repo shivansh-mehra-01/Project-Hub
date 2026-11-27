@@ -27,6 +27,7 @@ import {
   BarChart3,
   Kanban,
   Search,
+  Menu,
 } from "lucide-react";
 import { Badge } from "@/design-system/components/Badge";
 import { Button } from "@/design-system/components/Button";
@@ -42,6 +43,7 @@ export default function MarketingHomePage() {
 
   const [isPilotModalOpen, setIsPilotModalOpen] = useState(false);
   const [pilotSubmitted, setPilotSubmitted] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Pilot form state
   const [pilotName, setPilotName] = useState("");
@@ -72,70 +74,121 @@ export default function MarketingHomePage() {
       {/* 1. TOP CHARCOAL NAVBAR (#111827, 64px)                                     */}
       {/* ========================================================================= */}
       <header className="sticky top-0 z-50 h-16 bg-[#111827] border-b border-[#1F2937] text-white">
-        <div className="max-w-[1240px] h-full mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+        <div className="max-w-[1440px] h-full mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between">
           {/* Left Brand Mark */}
           <Link href="/" className="flex items-center gap-2.5 group">
             <CollabexLogo variant="dark" size="md" />
           </Link>
 
           {/* Center Smooth-Scroll Links (Desktop) */}
-          <nav className="hidden md:flex items-center gap-7 text-xs font-medium text-[#9CA3AF]">
-            <a href="#features" className="hover:text-white transition-colors">
-              Features
-            </a>
-            <a href="#nba" className="hover:text-white transition-colors">
-              NBA Compliance
-            </a>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-[#9CA3AF]">
             <a href="#workflows" className="hover:text-white transition-colors">
               Workflows
             </a>
             <a href="#portals" className="hover:text-white transition-colors">
               Role Portals
             </a>
+            <a href="#nba" className="hover:text-white transition-colors">
+              NBA Compliance
+            </a>
+            <a href="#features" className="hover:text-white transition-colors">
+              Features
+            </a>
           </nav>
 
           {/* Right Action Controls */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/login"
-              className="px-3.5 py-1.5 rounded-lg border border-white/20 hover:border-white/50 text-white bg-transparent hover:bg-white/10 text-xs font-semibold transition-colors"
+              className="px-4 py-2 rounded-lg border border-white/20 hover:border-white/50 text-white bg-transparent hover:bg-white/10 text-sm font-semibold transition-colors"
             >
               Sign In
             </Link>
             <button
               type="button"
               onClick={() => setIsPilotModalOpen(true)}
-              className="px-3.5 py-1.5 rounded-lg bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              className="hidden sm:inline-flex px-4 py-2 rounded-lg bg-brand-primary hover:bg-brand-primary-hover text-white text-sm font-semibold shadow-xs transition-colors cursor-pointer"
             >
               Request College Pilot
             </button>
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+              aria-label="Toggle navigation menu"
+              className="md:hidden p-1.5 rounded-lg border border-white/15 text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Dropdown Navigation */}
+        {isMobileMenuOpen && (
+          <nav className="md:hidden bg-[#111827] border-b border-[#1F2937] px-4 py-3 space-y-2 text-xs font-medium text-[#9CA3AF]">
+            <a
+              href="#workflows"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block py-1.5 hover:text-white transition-colors"
+            >
+              Workflows
+            </a>
+            <a
+              href="#portals"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block py-1.5 hover:text-white transition-colors"
+            >
+              Role Portals
+            </a>
+            <a
+              href="#nba"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block py-1.5 hover:text-white transition-colors"
+            >
+              NBA Compliance
+            </a>
+            <a
+              href="#features"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="block py-1.5 hover:text-white transition-colors"
+            >
+              Features
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                setIsPilotModalOpen(true);
+              }}
+              className="w-full mt-1 px-3.5 py-2 rounded-lg bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold text-center cursor-pointer"
+            >
+              Request College Pilot
+            </button>
+          </nav>
+        )}
       </header>
 
       {/* ========================================================================= */}
       {/* 2. 2-COLUMN HERO SECTION                                                  */}
       {/* ========================================================================= */}
-      <section className="py-12 lg:py-20 border-b border-[#E2E8F0] overflow-hidden bg-gradient-to-b from-white to-[#F8FAFC]">
-        <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="relative min-h-[calc(100vh-4rem)] flex items-center py-12 lg:py-16 border-b border-[#E2E8F0] overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_rgba(4,120,87,0.08),_transparent_55%),linear-gradient(to_bottom,#ffffff,#f8fafc)]">
+        <div className="max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
-            {/* Left Column: Copy & Actions (6 cols) */}
-            <div className="lg:col-span-6 space-y-6">
+            {/* Left Column: Copy & Actions (5 cols) */}
+            <div className="lg:col-span-5 space-y-6">
               {/* Eyebrow Pill */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-primary-tint border border-brand-primary-border text-brand-primary-text text-xs font-medium">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-primary-tint border border-brand-primary-border text-brand-primary-text text-sm font-medium">
                 <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" />
                 <span>Built for NBA Criterion 2 &amp; 3</span>
               </div>
 
               {/* Display Headline */}
-              <h1 className="font-heading font-bold text-4xl sm:text-5xl lg:text-[52px] text-[#0F172A] leading-[1.08] tracking-tight">
-                The Complete Workspace for College Projects &amp; NBA Compliance.
+              <h1 className="font-heading font-bold text-4xl sm:text-5xl lg:text-[54px] text-[#0F172A] leading-[1.08] tracking-tight">
+                The Complete Workspace for College Projects &amp; NBA Compliance
               </h1>
 
               {/* Subheadline */}
-              <p className="text-base sm:text-lg text-[#475569] leading-relaxed max-w-xl">
-                Manage Minor &amp; Major student teams, automate weekly guide reviews, and export
-                audit-ready CO-PO attainment dossiers.
+              <p className="text-base sm:text-xl text-[#475569] leading-relaxed max-w-xl">
+                Manage Minor &amp; Major teams, automate weekly guide reviews, and export audit-ready CO-PO dossiers.
               </p>
 
               {/* Action Buttons */}
@@ -143,14 +196,14 @@ export default function MarketingHomePage() {
                 <button
                   type="button"
                   onClick={() => setIsPilotModalOpen(true)}
-                  className="h-11 px-6 rounded-xl bg-brand-primary hover:bg-brand-primary-hover text-white font-semibold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="h-12 px-6 rounded-xl bg-brand-primary hover:bg-brand-primary-hover text-white font-semibold text-base shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span>Request College Pilot</span>
                   <ArrowRight className="h-4 w-4" />
                 </button>
                 <a
                   href="#portals"
-                  className="h-11 px-5 rounded-xl border border-[#CBD5E1] bg-white hover:bg-[#F8FAFC] text-[#0F172A] font-semibold text-sm shadow-2xs transition-all flex items-center justify-center gap-2"
+                  className="h-12 px-6 rounded-xl border border-[#CBD5E1] bg-white hover:bg-[#F8FAFC] text-[#0F172A] font-semibold text-base shadow-2xs transition-all flex items-center justify-center gap-2"
                 >
                   <Sparkles className="h-4 w-4 text-brand-primary" />
                   <span>Explore Role Portals</span>
@@ -158,7 +211,7 @@ export default function MarketingHomePage() {
               </div>
 
               {/* Trust Strip */}
-              <div className="pt-3 border-t border-[#E2E8F0] flex flex-wrap items-center gap-y-2 gap-x-4 text-xs font-medium text-[#64748B]">
+              <div className="pt-4 border-t border-[#E2E8F0] flex flex-wrap items-center gap-y-2 gap-x-4 text-sm font-medium text-[#64748B]">
                 <span className="flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5 text-brand-primary" />
                   Zero Public Signup
@@ -176,15 +229,15 @@ export default function MarketingHomePage() {
               </div>
             </div>
 
-            {/* Right Column: High-Fidelity UI Preview Card (6 cols) */}
-            <div className="lg:col-span-6">
-              <div className="rounded-2xl border border-slate-300 bg-white shadow-2xl overflow-hidden flex flex-col text-slate-800 transition-all hover:shadow-3xl">
+            {/* Right Column: High-Fidelity UI Preview Card (7 cols) */}
+            <div className="lg:col-span-7">
+              <div className="rounded-2xl border border-slate-200/90 bg-white shadow-[0_20px_60px_-15px_rgba(15,23,42,0.16)] overflow-hidden flex flex-col text-slate-800">
                 {/* Mock Window Top Bar */}
                 <div className="bg-[#111827] px-3.5 py-2.5 flex items-center justify-between border-b border-slate-800 text-white select-none">
                   <CollabexLogo variant="dark" size="sm" />
                   <div className="flex items-center gap-3 text-slate-400">
-                    <Search className="h-3.5 w-3.5 hover:text-white cursor-pointer" />
-                    <Sliders className="h-3.5 w-3.5 hover:text-white cursor-pointer" />
+                    <Search className="h-3.5 w-3.5" />
+                    <Sliders className="h-3.5 w-3.5" />
                     <div className="h-5 w-5 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-200">
                       JS
                     </div>
@@ -201,13 +254,13 @@ export default function MarketingHomePage() {
                     <div className="p-1 rounded bg-brand-primary text-white">
                       <FolderGit2 className="h-3.5 w-3.5" />
                     </div>
-                    <div className="p-1 rounded hover:bg-slate-800 text-slate-400">
+                    <div className="p-1 rounded text-slate-400">
                       <Users2 className="h-3.5 w-3.5" />
                     </div>
-                    <div className="p-1 rounded hover:bg-slate-800 text-slate-400">
+                    <div className="p-1 rounded text-slate-400">
                       <GraduationCap className="h-3.5 w-3.5" />
                     </div>
-                    <div className="p-1 rounded hover:bg-slate-800 text-slate-400">
+                    <div className="p-1 rounded text-slate-400">
                       <FileCheck2 className="h-3.5 w-3.5" />
                     </div>
                     <div className="mt-auto">
@@ -231,23 +284,23 @@ export default function MarketingHomePage() {
                           Team 01 • IoT Energy Monitoring
                         </div>
                         <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                          <div className="flex items-center gap-1.5 p-1 rounded bg-slate-50/70">
                             <div className="h-5 w-5 rounded-full bg-emerald-100 shrink-0 flex items-center justify-center text-[9px] font-semibold text-emerald-800">
                               SM
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="font-medium text-slate-800 truncate leading-tight">Shivansh Mehra (Lead)</div>
-                              <div className="text-[8px] text-slate-400">Week 5 Signed • 14 hrs</div>
+                              <div className="text-[9px] text-slate-400">Week 5 Signed • 14 hrs</div>
                             </div>
                             <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                           </div>
-                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                          <div className="flex items-center gap-1.5 p-1 rounded">
                             <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
                               AS
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="font-medium text-slate-800 truncate leading-tight">Aarav Sharma (ML)</div>
-                              <div className="text-[8px] text-slate-400">Week 5 Signed • 12 hrs</div>
+                              <div className="text-[9px] text-slate-400">Week 5 Signed • 12 hrs</div>
                             </div>
                             <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                           </div>
@@ -259,23 +312,23 @@ export default function MarketingHomePage() {
                           Team 04 • Solar Microgrid
                         </div>
                         <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                          <div className="flex items-center gap-1.5 p-1 rounded">
                             <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
                               DP
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="font-medium text-slate-800 truncate leading-tight">Devansh Patel (Lead)</div>
-                              <div className="text-[8px] text-slate-400">Week 5 Signed • 16 hrs</div>
+                              <div className="text-[9px] text-slate-400">Week 5 Signed • 16 hrs</div>
                             </div>
                             <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                           </div>
-                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                          <div className="flex items-center gap-1.5 p-1 rounded">
                             <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
                               MS
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="font-medium text-slate-800 truncate leading-tight">Meera Sen (Hardware)</div>
-                              <div className="text-[8px] text-slate-400">Week 5 Signed • 14 hrs</div>
+                              <div className="text-[9px] text-slate-400">Week 5 Signed • 14 hrs</div>
                             </div>
                             <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                           </div>
@@ -284,16 +337,16 @@ export default function MarketingHomePage() {
 
                       <div>
                         <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                          Team 07 • Decentralized Credential
+                          Team 07 • Ledger
                         </div>
                         <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 p-1 rounded hover:bg-slate-50 cursor-pointer">
+                          <div className="flex items-center gap-1.5 p-1 rounded">
                             <div className="h-5 w-5 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-[9px] font-semibold text-slate-700">
                               NS
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="font-medium text-slate-800 truncate leading-tight">Neha Singhal (Lead)</div>
-                              <div className="text-[8px] text-slate-400">Week 5 Signed • 15 hrs</div>
+                              <div className="text-[9px] text-slate-400">Week 5 Signed • 15 hrs</div>
                             </div>
                             <ChevronRight className="h-2.5 w-2.5 text-slate-400 shrink-0" />
                           </div>
@@ -313,27 +366,37 @@ export default function MarketingHomePage() {
                         <span className="text-[9px] text-slate-400 font-mono">Progress Tracker</span>
                       </div>
 
-                      {/* Centered Progressive Funnel Bars */}
+                      {/* Aligned Progressive Funnel Bars */}
                       <div className="space-y-1.5 py-1">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-3.5 bg-brand-primary rounded-xs shadow-xs" style={{ width: "100%" }} />
-                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-14 text-right">32 Synopses</span>
+                          <div className="flex-1 bg-slate-100 rounded-xs overflow-hidden">
+                            <div className="h-3 bg-brand-primary rounded-xs" style={{ width: "100%" }} />
+                          </div>
+                          <span className="text-[9px] text-slate-500 tabular-nums shrink-0 w-16 whitespace-nowrap text-right">32 Synopses</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="h-3.5 bg-brand-primary/90 rounded-xs shadow-xs mx-auto" style={{ width: "88%" }} />
-                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-14 text-right">28 Guides</span>
+                          <div className="flex-1 bg-slate-100 rounded-xs overflow-hidden">
+                            <div className="h-3 bg-brand-primary/90 rounded-xs" style={{ width: "88%" }} />
+                          </div>
+                          <span className="text-[9px] text-slate-500 tabular-nums shrink-0 w-16 whitespace-nowrap text-right">28 Guides</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="h-3.5 bg-brand-primary/80 rounded-xs shadow-xs mx-auto" style={{ width: "81%" }} />
-                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-14 text-right">26 Batched</span>
+                          <div className="flex-1 bg-slate-100 rounded-xs overflow-hidden">
+                            <div className="h-3 bg-brand-primary/80 rounded-xs" style={{ width: "81%" }} />
+                          </div>
+                          <span className="text-[9px] text-slate-500 tabular-nums shrink-0 w-16 whitespace-nowrap text-right">26 Batched</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="h-3 bg-brand-primary/70 rounded-xs shadow-xs mx-auto" style={{ width: "75%" }} />
-                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-14 text-right">24 Signed</span>
+                          <div className="flex-1 bg-slate-100 rounded-xs overflow-hidden">
+                            <div className="h-3 bg-brand-primary/70 rounded-xs" style={{ width: "75%" }} />
+                          </div>
+                          <span className="text-[9px] text-slate-500 tabular-nums shrink-0 w-16 whitespace-nowrap text-right">24 Signed</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="h-2.5 bg-brand-primary/60 rounded-xs shadow-xs mx-auto" style={{ width: "75%" }} />
-                          <span className="font-mono text-[9px] text-slate-500 tabular-nums shrink-0 w-14 text-right">24 Active</span>
+                          <div className="flex-1 bg-slate-100 rounded-xs overflow-hidden">
+                            <div className="h-3 bg-brand-primary/60 rounded-xs" style={{ width: "75%" }} />
+                          </div>
+                          <span className="text-[9px] text-slate-500 tabular-nums shrink-0 w-16 whitespace-nowrap text-right">24 Active</span>
                         </div>
                       </div>
                     </div>
@@ -349,49 +412,49 @@ export default function MarketingHomePage() {
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <table className="flex-1 text-left text-[9px]">
+                      <div className="flex items-center gap-3">
+                        <table className="flex-1 text-left text-[10px]">
                           <thead className="text-slate-400 border-b border-slate-100">
                             <tr>
-                              <th className="pb-1 font-medium">Outcome</th>
-                              <th className="pb-1 font-medium">Evaluation Source</th>
-                              <th className="pb-1 font-medium text-right">Status</th>
+                              <th className="pb-1.5 pr-2 font-medium">Outcome</th>
+                              <th className="pb-1.5 pr-2 font-medium">Source</th>
+                              <th className="pb-1.5 font-medium text-right">Status</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             <tr>
-                              <td className="py-1 font-medium text-slate-800">PO2: Problem Analysis</td>
-                              <td className="py-1 text-slate-500">Proposal Literature Survey</td>
-                              <td className="py-1 text-right">
-                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded font-mono">
-                                  <Check className="h-2 w-2" /> 88.2% (Pass)
+                              <td className="py-1.5 pr-2 font-medium text-slate-800">PO2: Problem Analysis</td>
+                              <td className="py-1.5 pr-2 text-slate-500">Literature Survey</td>
+                              <td className="py-1.5 text-right">
+                                <span className="inline-flex items-center gap-0.5 whitespace-nowrap text-[9px] font-semibold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded tabular-nums">
+                                  <Check className="h-2.5 w-2.5" /> 88.2% Pass
                                 </span>
                               </td>
                             </tr>
                             <tr>
-                              <td className="py-1 font-medium text-slate-800">PO3: Solution Architecture</td>
-                              <td className="py-1 text-slate-500">Mid-Term System Design</td>
-                              <td className="py-1 text-right">
-                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded font-mono">
-                                  <Check className="h-2 w-2" /> 84.6% (Pass)
+                              <td className="py-1.5 pr-2 font-medium text-slate-800">PO3: System Design</td>
+                              <td className="py-1.5 pr-2 text-slate-500">Mid-Term Review</td>
+                              <td className="py-1.5 text-right">
+                                <span className="inline-flex items-center gap-0.5 whitespace-nowrap text-[9px] font-semibold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded tabular-nums">
+                                  <Check className="h-2.5 w-2.5" /> 84.6% Pass
                                 </span>
                               </td>
                             </tr>
                             <tr>
-                              <td className="py-1 font-medium text-slate-800">PO5: Modern Tool Usage</td>
-                              <td className="py-1 text-slate-500">GitHub CI &amp; ESP32 Firmware</td>
-                              <td className="py-1 text-right">
-                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded font-mono">
-                                  <Check className="h-2 w-2" /> 91.0% (Pass)
+                              <td className="py-1.5 pr-2 font-medium text-slate-800">PO5: Modern Tools</td>
+                              <td className="py-1.5 pr-2 text-slate-500">GitHub &amp; Firmware</td>
+                              <td className="py-1.5 text-right">
+                                <span className="inline-flex items-center gap-0.5 whitespace-nowrap text-[9px] font-semibold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded tabular-nums">
+                                  <Check className="h-2.5 w-2.5" /> 91.0% Pass
                                 </span>
                               </td>
                             </tr>
                             <tr>
-                              <td className="py-1 font-medium text-slate-800">PO10: Viva Defense</td>
-                              <td className="py-1 text-slate-500">Examiner Rubric Matrix</td>
-                              <td className="py-1 text-right">
-                                <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded font-mono">
-                                  <Check className="h-2 w-2" /> 86.5% (Pass)
+                              <td className="py-1.5 pr-2 font-medium text-slate-800">PO10: Viva Defense</td>
+                              <td className="py-1.5 pr-2 text-slate-500">Examiner Rubric</td>
+                              <td className="py-1.5 text-right">
+                                <span className="inline-flex items-center gap-0.5 whitespace-nowrap text-[9px] font-semibold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded tabular-nums">
+                                  <Check className="h-2.5 w-2.5" /> 86.5% Pass
                                 </span>
                               </td>
                             </tr>
@@ -399,9 +462,9 @@ export default function MarketingHomePage() {
                         </table>
 
                         {/* Circular Gauge */}
-                        <div className="shrink-0 flex flex-col items-center justify-center p-1.5 bg-slate-50 rounded-lg border border-slate-100">
-                          <div className="relative h-11 w-11 flex items-center justify-center">
-                            <svg className="h-11 w-11 -rotate-90" viewBox="0 0 36 36">
+                        <div className="shrink-0 flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg border border-slate-100">
+                          <div className="relative h-14 w-14 flex items-center justify-center">
+                            <svg className="h-14 w-14 -rotate-90" viewBox="0 0 36 36">
                               <path
                                 className="text-slate-200"
                                 strokeWidth="3.5"
@@ -419,11 +482,11 @@ export default function MarketingHomePage() {
                                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                               />
                             </svg>
-                            <span className="absolute font-mono text-[9px] font-bold text-slate-800 tabular-nums">
+                            <span className="absolute text-xs font-bold text-slate-800 tabular-nums">
                               84%
                             </span>
                           </div>
-                          <span className="text-[8px] font-semibold text-slate-500 mt-0.5">Attainment</span>
+                          <span className="text-[9px] font-semibold text-slate-500 mt-1">Attainment</span>
                         </div>
                       </div>
                     </div>
@@ -438,17 +501,17 @@ export default function MarketingHomePage() {
       {/* ========================================================================= */}
       {/* 3. 3-TIER APPROVAL & EXECUTION WORKFLOW (#workflows)                      */}
       {/* ========================================================================= */}
-      <section id="workflows" className="py-16 bg-white border-b border-[#E2E8F0]">
-        <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          <div className="text-center space-y-2 max-w-2xl mx-auto">
+      <section id="workflows" className="py-16 lg:py-20 bg-white border-b border-[#E2E8F0] scroll-mt-20">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 space-y-10">
+          <div className="text-center space-y-2.5 max-w-2xl mx-auto">
             <div className="text-xs font-bold text-brand-primary uppercase tracking-wider">
               Autonomous Governance
             </div>
-            <h2 className="font-heading font-bold text-2xl sm:text-3xl text-[#0F172A]">
+            <h2 className="font-heading font-bold text-3xl sm:text-4xl text-[#0F172A]">
               The 3-Tier Academic Project Lifecycle
             </h2>
-            <p className="text-xs sm:text-sm text-[#475569]">
-              Every project proposal, continuous review, and defense mark follows a structured academic audit trail.
+            <p className="text-sm sm:text-base text-[#475569]">
+              Structured project approvals, continuous reviews, and evaluation tracking.
             </p>
           </div>
 
@@ -459,23 +522,22 @@ export default function MarketingHomePage() {
                 01
               </div>
               <div className="space-y-1.5">
-                <h3 className="font-heading font-bold text-base text-[#0F172A]">
+                <h3 className="font-heading font-bold text-lg text-[#0F172A]">
                   Team Formation &amp; Synopsis
                 </h3>
-                <p className="text-xs text-[#475569] leading-relaxed">
-                  Students form 2–4 member teams, select a Team Lead, link primary UN Sustainable Development
-                  Goals (SDGs), and submit project synopses.
+                <p className="text-sm text-[#475569] leading-relaxed">
+                  Form 2–4 member teams, map UN SDGs, and submit project synopses.
                 </p>
               </div>
-              <ul className="text-xs text-[#64748B] space-y-1.5 pt-2 border-t border-[#E2E8F0]">
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Max 4 members enforced
+              <ul className="text-sm text-[#64748B] space-y-2 pt-3 border-t border-[#E2E8F0]">
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-brand-primary shrink-0" /> Max 4 members enforced
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Mandatory UN SDG mapping
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-brand-primary shrink-0" /> Mandatory UN SDG mapping
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Roster lock prevents churn
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-brand-primary shrink-0" /> Roster lock prevents churn
                 </li>
               </ul>
             </div>
@@ -486,23 +548,22 @@ export default function MarketingHomePage() {
                 02
               </div>
               <div className="space-y-1.5">
-                <h3 className="font-heading font-bold text-base text-[#0F172A]">
+                <h3 className="font-heading font-bold text-lg text-[#0F172A]">
                   3-Tier Academic Sign-Off
                 </h3>
-                <p className="text-xs text-[#475569] leading-relaxed">
-                  Proposals are endorsed by the designated Guide, consolidated by the Project Coordinator
-                  with workload validation, and signed by Department HOD.
+                <p className="text-sm text-[#475569] leading-relaxed">
+                  Endorsed by Guides, balanced by Coordinators, and approved by HODs.
                 </p>
               </div>
-              <ul className="text-xs text-[#64748B] space-y-1.5 pt-2 border-t border-[#E2E8F0]">
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Guide technical endorsement
+              <ul className="text-sm text-[#64748B] space-y-2 pt-3 border-t border-[#E2E8F0]">
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-brand-primary shrink-0" /> Guide technical endorsement
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Workload threshold verification
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-brand-primary shrink-0" /> Workload threshold verification
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-brand-primary" /> HOD final allotment sign-off
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-brand-primary shrink-0" /> HOD final allotment sign-off
                 </li>
               </ul>
             </div>
@@ -513,23 +574,22 @@ export default function MarketingHomePage() {
                 03
               </div>
               <div className="space-y-1.5">
-                <h3 className="font-heading font-bold text-base text-[#0F172A]">
+                <h3 className="font-heading font-bold text-lg text-[#0F172A]">
                   Friday Logs, Viva &amp; NBA ZIP
                 </h3>
-                <p className="text-xs text-[#475569] leading-relaxed">
-                  Bi-weekly engineering logbooks signed by mentors, 3-faculty viva panels with conflict-of-interest
-                  exclusion, and 1-click SAR dossier packaging.
+                <p className="text-sm text-[#475569] leading-relaxed">
+                  Signed weekly logbooks, conflict-free viva panels, and 1-click SAR export.
                 </p>
               </div>
-              <ul className="text-xs text-[#64748B] space-y-1.5 pt-2 border-t border-[#E2E8F0]">
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Stamped weekly logbook entries
+              <ul className="text-sm text-[#64748B] space-y-2 pt-3 border-t border-[#E2E8F0]">
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-brand-primary shrink-0" /> Stamped weekly logbook entries
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-brand-primary" /> Conflict-free viva scoring
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-brand-primary shrink-0" /> Conflict-free viva scoring
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-brand-primary" /> 3 Best/Avg/Weak ZIP export
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-brand-primary shrink-0" /> 3 Best/Avg/Weak ZIP export
                 </li>
               </ul>
             </div>
@@ -540,18 +600,17 @@ export default function MarketingHomePage() {
       {/* ========================================================================= */}
       {/* 4. 6-ROLE CAMPUS PORTALS GRID (#portals)                                  */}
       {/* ========================================================================= */}
-      <section id="portals" className="py-16 bg-[#F8FAFC] border-b border-[#E2E8F0]">
-        <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          <div className="text-center space-y-2 max-w-2xl mx-auto">
+      <section id="portals" className="py-16 lg:py-20 bg-[#F8FAFC] border-b border-[#E2E8F0] scroll-mt-20">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 space-y-10">
+          <div className="text-center space-y-2.5 max-w-2xl mx-auto">
             <div className="text-xs font-bold text-brand-primary uppercase tracking-wider">
               Exact 6-Role Hierarchy
             </div>
-            <h2 className="font-heading font-bold text-2xl sm:text-3xl text-[#0F172A]">
-              Interactive Campus Portals &amp; Live Previews
+            <h2 className="font-heading font-bold text-3xl sm:text-4xl text-[#0F172A]">
+              Interactive Campus Portals
             </h2>
-            <p className="text-xs sm:text-sm text-[#475569]">
-              Test any stakeholder experience instantly. Every role is completely isolated with dedicated
-              authority bounds.
+            <p className="text-sm sm:text-base text-[#475569]">
+              Dedicated portals for every academic role with strict access boundaries.
             </p>
           </div>
 
@@ -720,62 +779,58 @@ export default function MarketingHomePage() {
       {/* ========================================================================= */}
       {/* 5. NBA CRITERION 2 & 3 COMPLIANCE BANNER (#nba)                           */}
       {/* ========================================================================= */}
-      <section id="nba" className="py-16 bg-white border-b border-[#E2E8F0]">
-        <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="nba" className="py-16 lg:py-20 bg-white border-b border-[#E2E8F0] scroll-mt-20">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10">
           <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-brand-primary-hover to-brand-primary text-white shadow-xl space-y-8">
             <div className="space-y-3 max-w-3xl">
               <span className="text-xs font-bold uppercase tracking-widest text-emerald-300">
                 Accreditation Assurance Engine
               </span>
-              <h2 className="font-heading font-bold text-2xl sm:text-4xl text-white leading-tight">
+              <h2 className="font-heading font-bold text-3xl sm:text-4xl text-white leading-tight">
                 Engineered for NBA Tier-1 &amp; Tier-2 Criterion 2 &amp; 3 Compliance
               </h2>
-              <p className="text-sm sm:text-base text-emerald-100 leading-relaxed">
-                Eliminate manual paperwork. Collabex automates continuous assessment logging, CO-to-PO/PSO
-                direct attainment calculations, and official sample packaging.
+              <p className="text-base sm:text-lg text-emerald-100 leading-relaxed">
+                Automate continuous assessment logging, CO-to-PO attainment calculations, and audit sample packaging.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
               <div className="p-5 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/20 space-y-2">
-                <div className="text-xs font-bold text-emerald-300 font-heading">
+                <div className="text-base font-bold text-emerald-300 font-heading">
                   Criterion 2.2: Continuous Evaluation
                 </div>
-                <p className="text-xs text-white/90 leading-relaxed">
-                  Time-stamped Friday student logbooks with guide verification signatures provide continuous
-                  documented evidence of student mentoring.
+                <p className="text-sm text-white/90 leading-relaxed">
+                  Time-stamped weekly logbooks with guide sign-offs for documented mentoring evidence.
                 </p>
               </div>
 
               <div className="p-5 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/20 space-y-2">
-                <div className="text-xs font-bold text-emerald-300 font-heading">
+                <div className="text-base font-bold text-emerald-300 font-heading">
                   Criterion 3.3: Direct CO-PO Attainment
                 </div>
-                <p className="text-xs text-white/90 leading-relaxed">
-                  Automatic calculation mapping 80% direct continuous rubric evaluations + 20% indirect exit surveys
-                  against institutional 70% threshold targets.
+                <p className="text-sm text-white/90 leading-relaxed">
+                  Maps 80% direct rubric scores + 20% exit surveys against institutional 70% targets.
                 </p>
               </div>
 
               <div className="p-5 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/20 space-y-2">
-                <div className="text-xs font-bold text-emerald-300 font-heading">
+                <div className="text-base font-bold text-emerald-300 font-heading">
                   Audit Sample ZIP Packager
                 </div>
-                <p className="text-xs text-white/90 leading-relaxed">
-                  Instant synthesis and ZIP download of 3 Best + 3 Average + 3 Weak project reports, codebases,
-                  and signed evaluation rubrics.
+                <p className="text-sm text-white/90 leading-relaxed">
+                  1-click ZIP export of 3 Best, 3 Average, and 3 Weak project dossiers and rubrics.
                 </p>
               </div>
             </div>
 
-            <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-white/20">
-              <div className="text-xs text-emerald-200">
-                Applicable for autonomous universities, Tier-1 institutions, and Tier-2 affiliated colleges.
+            <div className="pt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-white/20">
+              <div className="text-sm text-emerald-200">
+                Built for autonomous universities and affiliated engineering colleges.
               </div>
               <button
                 type="button"
                 onClick={() => setIsPilotModalOpen(true)}
-                className="px-5 py-2.5 rounded-xl bg-white text-brand-primary hover:bg-brand-primary-tint text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-white text-brand-primary hover:bg-brand-primary-tint text-sm font-bold shadow-xs transition-colors cursor-pointer"
               >
                 Schedule an Institutional Consultation
               </button>
@@ -787,70 +842,66 @@ export default function MarketingHomePage() {
       {/* ========================================================================= */}
       {/* 6. PLATFORM FEATURES GRID (#features)                                     */}
       {/* ========================================================================= */}
-      <section id="features" className="py-16 bg-[#F8FAFC] border-b border-[#E2E8F0]">
-        <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          <div className="text-center space-y-2 max-w-2xl mx-auto">
+      <section id="features" className="py-16 lg:py-20 bg-[#F8FAFC] border-b border-[#E2E8F0] scroll-mt-20">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 space-y-10">
+          <div className="text-center space-y-2.5 max-w-2xl mx-auto">
             <div className="text-xs font-bold text-brand-primary uppercase tracking-wider">
               Enterprise Grade
             </div>
-            <h2 className="font-heading font-bold text-2xl sm:text-3xl text-[#0F172A]">
+            <h2 className="font-heading font-bold text-3xl sm:text-4xl text-[#0F172A]">
               Designed for Campus Security &amp; Scale
             </h2>
-            <p className="text-xs sm:text-sm text-[#475569]">
-              Built with modern SaaS boundaries that university deans, HODs, and IT directors trust.
+            <p className="text-sm sm:text-base text-[#475569]">
+              Modern multi-tenant architecture built for universities and engineering colleges.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <Card className="p-5 space-y-3">
-              <div className="h-9 w-9 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
+            <Card className="p-6 space-y-3">
+              <div className="h-10 w-10 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
                 <ShieldCheck className="h-5 w-5" />
               </div>
-              <h3 className="font-heading font-bold text-sm text-[#0F172A]">
+              <h3 className="font-heading font-bold text-base text-[#0F172A]">
                 PostgreSQL Multi-Tenancy
               </h3>
-              <p className="text-xs text-[#64748B] leading-relaxed">
-                Complete database partition isolation per college tenant via immutable CollegeId. Zero cross-campus
-                user mixing or data leakage.
+              <p className="text-sm text-[#64748B] leading-relaxed">
+                Strict database isolation per college tenant with zero cross-campus data leakage.
               </p>
             </Card>
 
-            <Card className="p-5 space-y-3">
-              <div className="h-9 w-9 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
+            <Card className="p-6 space-y-3">
+              <div className="h-10 w-10 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
                 <Lock className="h-5 w-5" />
               </div>
-              <h3 className="font-heading font-bold text-sm text-[#0F172A]">
+              <h3 className="font-heading font-bold text-base text-[#0F172A]">
                 Institutional SSO Only
               </h3>
-              <p className="text-xs text-[#64748B] leading-relaxed">
-                Zero public self-signup. Users authenticate strictly through verified university Google Workspace
-                or Microsoft 365 Azure AD credentials.
+              <p className="text-sm text-[#64748B] leading-relaxed">
+                Zero public signup. Verified login via university Google Workspace or Microsoft 365.
               </p>
             </Card>
 
-            <Card className="p-5 space-y-3">
-              <div className="h-9 w-9 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
+            <Card className="p-6 space-y-3">
+              <div className="h-10 w-10 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
                 <Sparkles className="h-5 w-5" />
               </div>
-              <h3 className="font-heading font-bold text-sm text-[#0F172A]">
+              <h3 className="font-heading font-bold text-base text-[#0F172A]">
                 Heuristic Guide Matcher
               </h3>
-              <p className="text-xs text-[#64748B] leading-relaxed">
-                Automated pairing algorithm groups orphan students into balanced teams and matches project domains
-                with faculty research expertise.
+              <p className="text-sm text-[#64748B] leading-relaxed">
+                Pairs unallocated students into balanced teams and matches faculty expertise.
               </p>
             </Card>
 
-            <Card className="p-5 space-y-3">
-              <div className="h-9 w-9 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
+            <Card className="p-6 space-y-3">
+              <div className="h-10 w-10 rounded-lg bg-brand-primary-tint text-brand-primary flex items-center justify-center">
                 <BarChart3 className="h-5 w-5" />
               </div>
-              <h3 className="font-heading font-bold text-sm text-[#0F172A]">
+              <h3 className="font-heading font-bold text-base text-[#0F172A]">
                 University Marksheet Exports
               </h3>
-              <p className="text-xs text-[#64748B] leading-relaxed">
-                Consolidated internal evaluations formatted strictly for university examination portal uploads
-                (e.g. RGPV, VTU, Anna University format).
+              <p className="text-sm text-[#64748B] leading-relaxed">
+                Consolidated internal marksheets formatted for university exam portal uploads.
               </p>
             </Card>
           </div>
@@ -861,30 +912,29 @@ export default function MarketingHomePage() {
       {/* 7. MINIMAL CHARCOAL FOOTER (#111827)                                       */}
       {/* ========================================================================= */}
       <footer className="bg-[#111827] border-t border-[#1F2937] text-white py-12">
-        <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 space-y-8">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-[#1F2937]">
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2.5">
                 <CollabexLogo variant="dark" size="md" />
               </div>
-              <p className="text-xs text-[#9CA3AF] max-w-sm">
-                Purpose-built B2B SaaS for engineering colleges to manage Minor &amp; Major capstone projects
-                and automate NBA Criterion 2 &amp; 3 compliance.
+              <p className="text-sm text-[#9CA3AF] max-w-md">
+                B2B SaaS for engineering colleges to manage capstone projects and NBA compliance.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-6 text-xs text-[#9CA3AF]">
-              <a href="#features" className="hover:text-white transition-colors">
-                Features
-              </a>
-              <a href="#nba" className="hover:text-white transition-colors">
-                NBA Criterion 2 &amp; 3
-              </a>
+            <div className="flex flex-wrap gap-6 text-sm text-[#9CA3AF]">
               <a href="#workflows" className="hover:text-white transition-colors">
-                Lifecycle Workflows
+                Workflows
               </a>
               <a href="#portals" className="hover:text-white transition-colors">
-                Campus Portals
+                Role Portals
+              </a>
+              <a href="#nba" className="hover:text-white transition-colors">
+                NBA Compliance
+              </a>
+              <a href="#features" className="hover:text-white transition-colors">
+                Features
               </a>
               <Link href="/login" className="hover:text-white transition-colors">
                 Sign In
@@ -892,7 +942,7 @@ export default function MarketingHomePage() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B7280]">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-[#6B7280]">
             <div>
               &copy; 2026 Collabex SaaS. Multi-tenant academic project management.
             </div>

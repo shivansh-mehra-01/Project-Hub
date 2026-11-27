@@ -47,7 +47,6 @@ export const AnnouncementsView: React.FC = () => {
 
   useDashboardHeader({
     title: "Announcements",
-    breadcrumb: "Operations / Announcements",
   });
 
   // Search & Filter state

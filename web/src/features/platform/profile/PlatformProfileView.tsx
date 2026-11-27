@@ -80,7 +80,6 @@ export const PlatformProfileView: React.FC = () => {
 
   useDashboardHeader({
     title: "My Profile",
-    breadcrumb: "Super Admin / My Profile",
   });
 
   // Loading & Error

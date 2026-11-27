@@ -233,7 +233,6 @@ export const AddCollegeView: React.FC = () => {
 
   useDashboardHeader({
     title: "Add New College",
-    breadcrumb: "Super Admin / Colleges / Add College",
   });
 
   const [formData, setFormData] = useState({

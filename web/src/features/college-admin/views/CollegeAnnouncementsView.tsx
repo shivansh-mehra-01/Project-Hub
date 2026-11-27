@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Megaphone, RefreshCw, Search, ArrowLeft, Eye } from "lucide-react";
+import { Megaphone, Search, Eye } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { collegeApi } from "@/lib/api/collegeApi";
 import { CollegeAnnouncementDto } from "@/lib/api/types";
@@ -25,7 +24,6 @@ export const CollegeAnnouncementsView: React.FC = () => {
 
   useDashboardHeader({
     title: "Announcements",
-    breadcrumb: "Platform Announcements & Operational Notices",
   });
 
   const loadAnnouncements = useCallback(async () => {
@@ -61,36 +59,6 @@ export const CollegeAnnouncementsView: React.FC = () => {
 
   return (
     <div className="space-y-5 pb-8 font-sans bg-[#f8fafc]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/college"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to Overview
-          </Link>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900 tracking-tight">
-              Platform Announcements
-            </h1>
-            <p className="text-xs text-slate-500">
-              Official platform bulletins, maintenance notices, and advisories for your college.
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={loadAnnouncements}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
-      </div>
-
       {apiError && (
         <ApiConnectionBanner
           onRetry={loadAnnouncements}

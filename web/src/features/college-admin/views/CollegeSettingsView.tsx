@@ -62,7 +62,6 @@ export const CollegeSettingsView: React.FC = () => {
 
   useDashboardHeader({
     title: "College Settings",
-    breadcrumb: "Institution identity, academic session configuration, and resource usage",
   });
 
   const showToast = (msg: string) => {

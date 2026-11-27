@@ -3,15 +3,20 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Building2,
   CheckCircle2,
   ChevronLeft,
+  Compass,
   Eye,
   EyeOff,
+  GraduationCap,
   KeyRound,
   Lock,
   Mail,
   ShieldCheck,
   TrendingUp,
+  UserCheck,
+  Users,
 } from "lucide-react";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import {
@@ -39,6 +44,52 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedTestRole, setSelectedTestRole] = useState<string | null>(null);
+
+  const testRoleAccounts = [
+    {
+      role: "SuperAdmin",
+      label: "Super Admin",
+      email: "superadmin@collabex.in",
+      password: "Pass@1234",
+      icon: ShieldCheck,
+    },
+    {
+      role: "CollegeAdmin",
+      label: "College Admin",
+      email: "collegeadmin@sistec.ac.in",
+      password: "Pass@1234",
+      icon: Building2,
+    },
+    {
+      role: "HOD",
+      label: "HOD",
+      email: "hod@sistec.ac.in",
+      password: "Pass@1234",
+      icon: UserCheck,
+    },
+    {
+      role: "Coordinator",
+      label: "Coordinator",
+      email: "coordinator@sistec.ac.in",
+      password: "Pass@1234",
+      icon: Compass,
+    },
+    {
+      role: "Faculty",
+      label: "Faculty",
+      email: "faculty@sistec.ac.in",
+      password: "Pass@1234",
+      icon: GraduationCap,
+    },
+    {
+      role: "Student",
+      label: "Student",
+      email: "student@sistec.ac.in",
+      password: "Pass@1234",
+      icon: Users,
+    },
+  ];
 
   // OTP / Set Password State
   const [otpEmail, setOtpEmail] = useState("");
@@ -435,6 +486,48 @@ export default function LoginPage() {
                   >
                     Forgot password?
                   </button>
+                </div>
+
+                {/* Quick Role Fill for Testing */}
+                <div className="pt-3 border-t border-slate-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      Quick Test Login (Tap Role)
+                    </span>
+                    {selectedTestRole && (
+                      <span className="text-[11px] font-medium text-[#047857]">
+                        Filled: {selectedTestRole}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {testRoleAccounts.map((acc) => {
+                      const Icon = acc.icon;
+                      const isSelected = selectedTestRole === acc.label;
+                      return (
+                        <button
+                          key={acc.role}
+                          type="button"
+                          onClick={() => {
+                            setEmail(acc.email);
+                            setPassword(acc.password);
+                            setEmailError("");
+                            setSelectedTestRole(acc.label);
+                          }}
+                          className={cn(
+                            "flex flex-col items-center justify-center gap-1 py-2 px-2 rounded-lg border text-[11px] font-medium transition-colors cursor-pointer",
+                            isSelected
+                              ? "border-[#047857] bg-emerald-50 text-[#047857]"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50/40 hover:text-slate-900"
+                          )}
+                          title={`${acc.email} / ${acc.password}`}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                          <span className="truncate w-full text-center">{acc.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </form>
             </div>

@@ -81,8 +81,7 @@ function getPlatformIcon(platform: string) {
 
 export const StudentProfileView: React.FC = () => {
   useDashboardHeader({
-    title: "Learner Academic Profile",
-    breadcrumb: "Learner Academic Profile",
+    title: "Profile",
   });
 
   const [loading, setLoading] = useState(true);
@@ -487,7 +486,7 @@ export const StudentProfileView: React.FC = () => {
                     rows={4}
                     maxLength={500}
                   />
-                  <div className="text-[11px] text-slate-400 text-right font-mono">
+                  <div className="text-[11px] text-slate-400 text-right tabular-nums">
                     {bio.trim().length} / 500
                   </div>
                 </div>

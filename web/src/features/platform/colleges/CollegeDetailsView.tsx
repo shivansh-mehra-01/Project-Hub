@@ -75,7 +75,6 @@ export const CollegeDetailsView: React.FC<CollegeDetailsViewProps> = ({ id: prop
 
   useDashboardHeader({
     title: "College Details",
-    breadcrumb: "Colleges / College Details",
   });
 
   const storeCollege = useMemo(

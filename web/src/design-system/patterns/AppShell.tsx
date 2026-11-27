@@ -84,6 +84,7 @@ export const useDashboardHeader = (config?: HeaderConfig) => {
   useEffect(() => {
     if (config?.title || config?.breadcrumb) {
       setHeader(config);
+      return () => setHeader(null);
     }
   }, [config?.title, config?.breadcrumb, setHeader]);
   return { setHeader };
@@ -882,20 +883,14 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 </div>
               )}
             </div>
-
-            {/* Role Badge Indicator */}
-            <span
-              suppressHydrationWarning
-              className="inline-flex items-center text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300"
-            >
-              {formatRoleLabel(effectiveRole)}
-            </span>
           </div>
         </header>
 
         {/* Main Content Area (Protected by Centralized RouteGuard, Responsive Container) */}
-        <main className="flex-1 min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7 max-w-[1440px] w-full mx-auto space-y-6">
-          <RouteGuard>{children}</RouteGuard>
+        <main className="flex-1 min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7 max-w-[1440px] w-full mx-auto">
+          <div key={pathname} className="animate-tab-enter space-y-6">
+            <RouteGuard>{children}</RouteGuard>
+          </div>
         </main>
       </div>
 

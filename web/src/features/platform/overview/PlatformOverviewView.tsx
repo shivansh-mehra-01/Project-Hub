@@ -41,7 +41,6 @@ export const PlatformOverviewView: React.FC = () => {
 
   useDashboardHeader({
     title: "Overview",
-    breadcrumb: "Colabex Super Admin / Overview",
   });
 
   // 1. FIVE KEY PLATFORM METRICS
@@ -117,110 +116,87 @@ export const PlatformOverviewView: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Page Header */}
-      <div className="border-b border-slate-200 pb-4">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Overview</h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Platform-level operational status, college onboarding queue, and institutional support desk.
-        </p>
-      </div>
-
       {/* 5 SUMMARY METRICS CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         {/* Card 1: Total Colleges */}
-        <Link
-          href="/platform/colleges"
-          className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between group"
-        >
+        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Total Colleges</span>
-            <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200/60 flex items-center justify-center text-slate-600 group-hover:text-slate-900 group-hover:bg-slate-100 transition-colors">
+            <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200/60 flex items-center justify-center text-slate-600">
               <Building2 className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-2.5">
-            <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
+            <div className="text-2xl font-bold tabular-nums text-slate-900 tracking-tight">
               {totalCollegesCount}
             </div>
             <p className="text-[10px] text-slate-400 font-medium mt-0.5">RGPV affiliated institutions</p>
           </div>
-        </Link>
+        </div>
 
         {/* Card 2: Active Colleges */}
-        <Link
-          href="/platform/colleges?status=Active"
-          className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between group"
-        >
+        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Active Colleges</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-100 transition-colors">
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
               <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-2.5">
-            <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
+            <div className="text-2xl font-bold tabular-nums text-slate-900 tracking-tight">
               {activeCollegesCount}
             </div>
             <p className="text-[10px] text-emerald-600 font-medium mt-0.5">Operational tenants</p>
           </div>
-        </Link>
+        </div>
 
         {/* Card 3: Pending Applications */}
-        <Link
-          href="/platform/colleges?status=Pending Review"
-          className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between group"
-        >
+        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Pending Applications</span>
-            <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-100 transition-colors">
+            <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
               <FileCheck2 className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-2.5">
-            <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
+            <div className="text-2xl font-bold tabular-nums text-slate-900 tracking-tight">
               {pendingApplicationsCount}
             </div>
             <p className="text-[10px] text-blue-600 font-medium mt-0.5">Awaiting review</p>
           </div>
-        </Link>
+        </div>
 
         {/* Card 4: Suspended Colleges */}
-        <Link
-          href="/platform/colleges?status=Suspended"
-          className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between group"
-        >
+        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Suspended Colleges</span>
-            <div className="w-7 h-7 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 group-hover:bg-rose-100 transition-colors">
+            <div className="w-7 h-7 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
               <Ban className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-2.5">
-            <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
+            <div className="text-2xl font-bold tabular-nums text-slate-900 tracking-tight">
               {suspendedCollegesCount}
             </div>
             <p className="text-[10px] text-rose-600 font-medium mt-0.5">Access disabled</p>
           </div>
-        </Link>
+        </div>
 
         {/* Card 5: Open Support Tickets */}
-        <Link
-          href="/platform/support-health?tab=tickets&status=Open"
-          className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between group col-span-2 sm:col-span-1"
-        >
+        <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Open Tickets</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 group-hover:bg-amber-100 transition-colors">
+            <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
               <LifeBuoy className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-2.5">
-            <div className="text-2xl font-bold font-mono text-slate-900 tracking-tight">
+            <div className="text-2xl font-bold tabular-nums text-slate-900 tracking-tight">
               {openTicketsCount}
             </div>
             <p className="text-[10px] text-amber-700 font-medium mt-0.5">College requests</p>
           </div>
-        </Link>
+        </div>
       </div>
 
       {/* Aggregate Volume Notice (Accurate Aggregation) */}

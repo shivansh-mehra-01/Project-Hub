@@ -97,7 +97,6 @@ export const ApplicationDetailsView: React.FC<ApplicationDetailsViewProps> = ({ 
 
   useDashboardHeader({
     title: "Application Details",
-    breadcrumb: "Dashboard / Colleges / Applications / Application Details",
   });
 
   const request = useMemo(() => {

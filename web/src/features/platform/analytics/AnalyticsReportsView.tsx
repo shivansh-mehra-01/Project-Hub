@@ -40,7 +40,6 @@ function escapeCsvCell(value: string | number): string {
 export const AnalyticsReportsView: React.FC = () => {
   useDashboardHeader({
     title: "Analytics & Adoption",
-    breadcrumb: "Operations / Analytics & Adoption",
   });
 
   const [analytics, setAnalytics] = useState<PlatformAnalyticsOverviewDto | null>(null);
