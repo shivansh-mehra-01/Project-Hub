@@ -105,6 +105,20 @@ public record StudentAcademicRecordDto
     public bool AllowPublicPortfolio { get; init; }
 }
 
+public record PendingPortfolioProjectDto
+{
+    public Guid ProjectTeamId { get; init; }
+    public string ProjectTitle { get; init; } = string.Empty;
+    public string TeamCode { get; init; } = string.Empty;
+    public string TrackName { get; init; } = string.Empty;
+    public string AcademicYear { get; init; } = string.Empty;
+    public string RoleDescription { get; init; } = string.Empty;
+    public bool IsTeamLead { get; init; }
+    public string GuideName { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public string? RepositoryUrl { get; init; }
+}
+
 public record VerifiedStudentPortfolioDto
 {
     public Guid StudentUserId { get; init; }
@@ -112,9 +126,12 @@ public record VerifiedStudentPortfolioDto
     public string EnrollmentNumber { get; init; } = string.Empty;
     public string DepartmentName { get; init; } = string.Empty;
     public string CollegeName { get; init; } = string.Empty;
+    public string? ProgramName { get; init; }
+    public int? CurrentSemesterNumber { get; init; }
     public bool AllowPublicPortfolio { get; init; }
     public string PublicPortfolioShareUrl { get; init; } = string.Empty;
     public List<StudentAcademicRecordDto> Projects { get; init; } = new();
+    public List<PendingPortfolioProjectDto> PendingVerificationProjects { get; init; } = new();
 }
 
 public record UpdatePortfolioVisibilityRequest

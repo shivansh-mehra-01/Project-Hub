@@ -2258,15 +2258,31 @@ export interface StudentAcademicRecordDto {
   allowPublicPortfolio: boolean;
 }
 
+export interface PendingPortfolioProjectDto {
+  projectTeamId: string;
+  projectTitle: string;
+  teamCode: string;
+  trackName: string;
+  academicYear: string;
+  roleDescription: string;
+  isTeamLead: boolean;
+  guideName: string;
+  status: string;
+  repositoryUrl?: string;
+}
+
 export interface VerifiedStudentPortfolioDto {
   studentUserId: string;
   studentName: string;
   enrollmentNumber: string;
   departmentName: string;
   collegeName: string;
+  programName?: string;
+  currentSemesterNumber?: number;
   allowPublicPortfolio: boolean;
   publicPortfolioShareUrl: string;
   projects: StudentAcademicRecordDto[];
+  pendingVerificationProjects?: PendingPortfolioProjectDto[];
 }
 
 export interface UpdatePortfolioVisibilityRequest {

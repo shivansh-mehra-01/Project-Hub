@@ -2537,14 +2537,14 @@ public class StudentController : ControllerBase
         {
             StudentId = user.Id,
             FullName = user.FullName,
-            EnrollmentCode = user.EnrollmentOrEmployeeCode,
-            CollegeName = user.College?.Name ?? "ProjectHub Institution",
-            DepartmentName = user.Department?.Name ?? "Computer Science & Engineering",
-            ProjectTitle = team?.Title ?? "Smart IoT Energy Monitoring & Anomaly Detection",
-            TeamCode = team?.TeamCode ?? "2026-CS-MIN-01",
-            ModuleResponsibility = member?.ModuleResponsibility ?? "Edge Firmware & Telemetry Pipeline",
-            DomainTag = team?.DomainTag ?? "IoT & Cloud Infrastructure",
-            SdgCode = team?.SdgCode ?? "SDG-7",
+            EnrollmentCode = user.EnrollmentOrEmployeeCode ?? string.Empty,
+            CollegeName = user.College?.Name ?? string.Empty,
+            DepartmentName = user.Department?.Name ?? string.Empty,
+            ProjectTitle = team?.Title ?? string.Empty,
+            TeamCode = team?.TeamCode ?? string.Empty,
+            ModuleResponsibility = member?.ModuleResponsibility ?? string.Empty,
+            DomainTag = team?.DomainTag ?? string.Empty,
+            SdgCode = team?.SdgCode ?? string.Empty,
             RepoUrl = team?.RepoUrl,
             TotalHoursLogged = totalHours,
             TotalCommits = totalCommits,
@@ -4663,12 +4663,55 @@ public class StudentController : ControllerBase
 
         if (student == null) return NotFound(new { message = "Student profile not found." });
 
+        var enrollment = await _context.StudentAcademicEnrollments
+            .Include(e => e.Department)
+            .Include(e => e.CourseProgram)
+            .Include(e => e.CurrentSemesterTerm)
+            .FirstOrDefaultAsync(e => e.StudentUserId == studentId && e.CollegeId == collegeId && e.AcademicStatus == AcademicStatus.Active && !e.IsDeleted);
+
         var records = await _context.StudentAcademicRecords
-            .Where(r => r.StudentUserId == studentId && r.CollegeId == collegeId && !r.IsDeleted)
+            .Where(r => r.StudentUserId == studentId && r.CollegeId == collegeId && !r.IsDeleted && r.IsVerified)
             .OrderByDescending(r => r.VerifiedAtUtc)
             .ToListAsync();
 
         var allowPublic = records.Any(r => r.AllowPublicPortfolio);
+        var verifiedTeamIds = records.Select(r => r.ProjectTeamId).ToHashSet();
+
+        var completedMemberships = await _context.TeamMembers
+            .Include(m => m.ProjectTeam!)
+                .ThenInclude(t => t.AcademicTrack)
+            .Include(m => m.ProjectTeam!)
+                .ThenInclude(t => t.GuideUser)
+            .Where(m =>
+                !m.IsDeleted &&
+                m.IsActive &&
+                m.UserId == studentId &&
+                m.CollegeId == collegeId &&
+                m.ProjectTeam != null &&
+                !m.ProjectTeam.IsDeleted &&
+                m.ProjectTeam.CollegeId == collegeId &&
+                (m.ProjectTeam.Status == ProjectStatus.Completed || m.ProjectTeam.Status == ProjectStatus.Archived))
+            .OrderByDescending(m => m.ProjectTeam!.UpdatedAtUtc)
+            .ToListAsync();
+
+        var pendingProjects = completedMemberships
+            .Where(m => !verifiedTeamIds.Contains(m.ProjectTeamId))
+            .Select(m => new PendingPortfolioProjectDto
+            {
+                ProjectTeamId = m.ProjectTeamId,
+                ProjectTitle = m.ProjectTeam!.Title,
+                TeamCode = m.ProjectTeam.TeamCode,
+                TrackName = m.ProjectTeam.AcademicTrack?.Name ?? string.Empty,
+                AcademicYear = m.ProjectTeam.AcademicTrack?.AcademicYear ?? string.Empty,
+                RoleDescription = !string.IsNullOrWhiteSpace(m.ModuleResponsibility)
+                    ? m.ModuleResponsibility
+                    : (m.IsTeamLead ? "Team Lead" : "Team Member"),
+                IsTeamLead = m.IsTeamLead,
+                GuideName = m.ProjectTeam.GuideUser?.FullName ?? string.Empty,
+                Status = m.ProjectTeam.Status.ToString(),
+                RepositoryUrl = m.ProjectTeam.RepoUrl
+            })
+            .ToList();
 
         var projectDtos = records.Select(r =>
         {
@@ -4716,18 +4759,23 @@ public class StudentController : ControllerBase
             };
         }).ToList();
 
-        var shareUrl = $"https://collabex.io/verify/{student.EnrollmentOrEmployeeCode}";
+        var shareUrl = !string.IsNullOrWhiteSpace(student.EnrollmentOrEmployeeCode)
+            ? $"https://collabex.io/verify/{student.EnrollmentOrEmployeeCode}"
+            : string.Empty;
 
         return Ok(new VerifiedStudentPortfolioDto
         {
             StudentUserId = student.Id,
             StudentName = student.FullName,
             EnrollmentNumber = student.EnrollmentOrEmployeeCode ?? string.Empty,
-            DepartmentName = student.Department?.Name ?? "Computer Science & Engineering",
+            DepartmentName = student.Department?.Name ?? enrollment?.Department?.Name ?? string.Empty,
             CollegeName = student.College?.Name ?? string.Empty,
+            ProgramName = enrollment?.CourseProgram?.Name,
+            CurrentSemesterNumber = enrollment?.CurrentSemesterTerm?.SemesterNumber,
             AllowPublicPortfolio = allowPublic,
             PublicPortfolioShareUrl = shareUrl,
-            Projects = projectDtos
+            Projects = projectDtos,
+            PendingVerificationProjects = pendingProjects
         });
     }
 
@@ -4831,6 +4879,11 @@ public class StudentController : ControllerBase
             .FirstOrDefaultAsync(r => r.Id == recordId && r.CollegeId == collegeId && !r.IsDeleted);
 
         if (r == null) return NotFound(new { message = "Academic record not found." });
+
+        if (!r.IsVerified && _tenantContext.Role == UserRole.Student)
+        {
+            return NotFound(new { message = "Verified academic record not found." });
+        }
 
         if (r.StudentUserId != studentId && _tenantContext.Role == UserRole.Student)
         {
