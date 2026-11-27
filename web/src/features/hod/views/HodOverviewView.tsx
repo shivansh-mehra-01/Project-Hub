@@ -42,11 +42,6 @@ export const HodOverviewView: React.FC = () => {
   };
 
   const loadData = useCallback(async () => {
-    if (!getAuthToken()) {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       const [dashRes, projRes] = await Promise.allSettled([

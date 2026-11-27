@@ -96,7 +96,6 @@ export const CoordinatorView: React.FC = () => {
   const [panels, setPanels] = useState<VivaPanel[]>([]);
 
   React.useEffect(() => {
-    if (!getAuthToken()) return;
     coordinatorApi
       .getPanels()
       .then((apiPanels) => {

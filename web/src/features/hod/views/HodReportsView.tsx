@@ -68,11 +68,6 @@ export const HodReportsView: React.FC = () => {
   }, [searchQuery]);
 
   const loadData = useCallback(async () => {
-    if (!getAuthToken()) {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       const [resRes, sumRes] = await Promise.allSettled([

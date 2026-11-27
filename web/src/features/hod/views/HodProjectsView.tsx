@@ -95,11 +95,6 @@ export const HodProjectsView: React.FC = () => {
   }, [searchQuery]);
 
   const loadData = useCallback(async () => {
-    if (!getAuthToken()) {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       const [projRes, tracksRes, facRes] = await Promise.allSettled([

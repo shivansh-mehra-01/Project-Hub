@@ -923,10 +923,33 @@ public class HodController : ControllerBase
     {
         var collegeId = _tenantContext.CollegeId!.Value;
         var deptId = await ResolveDepartmentIdAsync();
-        var faculty = await _context.Users.FirstOrDefaultAsync(u => u.Id == facultyId && u.CollegeId == collegeId && u.DepartmentId == deptId && !u.IsDeleted);
+        var faculty = await _context.Users.FirstOrDefaultAsync(u =>
+            u.Id == facultyId &&
+            u.CollegeId == collegeId &&
+            u.DepartmentId == deptId &&
+            !u.IsDeleted);
         if (faculty == null) return NotFound(new { message = "Faculty not found in department." });
 
+        if (faculty.Role != UserRole.Faculty && faculty.Role != UserRole.HOD)
+        {
+            return BadRequest(new { message = "Only eligible faculty members in this department can be appointed as Project Coordinator." });
+        }
+
+        if (!faculty.IsActive)
+        {
+            return BadRequest(new { message = "Inactive faculty accounts cannot be appointed as Project Coordinator." });
+        }
+
         faculty.IsProjectCoordinator = request.IsProjectCoordinator;
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = "TOGGLE_PROJECT_COORDINATOR",
+            TargetTenantId = collegeId,
+            TargetEntity = "UserAccount",
+            MetadataJson = $"{{\"FacultyId\":\"{faculty.Id}\",\"DepartmentId\":\"{deptId}\",\"IsProjectCoordinator\":{(request.IsProjectCoordinator ? "true" : "false")}}}",
+            OccurredAtUtc = DateTime.UtcNow
+        });
         await _context.SaveChangesAsync();
 
         return NoContent();
