@@ -930,7 +930,7 @@ public class CoordinatorController : ControllerBase
             .Include(d => d.College)
             .FirstOrDefaultAsync(d => (targetDeptId == null || d.Id == targetDeptId.Value) && d.CollegeId == collegeId && !d.IsDeleted, cancellationToken);
 
-        var collegeName = dept?.College?.Name ?? "Sagar Institute of Science and Technology (SISTec Bhopal)";
+        var collegeName = dept?.College?.Name ?? string.Empty;
         var deptName = dept?.Name ?? "Computer Science & Engineering";
         var deptCode = dept?.Code ?? "CSE";
 

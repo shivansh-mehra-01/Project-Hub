@@ -214,7 +214,7 @@ public record StudentIdentitySummaryDto
     public string FullName { get; init; } = string.Empty;
     public string EnrollmentCode { get; init; } = string.Empty;
     public string Usn => EnrollmentCode;
-    public string CollegeCode { get; init; } = "SISTEC";
+    public string CollegeCode { get; init; } = string.Empty;
     public string DepartmentCode { get; init; } = "CSE";
     public string Email { get; init; } = string.Empty;
     public string CollegeName { get; init; } = string.Empty;

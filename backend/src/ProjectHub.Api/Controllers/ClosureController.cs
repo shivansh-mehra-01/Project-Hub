@@ -325,7 +325,7 @@ public class ClosureController : ControllerBase
                     AcademicYear = team.AcademicTrack?.AcademicYear ?? "2026-2027",
                     TrackName = team.AcademicTrack?.Name ?? "Minor Project",
                     DepartmentName = team.Department?.Name ?? "Computer Science & Engineering",
-                    CollegeName = team.College?.Name ?? "SISTec",
+                    CollegeName = team.College?.Name ?? string.Empty,
                     StudentName = memberUser?.FullName ?? "Student",
                     EnrollmentNumber = memberUser?.EnrollmentOrEmployeeCode ?? string.Empty,
                     RoleDescription = string.IsNullOrWhiteSpace(member.ModuleResponsibility) ? (member.IsTeamLead ? "Team Lead" : "Engineering Member") : member.ModuleResponsibility,

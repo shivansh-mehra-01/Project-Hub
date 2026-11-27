@@ -586,7 +586,7 @@ export const StudentPortfolioView: React.FC = () => {
             </div>
             <div className="font-mono text-[10px] text-[#64748B] mt-2 break-all">
               Verification Hash:{" "}
-              {selectedRecordForModal?.verificationHash || "0x047857...sistec"} • Attainment Attested
+              {selectedRecordForModal?.verificationHash || "Pending Attestation"} • Attainment Attested
             </div>
           </div>
 

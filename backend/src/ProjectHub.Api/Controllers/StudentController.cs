@@ -4660,7 +4660,7 @@ public class StudentController : ControllerBase
             StudentName = student.FullName,
             EnrollmentNumber = student.EnrollmentOrEmployeeCode ?? string.Empty,
             DepartmentName = student.Department?.Name ?? "Computer Science & Engineering",
-            CollegeName = student.College?.Name ?? "SISTec",
+            CollegeName = student.College?.Name ?? string.Empty,
             AllowPublicPortfolio = allowPublic,
             PublicPortfolioShareUrl = shareUrl,
             Projects = projectDtos

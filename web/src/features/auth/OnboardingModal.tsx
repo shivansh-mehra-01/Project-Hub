@@ -18,12 +18,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   isOpen,
   onClose,
   onComplete,
-  initialEmail = "0176cs221045@sistec.ac.in",
+  initialEmail = "",
 }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [name, setName] = useState("Shivansh Mehra");
-  const [enrollment, setEnrollment] = useState("0176CS221045");
-  const [phone, setPhone] = useState("+91 98260 12345");
+  const [name, setName] = useState("");
+  const [enrollment, setEnrollment] = useState("");
+  const [phone, setPhone] = useState("");
   const [selectedSkills, setSelectedSkills] = useState<string[]>([
     "TypeScript",
     "Next.js",
