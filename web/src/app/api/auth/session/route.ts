@@ -6,14 +6,20 @@ import {
   REFRESH_COOKIE,
   setAuthCookies,
 } from "@/lib/bff/authCookies";
+import { getClientForwardingHeaders } from "@/lib/bff/forwardedHeaders";
 
 export async function GET(req: NextRequest) {
   const accessToken = req.cookies.get(ACCESS_COOKIE)?.value;
   const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value;
+  const forwardingHeaders = getClientForwardingHeaders(req);
 
   if (accessToken) {
     const meRes = await fetch(`${getBackendApiUrl()}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+        ...forwardingHeaders,
+      },
     }).catch(() => null);
 
     if (meRes?.ok) {
@@ -25,7 +31,11 @@ export async function GET(req: NextRequest) {
   if (refreshToken) {
     const refreshRes = await fetch(`${getBackendApiUrl()}/api/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...forwardingHeaders,
+      },
       body: JSON.stringify({ refreshToken }),
     }).catch(() => null);
 

@@ -6,6 +6,7 @@ import {
   setAuthCookies,
   validateCsrfOrigin,
 } from "@/lib/bff/authCookies";
+import { getClientForwardingHeaders } from "@/lib/bff/forwardedHeaders";
 
 export async function POST(req: NextRequest) {
   if (!validateCsrfOrigin(req)) {
@@ -19,7 +20,11 @@ export async function POST(req: NextRequest) {
 
   const backendRes = await fetch(`${getBackendApiUrl()}/api/auth/refresh`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...getClientForwardingHeaders(req),
+    },
     body: JSON.stringify({ refreshToken }),
   });
 

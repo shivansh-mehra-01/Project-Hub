@@ -5,6 +5,7 @@ import {
   getBackendApiUrl,
   validateCsrfOrigin,
 } from "@/lib/bff/authCookies";
+import { getClientForwardingHeaders } from "@/lib/bff/forwardedHeaders";
 
 export async function POST(req: NextRequest) {
   if (!validateCsrfOrigin(req)) {
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
+        ...getClientForwardingHeaders(req),
       },
     }).catch(() => null);
   }

@@ -7,6 +7,7 @@ import {
   setAuthCookies,
   validateCsrfOrigin,
 } from "@/lib/bff/authCookies";
+import { getClientForwardingHeaders } from "@/lib/bff/forwardedHeaders";
 
 async function handleProxy(
   req: NextRequest,
@@ -24,7 +25,7 @@ async function handleProxy(
   const accessToken = req.cookies.get(ACCESS_COOKIE)?.value;
   const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value;
 
-  const forwardHeaders = new Headers();
+  const forwardHeaders = new Headers(getClientForwardingHeaders(req));
   const contentType = req.headers.get("content-type");
   if (contentType) forwardHeaders.set("Content-Type", contentType);
   const accept = req.headers.get("accept");
@@ -46,7 +47,11 @@ async function handleProxy(
   if (backendRes.status === 401 && refreshToken) {
     const refreshRes = await fetch(`${getBackendApiUrl()}/api/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...getClientForwardingHeaders(req),
+      },
       body: JSON.stringify({ refreshToken }),
     }).catch(() => null);
 

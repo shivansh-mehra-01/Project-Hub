@@ -1,8 +1,11 @@
+using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -149,7 +152,51 @@ builder.Services.AddProjectHubAuthorization();
 // 6. OpenAPI & Documentation
 builder.Services.AddOpenApi("v1");
 
-// 7. Rate Limiting for Security Endpoints (Login & Password Reset brute-force protection)
+// 7. Forwarded Headers & Rate Limiting for Security Endpoints
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+
+    var knownProxies = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? Array.Empty<string>();
+    foreach (var proxy in knownProxies)
+    {
+        if (IPAddress.TryParse(proxy, out var ip))
+        {
+            options.KnownProxies.Add(ip);
+        }
+    }
+
+    var knownNetworks = builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? Array.Empty<string>();
+    foreach (var cidr in knownNetworks)
+    {
+        if (System.Net.IPNetwork.TryParse(cidr, out var network))
+        {
+            options.KnownIPNetworks.Add(network);
+        }
+    }
+});
+
+var rateLimitWindow = TimeSpan.FromSeconds(
+    Math.Max(1, builder.Configuration.GetValue<int?>("RateLimiting:WindowSeconds") ?? 60));
+var loginIpLimit = builder.Configuration.GetValue<int?>("RateLimiting:LoginIpPermitLimit")
+    ?? (builder.Environment.IsDevelopment() ? 200 : 60);
+var loginAccountLimit = builder.Configuration.GetValue<int?>("RateLimiting:LoginAccountPermitLimit")
+    ?? (builder.Environment.IsDevelopment() ? 200 : 10);
+var passwordResetLimit = builder.Configuration.GetValue<int?>("RateLimiting:PasswordResetPermitLimit") ?? 10;
+var rosterSignupLimit = builder.Configuration.GetValue<int?>("RateLimiting:RosterSignupPermitLimit") ?? 10;
+
+var loginAccountLimiter = PartitionedRateLimiter.Create<string, string>(emailKey =>
+    RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: emailKey,
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = loginAccountLimit,
+            Window = rateLimitWindow,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0
+        }));
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -158,8 +205,8 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = builder.Environment.IsDevelopment() ? 200 : 10,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = loginIpLimit,
+                Window = rateLimitWindow,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
@@ -168,8 +215,8 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = passwordResetLimit,
+                Window = rateLimitWindow,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
@@ -178,8 +225,8 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = rosterSignupLimit,
+                Window = rateLimitWindow,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
@@ -191,7 +238,7 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 5,
-                Window = TimeSpan.FromMinutes(1),
+                Window = rateLimitWindow,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
@@ -291,6 +338,8 @@ app.Use(async (context, next) =>
 });
 
 // 8. Middleware Pipeline
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
@@ -302,6 +351,46 @@ app.UseSerilogRequestLogging();
 app.UseCors("AllowFrontend");
 
 app.UseRateLimiter();
+
+// Per-account login rate limiting (chained alongside IP-based LoginLimit)
+app.Use(async (context, next) =>
+{
+    if (HttpMethods.IsPost(context.Request.Method) &&
+        context.Request.Path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase) &&
+        context.Request.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        context.Request.EnableBuffering();
+        string? normalizedEmail = null;
+        try
+        {
+            using var doc = await JsonDocument.ParseAsync(context.Request.Body);
+            if (doc.RootElement.TryGetProperty("email", out var emailProp) && emailProp.ValueKind == JsonValueKind.String)
+            {
+                normalizedEmail = emailProp.GetString()?.Trim().ToLowerInvariant();
+            }
+        }
+        catch
+        {
+            // Ignore malformed JSON; controller will return 400
+        }
+        finally
+        {
+            context.Request.Body.Position = 0;
+        }
+
+        if (!string.IsNullOrEmpty(normalizedEmail))
+        {
+            using var lease = await loginAccountLimiter.AcquireAsync(normalizedEmail, 1, context.RequestAborted);
+            if (!lease.IsAcquired)
+            {
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                return;
+            }
+        }
+    }
+
+    await next();
+});
 
 app.UseAuthentication();
 app.UseTenantResolution();

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBackendApiUrl, setAuthCookies, validateCsrfOrigin } from "@/lib/bff/authCookies";
+import { getClientForwardingHeaders } from "@/lib/bff/forwardedHeaders";
 
 export async function POST(req: NextRequest) {
   if (!validateCsrfOrigin(req)) {
@@ -9,7 +10,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const backendRes = await fetch(`${getBackendApiUrl()}/api/auth/mfa/verify`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...getClientForwardingHeaders(req),
+    },
     body: JSON.stringify(body),
   });
 
