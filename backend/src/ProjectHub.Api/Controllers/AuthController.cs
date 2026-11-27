@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -27,6 +28,7 @@ public class AuthController : ControllerBase
     private readonly IWebHostEnvironment _environment;
     private readonly ITenantContext _tenantContext;
     private readonly IConfiguration _configuration;
+    private readonly IDataProtector _mfaProtector;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
@@ -37,6 +39,7 @@ public class AuthController : ControllerBase
         IWebHostEnvironment environment,
         ITenantContext tenantContext,
         IConfiguration configuration,
+        IDataProtectionProvider dataProtectionProvider,
         ILogger<AuthController> logger)
     {
         _context = context;
@@ -46,7 +49,31 @@ public class AuthController : ControllerBase
         _environment = environment;
         _tenantContext = tenantContext;
         _configuration = configuration;
+        _mfaProtector = dataProtectionProvider.CreateProtector("Colabex.MfaSecret");
         _logger = logger;
+    }
+
+    private const string MfaSecretPrefix = "dp:";
+
+    private string ProtectMfaSecret(string rawSecret) =>
+        $"{MfaSecretPrefix}{_mfaProtector.Protect(rawSecret)}";
+
+    private string? UnprotectMfaSecret(string? storedSecret, out bool isLegacyPlaintext)
+    {
+        if (string.IsNullOrWhiteSpace(storedSecret))
+        {
+            isLegacyPlaintext = false;
+            return null;
+        }
+
+        if (storedSecret.StartsWith(MfaSecretPrefix, StringComparison.Ordinal))
+        {
+            isLegacyPlaintext = false;
+            return _mfaProtector.Unprotect(storedSecret[MfaSecretPrefix.Length..]);
+        }
+
+        isLegacyPlaintext = true;
+        return storedSecret;
     }
 
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
@@ -1032,7 +1059,9 @@ public class AuthController : ControllerBase
         if (user == null) return Unauthorized();
 
         var secret = TotpHelper.GenerateSecret();
-        user.MfaSecret = secret;
+        _tenantContext.CollegeId = user.CollegeId;
+        if (user.Role == UserRole.SuperAdmin) _tenantContext.IsSuperAdmin = true;
+        user.MfaSecret = ProtectMfaSecret(secret);
         user.MfaEnabled = false;
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -1053,7 +1082,19 @@ public class AuthController : ControllerBase
         var user = await _context.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == userId && !u.IsDeleted && u.IsActive, cancellationToken);
         if (user == null) return Unauthorized();
 
-        if (!TotpHelper.VerifyCode(user.MfaSecret, request.Code))
+        string? plainSecret;
+        bool isLegacyPlaintext;
+        try
+        {
+            plainSecret = UnprotectMfaSecret(user.MfaSecret, out isLegacyPlaintext);
+        }
+        catch (CryptographicException ex)
+        {
+            _logger.LogError(ex, "Failed to decrypt MFA secret for user {UserId}.", user.Id);
+            return BadRequest(new { message = "MFA enrollment secret could not be decrypted. Please re-enroll MFA." });
+        }
+
+        if (!TotpHelper.VerifyCode(plainSecret, request.Code))
         {
             return BadRequest(new { message = "Invalid TOTP verification code." });
         }
@@ -1068,6 +1109,12 @@ public class AuthController : ControllerBase
             hashedCodes.Add(PasswordHelper.HashPassword(formatted));
         }
 
+        _tenantContext.CollegeId = user.CollegeId;
+        if (user.Role == UserRole.SuperAdmin) _tenantContext.IsSuperAdmin = true;
+        if (isLegacyPlaintext && !string.IsNullOrWhiteSpace(plainSecret))
+        {
+            user.MfaSecret = ProtectMfaSecret(plainSecret);
+        }
         user.MfaEnabled = true;
         user.MfaRecoveryCodesJson = JsonSerializer.Serialize(hashedCodes);
         user.SecurityStamp = Guid.NewGuid().ToString("N");
@@ -1104,7 +1151,26 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Account is not eligible for MFA verification." });
         }
 
-        var verified = TotpHelper.VerifyCode(user.MfaSecret, request.Code);
+        if (user.LockoutEndUtc.HasValue && user.LockoutEndUtc.Value > DateTime.UtcNow)
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                message = "Account is temporarily locked due to repeated failed sign-in attempts. Please try again later."
+            });
+        }
+
+        string? plainSecret = null;
+        bool isLegacyPlaintext = false;
+        try
+        {
+            plainSecret = UnprotectMfaSecret(user.MfaSecret, out isLegacyPlaintext);
+        }
+        catch (CryptographicException ex)
+        {
+            _logger.LogError(ex, "Failed to decrypt MFA secret for user {UserId}. DataProtection keys may be missing.", user.Id);
+        }
+
+        var verified = !string.IsNullOrWhiteSpace(plainSecret) && TotpHelper.VerifyCode(plainSecret, request.Code);
         if (!verified && !string.IsNullOrWhiteSpace(user.MfaRecoveryCodesJson))
         {
             var storedHashes = JsonSerializer.Deserialize<List<string>>(user.MfaRecoveryCodesJson) ?? new List<string>();
@@ -1117,12 +1183,39 @@ public class AuthController : ControllerBase
             }
         }
 
+        _tenantContext.CollegeId = user.CollegeId;
+        if (user.Role == UserRole.SuperAdmin) _tenantContext.IsSuperAdmin = true;
+
         if (!verified)
         {
+            user.AccessFailedCount++;
+            if (user.AccessFailedCount >= 5)
+            {
+                user.LockoutEndUtc = DateTime.UtcNow.AddMinutes(15);
+                user.AccessFailedCount = 0;
+                _context.PlatformAuditLogs.Add(new PlatformAuditLog
+                {
+                    Id = Guid.NewGuid(),
+                    ActorUserId = user.Id,
+                    ActorEmail = user.Email,
+                    Action = "Account Lockout Triggered",
+                    TargetEntity = $"UserAccount: {user.Id}",
+                    IpAddress = GetClientIp(),
+                    OccurredAtUtc = DateTime.UtcNow,
+                    MetadataJson = JsonSerializer.Serialize(new { reason = "MaxFailedMfaAttempts", lockoutMinutes = 15 })
+                });
+            }
+            await _context.SaveChangesAsync(cancellationToken);
             return Unauthorized(new { message = "Invalid authenticator or recovery code." });
         }
 
-        _tenantContext.CollegeId = user.CollegeId;
+        user.AccessFailedCount = 0;
+        user.LockoutEndUtc = null;
+        if (isLegacyPlaintext && !string.IsNullOrWhiteSpace(plainSecret))
+        {
+            user.MfaSecret = ProtectMfaSecret(plainSecret);
+        }
+
         var authResponse = await CreateSessionAndTokensAsync(user, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
 

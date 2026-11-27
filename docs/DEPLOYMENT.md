@@ -104,7 +104,11 @@ Before opening traffic to users, verify the live stack against `colabex_rls_app`
 Mount persistent storage for:
 - **Capstone Document Vault:** `/app/App_Data/vault` (student PDF/PPT/PPTX submissions).
 - **ASP.NET DataProtection Keys:** `/app/App_Data/dpkeys` (`DataProtection:KeysPath`).
-  > **Warning:** Losing DataProtection keys invalidates encrypted MFA secrets and outbox payloads.
+  > **Warning:** `DataProtection:KeysPath` MUST be on a persistent volume and backed up. Losing DataProtection keys makes encrypted `MfaSecret` values unreadable and locks out MFA-enrolled users (as well as invalidating queued outbox payloads).
+  >
+  > **SuperAdmin MFA Recovery Procedure (if keys are lost):**
+  > 1. Restore `/app/App_Data/dpkeys` from the latest backup and restart the API.
+  > 2. If no backup exists, reset MFA for affected accounts in PostgreSQL (`UPDATE "UserAccounts" SET "MfaEnabled" = false, "MfaSecret" = NULL, "MfaRecoveryCodesJson" = NULL WHERE "Email" = '<affected-email>';`) and instruct users to sign in and re-enroll TOTP MFA immediately.
 
 ### Backup Plan
 - **PostgreSQL:** Schedule daily `pg_dump -Fc` backups + WAL archiving to off-host encrypted storage, and test restores monthly.
