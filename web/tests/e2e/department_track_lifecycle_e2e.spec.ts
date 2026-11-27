@@ -181,30 +181,34 @@ test.describe("Department Track Ownership & Lifecycle E2E", () => {
     await activateViaDevOtp(request, hodEmail, USER_PASS);
     await activateViaDevOtp(request, stuEmail, USER_PASS);
 
-    // 11. HOD logs in via UI, sees Initialize CTA, navigates to /hod/projects/tracks, creates & launches track
+    // 11. HOD logs in via UI, sees Start Project Window CTA, navigates to /hod/projects/start-window, starts window
     await loginViaUi(page, hodEmail, USER_PASS, /\/hod/);
-    await expect(page.getByText("Initialize Department Project Track")).toBeVisible({ timeout: 10000 });
-    await page.getByRole("button", { name: /Initialize Department Project Track/i }).click();
-    await expect(page).toHaveURL(/\/hod\/projects\/tracks/);
+    await expect(page.getByRole("button", { name: /Start Project Window/i })).toBeVisible({ timeout: 10000 });
+    await page.getByRole("button", { name: /Start Project Window/i }).click();
+    await expect(page).toHaveURL(/\/hod\/projects\/start-window/);
 
-    await page.getByRole("button", { name: /Initialize Project Track/i }).click();
-    await page.getByPlaceholder("e.g., Minor Project Sem 6 (2025-26)").fill("Minor Project Sem 6");
-    await page.getByRole("button", { name: "Next" }).click();
-    await page.getByRole("button", { name: "Next" }).click();
-    await page.getByRole("button", { name: /Initialize \& Launch/i }).click();
+    const today = new Date().toISOString().slice(0, 10);
+    const nextMonth = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 
-    await expect(page.getByText("Minor Project Sem 6")).toBeVisible({ timeout: 10000 });
+    await page.getByLabel("Project Type *").selectOption("Minor 1");
+    await page.getByLabel("Semester *").selectOption("6");
+    await page.getByLabel("Registration Opens *").fill(today);
+    await page.getByLabel("Registration Deadline *").fill(nextMonth);
+    await page.getByRole("button", { name: /^Start Window$/i }).click();
+
+    await expect(page).toHaveURL(/\/hod\/projects\/tracks/, { timeout: 15000 });
+    await expect(page.getByText("Minor 1 — 6th Semester")).toBeVisible({ timeout: 10000 });
     await expect(page.getByText("Open", { exact: true })).toBeVisible();
 
     // Reload and confirm persistence
     await page.reload({ waitUntil: "networkidle" });
-    await expect(page.getByText("Minor Project Sem 6")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Minor 1 — 6th Semester")).toBeVisible({ timeout: 10000 });
 
     // 12. Student logs in via UI, discovers open track, and starts project
     await page.context().clearCookies();
     await loginViaUi(page, stuEmail, USER_PASS, /\/student/);
     await expect(page.getByText("Open Department Project Tracks")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText("Minor Project Sem 6")).toBeVisible();
+    await expect(page.getByText("Minor 1 — 6th Semester")).toBeVisible();
 
     await page.getByRole("button", { name: "Start Project" }).first().click();
     await page.getByPlaceholder("e.g., Smart Campus Energy Optimizer").fill("Autonomous Lab Monitor");

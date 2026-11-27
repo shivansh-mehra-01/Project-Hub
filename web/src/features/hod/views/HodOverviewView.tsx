@@ -201,10 +201,10 @@ export const HodOverviewView: React.FC = () => {
             <Button
               size="sm"
               variant="primary"
-              onClick={() => router.push("/hod/projects/tracks")}
+              onClick={() => router.push("/hod/projects/start-window")}
               rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
             >
-              Initialize Department Project Track
+              Start Project Window
             </Button>
           </CardContent>
         </Card>

@@ -301,21 +301,15 @@ export const HodTracksView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link href="/hod/projects/start-window">
-            <Button variant="secondary" size="sm" leftIcon={<Compass className="h-4 w-4" />}>
-              Start Project Window
-            </Button>
-          </Link>
+        <Link href="/hod/projects/start-window">
           <Button
             variant="primary"
             size="sm"
             leftIcon={<Plus className="h-4 w-4" />}
-            onClick={openCreateWizard}
           >
-            Initialize Project Track
+            Start Project Window
           </Button>
-        </div>
+        </Link>
       </div>
 
       {error && (
@@ -341,9 +335,11 @@ export const HodTracksView: React.FC = () => {
                 </p>
               </div>
             </div>
-            <Button variant="primary" size="sm" onClick={openCreateWizard}>
-              Launch First Track
-            </Button>
+            <Link href="/hod/projects/start-window">
+              <Button variant="primary" size="sm" leftIcon={<Plus className="h-4 w-4" />}>
+                Start Project Window
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       )}
@@ -364,9 +360,11 @@ export const HodTracksView: React.FC = () => {
             <p className="text-xs text-slate-500 max-w-md mx-auto">
               Create a track to define whether students participate individually or in teams, set proposal deadlines, and configure evaluation weights.
             </p>
-            <Button variant="primary" size="sm" onClick={openCreateWizard}>
-              Initialize Project Track
-            </Button>
+            <Link href="/hod/projects/start-window">
+              <Button variant="primary" size="sm" leftIcon={<Plus className="h-4 w-4" />}>
+                Start Project Window
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       ) : (
