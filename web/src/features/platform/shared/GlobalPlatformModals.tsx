@@ -50,7 +50,7 @@ export const LogoutConfirmationModal: React.FC<LogoutModalProps> = ({
       description={
         isSuperAdmin
           ? "Confirm termination of your active administrative session."
-          : "Are you sure you want to end your current session?"
+          : undefined
       }
       maxWidth="sm"
       footer={
@@ -95,12 +95,9 @@ export const LogoutConfirmationModal: React.FC<LogoutModalProps> = ({
           </label>
         </div>
       ) : (
-        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 flex items-start gap-2.5 text-xs">
-          <LogOut className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-          <p className="leading-relaxed">
-            You will be returned to the sign-in screen. Please ensure any unsaved changes are saved before continuing.
-          </p>
-        </div>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          You will be returned to the sign-in screen. Please make sure any unsaved changes are saved before continuing.
+        </p>
       )}
     </Modal>
   );

@@ -88,7 +88,6 @@ export const CollegesView: React.FC = () => {
 
   useDashboardHeader({
     title: "Colleges",
-    breadcrumb: "Colleges / Institutional Directory",
   });
 
   const rawStatus = searchParams.get("status");

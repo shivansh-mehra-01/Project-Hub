@@ -96,44 +96,6 @@ export const FacultyProblemBankView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E2E8F0]">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-[#0F172A]">
-              Department Problem Bank
-            </h1>
-            <Badge variant="neutral" className="text-xs">
-              Research & Innovation Repository
-            </Badge>
-          </div>
-          <p className="text-xs text-[#64748B] mt-1">
-            Faculty-sponsored research topics, industry problem statements, and SDG-aligned capstone challenges.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={fetchStatements}
-            disabled={isLoading}
-            className="gap-1.5 text-xs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setIsModalOpen(true)}
-            className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
-          >
-            <Plus className="w-4 h-4" />
-            Propose Topic
-          </Button>
-        </div>
-      </div>
-
       {/* Success Toast */}
       {successToast && (
         <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
@@ -163,7 +125,7 @@ export const FacultyProblemBankView: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <div className="flex items-center gap-1.5 shrink-0 text-xs text-slate-500">
             <Filter className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Filter:</span>
@@ -172,7 +134,7 @@ export const FacultyProblemBankView: React.FC = () => {
           <select
             value={selectedSdg}
             onChange={(e) => setSelectedSdg(e.target.value)}
-            className="text-xs py-1.5 px-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+            className="text-xs py-1.5 px-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium max-w-[180px]"
           >
             {sdgOptions.map((sdg) => (
               <option key={sdg.code} value={sdg.code}>
@@ -192,6 +154,16 @@ export const FacultyProblemBankView: React.FC = () => {
             <option value="AVAILABLE">Available Only</option>
             <option value="ALLOCATED">Allocated</option>
           </select>
+
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setIsModalOpen(true)}
+            className="gap-1.5 text-xs shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Propose Topic
+          </Button>
         </div>
       </div>
 

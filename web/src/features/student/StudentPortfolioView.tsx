@@ -31,8 +31,7 @@ import { VerifiedStudentPortfolioDto, StudentAcademicRecordDto } from "@/lib/api
 
 export const StudentPortfolioView: React.FC = () => {
   useDashboardHeader({
-    title: "Academic Project Portfolio",
-    breadcrumb: "Verified Institutional Transcript",
+    title: "Portfolio",
   });
 
   const {
@@ -160,7 +159,7 @@ export const StudentPortfolioView: React.FC = () => {
         {/* Profile Card Header */}
         <div className="p-6 rounded-xl border border-[#E2E8F0] bg-white shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-full bg-brand-primary-tint border border-brand-primary-border text-brand-primary flex items-center justify-center font-bold text-xl font-mono">
+            <div className="h-14 w-14 rounded-full bg-brand-primary-tint border border-brand-primary-border text-brand-primary flex items-center justify-center font-bold text-xl">
               {currentPersona.name
                 .split(" ")
                 .map((n) => n[0])
@@ -177,8 +176,8 @@ export const StudentPortfolioView: React.FC = () => {
               <div className="text-xs text-[#64748B]">
                 B.Tech in Computer Science &amp; Engineering • Sagar Institute of Science and Technology
               </div>
-              <div className="font-mono text-xs text-[#475569] tabular-nums">
-                Enrollment USN: {studentUsn} • CGPA: 8.74
+              <div className="text-xs text-[#475569] tabular-nums">
+                Enrollment USN: <span className="font-mono">{studentUsn}</span> • CGPA: 8.74
               </div>
             </div>
           </div>
@@ -227,7 +226,7 @@ export const StudentPortfolioView: React.FC = () => {
                   <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
+                        <span className="text-xs font-semibold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
                           {proj.academicYear} • {proj.trackName}
                         </span>
                         <span className="text-[11px] font-mono text-slate-500">
@@ -323,7 +322,7 @@ export const StudentPortfolioView: React.FC = () => {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
+                  <span className="text-xs font-semibold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
                     Year 3 • Minor Project (Semester 6)
                   </span>
                   <span className="text-[11px] font-mono text-slate-500">
@@ -345,7 +344,7 @@ export const StudentPortfolioView: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-[#64748B]">Individual Contribution:</span>
-                  <div className="font-bold text-[#0F172A] font-mono tabular-nums">40% of Project Workload</div>
+                  <div className="font-bold text-[#0F172A] tabular-nums">40% of Project Workload</div>
                 </div>
                 <div>
                   <span className="text-[#64748B]">Faculty Guide:</span>
@@ -405,7 +404,7 @@ export const StudentPortfolioView: React.FC = () => {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                    <span className="text-xs font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
                       Year 4 • Major Project Phase-I (Semester 7)
                     </span>
                     <span className="text-[11px] font-mono text-slate-500">
@@ -418,7 +417,7 @@ export const StudentPortfolioView: React.FC = () => {
                 </div>
                 <CardTitle className="pt-2 text-sm text-[#0F172A]">{majorTeam.title}</CardTitle>
                 <CardDescription>
-                  Advanced scale extension: Hardware telemetry scaled to 32 industrial distribution nodes with distributed LSTM inference and cloud failover.
+                  {majorTeam.abstract || "Continued capstone project build phase."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-xs">
@@ -456,7 +455,7 @@ export const StudentPortfolioView: React.FC = () => {
             <Card className="border-dashed bg-[#F8FAFC]/50">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-semibold text-[#64748B] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
+                  <span className="text-xs font-semibold text-[#64748B] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
                     Year 4 • Major Project (Semester 7 &amp; 8)
                   </span>
                   <Badge variant="neutral" size="sm">
@@ -467,7 +466,7 @@ export const StudentPortfolioView: React.FC = () => {
                   Full Capstone System &amp; IEEE Publication Stage
                 </CardTitle>
                 <CardDescription>
-                  Comprehensive 1-year major project requiring full production deployment, research benchmarks, and formal university viva committee evaluation.
+                  Full-year major capstone phase for system deployment and final viva evaluation.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -550,7 +549,7 @@ export const StudentPortfolioView: React.FC = () => {
       >
         <div className="p-6 bg-white border-2 border-emerald-100 rounded-xl space-y-4 text-center">
           <div className="space-y-1">
-            <span className="text-[10px] font-bold tracking-widest text-brand-primary uppercase font-mono">
+            <span className="text-[10px] font-bold tracking-widest text-brand-primary uppercase">
               Official University Transcript Record
             </span>
             <h4 className="text-base font-bold text-[#0F172A]">

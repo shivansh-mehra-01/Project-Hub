@@ -44,7 +44,6 @@ export default function AccountPage() {
 
   useDashboardHeader({
     title: "Account",
-    breadcrumb: "Personal profile and security settings",
   });
 
   const showToast = (msg: string) => {

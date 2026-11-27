@@ -10,7 +10,8 @@ import {
   CreateProblemStatementRequest,
   ProjectProposalDto,
 } from "@/lib/api/types";
-import { getUserProfile } from "@/lib/api/apiClient";
+import { getUserProfile, authApi } from "@/lib/api";
+import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { showToast } from "@/lib/toast";
 import { FacultyStatCard } from "../components/FacultyStatCard";
 import { ActionQueueTable } from "../components/ActionQueueTable";
@@ -37,7 +38,24 @@ import {
 
 export const FacultyDashboardView: React.FC = () => {
   const router = useRouter();
-  const [profile] = useState(getUserProfile());
+  const { currentPersona } = useProjectHubStore();
+  const [profile, setProfile] = useState(() => getUserProfile());
+
+  useEffect(() => {
+    const cached = getUserProfile();
+    if (cached) {
+      setProfile(cached);
+    } else {
+      authApi
+        .session()
+        .then((res) => {
+          if (res.authenticated && res.user) {
+            setProfile(res.user);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   const [actionQueue, setActionQueue] = useState<ActionQueueDto | null>(null);
   const [mentoredTeams, setMentoredTeams] = useState<ProjectProposalDto[]>([]);
@@ -154,39 +172,25 @@ export const FacultyDashboardView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Header & Context Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+      {/* Clean Top Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-[#0F172A] tracking-tight">
-            Faculty Mentorship & Evaluation Console
+          <h1 className="text-lg font-semibold text-[#0F172A] tracking-tight">
+            Welcome back, {profile?.fullName || currentPersona?.name || "Faculty"}
           </h1>
-          <p className="text-xs text-[#64748B] mt-0.5">
-            {profile?.collegeName ? `${profile.collegeName}` : "Institution"} •{" "}
-            {profile?.departmentName ? `${profile.departmentName}` : "Department"} •{" "}
-            {profile?.role ? `${profile.role}` : "Faculty"}
+          <p className="text-xs text-[#64748B]">
+            {profile?.departmentName || "Department"}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={loadDashboardData}
-            isLoading={isLoading}
-            leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-          >
-            Refresh
-          </Button>
-
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => setIsProblemModalOpen(true)}
-            leftIcon={<Plus className="w-3.5 h-3.5" />}
-          >
-            Propose Topic
-          </Button>
-        </div>
+        <Button
+          size="sm"
+          variant="primary"
+          onClick={() => setIsProblemModalOpen(true)}
+          leftIcon={<Plus className="w-3.5 h-3.5" />}
+        >
+          Propose Topic
+        </Button>
       </div>
 
       {error && (
@@ -209,7 +213,6 @@ export const FacultyDashboardView: React.FC = () => {
           subtext="Active capstone & minor teams"
           icon={<Users />}
           variant="neutral"
-          onClick={() => router.push("/faculty/teams")}
         />
 
         <FacultyStatCard
@@ -218,7 +221,6 @@ export const FacultyDashboardView: React.FC = () => {
           subtext="Friday check-ins awaiting sign-off"
           icon={<Calendar />}
           variant="amber"
-          onClick={() => router.push("/faculty/logs")}
         />
 
         <FacultyStatCard
@@ -227,7 +229,6 @@ export const FacultyDashboardView: React.FC = () => {
           subtext="Student dossiers requiring review"
           icon={<FileText />}
           variant="blue"
-          onClick={() => router.push("/faculty/proposals")}
         />
 
         <FacultyStatCard
@@ -236,7 +237,6 @@ export const FacultyDashboardView: React.FC = () => {
           subtext="Assigned viva examination panels"
           icon={<GraduationCap />}
           variant="emerald"
-          onClick={() => router.push("/faculty/evaluations")}
         />
       </div>
 
@@ -247,9 +247,6 @@ export const FacultyDashboardView: React.FC = () => {
             <CardTitle className="text-sm font-bold text-[#0F172A]">
               Priority Action Queue
             </CardTitle>
-            <p className="text-xs text-[#64748B] mt-0.5">
-              Urgent student logbook sign-offs and project proposal endorsement requests
-            </p>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -267,7 +264,6 @@ export const FacultyDashboardView: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-[#0F172A]">Mentored Project Teams</h2>
-            <p className="text-xs text-[#64748B]">Active project groups under your direct academic supervision</p>
           </div>
           <Button
             size="sm"

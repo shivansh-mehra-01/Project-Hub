@@ -35,8 +35,7 @@ export const HodApprovalsView: React.FC = () => {
   const searchParams = useSearchParams();
 
   useDashboardHeader({
-    title: "Decisions & Governance Approvals",
-    breadcrumb: "HOD Console • Approvals",
+    title: "Approvals",
   });
 
   // Active queue state synchronized with URL search parameter
@@ -171,24 +170,6 @@ export const HodApprovalsView: React.FC = () => {
           <span>{toastMessage}</span>
         </div>
       )}
-
-      {/* Header Card */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shrink-0" />
-            <h1 className="text-base sm:text-lg font-bold font-heading text-slate-900 tracking-tight">
-              Decisions &amp; Governance Approvals Queue
-            </h1>
-            <Badge variant={totalPendingDecisions > 0 ? "warning" : "success"} size="sm">
-              {totalPendingDecisions} Pending Decision{totalPendingDecisions === 1 ? "" : "s"}
-            </Badge>
-          </div>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Review student project proposals, endorse Project Coordinator exception overrides, and authorize evaluation grade modification requests.
-          </p>
-        </div>
-      </div>
 
       {/* Single Compact Queue Navigation Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 bg-slate-100 rounded-xl border border-slate-200/80">

@@ -36,8 +36,7 @@ export const HodProjectsView: React.FC = () => {
   const searchParams = useSearchParams();
 
   useDashboardHeader({
-    title: "Department Projects Governance",
-    breadcrumb: "HOD Console • Projects",
+    title: "Projects",
   });
 
   // Data states
@@ -221,24 +220,6 @@ export const HodProjectsView: React.FC = () => {
           <span>{toastMessage}</span>
         </div>
       )}
-
-      {/* Header Card */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shrink-0" />
-            <h1 className="text-base sm:text-lg font-bold font-heading text-slate-900 tracking-tight">
-              Department Projects Governance
-            </h1>
-            <Badge variant="neutral" size="sm">
-              {projects.length} Registered Teams
-            </Badge>
-          </div>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Monitor capstone group execution, review member responsibilities, and assign departmental faculty mentors.
-          </p>
-        </div>
-      </div>
 
       {/* Filter and Search Bar */}
       <Card className="border-slate-200/80 bg-white">

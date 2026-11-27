@@ -52,7 +52,6 @@ export const SupportHealthView: React.FC = () => {
 
   useDashboardHeader({
     title: "Support & Health",
-    breadcrumb: "Operations / Support & Health",
   });
 
   const searchParams = useSearchParams();

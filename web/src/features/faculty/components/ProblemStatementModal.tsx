@@ -74,13 +74,13 @@ export const ProblemStatementModal: React.FC<ProblemStatementModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Propose Department Problem Statement"
+      title="Propose Project Topic"
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         <div>
-          <label className="font-semibold text-[#0F172A] block mb-1">
-            Problem Statement Title *
+          <label className="font-semibold text-[#0F172A] block mb-1.5">
+            Topic Title *
           </label>
           <input
             type="text"
@@ -93,28 +93,28 @@ export const ProblemStatementModal: React.FC<ProblemStatementModalProps> = ({
         </div>
 
         <div>
-          <label className="font-semibold text-[#0F172A] block mb-1">
-            Technical Abstract & Scope *
+          <label className="font-semibold text-[#0F172A] block mb-1.5">
+            Description & Scope *
           </label>
           <textarea
             value={abstract}
             onChange={(e) => setAbstract(e.target.value)}
-            placeholder="Describe the engineering challenge, target deliverables, methodology, and expected outcomes..."
+            placeholder="Describe the challenge, deliverables, methodology, and expected outcomes..."
             rows={4}
             className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 resize-none"
             required
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="font-semibold text-[#0F172A] block mb-1">
-              Target UN Sustainable Development Goal
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+          <div className="min-w-0">
+            <label className="font-semibold text-[#0F172A] block mb-1.5">
+              UN SDG Goal
             </label>
             <select
               value={sdgCode}
               onChange={(e) => setSdgCode(e.target.value)}
-              className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 bg-white"
+              className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 bg-white truncate"
             >
               {sdgOptions.map((opt) => (
                 <option key={opt.code} value={opt.code}>
@@ -125,8 +125,8 @@ export const ProblemStatementModal: React.FC<ProblemStatementModalProps> = ({
           </div>
 
           <div>
-            <label className="font-semibold text-[#0F172A] block mb-1">
-              Max Team Capacity
+            <label className="font-semibold text-[#0F172A] block mb-1.5">
+              Max Team Size
             </label>
             <input
               type="number"
@@ -140,8 +140,8 @@ export const ProblemStatementModal: React.FC<ProblemStatementModalProps> = ({
         </div>
 
         <div>
-          <label className="font-semibold text-[#0F172A] block mb-1">
-            Prerequisites / Recommended Skills (CSV)
+          <label className="font-semibold text-[#0F172A] block mb-1.5">
+            Required Skills (comma-separated)
           </label>
           <input
             type="text"
@@ -159,12 +159,12 @@ export const ProblemStatementModal: React.FC<ProblemStatementModalProps> = ({
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
-          <Button variant="ghost" type="button" onClick={onClose} disabled={isSubmitting}>
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200">
+          <Button variant="secondary" size="sm" type="button" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button variant="primary" type="submit" isLoading={isSubmitting}>
-            Publish Statement
+          <Button variant="primary" size="sm" type="submit" isLoading={isSubmitting}>
+            Publish Topic
           </Button>
         </div>
       </form>

@@ -3,15 +3,20 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Building2,
   CheckCircle2,
   ChevronLeft,
+  Compass,
   Eye,
   EyeOff,
+  GraduationCap,
   KeyRound,
   Lock,
   Mail,
   ShieldCheck,
   TrendingUp,
+  UserCheck,
+  Users,
 } from "lucide-react";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import {
@@ -39,6 +44,52 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedTestRole, setSelectedTestRole] = useState<string | null>(null);
+
+  const testRoleAccounts = [
+    {
+      role: "SuperAdmin",
+      label: "Super Admin",
+      email: "superadmin@collabex.in",
+      password: "Pass@1234",
+      icon: ShieldCheck,
+    },
+    {
+      role: "CollegeAdmin",
+      label: "College Admin",
+      email: "collegeadmin@sistec.ac.in",
+      password: "Pass@1234",
+      icon: Building2,
+    },
+    {
+      role: "HOD",
+      label: "HOD",
+      email: "hod@sistec.ac.in",
+      password: "Pass@1234",
+      icon: UserCheck,
+    },
+    {
+      role: "Coordinator",
+      label: "Coordinator",
+      email: "coordinator@sistec.ac.in",
+      password: "Pass@1234",
+      icon: Compass,
+    },
+    {
+      role: "Faculty",
+      label: "Faculty",
+      email: "faculty@sistec.ac.in",
+      password: "Pass@1234",
+      icon: GraduationCap,
+    },
+    {
+      role: "Student",
+      label: "Student",
+      email: "student@sistec.ac.in",
+      password: "Pass@1234",
+      icon: Users,
+    },
+  ];
 
   // OTP / Set Password State
   const [otpEmail, setOtpEmail] = useState("");

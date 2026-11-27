@@ -24,8 +24,7 @@ export const HodOverviewView: React.FC = () => {
   const router = useRouter();
 
   useDashboardHeader({
-    title: "Department Executive Overview",
-    breadcrumb: "HOD Console • Overview",
+    title: "Overview",
   });
 
   const [dashboard, setDashboard] = useState<HodDashboardDto | null>(null);
@@ -220,7 +219,6 @@ export const HodOverviewView: React.FC = () => {
           subtitle={`Of ${dashboard?.totalTeams ?? projects.length} Total Registered`}
           icon={FolderGit2}
           variant="emerald"
-          onClick={() => router.push("/hod/projects?status=ActiveBuild")}
         />
 
         {/* 2. Pending Approvals */}
@@ -230,7 +228,6 @@ export const HodOverviewView: React.FC = () => {
           subtitle="Proposals, Unlocks &amp; Overrides"
           icon={AlertCircle}
           variant={totalPendingDecisions > 0 ? "amber" : "neutral"}
-          onClick={() => router.push("/hod/approvals")}
         />
 
         {/* 3. At-Risk Projects */}
@@ -240,7 +237,6 @@ export const HodOverviewView: React.FC = () => {
           subtitle="Missed Logs ≥ 2 Weeks"
           icon={Clock}
           variant={(dashboard?.atRiskTeams ?? 0) > 0 ? "rose" : "neutral"}
-          onClick={() => router.push("/hod/projects?onlyAtRisk=true")}
         />
 
         {/* 4. Projects Without Guide */}
@@ -250,7 +246,6 @@ export const HodOverviewView: React.FC = () => {
           subtitle="Requires Mentor Allocation"
           icon={Users}
           variant={(dashboard?.projectsWithoutGuide ?? 0) > 0 ? "amber" : "neutral"}
-          onClick={() => router.push("/hod/projects?onlyWithoutGuide=true")}
         />
       </div>
 
@@ -258,10 +253,7 @@ export const HodOverviewView: React.FC = () => {
       <Card className="border-slate-200/80 bg-white">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
-            <CardTitle>Department Project Lifecycle Pipeline</CardTitle>
-            <CardDescription>
-              Real-time distribution of capstone groups across academic governance milestones. Click any stage to inspect teams.
-            </CardDescription>
+            <CardTitle>Project Lifecycle Pipeline</CardTitle>
           </div>
           <Badge variant="neutral" size="sm">
             Total: {projects.length} Teams
@@ -295,7 +287,7 @@ export const HodOverviewView: React.FC = () => {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-bold uppercase tracking-[0.06em] text-slate-500">
-            Actionable Governance Triage
+            Pending Actions
           </h2>
         </div>
 
@@ -370,9 +362,6 @@ export const HodOverviewView: React.FC = () => {
               <CardTitle className="text-sm font-bold text-slate-900">
                 Department Evaluation Cutoff Date
               </CardTitle>
-              <CardDescription className="text-xs text-slate-500">
-                Configure the evaluation cutoff deadline for {dashboard?.departmentCode || "your department"}.
-              </CardDescription>
             </div>
             <span className="text-xs font-mono text-slate-500">
               {dashboard?.evaluationCutoffDateUtc

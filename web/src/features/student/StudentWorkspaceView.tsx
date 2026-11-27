@@ -52,7 +52,7 @@ import { Textarea } from "@/design-system/components/Textarea";
 import { EmptyState } from "@/design-system/patterns/EmptyState";
 import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { ArtifactSlot, GuideReviewStatusType, ProjectArtifact, TaskStatusType, Team } from "@/mocks/store-types";
-import { studentApi, getAuthToken } from "@/lib/api";
+import { studentApi } from "@/lib/api";
 import {
   CollegeTrackDto,
   StudentDashboardDto,
@@ -265,10 +265,7 @@ export const StudentWorkspaceView: React.FC = () => {
   }, []);
 
   useDashboardHeader({
-    title: "Project Workspace",
-    breadcrumb: dashboardData
-      ? `${dashboardData.identity.collegeCode} ${dashboardData.identity.departmentCode} • ${subTabBreadcrumbs[subTab] || "Project"}`
-      : subTabBreadcrumbs[subTab] || "Project Workspace",
+    title: "Workspace",
   });
 
   // New Task Modal & Selected Task for Details
@@ -419,22 +416,20 @@ export const StudentWorkspaceView: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-    if (getAuthToken()) {
-      Promise.all([
-        studentApi.getReceivedInvitations().catch(() => []),
-        studentApi.getSentInvitations().catch(() => []),
-        studentApi.getCurrentTeamRoster().catch(() => null),
-        studentApi.getGuidePreference().catch(() => null),
-        studentApi.getFacultyGuides().catch(() => []),
-      ]).then(([received, sent, roster, guidePref, guides]) => {
-        if (!isMounted) return;
-        if (received) setReceivedInvitations(received);
-        if (sent) setSentInvitations(sent);
-        if (roster) setTeamRoster(roster);
-        if (guidePref) setGuidePreference(guidePref);
-        if (guides) setFacultyGuides(guides);
-      });
-    }
+    Promise.all([
+      studentApi.getReceivedInvitations().catch(() => []),
+      studentApi.getSentInvitations().catch(() => []),
+      studentApi.getCurrentTeamRoster().catch(() => null),
+      studentApi.getGuidePreference().catch(() => null),
+      studentApi.getFacultyGuides().catch(() => []),
+    ]).then(([received, sent, roster, guidePref, guides]) => {
+      if (!isMounted) return;
+      if (received) setReceivedInvitations(received);
+      if (sent) setSentInvitations(sent);
+      if (roster) setTeamRoster(roster);
+      if (guidePref) setGuidePreference(guidePref);
+      if (guides) setFacultyGuides(guides);
+    });
     return () => {
       isMounted = false;
     };
@@ -897,7 +892,7 @@ export const StudentWorkspaceView: React.FC = () => {
     setTimeout(() => setRepoSuccess(false), 3500);
   };
 
-  if (dashboardLoading && getAuthToken()) {
+  if (dashboardLoading) {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="h-20 bg-slate-100 rounded-xl" />
@@ -1885,7 +1880,7 @@ export const StudentWorkspaceView: React.FC = () => {
                     <h4 className="text-xs font-bold text-emerald-950 font-heading">
                       Project Formally Closed &amp; Sealed
                     </h4>
-                    <span className="text-[10px] font-mono font-bold bg-emerald-200/80 text-emerald-900 px-1.5 py-0.2 rounded">
+                    <span className="text-[10px] font-bold bg-emerald-200/80 text-emerald-900 px-1.5 py-0.2 rounded">
                       Archived Record
                     </span>
                   </div>
@@ -1928,7 +1923,7 @@ export const StudentWorkspaceView: React.FC = () => {
               <Target className="h-4 w-4" strokeWidth={1.75} />
               <span>Milestones</span>
               {liveMilestones.length > 0 && (
-                <span className="ml-1 text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700">
+                <span className="ml-1 text-[10px] tabular-nums font-semibold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700">
                   {liveMilestones.length}
                 </span>
               )}
@@ -1969,7 +1964,7 @@ export const StudentWorkspaceView: React.FC = () => {
               <FileCheck2 className="h-4 w-4" strokeWidth={1.75} />
               <span>Final Submission</span>
               {submissionData && (
-                <span className={`ml-1 text-[10px] font-mono font-semibold px-1.5 py-0.2 rounded-full ${
+                <span className={`ml-1 text-[10px] font-semibold px-1.5 py-0.2 rounded-full ${
                   submissionData.status === 'Accepted'
                     ? 'bg-emerald-100 text-emerald-800'
                     : submissionData.status === 'RevisionRequested'
@@ -2074,7 +2069,7 @@ export const StudentWorkspaceView: React.FC = () => {
                         <span className="text-xs font-bold text-[#0F172A]">
                           {columnStatus === "InProgress" ? "In Progress" : columnStatus}
                         </span>
-                        <span className="font-mono text-xs bg-white px-2 py-0.5 rounded-full border border-[#CBD5E1] text-[#475569] tabular-nums">
+                        <span className="text-xs bg-white px-2 py-0.5 rounded-full border border-[#CBD5E1] text-[#475569] tabular-nums">
                           {tasksInCol.length}
                         </span>
                       </div>
@@ -2096,7 +2091,7 @@ export const StudentWorkspaceView: React.FC = () => {
                                     Overdue
                                   </span>
                                 )}
-                                <span className="text-[10px] text-[#94A3B8] font-mono tabular-nums">
+                                <span className="text-[10px] text-[#94A3B8] tabular-nums">
                                   Due {task.dueDate}
                                 </span>
                               </div>
@@ -2114,7 +2109,7 @@ export const StudentWorkspaceView: React.FC = () => {
                                     e.stopPropagation();
                                     handleUpdateTaskStatus(task.id, e.target.value as SprintTaskStatus);
                                   }}
-                                  className="text-[10px] font-semibold font-mono rounded px-1.5 py-0.5 border border-slate-200 bg-slate-50 text-slate-700 hover:border-brand-primary cursor-pointer focus:outline-hidden"
+                                  className="text-[10px] font-semibold rounded px-1.5 py-0.5 border border-slate-200 bg-slate-50 text-slate-700 hover:border-brand-primary cursor-pointer focus:outline-hidden"
                                 >
                                   <option value="Todo">Todo</option>
                                   <option value="InProgress">In Progress</option>
@@ -2248,7 +2243,7 @@ export const StudentWorkspaceView: React.FC = () => {
                             </p>
                           </div>
                           <div className="text-right shrink-0">
-                            <div className="text-[11px] text-slate-400 font-mono">Target Date</div>
+                            <div className="text-[11px] text-slate-400">Target Date</div>
                             <div className="text-xs font-semibold text-slate-700">
                               {new Date(milestone.targetDateUtc).toLocaleDateString(undefined, {
                                 year: "numeric",
@@ -2343,7 +2338,7 @@ export const StudentWorkspaceView: React.FC = () => {
                                   <span>
                                     <strong>{h.reviewerName}</strong>: {h.resultStatus === "Approved" ? "Approved" : "Revision Requested"} — <em>&quot;{h.feedback}&quot;</em>
                                   </span>
-                                  <span className="text-slate-400 font-mono text-[10px]">
+                                  <span className="text-slate-400 tabular-nums text-[10px]">
                                     {new Date(h.reviewedAtUtc).toLocaleDateString()}
                                   </span>
                                 </div>
@@ -2495,7 +2490,7 @@ export const StudentWorkspaceView: React.FC = () => {
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500 font-mono">Vault Status:</span>
+                    <span className="text-xs text-slate-500">Vault Status:</span>
                     <Badge
                       variant={(myTeam.artifacts || []).filter((a) => a.status === "Approved").length === 4 ? "success" : "info"}
                       size="sm"
@@ -2563,13 +2558,13 @@ export const StudentWorkspaceView: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => handleDownloadArtifact(artifact)}
-                                    className="font-mono font-medium text-brand-primary hover:underline truncate max-w-[130px] flex items-center gap-1 cursor-pointer text-left"
+                                    className="font-medium text-brand-primary hover:underline truncate max-w-[130px] flex items-center gap-1 cursor-pointer text-left"
                                     title="Download vault deliverable"
                                   >
                                     <span className="truncate">{fileName}</span>
                                   </button>
                                   <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className="font-mono text-[10px] text-slate-400">
+                                    <span className="tabular-nums text-[10px] text-slate-400">
                                       {fileSize}
                                     </span>
                                     <button
@@ -2589,7 +2584,7 @@ export const StudentWorkspaceView: React.FC = () => {
                                     </div>
                                   )}
                                   {similarity !== undefined && (
-                                    <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-semibold font-mono">
+                                    <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-semibold tabular-nums">
                                       <ShieldCheck className="h-3 w-3" />
                                       <span>{similarity}% Similarity (Pass)</span>
                                     </div>
@@ -2683,9 +2678,6 @@ export const StudentWorkspaceView: React.FC = () => {
                     <ShieldCheck className="h-4 w-4 text-brand-primary" />
                     Academic Submission Readiness Gates
                   </CardTitle>
-                  <CardDescription className="text-xs">
-                    Institutional policy requires all prerequisites to be verified before final submission to your faculty guide.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -2802,9 +2794,6 @@ export const StudentWorkspaceView: React.FC = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm font-semibold">Academic Project Deliverables Specification</CardTitle>
-                  <CardDescription className="text-xs">
-                    Formal documentation of project formulation, methodology, engineering implementation, and evaluation.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <Input
@@ -2888,7 +2877,7 @@ export const StudentWorkspaceView: React.FC = () => {
                       <div className="font-semibold text-slate-900">Attached Final Report Document:</div>
                       <div className="text-slate-600 mt-0.5">
                         {submissionData?.reportFileName ? (
-                          <span className="font-mono text-emerald-800 font-medium">
+                          <span className="text-emerald-800 font-medium">
                             {submissionData.reportFileName} ({(submissionData.reportFileSizeBytes / 1024).toFixed(1)} KB)
                           </span>
                         ) : (
@@ -3016,9 +3005,6 @@ export const StudentWorkspaceView: React.FC = () => {
                       <History className="h-4 w-4 text-brand-primary" />
                       Faculty Review &amp; Revision History ({submissionData.reviewHistories.length} iteration{submissionData.reviewHistories.length > 1 ? "s" : ""})
                     </CardTitle>
-                    <CardDescription className="text-xs">
-                      Official review remarks and academic guidance recorded by your allocated faculty guide.
-                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {submissionData.reviewHistories.map((rev) => (
@@ -3033,7 +3019,7 @@ export const StudentWorkspaceView: React.FC = () => {
                               {rev.resultStatus}
                             </Badge>
                           </div>
-                          <span className="text-[11px] text-slate-500 font-mono">
+                          <span className="text-[11px] text-slate-500 tabular-nums">
                             {new Date(rev.reviewedAtUtc).toLocaleString()}
                           </span>
                         </div>
@@ -3135,9 +3121,6 @@ export const StudentWorkspaceView: React.FC = () => {
                         <Calendar className="h-4 w-4 text-brand-primary" />
                         <span>Viva Defense Session Schedule</span>
                       </CardTitle>
-                      <CardDescription>
-                        Official defense slot, panel evaluators, and venue configuration.
-                      </CardDescription>
                     </div>
                     {evaluationData.schedule && (
                       <Badge
@@ -3172,7 +3155,7 @@ export const StudentWorkspaceView: React.FC = () => {
                                 day: "numeric",
                               })}
                             </div>
-                            <div className="text-xs text-slate-600 font-mono mt-0.5">
+                            <div className="text-xs text-slate-600 tabular-nums mt-0.5">
                               {new Date(evaluationData.schedule.scheduledDateUtc).toLocaleTimeString(undefined, {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -3270,9 +3253,6 @@ export const StudentWorkspaceView: React.FC = () => {
                         <Lock className="h-4 w-4 text-amber-600" />
                         <span>Academic Evaluation Scorecard (Sealed)</span>
                       </CardTitle>
-                      <CardDescription>
-                        Official viva defense rubric marks and evaluation breakdown.
-                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="p-6 bg-amber-50/60 border border-amber-200 rounded-xl space-y-3 text-center">
@@ -3309,7 +3289,7 @@ export const StudentWorkspaceView: React.FC = () => {
                         <div className="p-4 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div>
                             <span className="text-xs text-[#64748B]">Consolidated Defense Score</span>
-                            <div className="text-2xl font-bold font-mono text-brand-primary tabular-nums">
+                            <div className="text-2xl font-bold text-brand-primary tabular-nums">
                               {evaluationData.sharedTotalScore?.toFixed(1) ?? "0"} / {evaluationData.sharedMaxScore?.toFixed(1) ?? "0"}
                             </div>
                           </div>
@@ -3342,7 +3322,7 @@ export const StudentWorkspaceView: React.FC = () => {
                                     <div className="font-semibold text-[#0F172A]">{c.title || c.criterionCode}</div>
                                     {c.remarks && <div className="text-[11px] text-[#64748B]">{c.remarks}</div>}
                                   </div>
-                                  <span className="font-mono font-bold text-[#0F172A] shrink-0">
+                                  <span className="tabular-nums font-bold text-[#0F172A] shrink-0">
                                     {c.awardedMarks.toFixed(1)} / {c.maxMarks.toFixed(1)}
                                   </span>
                                 </div>
@@ -3356,32 +3336,32 @@ export const StudentWorkspaceView: React.FC = () => {
                           <div className="p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-3">
                             <div className="flex items-center justify-between">
                               <h5 className="text-xs font-bold text-emerald-950">Your Individual Assessment Breakdown</h5>
-                              <span className="font-mono text-xs font-bold text-emerald-900">
+                              <span className="tabular-nums text-xs font-bold text-emerald-900">
                                 Final Computed Mark: {evaluationData.myIndividualScore.finalComputedStudentMark.toFixed(1)}
                               </span>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                               <div className="p-2.5 bg-white border border-emerald-100 rounded-lg">
                                 <span className="text-[10px] text-slate-500 block">Module Ownership</span>
-                                <span className="font-mono font-bold text-slate-900">
+                                <span className="tabular-nums font-bold text-slate-900">
                                   {evaluationData.myIndividualScore.moduleOwnershipScore.toFixed(1)} / 10
                                 </span>
                               </div>
                               <div className="p-2.5 bg-white border border-emerald-100 rounded-lg">
                                 <span className="text-[10px] text-slate-500 block">Viva Q&amp;A Defense</span>
-                                <span className="font-mono font-bold text-slate-900">
+                                <span className="tabular-nums font-bold text-slate-900">
                                   {evaluationData.myIndividualScore.vivaQaScore.toFixed(1)} / 10
                                 </span>
                               </div>
                               <div className="p-2.5 bg-white border border-emerald-100 rounded-lg">
                                 <span className="text-[10px] text-slate-500 block">Logbook Discipline</span>
-                                <span className="font-mono font-bold text-slate-900">
+                                <span className="tabular-nums font-bold text-slate-900">
                                   {evaluationData.myIndividualScore.logDisciplineScore.toFixed(1)} / 10
                                 </span>
                               </div>
                               <div className="p-2.5 bg-white border border-emerald-100 rounded-lg">
                                 <span className="text-[10px] text-slate-500 block">Individual Subtotal</span>
-                                <span className="font-mono font-bold text-emerald-800">
+                                <span className="tabular-nums font-bold text-emerald-800">
                                   {evaluationData.myIndividualScore.individualTotalScore.toFixed(1)} / 30
                                 </span>
                               </div>
@@ -3402,9 +3382,9 @@ export const StudentWorkspaceView: React.FC = () => {
                                   </div>
                                   <div className="flex items-center gap-4">
                                     <span className="text-[11px] text-slate-500">
-                                      Indiv: <strong className="font-mono text-slate-800">{m.individualTotalScore.toFixed(1)}/30</strong>
+                                      Indiv: <strong className="tabular-nums text-slate-800">{m.individualTotalScore.toFixed(1)}/30</strong>
                                     </span>
-                                    <span className="font-mono font-bold text-brand-primary text-xs bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
+                                    <span className="tabular-nums font-bold text-brand-primary text-xs bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border">
                                       Total: {m.finalComputedStudentMark.toFixed(1)}
                                     </span>
                                   </div>
@@ -3481,13 +3461,13 @@ export const StudentWorkspaceView: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-[#64748B]">Weekly Logs Signed:</span>
-                      <div className="font-bold text-[#0F172A] font-mono tabular-nums">
+                      <div className="font-bold text-[#0F172A] tabular-nums">
                         {myTeam.weeklyLogs.length} Verified
                       </div>
                     </div>
                     <div>
                       <span className="text-[#64748B]">Sprint Tasks:</span>
-                      <div className="font-bold text-[#0F172A] font-mono tabular-nums">
+                      <div className="font-bold text-[#0F172A] tabular-nums">
                         {myTeam.tasks.filter((t) => t.status === "Done").length}/{myTeam.tasks.length} Done
                       </div>
                     </div>
@@ -3497,7 +3477,7 @@ export const StudentWorkspaceView: React.FC = () => {
                   <div className="p-3.5 rounded-xl border border-[#E2E8F0] bg-white space-y-2">
                     <span className="font-bold text-xs text-[#0F172A] block">Connected Repository &amp; Issue Trackers</span>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-2 font-mono">
+                      <div className="flex items-center gap-2">
                         <GithubIcon className="h-4 w-4 text-[#0F172A]" />
                         <span className="text-[#64748B]">GitHub:</span>
                         <a
@@ -3511,7 +3491,7 @@ export const StudentWorkspaceView: React.FC = () => {
                         </a>
                       </div>
 
-                      <div className="flex items-center gap-2 font-mono">
+                      <div className="flex items-center gap-2">
                         <LinkIcon className="h-4 w-4 text-[#0F172A]" />
                         <span className="text-[#64748B]">Jira:</span>
                         <a
@@ -3766,10 +3746,10 @@ export const StudentWorkspaceView: React.FC = () => {
             </div>
             {selectedFile ? (
               <div className="space-y-1">
-                <div className="font-bold text-xs text-brand-primary font-mono">
+                <div className="font-bold text-xs text-brand-primary">
                   {selectedFile.name}
                 </div>
-                <div className="text-[10px] text-slate-500 font-mono">
+                <div className="text-[10px] text-slate-500 tabular-nums">
                   {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for cryptographic commit
                 </div>
               </div>
@@ -3778,7 +3758,7 @@ export const StudentWorkspaceView: React.FC = () => {
                 <div className="text-xs font-semibold text-slate-800">
                   Drag and drop your deliverable file here, or click to browse
                 </div>
-                <p className="text-[10px] text-slate-500 font-mono">
+                <p className="text-[10px] text-slate-500">
                   Accepted formats: .pdf, .ppt, .pptx (Max file size: 25MB)
                 </p>
               </>
@@ -3848,7 +3828,7 @@ export const StudentWorkspaceView: React.FC = () => {
               </div>
               <div>
                 <span className="text-slate-500">Due Date:</span>
-                <div className="font-mono font-semibold text-slate-800">{selectedTaskForDetails.dueDate}</div>
+                <div className="tabular-nums font-semibold text-slate-800">{selectedTaskForDetails.dueDate}</div>
               </div>
               <div>
                 <span className="text-slate-500">Assignee:</span>

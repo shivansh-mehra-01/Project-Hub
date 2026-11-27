@@ -89,7 +89,6 @@ export const SecurityAuditView: React.FC = () => {
 
   useDashboardHeader({
     title: "Security & Audit",
-    breadcrumb: "Operations / Security & Audit",
   });
 
   // Top Tabs: Exactly two primary tabs

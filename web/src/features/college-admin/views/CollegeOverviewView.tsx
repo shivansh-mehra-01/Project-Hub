@@ -44,7 +44,6 @@ export const CollegeOverviewView: React.FC = () => {
 
   useDashboardHeader({
     title: "Overview",
-    breadcrumb: "Institutional metrics, department leadership, operational actions, and audit trail",
   });
 
   const loadAnnouncements = useCallback(async () => {
@@ -169,17 +168,14 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px] font-semibold">
-                {overview.tenantCode}
-              </span>
-              {overview.totalProjects > 0 && (
+            {overview.totalProjects > 0 && (
+              <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span className="text-[11px] font-medium text-slate-600">
                   {overview.totalProjects} Active{" "}
                   {overview.totalProjects === 1 ? "Project Team" : "Project Teams"}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* SECTION 2: CORE INSTITUTIONAL KPI CARDS */}
@@ -196,7 +192,7 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
                     {totalStudents.toLocaleString()}
                   </span>
                   <span className="text-xs font-semibold text-slate-500">
@@ -211,7 +207,7 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
               <Link
                 href="/college/courses"
-                className="text-[11px] font-semibold text-sky-800 hover:text-sky-900 inline-flex items-center gap-1"
+                className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 inline-flex items-center gap-1"
               >
                 View Academic Structure <ArrowRight className="h-3 w-3" />
               </Link>
@@ -229,7 +225,7 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
                     {totalFaculty.toLocaleString()}
                   </span>
                   <span className="text-xs font-semibold text-slate-500">
@@ -262,7 +258,7 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
                     {totalDepartments}
                   </span>
                   <span className="text-xs font-semibold text-slate-500">
@@ -275,7 +271,7 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
               <Link
                 href="/college/courses"
-                className="text-[11px] font-semibold text-slate-700 hover:text-slate-900 inline-flex items-center gap-1"
+                className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 inline-flex items-center gap-1"
               >
                 Programs & Branches <ArrowRight className="h-3 w-3" />
               </Link>
@@ -293,7 +289,7 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
                     {appointedHodsCount} of {totalDepartments}
                   </span>
                   <span className="text-xs font-semibold text-slate-500">Appointed</span>
@@ -320,7 +316,7 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
               <Link
                 href="/college/hods"
-                className="text-[11px] font-semibold text-indigo-700 hover:text-indigo-900 inline-flex items-center gap-1"
+                className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 inline-flex items-center gap-1"
               >
                 Manage Leadership <ArrowRight className="h-3 w-3" />
               </Link>
@@ -328,9 +324,9 @@ export const CollegeOverviewView: React.FC = () => {
           </div>
 
           {/* SECTION 3: DEPARTMENT LEADERSHIP OVERVIEW & INSTITUTIONAL IDENTITY */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             {/* Left (7 Cols): Department Operational Roster */}
-            <div className="lg:col-span-7 rounded-xl border border-slate-200 bg-white p-5 flex flex-col justify-between space-y-4 shadow-xs">
+            <div className="lg:col-span-7 rounded-xl border border-slate-200 bg-white p-5 space-y-4 shadow-xs">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <UserCheck className="h-4 w-4 text-emerald-800" strokeWidth={1.75} />
@@ -338,7 +334,7 @@ export const CollegeOverviewView: React.FC = () => {
                     Department Coverage & Leadership
                   </h2>
                 </div>
-                <span className="text-[11px] font-semibold text-slate-500 font-mono">
+                <span className="text-[11px] font-semibold text-slate-500 tabular-nums">
                   {totalDepartments} {totalDepartments === 1 ? "Department" : "Departments"}
                 </span>
               </div>
@@ -373,13 +369,13 @@ export const CollegeOverviewView: React.FC = () => {
                               </span>
                             )}
                           </td>
-                          <td className="p-2.5 text-center font-mono">{dept.facultyCount}</td>
-                          <td className="p-2.5 text-center font-mono">
+                          <td className="p-2.5 text-center tabular-nums">{dept.facultyCount}</td>
+                          <td className="p-2.5 text-center tabular-nums whitespace-nowrap">
                             {dept.studentCount} / {dept.intakeQuota}
                           </td>
                           <td className="p-2.5 text-right">
                             <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${
+                              className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded text-[10px] font-semibold ${
                                 dept.activeTrackCount > 0
                                   ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                                   : "bg-slate-100 text-slate-600 border border-slate-200"
@@ -407,10 +403,7 @@ export const CollegeOverviewView: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                <span className="text-[11px] text-slate-500">
-                  Active user counts and HOD assignments scoped to {overview.tenantCode}.
-                </span>
+              <div className="flex items-center justify-end pt-2 border-t border-slate-100 text-xs">
                 <Link
                   href="/college/hods"
                   className="font-semibold text-emerald-800 hover:text-emerald-900 inline-flex items-center gap-1"
@@ -420,19 +413,14 @@ export const CollegeOverviewView: React.FC = () => {
               </div>
             </div>
 
-            {/* Right (5 Cols): Institutional Identity */}
-            <div className="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-5 flex flex-col justify-between space-y-4 shadow-xs">
+            {/* Right (5 Cols): Institutional Identity + Operational Action Items */}
+            <div className="lg:col-span-5 space-y-5">
+              <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4 shadow-xs">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-emerald-800" strokeWidth={1.75} />
                   <h2 className="text-sm font-bold text-slate-900">Institutional Identity</h2>
                 </div>
-                <Link
-                  href="/college/settings"
-                  className="text-xs font-semibold text-emerald-800 hover:text-emerald-900 inline-flex items-center gap-1"
-                >
-                  Settings <ArrowRight className="h-3 w-3" />
-                </Link>
               </div>
 
               <div className="flex items-center gap-3">
@@ -493,7 +481,7 @@ export const CollegeOverviewView: React.FC = () => {
                     <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
                       Institutional Domain
                     </span>
-                    <span className="block font-semibold text-slate-900 text-xs font-mono truncate">
+                    <span className="block font-semibold text-slate-900 text-xs truncate">
                       {overview.ssoDomain || "Not configured"}
                     </span>
                   </div>
@@ -516,19 +504,16 @@ export const CollegeOverviewView: React.FC = () => {
                 <span>Institutional Settings & Seal</span>
                 <ArrowRight className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
               </Link>
-            </div>
-          </div>
+              </div>
 
-          {/* SECTION 4: OPERATIONAL ACTION ITEMS & GOVERNANCE AUDIT TRAIL */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-            {/* Left (5 Cols): Operational Action Items */}
-            <div className="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-5 flex flex-col justify-between space-y-4 shadow-xs">
+              {/* Operational Action Items */}
+              <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4 shadow-xs">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4 text-emerald-800" strokeWidth={1.75} />
                   <h2 className="text-sm font-bold text-slate-900">Operational Action Items</h2>
                 </div>
-                <span className="text-[11px] font-semibold text-slate-500 font-mono">
+                <span className="text-[11px] font-semibold text-slate-500 tabular-nums">
                   {actionItems.length} Pending
                 </span>
               </div>
@@ -592,16 +577,12 @@ export const CollegeOverviewView: React.FC = () => {
                   </div>
                 )}
               </div>
-
-              <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-100">
-                <span>
-                  Tracks department leadership vacancies, academic session setup, and profile configuration.
-                </span>
               </div>
             </div>
+          </div>
 
-            {/* Right (7 Cols): Governance Audit Trail */}
-            <div className="lg:col-span-7 rounded-xl border border-slate-200 bg-white p-5 flex flex-col justify-between space-y-4 shadow-xs">
+          {/* SECTION 4: GOVERNANCE AUDIT TRAIL */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4 shadow-xs">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-emerald-800" strokeWidth={1.75} />
@@ -615,9 +596,9 @@ export const CollegeOverviewView: React.FC = () => {
                 </Link>
               </div>
 
-              <div className="relative pl-5 space-y-3.5 before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 text-xs">
-                {activities.length > 0 ? (
-                  activities.map((act, idx) => (
+              {activities.length > 0 ? (
+                <div className="relative pl-5 space-y-3.5 before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 text-xs">
+                  {activities.map((act, idx) => (
                     <div key={idx} className="relative space-y-0.5">
                       <div className="absolute -left-5 top-1.5 h-2 w-2 rounded-full bg-emerald-700 ring-2 ring-white" />
                       <div className="font-semibold text-slate-900 leading-snug">{act.title}</div>
@@ -631,27 +612,21 @@ export const CollegeOverviewView: React.FC = () => {
                         )}
                         <span className="text-slate-300">•</span>
                         <span
-                          className="font-mono text-slate-400"
+                          className="tabular-nums text-slate-400"
                           title={new Date(act.occurredAtUtc).toLocaleString()}
                         >
                           {act.timeAgo}
                         </span>
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-slate-400 text-xs italic py-4">
-                    No recent institutional audit events recorded.
-                  </div>
-                )}
-              </div>
-
-              <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-100 flex items-center justify-between">
-                <span>Tenant-scoped immutable audit log of administrative actions.</span>
-                <span className="text-[10px] font-mono text-slate-400">Audit Ledger Active</span>
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center text-xs text-slate-500">
+                  No recent institutional audit events recorded.
+                </div>
+              )}
             </div>
-          </div>
         </>
       )}
 
@@ -667,9 +642,6 @@ export const CollegeOverviewView: React.FC = () => {
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900">Platform Announcements</h2>
-              <p className="text-[11px] text-slate-500">
-                Official bulletins and maintenance advisories from Colabex Super Admin.
-              </p>
             </div>
           </div>
 
@@ -744,7 +716,7 @@ export const CollegeOverviewView: React.FC = () => {
                         {item.category}
                       </span>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-400">
+                    <span className="text-[10px] tabular-nums text-slate-400">
                       {formatAnnouncementDate(item.publishDateUtc)}
                     </span>
                   </div>

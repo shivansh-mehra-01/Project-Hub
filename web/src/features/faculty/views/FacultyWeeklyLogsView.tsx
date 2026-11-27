@@ -67,35 +67,6 @@ export const FacultyWeeklyLogsView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <button
-              onClick={() => router.push("/faculty")}
-              className="text-xs text-[#64748B] hover:text-[#0F172A] flex items-center gap-1 font-medium transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Dashboard
-            </button>
-          </div>
-          <h1 className="text-xl font-bold text-[#0F172A] tracking-tight">
-            Weekly Progress Logs Verification Queue
-          </h1>
-          <p className="text-xs text-[#64748B] mt-0.5">
-            Continuous engineering discipline sign-off, Friday logbook reviews, and mentor recommendations
-          </p>
-        </div>
-
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={loadLogs}
-          isLoading={isLoading}
-          leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-        >
-          Refresh Queue
-        </Button>
-      </div>
 
       {error && (
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between gap-3">
