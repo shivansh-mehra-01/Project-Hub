@@ -29,18 +29,18 @@ async function authenticateStudent(
 }
 
 test.describe("Student Module Phase 3 — Project Discovery, Problem Bank & Idea Registration E2E Journeys", () => {
-  // J04 — Project Discovery: Problem Bank Exploration & Topic Adoption
-  test("J04 — Explore Faculty Problem Statements and Adopt Topic", async ({ page, request }) => {
+  // J04 — Project Discovery: Archive Exploration & Idea Registration
+  test("J04 — Explore Project Discovery & Idea Registration", async ({ page, request }) => {
     await authenticateStudent(page, request, "student@sistec.ac.in", "Pass@1234");
     await page.goto(`${BASE_URL}/student/explore`);
 
     // Verify page title and header
     await expect(page.locator("body")).toContainText("Project Discovery & Idea Registration");
-    await expect(page.locator("body")).toContainText("Faculty Problem Bank");
+    await expect(page.locator("body")).toContainText("Campus Project Archive");
 
-    // Check Problem Bank tab exists and shows statements
-    const problemBankBtn = page.getByRole("button", { name: /Faculty Problem Bank/i });
-    await expect(problemBankBtn).toBeVisible();
+    // Check Campus Project Archive tab exists
+    const archiveTabBtn = page.getByRole("button", { name: /Campus Project Archive/i });
+    await expect(archiveTabBtn).toBeVisible();
 
     // Verify search input is available
     const searchInput = page.locator('input[placeholder*="Search by keywords"]');

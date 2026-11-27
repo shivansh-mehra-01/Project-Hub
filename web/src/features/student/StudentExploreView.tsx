@@ -29,7 +29,6 @@ import { studentApi } from "@/lib/api/studentApi";
 import {
   ArchivedProjectSummaryDto,
   FacultyGuideSummaryDto,
-  ProblemBankStatementDto,
   ProjectIdeaDto,
   SimilarityCheckResultDto,
 } from "@/lib/api/types";
@@ -70,10 +69,9 @@ export const StudentExploreView: React.FC = () => {
     title: "Explore",
   });
 
-  const [filter, setFilter] = useState<"problems" | "past" | "ideas">("problems");
+  const [filter, setFilter] = useState<"past" | "ideas">("past");
 
   // Remote data state
-  const [problemBank, setProblemBank] = useState<ProblemBankStatementDto[]>([]);
   const [pastProjects, setPastProjects] = useState<ArchivedProjectSummaryDto[]>([]);
   const [ideas, setIdeas] = useState<ProjectIdeaDto[]>([]);
   const [facultyGuides, setFacultyGuides] = useState<FacultyGuideSummaryDto[]>([]);
@@ -103,7 +101,6 @@ export const StudentExploreView: React.FC = () => {
   const [ideaDomain, setIdeaDomain] = useState("Artificial Intelligence & ML");
   const [ideaSdg, setIdeaSdg] = useState("SDG-9");
   const [ideaGuideId, setIdeaGuideId] = useState("");
-  const [adoptedProblemBankId, setAdoptedProblemBankId] = useState<string | undefined>(undefined);
   const [submissionRemarks, setSubmissionRemarks] = useState("");
 
   // Similarity Check State
@@ -122,12 +119,7 @@ export const StudentExploreView: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const [pbRes, pastRes, ideasRes, guidesRes] = await Promise.all([
-        studentApi.getProblemBank({
-          search: searchQuery || undefined,
-          domain: domainFilter || undefined,
-          sdg: sdgFilter || undefined,
-        }),
+      const [pastRes, ideasRes, guidesRes] = await Promise.all([
         studentApi.getArchivedProjects({
           search: searchQuery || undefined,
           domain: domainFilter || undefined,
@@ -137,7 +129,6 @@ export const StudentExploreView: React.FC = () => {
         studentApi.getFacultyGuides().catch(() => [] as FacultyGuideSummaryDto[]),
       ]);
 
-      setProblemBank(pbRes || []);
       setPastProjects(pastRes || []);
       setIdeas(ideasRes || []);
       setFacultyGuides(guidesRes || []);
@@ -164,28 +155,11 @@ export const StudentExploreView: React.FC = () => {
     setIdeaAbstract("");
     setIdeaDomain("Artificial Intelligence & ML");
     setIdeaSdg("SDG-9");
-    setAdoptedProblemBankId(undefined);
     setSubmissionRemarks("");
     setSimilarityResult(null);
     if (facultyGuides.length > 0) {
       setIdeaGuideId(facultyGuides[0].id);
     }
-    setIsIdeaModalOpen(true);
-  };
-
-  // Open modal when adopting a problem bank statement
-  const handleAdoptStatement = (statement: ProblemBankStatementDto) => {
-    setIsEditingExisting(false);
-    setIsResubmitting(false);
-    setCurrentIdeaId(null);
-    setIdeaTitle(statement.title);
-    setIdeaAbstract(statement.abstract);
-    setIdeaDomain(statement.departmentName || "Artificial Intelligence & ML");
-    setIdeaSdg(statement.sdgCode || "SDG-9");
-    setIdeaGuideId(statement.proposedByFacultyId || (facultyGuides[0]?.id ?? ""));
-    setAdoptedProblemBankId(statement.id);
-    setSubmissionRemarks("");
-    setSimilarityResult(null);
     setIsIdeaModalOpen(true);
   };
 
@@ -199,7 +173,6 @@ export const StudentExploreView: React.FC = () => {
     setIdeaDomain(idea.domainTag || "Artificial Intelligence & ML");
     setIdeaSdg(idea.sdgCode || "SDG-9");
     setIdeaGuideId(idea.guideUserId || (facultyGuides[0]?.id ?? ""));
-    setAdoptedProblemBankId(undefined);
     setSubmissionRemarks(isResubmitFlow ? `Resubmission addressing feedback: ${idea.latestReviewRemarks || ""}` : "");
     setSimilarityResult(
       idea.similarityScorePct
@@ -270,7 +243,6 @@ export const StudentExploreView: React.FC = () => {
           domainTag: ideaDomain,
           sdgCode: ideaSdg,
           guideUserId: ideaGuideId || undefined,
-          adoptedProblemBankId: adoptedProblemBankId,
         });
         setSuccessBanner("Project idea draft successfully registered.");
       }
@@ -314,7 +286,6 @@ export const StudentExploreView: React.FC = () => {
           domainTag: ideaDomain,
           sdgCode: ideaSdg,
           guideUserId: ideaGuideId,
-          adoptedProblemBankId: adoptedProblemBankId,
         });
         targetId = createRes.id;
       } else {
@@ -462,17 +433,6 @@ export const StudentExploreView: React.FC = () => {
         <div className="flex gap-1.5 p-1 bg-white rounded-lg border border-[#E2E8F0] shadow-2xs overflow-x-auto w-full sm:w-auto">
           <button
             type="button"
-            onClick={() => setFilter("problems")}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
-              filter === "problems"
-                ? "bg-brand-primary text-white"
-                : "text-[#64748B] hover:text-[#0F172A]"
-            }`}
-          >
-            Faculty Problem Bank ({problemBank.length})
-          </button>
-          <button
-            type="button"
             onClick={() => setFilter("past")}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
               filter === "past"
@@ -510,8 +470,8 @@ export const StudentExploreView: React.FC = () => {
         </Button>
       </div>
 
-      {/* Search and Filters Bar (for Problem Bank & Archive) */}
-      {(filter === "problems" || filter === "past") && (
+      {/* Search and Filters Bar (for Archive) */}
+      {filter === "past" && (
         <div className="p-3 bg-white rounded-xl border border-[#E2E8F0] shadow-2xs flex flex-col md:flex-row gap-3 items-center justify-between">
           <div className="relative w-full md:w-80">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#94A3B8]" />
@@ -558,76 +518,7 @@ export const StudentExploreView: React.FC = () => {
         </div>
       )}
 
-      {/* 1. Problem Bank Grid */}
-      {!isLoading && filter === "problems" && (
-        problemBank.length === 0 ? (
-          <EmptyState
-            title="No Problem Statements Found"
-            description="No open research topics match your current filter criteria."
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {problemBank.map((pb) => (
-              <Card key={pb.id} className="hover:border-[#CBD5E1] transition-all flex flex-col justify-between">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-brand-primary bg-brand-primary-tint px-2 py-0.5 rounded border border-brand-primary-border font-mono">
-                      {pb.sdgCode || "SDG-9"}
-                    </span>
-                    <span className="text-[10px] text-[#64748B]">
-                      Capacity: {pb.maxTeamCapacity} {pb.maxTeamCapacity === 1 ? "Team" : "Teams"}
-                    </span>
-                  </div>
-                  <CardTitle className="pt-2 text-sm leading-snug">{pb.title}</CardTitle>
-                  <CardDescription className="line-clamp-3 text-xs leading-relaxed">{pb.abstract}</CardDescription>
-                </CardHeader>
-
-                <CardContent className="space-y-3 text-xs pt-0">
-                  <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
-                    <div className="text-[11px] text-[#64748B]">Faculty Mentor &amp; Department:</div>
-                    <div className="font-semibold text-[#0F172A]">{pb.facultyName}</div>
-                    <div className="text-[10px] text-[#64748B]">{pb.departmentName} ({pb.departmentCode})</div>
-                  </div>
-
-                  {pb.prerequisites && pb.prerequisites.length > 0 && (
-                    <div className="space-y-1">
-                      <div className="text-[10px] font-semibold text-[#64748B]">Prerequisites:</div>
-                      <div className="flex flex-wrap gap-1">
-                        {pb.prerequisites.map((p, i) => (
-                          <span
-                            key={i}
-                            className="px-1.5 py-0.5 rounded bg-white text-[#475569] border border-[#CBD5E1] text-[10px] font-mono"
-                          >
-                            {p}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <Button
-                    size="sm"
-                    variant={hasActiveProject || pb.isAllocated ? "secondary" : "primary"}
-                    className="w-full"
-                    disabled={hasActiveProject || pb.isAllocated}
-                    onClick={() => handleAdoptStatement(pb)}
-                    title={hasActiveProject ? "You are already registered in an active project for this cycle." : undefined}
-                    leftIcon={<Sparkles className="h-3.5 w-3.5" />}
-                  >
-                    {hasActiveProject
-                      ? "Allocation Finalized"
-                      : pb.isAllocated
-                      ? "Topic Fully Allocated"
-                      : "Adopt & Register Idea"}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )
-      )}
-
-      {/* 2. Past Projects Grid */}
+      {/* Past Projects Grid */}
       {!isLoading && filter === "past" && (
         pastProjects.length === 0 ? (
           <EmptyState
@@ -922,8 +813,6 @@ export const StudentExploreView: React.FC = () => {
             ? "Revise & Resubmit Project Proposal"
             : isEditingExisting
             ? "Edit Project Idea Draft"
-            : adoptedProblemBankId
-            ? "Adopt Problem Statement & Register Idea"
             : "Register New Project Idea"
         }
         description="Provide comprehensive details about your project topic. Originality is verified against the institutional repository."

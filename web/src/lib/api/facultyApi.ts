@@ -3,8 +3,6 @@ import {
   ActionQueueDto,
   ArtifactSlotDto,
   AssignedDefenseTeamDto,
-  CreateProblemStatementRequest,
-  ProblemBankStatement,
   ProjectProposalDto,
   ReturnProposalRequest,
   ReviewArtifactRequest,
@@ -49,14 +47,6 @@ export const facultyApi = {
       isRejected: boolean;
       remarks: string;
     }>(`/api/faculty/proposals/${teamId}/reject`, data),
-
-  getProblemBank: () => apiClient.get<ProblemBankStatement[]>("/api/faculty/problem-bank"),
-
-  createProblemStatement: (data: CreateProblemStatementRequest) =>
-    apiClient.post<ProblemBankStatement>(
-      "/api/faculty/problem-bank",
-      data
-    ),
 
   getAssignedDefenseTeams: () =>
     apiClient.get<AssignedDefenseTeamDto[]>("/api/faculty/defense-teams"),

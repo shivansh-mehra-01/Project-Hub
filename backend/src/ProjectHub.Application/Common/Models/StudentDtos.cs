@@ -304,25 +304,8 @@ public record StudentDashboardDto
 }
 
 // =========================================================================
-// PHASE 3: PROJECT DISCOVERY, PROBLEM BANK & IDEA REGISTRATION DTOs
+// PHASE 3: PROJECT DISCOVERY & IDEA REGISTRATION DTOs
 // =========================================================================
-
-public record ProblemBankStatementDto
-{
-    public Guid Id { get; init; }
-    public string Title { get; init; } = string.Empty;
-    public string Abstract { get; init; } = string.Empty;
-    public string SdgCode { get; init; } = string.Empty;
-    public List<string> Prerequisites { get; init; } = new();
-    public int MaxTeamCapacity { get; init; } = 4;
-    public bool IsAllocated { get; init; }
-    public Guid ProposedByFacultyId { get; init; }
-    public string FacultyName { get; init; } = string.Empty;
-    public string DepartmentName { get; init; } = string.Empty;
-    public string DepartmentCode { get; init; } = string.Empty;
-    public string AcademicTrackName { get; init; } = string.Empty;
-    public DateTime CreatedAtUtc { get; init; }
-}
 
 public record ArchivedProjectSummaryDto
 {
@@ -349,7 +332,6 @@ public record CreateProjectIdeaRequest
     public string SdgCode { get; init; } = string.Empty;
     public Guid? GuideUserId { get; init; }
     public Guid? AcademicTrackId { get; init; }
-    public Guid? AdoptedProblemBankId { get; init; }
 }
 
 public record UpdateProjectIdeaRequest

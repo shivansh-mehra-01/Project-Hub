@@ -633,17 +633,6 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     isSidebarItem: true,
     sidebarOrder: 6,
   },
-  {
-    path: "/faculty/problem-bank",
-    label: "Problem Bank",
-    breadcrumbGroup: "Faculty & Guide Console",
-    breadcrumbTitle: "Department Problem Bank & SDG Topics",
-    iconName: "BookOpen",
-    allowedRoles: ["Faculty"],
-    description: "Department research challenges, industry topics, and SDG-aligned project proposals",
-    isSidebarItem: true,
-    sidebarOrder: 7,
-  },
 
   // =========================================================================
   // 5. PROJECT COORDINATOR ROUTE (/coordinator)

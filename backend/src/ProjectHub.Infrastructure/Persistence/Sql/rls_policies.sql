@@ -77,21 +77,6 @@ CREATE POLICY tenant_isolation_policy ON "CourseOutcomeDefinitions"
         OR "CollegeId" = NULLIF(current_setting('app.current_tenant', true), '')::uuid
     );
 
--- 2.5 ProblemBankStatements
-ALTER TABLE "ProblemBankStatements" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "ProblemBankStatements" FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON "ProblemBankStatements";
-CREATE POLICY tenant_isolation_policy ON "ProblemBankStatements"
-    AS PERMISSIVE FOR ALL TO PUBLIC
-    USING (
-        current_setting('app.is_super_admin', true) = 'true'
-        OR "CollegeId" = NULLIF(current_setting('app.current_tenant', true), '')::uuid
-    )
-    WITH CHECK (
-        current_setting('app.is_super_admin', true) = 'true'
-        OR "CollegeId" = NULLIF(current_setting('app.current_tenant', true), '')::uuid
-    );
-
 -- 2.6 ProjectTeams
 ALTER TABLE "ProjectTeams" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ProjectTeams" FORCE ROW LEVEL SECURITY;

@@ -381,56 +381,6 @@ public class FacultyController : ControllerBase
         return Ok(new { success = true, teamId = team.Id, status = team.Status, isRejected = true, remarks = remarks.Trim() });
     }
 
-    [HttpGet("problem-bank")]
-    public async Task<ActionResult<List<ProblemBankStatement>>> GetProblemBank()
-    {
-        var facultyId = _tenantContext.UserId!.Value;
-
-        var statements = await _context.ProblemBankStatements
-            .Where(p => p.ProposedByFacultyId == facultyId && !p.IsDeleted)
-            .OrderByDescending(p => p.CreatedAtUtc)
-            .ToListAsync();
-
-        return Ok(statements);
-    }
-
-    [HttpPost("problem-bank")]
-    public async Task<ActionResult<ProblemBankStatement>> CreateProblemBankStatement([FromBody] CreateProblemStatementRequest request)
-    {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var facultyId = _tenantContext.UserId!.Value;
-
-        var caller = await ResolveCurrentUserAsync();
-        if (caller == null || !caller.DepartmentId.HasValue)
-        {
-            return BadRequest(new { message = "Faculty member must be affiliated with an academic department." });
-        }
-
-        // Server-side department enforcement: never trust client-supplied department ID
-        if (request.DepartmentId != Guid.Empty && request.DepartmentId != caller.DepartmentId.Value)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = "You can only propose problem bank statements for your affiliated academic department." });
-        }
-
-        var statement = new ProblemBankStatement
-        {
-            CollegeId = collegeId,
-            DepartmentId = caller.DepartmentId.Value,
-            AcademicTrackId = request.AcademicTrackId,
-            ProposedByFacultyId = facultyId,
-            Title = request.Title.Trim(),
-            Abstract = request.Abstract.Trim(),
-            SdgCode = request.SdgCode.Trim(),
-            PrerequisitesCsv = request.PrerequisitesCsv,
-            MaxTeamCapacity = request.MaxTeamCapacity
-        };
-
-        await _context.ProblemBankStatements.AddAsync(statement);
-        await _context.SaveChangesAsync();
-
-        return Ok(statement);
-    }
-
     [HttpGet("defense-teams")]
     [HttpGet("evaluations/assigned")]
     public async Task<ActionResult<List<AssignedDefenseTeamDto>>> GetAssignedDefenseTeams()

@@ -1689,109 +1689,8 @@ public class StudentController : ControllerBase
     }
 
     // =========================================================================
-    // PHASE 3: PROJECT DISCOVERY, PROBLEM BANK & IDEA REGISTRATION
+    // PHASE 3: PROJECT DISCOVERY & IDEA REGISTRATION
     // =========================================================================
-
-    [HttpGet("problem-bank")]
-    public async Task<ActionResult<List<ProblemBankStatementDto>>> GetProblemBank(
-        [FromQuery] string? domain,
-        [FromQuery] string? sdg,
-        [FromQuery] string? search)
-    {
-        var studentId = _tenantContext.UserId!.Value;
-        var collegeId = _tenantContext.CollegeId!.Value;
-
-        var student = await _context.Users.FirstOrDefaultAsync(u => u.Id == studentId && u.CollegeId == collegeId && !u.IsDeleted);
-        if (student == null) return Unauthorized();
-
-        var query = _context.ProblemBankStatements
-            .Include(p => p.ProposedByFaculty)
-            .Include(p => p.Department)
-            .Include(p => p.AcademicTrack)
-            .Where(p => p.CollegeId == collegeId && !p.IsAllocated && !p.IsDeleted);
-
-        if (student.DepartmentId.HasValue)
-        {
-            query = query.Where(p => p.DepartmentId == student.DepartmentId.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(sdg))
-        {
-            var sdgTrim = sdg.Trim().ToUpperInvariant();
-            query = query.Where(p => p.SdgCode.ToUpper().Contains(sdgTrim));
-        }
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var s = search.Trim().ToLower();
-            query = query.Where(p => p.Title.ToLower().Contains(s) || p.Abstract.ToLower().Contains(s));
-        }
-
-        var statements = await query
-            .OrderByDescending(p => p.CreatedAtUtc)
-            .Select(p => new ProblemBankStatementDto
-            {
-                Id = p.Id,
-                Title = p.Title,
-                Abstract = p.Abstract,
-                SdgCode = p.SdgCode,
-                Prerequisites = string.IsNullOrWhiteSpace(p.PrerequisitesCsv)
-                    ? new List<string>()
-                    : p.PrerequisitesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
-                MaxTeamCapacity = p.MaxTeamCapacity,
-                IsAllocated = p.IsAllocated,
-                ProposedByFacultyId = p.ProposedByFacultyId,
-                FacultyName = p.ProposedByFaculty != null ? p.ProposedByFaculty.FullName : "Faculty Mentor",
-                DepartmentName = p.Department != null ? p.Department.Name : "Engineering",
-                DepartmentCode = p.Department != null ? p.Department.Code : "ENG",
-                AcademicTrackName = p.AcademicTrack != null ? p.AcademicTrack.Name : "Project Track",
-                CreatedAtUtc = p.CreatedAtUtc
-            })
-            .ToListAsync();
-
-        if (!string.IsNullOrWhiteSpace(domain))
-        {
-            var d = domain.Trim().ToLower();
-            statements = statements.Where(s =>
-                s.Title.ToLower().Contains(d) ||
-                s.Abstract.ToLower().Contains(d) ||
-                s.Prerequisites.Any(p => p.ToLower().Contains(d))).ToList();
-        }
-
-        return Ok(statements);
-    }
-
-    [HttpGet("problem-bank/{id}")]
-    public async Task<ActionResult<ProblemBankStatementDto>> GetProblemBankStatement(Guid id)
-    {
-        var collegeId = _tenantContext.CollegeId!.Value;
-        var p = await _context.ProblemBankStatements
-            .Include(x => x.ProposedByFaculty)
-            .Include(x => x.Department)
-            .Include(x => x.AcademicTrack)
-            .FirstOrDefaultAsync(x => x.Id == id && x.CollegeId == collegeId && !x.IsDeleted);
-
-        if (p == null) return NotFound(new { message = "Problem statement not found." });
-
-        return Ok(new ProblemBankStatementDto
-        {
-            Id = p.Id,
-            Title = p.Title,
-            Abstract = p.Abstract,
-            SdgCode = p.SdgCode,
-            Prerequisites = string.IsNullOrWhiteSpace(p.PrerequisitesCsv)
-                ? new List<string>()
-                : p.PrerequisitesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
-            MaxTeamCapacity = p.MaxTeamCapacity,
-            IsAllocated = p.IsAllocated,
-            ProposedByFacultyId = p.ProposedByFacultyId,
-            FacultyName = p.ProposedByFaculty != null ? p.ProposedByFaculty.FullName : "Faculty Mentor",
-            DepartmentName = p.Department != null ? p.Department.Name : "Engineering",
-            DepartmentCode = p.Department != null ? p.Department.Code : "ENG",
-            AcademicTrackName = p.AcademicTrack != null ? p.AcademicTrack.Name : "Project Track",
-            CreatedAtUtc = p.CreatedAtUtc
-        });
-    }
 
     [HttpGet("faculty-guides")]
     public async Task<ActionResult<List<FacultyGuideSummaryDto>>> GetFacultyGuides()
@@ -2095,19 +1994,7 @@ public class StudentController : ControllerBase
         };
         await _context.TeamMembers.AddAsync(leadMember);
 
-        // 9. If problem bank statement adopted, link it
-        if (request.AdoptedProblemBankId.HasValue)
-        {
-            var statement = await _context.ProblemBankStatements
-                .FirstOrDefaultAsync(p => p.Id == request.AdoptedProblemBankId.Value && p.CollegeId == collegeId && !p.IsDeleted);
-            if (statement != null && !statement.IsAllocated)
-            {
-                statement.IsAllocated = true;
-                statement.AllocatedTeamId = newTeam.Id;
-            }
-        }
-
-        // 10. Audit log
+        // 9. Audit log
         var audit = new PlatformAuditLog
         {
             ActorUserId = studentId,

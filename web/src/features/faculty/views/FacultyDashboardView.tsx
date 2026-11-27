@@ -7,7 +7,6 @@ import {
   ActionQueueDto,
   ActionQueueItemDto,
   AssignedDefenseTeamDto,
-  CreateProblemStatementRequest,
   ProjectProposalDto,
 } from "@/lib/api/types";
 import { getUserProfile, authApi } from "@/lib/api";
@@ -21,7 +20,6 @@ import {
   ProposalDecisionModal,
   ProposalDecisionType,
 } from "../components/ProposalDecisionModal";
-import { ProblemStatementModal } from "../components/ProblemStatementModal";
 import { MentoredTeamCard } from "../components/MentoredTeamCard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/design-system/components/Card";
 import { Button } from "@/design-system/components/Button";
@@ -78,8 +76,6 @@ export const FacultyDashboardView: React.FC = () => {
     teamId: "",
     teamCode: "",
   });
-
-  const [isProblemModalOpen, setIsProblemModalOpen] = useState(false);
 
   const loadDashboardData = useCallback(async () => {
     try {
@@ -164,12 +160,6 @@ export const FacultyDashboardView: React.FC = () => {
     await loadDashboardData();
   };
 
-  const handleCreateProblemStatement = async (data: CreateProblemStatementRequest) => {
-    await facultyApi.createProblemStatement(data);
-    showToast("Problem statement proposed successfully.", "success");
-    await loadDashboardData();
-  };
-
   return (
     <div className="space-y-6 pb-12">
       {/* Clean Top Action Bar */}
@@ -182,15 +172,6 @@ export const FacultyDashboardView: React.FC = () => {
             {profile?.departmentName || "Department"}
           </p>
         </div>
-
-        <Button
-          size="sm"
-          variant="primary"
-          onClick={() => setIsProblemModalOpen(true)}
-          leftIcon={<Plus className="w-3.5 h-3.5" />}
-        >
-          Propose Topic
-        </Button>
       </div>
 
       {error && (
@@ -318,12 +299,6 @@ export const FacultyDashboardView: React.FC = () => {
         teamId={decisionModal.teamId}
         teamCode={decisionModal.teamCode}
         onConfirm={handleConfirmDecision}
-      />
-
-      <ProblemStatementModal
-        isOpen={isProblemModalOpen}
-        onClose={() => setIsProblemModalOpen(false)}
-        onSubmit={handleCreateProblemStatement}
       />
     </div>
   );

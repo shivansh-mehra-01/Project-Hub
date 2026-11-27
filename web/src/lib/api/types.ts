@@ -950,32 +950,6 @@ export interface AssignedDefenseTeamDto {
   members: AssignedDefenseTeamMemberDto[];
 }
 
-export interface ProblemBankStatement {
-  id: string;
-  collegeId: string;
-  departmentId: string;
-  academicTrackId: string;
-  proposedByFacultyId: string;
-  title: string;
-  abstract: string;
-  sdgCode: string;
-  prerequisitesCsv?: string;
-  maxTeamCapacity: number;
-  isAllocated: boolean;
-  allocatedTeamId?: string;
-  createdAtUtc: string;
-}
-
-export interface CreateProblemStatementRequest {
-  departmentId: string;
-  academicTrackId: string;
-  title: string;
-  abstract: string;
-  sdgCode: string;
-  prerequisitesCsv?: string;
-  maxTeamCapacity?: number;
-}
-
 export interface StudentScoreInput {
   studentUserId: string;
   moduleOwnershipScore: number;
@@ -1257,23 +1231,7 @@ export interface StudentPortfolioDto {
   verifiedArtifacts: ArtifactSlotDto[];
 }
 
-// --- Phase 3: Project Discovery, Problem Bank & Idea Registration DTOs ---
-
-export interface ProblemBankStatementDto {
-  id: string;
-  title: string;
-  abstract: string;
-  sdgCode: string;
-  prerequisites: string[];
-  maxTeamCapacity: number;
-  isAllocated: boolean;
-  proposedByFacultyId: string;
-  facultyName: string;
-  departmentName: string;
-  departmentCode: string;
-  academicTrackName: string;
-  createdAtUtc: string;
-}
+// --- Phase 3: Project Discovery & Idea Registration DTOs ---
 
 export interface ArchivedProjectSummaryDto {
   teamId: string;
@@ -1298,7 +1256,6 @@ export interface CreateProjectIdeaRequest {
   sdgCode: string;
   guideUserId?: string;
   academicTrackId?: string;
-  adoptedProblemBankId?: string;
 }
 
 export interface UpdateProjectIdeaRequest {

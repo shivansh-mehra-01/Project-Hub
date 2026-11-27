@@ -1613,24 +1613,4 @@ public class FacultySecurityAndWorkflowTests : IClassFixture<CustomWebApplicatio
         // Must be NotFound (query filter hidden) or Forbidden
         Assert.True(response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden);
     }
-
-    [Fact]
-    public async Task Scenario15_ClientSuppliedDepartmentId_CannotCreateCrossDepartmentRecords()
-    {
-        var client = CreateAuthenticatedClient(DbInitializer.FacultyNairUserId, DbInitializer.SistecTenantId, DbInitializer.CseDepartmentId, UserRole.Faculty);
-        var payload = new CreateProblemStatementRequest
-        {
-            DepartmentId = DbInitializer.MeDepartmentId, // Attacker sends Mechanical Dept
-            AcademicTrackId = DbInitializer.MinorTrackId,
-            Title = "Manipulated Cross-Department Problem Statement",
-            Abstract = "Attempting to create statement under another department.",
-            SdgCode = "SDG-09",
-            MaxTeamCapacity = 4
-        };
-
-        var response = await client.PostAsJsonAsync("/api/faculty/problem-bank", payload);
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("affiliated academic department", content);
-    }
 }

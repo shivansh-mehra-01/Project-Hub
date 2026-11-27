@@ -8,7 +8,6 @@ import {
   CreateProjectIdeaRequest,
   CreateTaskRequest,
   FacultyGuideSummaryDto,
-  ProblemBankStatementDto,
   ProjectIdeaDto,
   SimilarityCheckResultDto,
   SprintTaskDto,
@@ -48,13 +47,7 @@ export const studentApi = {
 
   getAvailableTracks: () => apiClient.get<CollegeTrackDto[]>("/api/student/tracks"),
 
-  // Phase 3: Project Discovery & Problem Bank
-  getProblemBank: (params?: { domain?: string; sdg?: string; search?: string }) =>
-    apiClient.get<ProblemBankStatementDto[]>("/api/student/problem-bank", { params }),
-
-  getProblemBankStatement: (id: string) =>
-    apiClient.get<ProblemBankStatementDto>(`/api/student/problem-bank/${id}`),
-
+  // Phase 3: Project Discovery
   getArchivedProjects: (params?: { search?: string; domain?: string; sdg?: string }) =>
     apiClient.get<ArchivedProjectSummaryDto[]>("/api/student/projects/archive", { params }),
 

@@ -53,17 +53,6 @@ public record AssignedDefenseTeamDto
     public List<AssignedDefenseTeamMemberDto> Members { get; init; } = new();
 }
 
-public record CreateProblemStatementRequest
-{
-    public Guid DepartmentId { get; init; }
-    public Guid AcademicTrackId { get; init; }
-    public string Title { get; init; } = string.Empty;
-    public string Abstract { get; init; } = string.Empty;
-    public string SdgCode { get; init; } = string.Empty;
-    public string? PrerequisitesCsv { get; init; }
-    public int MaxTeamCapacity { get; init; } = 4;
-}
-
 public record StudentScoreInput
 {
     public Guid StudentUserId { get; init; }

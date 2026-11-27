@@ -1510,81 +1510,6 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.ToTable("PlatformAuditLogs", (string)null);
                 });
 
-            modelBuilder.Entity("ProjectHub.Domain.Entities.ProblemBankStatement", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Abstract")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<Guid>("AcademicTrackId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("AllocatedTeamId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CollegeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("DepartmentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsAllocated")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("MaxTeamCapacity")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("PrerequisitesCsv")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ProposedByFacultyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("SdgCode")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AcademicTrackId");
-
-                    b.HasIndex("AllocatedTeamId");
-
-                    b.HasIndex("DepartmentId");
-
-                    b.HasIndex("ProposedByFacultyId");
-
-                    b.HasIndex("CollegeId", "DepartmentId", "AcademicTrackId");
-
-                    b.ToTable("ProblemBankStatements", (string)null);
-                });
-
             modelBuilder.Entity("ProjectHub.Domain.Entities.ProjectClosureRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3889,48 +3814,6 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("ReviewerUser");
                 });
 
-            modelBuilder.Entity("ProjectHub.Domain.Entities.ProblemBankStatement", b =>
-                {
-                    b.HasOne("ProjectHub.Domain.Entities.AcademicTrack", "AcademicTrack")
-                        .WithMany("ProblemStatements")
-                        .HasForeignKey("AcademicTrackId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ProjectHub.Domain.Entities.ProjectTeam", "AllocatedTeam")
-                        .WithMany()
-                        .HasForeignKey("AllocatedTeamId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("ProjectHub.Domain.Entities.CollegeTenant", "College")
-                        .WithMany()
-                        .HasForeignKey("CollegeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ProjectHub.Domain.Entities.Department", "Department")
-                        .WithMany()
-                        .HasForeignKey("DepartmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ProjectHub.Domain.Entities.UserAccount", "ProposedByFaculty")
-                        .WithMany()
-                        .HasForeignKey("ProposedByFacultyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AcademicTrack");
-
-                    b.Navigation("AllocatedTeam");
-
-                    b.Navigation("College");
-
-                    b.Navigation("Department");
-
-                    b.Navigation("ProposedByFaculty");
-                });
-
             modelBuilder.Entity("ProjectHub.Domain.Entities.ProjectClosureRecord", b =>
                 {
                     b.HasOne("ProjectHub.Domain.Entities.AcademicTrack", "AcademicTrack")
@@ -4522,8 +4405,6 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("ProjectHub.Domain.Entities.AcademicTrack", b =>
                 {
-                    b.Navigation("ProblemStatements");
-
                     b.Navigation("Teams");
                 });
 
