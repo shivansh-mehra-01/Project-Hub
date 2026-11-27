@@ -938,6 +938,7 @@ export interface AssignedDefenseTeamMemberDto {
   enrollmentCode: string;
   isTeamLead: boolean;
   moduleResponsibility: string;
+  skills?: string[];
 }
 
 export interface AssignedDefenseTeamDto {
@@ -979,6 +980,7 @@ export interface TeamMemberDto {
   enrollmentCode: string;
   isTeamLead: boolean;
   moduleResponsibility: string;
+  skills?: string[];
 }
 
 export interface SprintTaskDto {
@@ -1638,11 +1640,65 @@ export interface EligiblePeerDto {
 }
 
 export interface CreateStudentTeamRequest {
+  teamName?: string;
   title: string;
   abstract: string;
   domainTag?: string;
   sdgCode?: string;
   academicTrackId?: string;
+  creatorRole?: string;
+  requiredSkillsCsv?: string;
+  publishImmediately?: boolean;
+}
+
+export interface UpdateTeamDetailsRequest {
+  teamName?: string;
+  title?: string;
+  abstract?: string;
+  domainTag?: string;
+  requiredSkillsCsv?: string;
+  creatorRole?: string;
+}
+
+export type JoinRequestStatus = "Pending" | "Accepted" | "Rejected" | "Cancelled";
+
+export interface TeamJoinRequestDto {
+  id: string;
+  projectTeamId: string;
+  teamCode: string;
+  teamName?: string;
+  projectTitle: string;
+  studentUserId: string;
+  studentName: string;
+  studentUsn: string;
+  studentSkills: string[];
+  desiredRole: string;
+  message?: string;
+  status: JoinRequestStatus;
+  createdAtUtc: string;
+  respondedAtUtc?: string;
+  responseNotes?: string;
+}
+
+export interface PublishedTeamSummaryDto {
+  teamId: string;
+  teamCode: string;
+  teamName?: string;
+  title: string;
+  abstract: string;
+  domainTag: string;
+  academicTrackId: string;
+  academicTrackName: string;
+  semesterNumber?: number;
+  minTeamSize: number;
+  maxTeamSize: number;
+  currentMemberCount: number;
+  availableSlots: number;
+  requiredSkills: string[];
+  members: TeamMemberDto[];
+  myJoinRequestId?: string;
+  myJoinRequestStatus?: JoinRequestStatus;
+  publishedAtUtc?: string;
 }
 
 export interface SendTeamInvitationRequest {
@@ -1686,8 +1742,13 @@ export interface TransferTeamLeadRequest {
 export interface StudentTeamRosterDto {
   teamId: string;
   teamCode: string;
+  teamName?: string;
   title: string;
   abstract: string;
+  domainTag?: string;
+  isPublished?: boolean;
+  publishedAtUtc?: string;
+  requiredSkills?: string[];
   status: string;
   isRosterLocked: boolean;
   isCallerLead: boolean;
@@ -1696,6 +1757,7 @@ export interface StudentTeamRosterDto {
   currentMemberCount: number;
   members: TeamMemberDto[];
   pendingInvitations: TeamInvitationDto[];
+  incomingJoinRequests?: TeamJoinRequestDto[];
   guideUserId?: string;
   guideName?: string;
   preferredGuideUserId?: string;

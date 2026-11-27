@@ -42,6 +42,7 @@ import {
   Award,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
+import { StudentTeamFormationPanel } from "./components/StudentTeamFormationPanel";
 import { Button } from "@/design-system/components/Button";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
@@ -224,14 +225,6 @@ export const StudentWorkspaceView: React.FC = () => {
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [availableTracks, setAvailableTracks] = useState<CollegeTrackDto[]>([]);
   const [tracksLoading, setTracksLoading] = useState(true);
-  const [inspectingTrack, setInspectingTrack] = useState<CollegeTrackDto | null>(null);
-  const [showStartProjectModal, setShowStartProjectModal] = useState(false);
-  const [selectedTrackId, setSelectedTrackId] = useState("");
-  const [projectTitle, setProjectTitle] = useState("");
-  const [projectAbstract, setProjectAbstract] = useState("");
-  const [projectDomain, setProjectDomain] = useState("Software");
-  const [creatingProject, setCreatingProject] = useState(false);
-  const [createProjectError, setCreateProjectError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -244,9 +237,6 @@ export const StudentWorkspaceView: React.FC = () => {
         if (isMounted) {
           if (data) setDashboardData(data);
           setAvailableTracks(tracks || []);
-          if (tracks && tracks.length > 0) {
-            setSelectedTrackId(tracks[0].id);
-          }
         }
       } catch (err: unknown) {
         if (isMounted) {
@@ -929,73 +919,21 @@ export const StudentWorkspaceView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* NO ACTIVE PROJECT (No enrollment, offseason, or no open tracks)          */}
+      {/* NO ACTIVE PROJECT / PROJECT WINDOW & EXPLORE TEAMS                        */}
       {/* ========================================================================= */}
       {hasNoActiveProject &&
         (dashboardData?.allocationState !== "Unallocated" || (!tracksLoading && availableTracks.length === 0)) && (
           <Card className="p-10 text-center">
-            <p className="text-sm font-medium text-slate-600">No active project now</p>
+            <p className="text-sm font-medium text-slate-600">No active project window</p>
           </Card>
         )}
 
-      {/* ========================================================================= */}
-      {/* OPEN DEPARTMENT TRACKS (Unallocated student & HOD has launched tracks)   */}
-      {/* ========================================================================= */}
       {dashboardData?.allocationState === "Unallocated" && availableTracks.length > 0 && (
-        <div className="space-y-4">
-          <div className="text-xs font-semibold text-slate-700">Open Department Project Tracks</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {availableTracks.map((track) => (
-              <Card
-                key={track.id}
-                onClick={() => setInspectingTrack(track)}
-                className="cursor-pointer border-emerald-200 bg-emerald-50/30 hover:border-emerald-400 hover:shadow-sm transition-all"
-              >
-                <CardContent className="p-4 space-y-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-bold text-slate-900">{track.name}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {track.academicYear}
-                        {track.semesterNumber ? ` • Sem ${track.semesterNumber}` : ""}
-                        {track.subjectCode ? ` • ${track.subjectCode}` : ""}
-                      </div>
-                    </div>
-                    <Badge variant="success">
-                      {track.participationMode === "Individual"
-                        ? "Individual"
-                        : `Team (${track.minTeamSize ?? 2}–${track.maxTeamSize ?? 4})`}
-                    </Badge>
-                  </div>
-                  {track.description && (
-                    <p className="text-xs text-slate-600 line-clamp-2">{track.description}</p>
-                  )}
-                  <div className="flex items-center justify-between pt-2 border-t border-emerald-100">
-                    <span className="text-[11px] text-slate-500">
-                      {track.proposalDeadlineUtc
-                        ? `Cutoff: ${new Date(track.proposalDeadlineUtc).toLocaleDateString()}`
-                        : "Click to view details & guidelines"}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedTrackId(track.id);
-                        setProjectTitle("");
-                        setProjectAbstract("");
-                        setCreateProjectError(null);
-                        setShowStartProjectModal(true);
-                      }}
-                    >
-                      Start Project
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
+        <StudentTeamFormationPanel
+          availableTracks={availableTracks}
+          tracksLoading={tracksLoading}
+          onTeamCreated={() => window.location.reload()}
+        />
       )}
 
       {/* Incoming invitations (only shown if student actually has pending invitations) */}
@@ -1046,186 +984,6 @@ export const StudentWorkspaceView: React.FC = () => {
         </Card>
       )}
 
-      {/* Track Details & Guidelines Modal */}
-      <Modal
-        isOpen={Boolean(inspectingTrack)}
-        onClose={() => setInspectingTrack(null)}
-        title={inspectingTrack?.name || "Project Track Details"}
-        description={
-          inspectingTrack
-            ? `${inspectingTrack.academicYear}${inspectingTrack.semesterNumber ? ` • Semester ${inspectingTrack.semesterNumber}` : ""}${inspectingTrack.subjectCode ? ` • ${inspectingTrack.subjectCode}` : ""}`
-            : undefined
-        }
-      >
-        {inspectingTrack && (
-          <div className="space-y-4 text-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="success">
-                {inspectingTrack.participationMode === "Individual"
-                  ? "Individual Project"
-                  : `Team Project (${inspectingTrack.minTeamSize ?? 2}–${inspectingTrack.maxTeamSize ?? 4} members)`}
-              </Badge>
-              {inspectingTrack.subjectName && (
-                <Badge variant="neutral">{inspectingTrack.subjectName}</Badge>
-              )}
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5 space-y-1.5">
-              <div className="font-semibold text-slate-800">Project Guidelines &amp; Objectives</div>
-              <p className="text-slate-600 leading-relaxed whitespace-pre-line">
-                {inspectingTrack.description?.trim()
-                  ? inspectingTrack.description
-                  : "No additional guidelines specified by the department. Submit your project title, domain, and abstract before the proposal cutoff."}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-[11px] text-slate-500">Proposal Cutoff</div>
-                <div className="font-semibold text-slate-800 mt-0.5">
-                  {inspectingTrack.proposalDeadlineUtc
-                    ? new Date(inspectingTrack.proposalDeadlineUtc).toLocaleDateString()
-                    : "No hard cutoff"}
-                </div>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-[11px] text-slate-500">Final Submission Cutoff</div>
-                <div className="font-semibold text-slate-800 mt-0.5">
-                  {inspectingTrack.finalSubmissionDeadlineUtc
-                    ? new Date(inspectingTrack.finalSubmissionDeadlineUtc).toLocaleDateString()
-                    : "TBA by Department"}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 p-3 space-y-1">
-              <div className="font-semibold text-slate-800">Evaluation Split</div>
-              <div className="text-slate-600">
-                Guide {inspectingTrack.guideWeightPct}% • Mid-Term {inspectingTrack.midTermWeightPct}% • Final Viva {inspectingTrack.finalVivaWeightPct}%
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="secondary" size="sm" onClick={() => setInspectingTrack(null)}>
-                Close
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  const target = inspectingTrack;
-                  setInspectingTrack(null);
-                  setSelectedTrackId(target.id);
-                  setProjectTitle("");
-                  setProjectAbstract("");
-                  setCreateProjectError(null);
-                  setShowStartProjectModal(true);
-                }}
-              >
-                Start Project
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Start Department Project Modal */}
-      <Modal
-        isOpen={showStartProjectModal}
-        onClose={() => setShowStartProjectModal(false)}
-        title="Start Department Project"
-        description="Register your project under an open department track."
-      >
-        <div className="space-y-4">
-          {createProjectError && (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-              {createProjectError}
-            </div>
-          )}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Project Track
-            </label>
-            <select
-              value={selectedTrackId}
-              onChange={(e) => setSelectedTrackId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
-            >
-              {availableTracks.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.participationMode === "Individual" ? "Individual" : `Team ${t.minTeamSize ?? 2}–${t.maxTeamSize ?? 4}`})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Project Title *
-            </label>
-            <Input
-              value={projectTitle}
-              onChange={(e) => setProjectTitle(e.target.value)}
-              placeholder="e.g., Smart Campus Energy Optimizer"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Domain
-            </label>
-            <Input
-              value={projectDomain}
-              onChange={(e) => setProjectDomain(e.target.value)}
-              placeholder="e.g., AI / IoT / Systems"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Brief Abstract *
-            </label>
-            <Textarea
-              rows={3}
-              value={projectAbstract}
-              onChange={(e) => setProjectAbstract(e.target.value)}
-              placeholder="Describe the problem statement and proposed solution..."
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" size="sm" onClick={() => setShowStartProjectModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={creatingProject}
-              onClick={async () => {
-                if (!projectTitle.trim() || !projectAbstract.trim()) {
-                  setCreateProjectError("Project title and brief abstract are required.");
-                  return;
-                }
-                try {
-                  setCreatingProject(true);
-                  setCreateProjectError(null);
-                  await studentApi.createTeam({
-                    academicTrackId: selectedTrackId || undefined,
-                    title: projectTitle.trim(),
-                    abstract: projectAbstract.trim(),
-                    domainTag: projectDomain.trim() || "Software",
-                  });
-                  setShowStartProjectModal(false);
-                  window.location.reload();
-                } catch (err: unknown) {
-                  setCreateProjectError(err instanceof Error ? err.message : "Failed to start project.");
-                } finally {
-                  setCreatingProject(false);
-                }
-              }}
-            >
-              {creatingProject ? "Creating..." : "Create Project"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
       {/* ========================================================================= */}
       {/* STATE 2: PRE-APPROVAL SETUP                                               */}
       {/* ========================================================================= */}
@@ -1255,6 +1013,127 @@ export const StudentWorkspaceView: React.FC = () => {
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
               <span>{inviteFeedback}</span>
             </div>
+          )}
+
+          {/* Team Publishing & Join Requests (Draft -> Published -> Team Formation) */}
+          {!isSoloTrack && teamRoster && teamRoster.status === "Draft" && (
+            <Card className="border-slate-200">
+              <CardContent className="p-4 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900">
+                        {teamRoster.teamName || teamRoster.title}
+                      </span>
+                      <Badge variant={teamRoster.isPublished ? "success" : "neutral"} size="sm">
+                        {teamRoster.isPublished ? "Published • Open for Join Requests" : "Draft"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {teamRoster.isPublished
+                        ? "Eligible students in your project window can discover your team in Explore Teams and send join requests."
+                        : "Review your team details and publish when you are ready for eligible students to discover and request to join."}
+                    </p>
+                  </div>
+
+                  {isTeamLead && !teamRoster.isPublished && !isRosterLocked && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={async () => {
+                        try {
+                          const updated = await studentApi.publishCurrentTeam();
+                          setTeamRoster(updated);
+                          setInviteFeedback("Team published! Eligible students can now discover and request to join.");
+                        } catch (err: unknown) {
+                          setInviteFeedback(err instanceof Error ? err.message : "Failed to publish team.");
+                        }
+                      }}
+                    >
+                      Publish Team
+                    </Button>
+                  )}
+                </div>
+
+                {isTeamLead && (teamRoster.incomingJoinRequests?.length ?? 0) > 0 && (
+                  <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                    <div className="text-xs font-semibold text-slate-800">
+                      Incoming Join Requests ({teamRoster.incomingJoinRequests!.length})
+                    </div>
+                    <div className="space-y-2">
+                      {teamRoster.incomingJoinRequests!.map((req) => (
+                        <div
+                          key={req.id}
+                          className="p-3 rounded-lg border border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-slate-900">
+                                {req.studentName}
+                              </span>
+                              <span className="text-[11px] font-mono text-slate-500">
+                                {req.studentUsn}
+                              </span>
+                              <Badge variant="info" size="sm">
+                                Role: {req.desiredRole}
+                              </Badge>
+                            </div>
+                            {req.studentSkills.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {req.studentSkills.map((sk) => (
+                                  <span
+                                    key={sk}
+                                    className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] text-slate-600"
+                                  >
+                                    {sk}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {req.message && (
+                              <p className="text-[11px] text-slate-600">{req.message}</p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={async () => {
+                                try {
+                                  const updated = await studentApi.rejectJoinRequest(req.id);
+                                  setTeamRoster(updated);
+                                  setInviteFeedback(`Declined join request from ${req.studentName}.`);
+                                } catch (err: unknown) {
+                                  setInviteFeedback(err instanceof Error ? err.message : "Failed to reject request.");
+                                }
+                              }}
+                            >
+                              Reject
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={async () => {
+                                try {
+                                  const updated = await studentApi.acceptJoinRequest(req.id);
+                                  setTeamRoster(updated);
+                                  setInviteFeedback(`${req.studentName} joined the team as ${req.desiredRole}!`);
+                                } catch (err: unknown) {
+                                  setInviteFeedback(err instanceof Error ? err.message : "Failed to accept request.");
+                                }
+                              }}
+                            >
+                              Accept
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

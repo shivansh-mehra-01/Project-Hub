@@ -53,6 +53,7 @@ public class ProjectHubDbContext : DbContext, IAppDbContext
     public DbSet<ProjectTeam> ProjectTeams => Set<ProjectTeam>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<TeamInvitation> TeamInvitations => Set<TeamInvitation>();
+    public DbSet<TeamJoinRequest> TeamJoinRequests => Set<TeamJoinRequest>();
     public DbSet<SprintTask> SprintTasks => Set<SprintTask>();
     public DbSet<ProjectMilestone> ProjectMilestones => Set<ProjectMilestone>();
     public DbSet<MilestoneReviewHistory> MilestoneReviewHistories => Set<MilestoneReviewHistory>();

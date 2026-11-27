@@ -78,6 +78,20 @@ CREATE POLICY tenant_isolation_policy ON "CourseOutcomeDefinitions"
     );
 
 -- 2.6 ProjectTeams
+-- Note: TeamJoinRequests also enforces tenant isolation
+ALTER TABLE "TeamJoinRequests" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TeamJoinRequests" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON "TeamJoinRequests";
+CREATE POLICY tenant_isolation_policy ON "TeamJoinRequests"
+    AS PERMISSIVE FOR ALL TO PUBLIC
+    USING (
+        current_setting('app.is_super_admin', true) = 'true'
+        OR "CollegeId" = NULLIF(current_setting('app.current_tenant', true), '')::uuid
+    )
+    WITH CHECK (
+        current_setting('app.is_super_admin', true) = 'true'
+        OR "CollegeId" = NULLIF(current_setting('app.current_tenant', true), '')::uuid
+    );
 ALTER TABLE "ProjectTeams" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ProjectTeams" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_policy ON "ProjectTeams";

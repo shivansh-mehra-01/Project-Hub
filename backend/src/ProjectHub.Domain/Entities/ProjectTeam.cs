@@ -32,10 +32,14 @@ public class ProjectTeam : BaseEntity, ITenantEntity
         set => _teamCode = value?.Trim().ToUpperInvariant() ?? string.Empty;
     }
 
+    public string? TeamName { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Abstract { get; set; } = string.Empty;
     public string DomainTag { get; set; } = string.Empty;
     public string SdgCode { get; set; } = string.Empty;
+    public string? RequiredSkillsCsv { get; set; }
+    public bool IsPublished { get; set; } = false;
+    public DateTime? PublishedAtUtc { get; set; }
     public ProjectStatus Status { get; set; } = ProjectStatus.Draft;
     public Guid? GuideUserId { get; set; }
     public Guid? PreferredGuideUserId { get; set; }
@@ -64,6 +68,7 @@ public class ProjectTeam : BaseEntity, ITenantEntity
 
     public ICollection<TeamMember> Members { get; set; } = new List<TeamMember>();
     public ICollection<TeamInvitation> Invitations { get; set; } = new List<TeamInvitation>();
+    public ICollection<TeamJoinRequest> JoinRequests { get; set; } = new List<TeamJoinRequest>();
     public ICollection<SprintTask> Tasks { get; set; } = new List<SprintTask>();
     public ICollection<ProjectMilestone> Milestones { get; set; } = new List<ProjectMilestone>();
     public ICollection<ProjectReportSubmission> ReportSubmissions { get; set; } = new List<ProjectReportSubmission>();
