@@ -7,7 +7,9 @@ import { FolderGit2, Compass } from "lucide-react";
 
 export const HodProjectsTabBar: React.FC = () => {
   const pathname = usePathname();
-  const isTracks = pathname?.startsWith("/hod/projects/tracks");
+  const isTracks =
+    pathname?.startsWith("/hod/projects/tracks") ||
+    pathname?.startsWith("/hod/projects/start-window");
 
   return (
     <div className="flex items-center gap-1 border-b border-slate-200 pb-0">
