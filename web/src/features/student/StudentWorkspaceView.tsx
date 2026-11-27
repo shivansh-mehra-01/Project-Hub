@@ -226,34 +226,27 @@ export const StudentWorkspaceView: React.FC = () => {
   const [availableTracks, setAvailableTracks] = useState<CollegeTrackDto[]>([]);
   const [tracksLoading, setTracksLoading] = useState(true);
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchDashboard = async () => {
-      try {
-        const [data, tracks] = await Promise.all([
-          studentApi.getDashboard(),
-          studentApi.getAvailableTracks().catch(() => [] as CollegeTrackDto[]),
-        ]);
-        if (isMounted) {
-          if (data) setDashboardData(data);
-          setAvailableTracks(tracks || []);
-        }
-      } catch (err: unknown) {
-        if (isMounted) {
-          setDashboardError(err instanceof Error ? err.message : "Failed to load student dashboard");
-        }
-      } finally {
-        if (isMounted) {
-          setDashboardLoading(false);
-          setTracksLoading(false);
-        }
-      }
-    };
-    fetchDashboard();
-    return () => {
-      isMounted = false;
-    };
+  const refreshWorkspace = useCallback(async () => {
+    try {
+      const [data, tracks, roster] = await Promise.all([
+        studentApi.getDashboard(),
+        studentApi.getAvailableTracks().catch(() => [] as CollegeTrackDto[]),
+        studentApi.getCurrentTeamRoster().catch(() => null),
+      ]);
+      if (data) setDashboardData(data);
+      setAvailableTracks(tracks || []);
+      if (roster) setTeamRoster(roster);
+    } catch (err: unknown) {
+      setDashboardError(err instanceof Error ? err.message : "Failed to refresh workspace");
+    } finally {
+      setDashboardLoading(false);
+      setTracksLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshWorkspace();
+  }, [refreshWorkspace]);
 
   useDashboardHeader({
     title: "Workspace",
@@ -932,7 +925,7 @@ export const StudentWorkspaceView: React.FC = () => {
         <StudentTeamFormationPanel
           availableTracks={availableTracks}
           tracksLoading={tracksLoading}
-          onTeamCreated={() => window.location.reload()}
+          onTeamCreated={refreshWorkspace}
         />
       )}
 

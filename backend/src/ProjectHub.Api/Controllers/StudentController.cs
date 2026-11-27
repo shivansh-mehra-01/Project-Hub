@@ -3367,6 +3367,7 @@ public class StudentController : ControllerBase
 
         // 1. Verify active enrollment
         var enrollment = await _context.StudentAcademicEnrollments
+            .Include(e => e.CurrentSemesterTerm)
             .FirstOrDefaultAsync(e => e.StudentUserId == studentId && e.CollegeId == collegeId && e.AcademicStatus == AcademicStatus.Active && !e.IsDeleted, cancellationToken);
         if (enrollment == null)
         {
@@ -3394,6 +3395,14 @@ public class StudentController : ControllerBase
         {
             return BadRequest(new { message = "Project title cannot exceed 200 characters." });
         }
+        if (!string.IsNullOrWhiteSpace(request.TeamName) && request.TeamName.Trim().Length > 120)
+        {
+            return BadRequest(new { message = "Team name cannot exceed 120 characters." });
+        }
+        if (!string.IsNullOrWhiteSpace(request.CreatorRole) && request.CreatorRole.Trim().Length > 120)
+        {
+            return BadRequest(new { message = "Contribution role cannot exceed 120 characters." });
+        }
         if (string.IsNullOrWhiteSpace(request.Abstract) || request.Abstract.Trim().Length < 20)
         {
             return BadRequest(new { message = "Project abstract is mandatory and must be at least 20 characters long." });
@@ -3410,19 +3419,26 @@ public class StudentController : ControllerBase
         }
 
         // 4. Resolve track within the student's department
+        var studentSem = enrollment.CurrentSemesterTerm?.SemesterNumber;
         AcademicTrack? selectedTrack = null;
         if (!request.AcademicTrackId.HasValue || request.AcademicTrackId.Value == Guid.Empty)
         {
-            selectedTrack = await _context.AcademicTracks
-                .FirstOrDefaultAsync(t => t.CollegeId == collegeId &&
-                                          t.DepartmentId == student.DepartmentId.Value &&
-                                          t.Status == AcademicTrackStatus.Open &&
-                                          t.IsActive &&
-                                          !t.IsDeleted, cancellationToken);
+            var openTracks = await _context.AcademicTracks
+                .Include(t => t.SemesterTerm)
+                .Where(t => t.CollegeId == collegeId &&
+                            t.DepartmentId == student.DepartmentId.Value &&
+                            t.Status == AcademicTrackStatus.Open &&
+                            t.IsActive &&
+                            !t.IsDeleted)
+                .ToListAsync(cancellationToken);
+
+            selectedTrack = openTracks.FirstOrDefault(t =>
+                !studentSem.HasValue || t.SemesterTerm == null || t.SemesterTerm.SemesterNumber == studentSem.Value);
         }
         else
         {
             selectedTrack = await _context.AcademicTracks
+                .Include(t => t.SemesterTerm)
                 .FirstOrDefaultAsync(t => t.Id == request.AcademicTrackId.Value &&
                                           t.CollegeId == collegeId &&
                                           t.DepartmentId == student.DepartmentId.Value &&
@@ -3434,6 +3450,10 @@ public class StudentController : ControllerBase
             if (selectedTrack.Status != AcademicTrackStatus.Open || !selectedTrack.IsActive)
             {
                 return BadRequest(new { message = $"This project track is currently {selectedTrack.Status} and not accepting new projects." });
+            }
+            if (studentSem.HasValue && selectedTrack.SemesterTerm != null && selectedTrack.SemesterTerm.SemesterNumber != studentSem.Value)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You are not eligible to create a team in a project window for another semester." });
             }
         }
 

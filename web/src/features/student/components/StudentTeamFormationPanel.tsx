@@ -28,7 +28,7 @@ import {
 export interface StudentTeamFormationPanelProps {
   availableTracks: CollegeTrackDto[];
   tracksLoading: boolean;
-  onTeamCreated: () => void;
+  onTeamCreated: () => Promise<void> | void;
 }
 
 export const StudentTeamFormationPanel: React.FC<StudentTeamFormationPanelProps> = ({
@@ -154,7 +154,7 @@ export const StudentTeamFormationPanel: React.FC<StudentTeamFormationPanelProps>
         publishImmediately,
       });
       setCreateOpen(false);
-      onTeamCreated();
+      await onTeamCreated();
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : "Failed to create team.");
     } finally {
@@ -373,7 +373,27 @@ export const StudentTeamFormationPanel: React.FC<StudentTeamFormationPanelProps>
               className="rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-emerald-600 focus:outline-none bg-white sm:w-48"
             />
 
-            {availableTracks.length > 1 && (
+            {selectedTrack && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3.5 py-2.5 text-xs space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-emerald-950">{selectedTrack.name}</span>
+                <Badge variant="success" size="sm">
+                  {selectedTrack.participationMode === "Individual"
+                    ? "Individual (1)"
+                    : `Capacity: ${selectedTrack.minTeamSize ?? 2}–${selectedTrack.maxTeamSize ?? 4} members`}
+                </Badge>
+              </div>
+              <div className="text-[11px] text-emerald-800">
+                {selectedTrack.academicYear}
+                {selectedTrack.semesterNumber ? ` • Semester ${selectedTrack.semesterNumber}` : ""}
+                {selectedTrack.proposalDeadlineUtc
+                  ? ` • Deadline: ${new Date(selectedTrack.proposalDeadlineUtc).toLocaleDateString()}`
+                  : ""}
+              </div>
+            </div>
+          )}
+
+          {availableTracks.length > 1 && (
               <select
                 value={selectedTeamFilter}
                 onChange={(e) => setSelectedTeamFilter(e.target.value)}
@@ -699,6 +719,26 @@ export const StudentTeamFormationPanel: React.FC<StudentTeamFormationPanelProps>
           {createError && (
             <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
               {createError}
+            </div>
+          )}
+
+          {selectedTrack && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3.5 py-2.5 text-xs space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-emerald-950">{selectedTrack.name}</span>
+                <Badge variant="success" size="sm">
+                  {selectedTrack.participationMode === "Individual"
+                    ? "Individual (1)"
+                    : `Capacity: ${selectedTrack.minTeamSize ?? 2}–${selectedTrack.maxTeamSize ?? 4} members`}
+                </Badge>
+              </div>
+              <div className="text-[11px] text-emerald-800">
+                {selectedTrack.academicYear}
+                {selectedTrack.semesterNumber ? ` • Semester ${selectedTrack.semesterNumber}` : ""}
+                {selectedTrack.proposalDeadlineUtc
+                  ? ` • Deadline: ${new Date(selectedTrack.proposalDeadlineUtc).toLocaleDateString()}`
+                  : ""}
+              </div>
             </div>
           )}
 
