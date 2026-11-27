@@ -68,11 +68,23 @@ public class ProductionAuthLifecycleTests : IClassFixture<CustomWebApplicationFa
     [Fact]
     public async Task RefreshToken_RotationAndReplayDetection_RevokesTokenFamily()
     {
-        var auth = await LoginAsync("faculty@sistec.ac.in");
+        // Use grace=0 so replay detection is tested outside the concurrent BFF refresh grace window
+        using var noGraceFactory = _factory.WithWebHostBuilder(b =>
+            b.UseSetting("Auth:RefreshRaceGraceSeconds", "0"));
+        using var client = noGraceFactory.CreateClient();
+
+        var loginRes = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            Email = "faculty@sistec.ac.in",
+            Password = "Pass@1234"
+        });
+        loginRes.EnsureSuccessStatusCode();
+        var auth = await loginRes.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.NotNull(auth);
         Assert.False(string.IsNullOrWhiteSpace(auth.RefreshToken));
 
         // 1. Valid refresh rotates token
-        var refreshRes1 = await _client.PostAsJsonAsync("/api/auth/refresh", new RefreshTokenRequest
+        var refreshRes1 = await client.PostAsJsonAsync("/api/auth/refresh", new RefreshTokenRequest
         {
             RefreshToken = auth.RefreshToken
         });
@@ -82,14 +94,14 @@ public class ProductionAuthLifecycleTests : IClassFixture<CustomWebApplicationFa
         Assert.NotEqual(auth.RefreshToken, rotated.RefreshToken);
 
         // 2. Replay of old refresh token triggers family revocation
-        var replayRes = await _client.PostAsJsonAsync("/api/auth/refresh", new RefreshTokenRequest
+        var replayRes = await client.PostAsJsonAsync("/api/auth/refresh", new RefreshTokenRequest
         {
             RefreshToken = auth.RefreshToken
         });
         Assert.Equal(HttpStatusCode.Unauthorized, replayRes.StatusCode);
 
         // 3. Even the newer rotated token in that family is now revoked
-        var postReplayRes = await _client.PostAsJsonAsync("/api/auth/refresh", new RefreshTokenRequest
+        var postReplayRes = await client.PostAsJsonAsync("/api/auth/refresh", new RefreshTokenRequest
         {
             RefreshToken = rotated.RefreshToken
         });
