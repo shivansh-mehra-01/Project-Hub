@@ -1690,4 +1690,324 @@ public class HodController : ControllerBase
             DomainDistribution = domainStats
         });
     }
+
+    [HttpGet("students")]
+    public async Task<ActionResult<List<HodDepartmentStudentDto>>> GetDepartmentStudents(
+        [FromQuery] string? search,
+        [FromQuery] int? semesterNumber,
+        [FromQuery] string? status)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+
+        var studentsQuery = _context.Users
+            .AsNoTracking()
+            .Where(u => u.CollegeId == collegeId &&
+                        u.DepartmentId == deptId &&
+                        u.Role == UserRole.Student &&
+                        !u.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            studentsQuery = studentsQuery.Where(u =>
+                u.FullName.ToLower().Contains(term) ||
+                u.Email.ToLower().Contains(term) ||
+                (u.EnrollmentOrEmployeeCode != null && u.EnrollmentOrEmployeeCode.ToLower().Contains(term)));
+        }
+
+        var students = await studentsQuery
+            .OrderBy(u => u.FullName)
+            .ToListAsync();
+
+        var studentIds = students.Select(s => s.Id).ToList();
+
+        var enrollments = await _context.StudentAcademicEnrollments
+            .AsNoTracking()
+            .Include(e => e.CourseProgram)
+            .Include(e => e.CurrentSemesterTerm)
+            .Where(e => e.CollegeId == collegeId && studentIds.Contains(e.StudentUserId) && !e.IsDeleted)
+            .ToListAsync();
+
+        var memberships = await _context.TeamMembers
+            .AsNoTracking()
+            .Include(m => m.ProjectTeam)
+            .Where(m => m.CollegeId == collegeId && studentIds.Contains(m.UserId) && !m.IsDeleted && m.ProjectTeam != null && !m.ProjectTeam.IsDeleted)
+            .ToListAsync();
+
+        var enrollmentByStudent = enrollments
+            .GroupBy(e => e.StudentUserId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(e => e.AcademicStatus == AcademicStatus.Active ? 0 : 1)
+                      .ThenByDescending(e => e.UpdatedAtUtc)
+                      .First());
+
+        var teamByStudent = memberships
+            .GroupBy(m => m.UserId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.CreatedAtUtc).First().ProjectTeam!);
+
+        var result = students.Select(s =>
+        {
+            enrollmentByStudent.TryGetValue(s.Id, out var enr);
+            teamByStudent.TryGetValue(s.Id, out var team);
+            return new HodDepartmentStudentDto
+            {
+                Id = s.Id,
+                FullName = s.FullName,
+                Email = s.Email,
+                StudentNumber = s.EnrollmentOrEmployeeCode ?? string.Empty,
+                IsActive = s.IsActive,
+                IsActivated = s.IsActivated,
+                ProgramName = enr?.CourseProgram?.Name,
+                CurrentSemesterNumber = enr?.CurrentSemesterTerm?.SemesterNumber,
+                CurrentSemesterName = enr?.CurrentSemesterTerm?.SemesterName,
+                AcademicStatus = enr?.AcademicStatus.ToString() ?? "Not Enrolled",
+                AdmissionBatch = enr?.AdmissionBatch,
+                ActiveTeamCode = team?.TeamCode,
+                ActiveTeamTitle = team?.Title
+            };
+        });
+
+        if (semesterNumber.HasValue)
+        {
+            result = result.Where(r => r.CurrentSemesterNumber == semesterNumber.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, "ALL", StringComparison.OrdinalIgnoreCase))
+        {
+            result = result.Where(r => string.Equals(r.AcademicStatus, status, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return Ok(result.ToList());
+    }
+
+    [HttpPut("students/{studentId:guid}/enrollment")]
+    public async Task<ActionResult<HodDepartmentStudentDto>> UpdateStudentEnrollment(
+        Guid studentId,
+        [FromBody] UpdateStudentSemesterRequest request)
+    {
+        if (request.SemesterNumber < 1 || request.SemesterNumber > 12)
+        {
+            return BadRequest(new { message = "SemesterNumber must be between 1 and 12." });
+        }
+
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+
+        var student = await _context.Users
+            .FirstOrDefaultAsync(u => u.Id == studentId &&
+                                      u.CollegeId == collegeId &&
+                                      u.DepartmentId == deptId &&
+                                      u.Role == UserRole.Student &&
+                                      !u.IsDeleted);
+
+        if (student == null)
+        {
+            return NotFound(new { message = "Student not found in your department." });
+        }
+
+        var term = await ResolveOrCreateSemesterTermAsync(collegeId, deptId, request.SemesterNumber);
+        var programId = await ResolveDepartmentCourseProgramIdAsync(collegeId, deptId);
+        if (programId == Guid.Empty)
+        {
+            return BadRequest(new { message = "No Course Program is configured for this college/department." });
+        }
+
+        var enrollment = await _context.StudentAcademicEnrollments
+            .FirstOrDefaultAsync(e => e.CollegeId == collegeId && e.StudentUserId == studentId && !e.IsDeleted);
+
+        if (enrollment == null)
+        {
+            var currentYear = DateTime.UtcNow.Year;
+            enrollment = new StudentAcademicEnrollment
+            {
+                CollegeId = collegeId,
+                StudentUserId = studentId,
+                CourseProgramId = programId,
+                DepartmentId = deptId,
+                CurrentSemesterTermId = term.Id,
+                AdmissionBatch = string.IsNullOrWhiteSpace(request.AdmissionBatch) ? $"{currentYear}-{currentYear + 4}" : request.AdmissionBatch.Trim(),
+                AcademicStatus = request.AcademicStatus
+            };
+            await _context.StudentAcademicEnrollments.AddAsync(enrollment);
+        }
+        else
+        {
+            enrollment.DepartmentId = deptId;
+            enrollment.CourseProgramId = programId;
+            enrollment.CurrentSemesterTermId = term.Id;
+            enrollment.AcademicStatus = request.AcademicStatus;
+            if (!string.IsNullOrWhiteSpace(request.AdmissionBatch))
+            {
+                enrollment.AdmissionBatch = request.AdmissionBatch.Trim();
+            }
+        }
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            ActorEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "hod",
+            Action = "HOD_UPDATE_STUDENT_ENROLLMENT",
+            TargetEntity = $"Student:{student.EnrollmentOrEmployeeCode ?? student.Email}",
+            TargetTenantId = collegeId,
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                studentId = student.Id,
+                departmentId = deptId,
+                semesterNumber = request.SemesterNumber,
+                academicStatus = request.AcademicStatus.ToString()
+            }),
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+
+        var program = await _context.CoursePrograms.AsNoTracking().FirstOrDefaultAsync(p => p.Id == programId);
+        return Ok(new HodDepartmentStudentDto
+        {
+            Id = student.Id,
+            FullName = student.FullName,
+            Email = student.Email,
+            StudentNumber = student.EnrollmentOrEmployeeCode ?? string.Empty,
+            IsActive = student.IsActive,
+            IsActivated = student.IsActivated,
+            ProgramName = program?.Name,
+            CurrentSemesterNumber = term.SemesterNumber,
+            CurrentSemesterName = term.SemesterName,
+            AcademicStatus = enrollment.AcademicStatus.ToString(),
+            AdmissionBatch = enrollment.AdmissionBatch
+        });
+    }
+
+    [HttpPost("students/bulk-enroll")]
+    public async Task<IActionResult> BulkEnrollStudents([FromBody] BulkEnrollStudentsRequest request)
+    {
+        if (request.StudentIds == null || request.StudentIds.Count == 0)
+        {
+            return BadRequest(new { message = "Select at least one student to enroll." });
+        }
+        if (request.SemesterNumber < 1 || request.SemesterNumber > 12)
+        {
+            return BadRequest(new { message = "SemesterNumber must be between 1 and 12." });
+        }
+
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+
+        var students = await _context.Users
+            .Where(u => u.CollegeId == collegeId &&
+                        u.DepartmentId == deptId &&
+                        u.Role == UserRole.Student &&
+                        request.StudentIds.Contains(u.Id) &&
+                        !u.IsDeleted)
+            .ToListAsync();
+
+        if (students.Count == 0)
+        {
+            return NotFound(new { message = "No matching students found in your department." });
+        }
+
+        var term = await ResolveOrCreateSemesterTermAsync(collegeId, deptId, request.SemesterNumber);
+        var programId = await ResolveDepartmentCourseProgramIdAsync(collegeId, deptId);
+        if (programId == Guid.Empty)
+        {
+            return BadRequest(new { message = "No Course Program is configured for this college/department." });
+        }
+
+        var foundIds = students.Select(s => s.Id).ToList();
+        var existingEnrollments = await _context.StudentAcademicEnrollments
+            .Where(e => e.CollegeId == collegeId && foundIds.Contains(e.StudentUserId) && !e.IsDeleted)
+            .ToDictionaryAsync(e => e.StudentUserId);
+
+        var currentYear = DateTime.UtcNow.Year;
+        foreach (var student in students)
+        {
+            if (existingEnrollments.TryGetValue(student.Id, out var existing))
+            {
+                existing.DepartmentId = deptId;
+                existing.CourseProgramId = programId;
+                existing.CurrentSemesterTermId = term.Id;
+                existing.AcademicStatus = request.AcademicStatus;
+            }
+            else
+            {
+                await _context.StudentAcademicEnrollments.AddAsync(new StudentAcademicEnrollment
+                {
+                    CollegeId = collegeId,
+                    StudentUserId = student.Id,
+                    CourseProgramId = programId,
+                    DepartmentId = deptId,
+                    CurrentSemesterTermId = term.Id,
+                    AdmissionBatch = $"{currentYear}-{currentYear + 4}",
+                    AcademicStatus = request.AcademicStatus
+                });
+            }
+        }
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            ActorEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "hod",
+            Action = "HOD_BULK_ENROLL_STUDENTS",
+            TargetEntity = $"Department:{deptId}",
+            TargetTenantId = collegeId,
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                count = students.Count,
+                semesterNumber = request.SemesterNumber,
+                academicStatus = request.AcademicStatus.ToString()
+            }),
+            OccurredAtUtc = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+        return Ok(new { updatedCount = students.Count, semesterNumber = term.SemesterNumber, semesterName = term.SemesterName });
+    }
+
+    private async Task<SemesterTerm> ResolveOrCreateSemesterTermAsync(Guid collegeId, Guid deptId, int semesterNumber)
+    {
+        var activeSession = await _context.AcademicSessions
+            .Where(s => s.CollegeId == collegeId && !s.IsDeleted && s.IsActive)
+            .OrderByDescending(s => s.StartDate)
+            .FirstOrDefaultAsync();
+
+        var term = await _context.SemesterTerms.FirstOrDefaultAsync(t =>
+            t.CollegeId == collegeId &&
+            t.DepartmentId == deptId &&
+            (activeSession == null || t.AcademicSessionId == activeSession.Id) &&
+            t.SemesterNumber == semesterNumber &&
+            !t.IsDeleted);
+
+        if (term != null) return term;
+
+        term = new SemesterTerm
+        {
+            CollegeId = collegeId,
+            DepartmentId = deptId,
+            AcademicSessionId = activeSession?.Id,
+            SemesterNumber = semesterNumber,
+            SemesterName = $"Semester {semesterNumber}",
+            Parity = (semesterNumber % 2 == 1) ? SemesterParity.Odd : SemesterParity.Even,
+            IsActive = true
+        };
+        await _context.SemesterTerms.AddAsync(term);
+        await _context.SaveChangesAsync();
+        return term;
+    }
+
+    private async Task<Guid> ResolveDepartmentCourseProgramIdAsync(Guid collegeId, Guid deptId)
+    {
+        var dept = await _context.Departments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == deptId && d.CollegeId == collegeId && !d.IsDeleted);
+        if (dept?.CourseProgramId.HasValue == true)
+        {
+            return dept.CourseProgramId.Value;
+        }
+        return await _context.CoursePrograms.AsNoTracking()
+            .Where(p => p.CollegeId == collegeId && p.IsActive && !p.IsDeleted)
+            .OrderBy(p => p.Code == "BTECH" ? 0 : 1)
+            .Select(p => p.Id)
+            .FirstOrDefaultAsync();
+    }
 }

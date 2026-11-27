@@ -402,4 +402,52 @@ public class DepartmentTrackLifecycleTests : IClassFixture<CustomWebApplicationF
         });
         Assert.Equal(HttpStatusCode.BadRequest, createResp.StatusCode);
     }
+
+    [Fact]
+    public async Task Hod_CanEnrollDepartmentStudents_And_CreateSem1Track_ForFirstSemStudent()
+    {
+        var fx = await SeedFixtureAsync();
+        var hodToken = GenerateToken(fx.HodAId, fx.CollegeId, fx.DeptAId, UserRole.HOD);
+        var stuToken = GenerateToken(fx.StudentAId, fx.CollegeId, fx.DeptAId, UserRole.Student);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", hodToken);
+
+        // 1. HOD creates a Semester 1 track even though Semester 1 doesn't exist yet (SemesterTermId = null, SemesterNumber = 1)
+        var trackResp = await _client.PostAsJsonAsync("/api/hod/tracks", new CreateDepartmentTrackRequest
+        {
+            Name = "First Sem Mini Project",
+            AcademicYear = "2026-27",
+            AcademicSessionId = fx.SessionId,
+            SemesterTermId = Guid.Empty,
+            SemesterNumber = 1,
+            LaunchImmediately = true
+        });
+        Assert.Equal(HttpStatusCode.OK, trackResp.StatusCode);
+        var track = await trackResp.Content.ReadFromJsonAsync<CollegeTrackDto>();
+        Assert.NotNull(track);
+        Assert.Equal(1, track!.SemesterNumber);
+
+        // 2. HOD lists department students and updates StudentA to Semester 1
+        var listResp = await _client.GetAsync("/api/hod/students");
+        Assert.Equal(HttpStatusCode.OK, listResp.StatusCode);
+        var students = await listResp.Content.ReadFromJsonAsync<List<HodDepartmentStudentDto>>();
+        Assert.Contains(students!, s => s.Id == fx.StudentAId);
+
+        var enrollResp = await _client.PutAsJsonAsync($"/api/hod/students/{fx.StudentAId}/enrollment", new UpdateStudentSemesterRequest
+        {
+            SemesterNumber = 1,
+            AcademicStatus = AcademicStatus.Active
+        });
+        Assert.Equal(HttpStatusCode.OK, enrollResp.StatusCode);
+        var updatedStudent = await enrollResp.Content.ReadFromJsonAsync<HodDepartmentStudentDto>();
+        Assert.Equal(1, updatedStudent!.CurrentSemesterNumber);
+        Assert.Equal("Active", updatedStudent.AcademicStatus);
+
+        // 3. StudentA now discovers the Semester 1 track
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", stuToken);
+        var stuTracksResp = await _client.GetAsync("/api/student/tracks");
+        Assert.Equal(HttpStatusCode.OK, stuTracksResp.StatusCode);
+        var stuTracks = await stuTracksResp.Content.ReadFromJsonAsync<List<CollegeTrackDto>>();
+        Assert.Contains(stuTracks!, t => t.Id == track.Id && t.SemesterNumber == 1);
+    }
 }

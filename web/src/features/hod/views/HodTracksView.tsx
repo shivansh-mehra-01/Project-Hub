@@ -28,6 +28,7 @@ import {
   ParticipationMode,
   AcademicTrackStatus,
 } from "@/lib/api";
+import { HodProjectsTabBar } from "../components/HodProjectsTabBar";
 
 const STATUS_BADGE: Record<AcademicTrackStatus, "success" | "warning" | "neutral" | "danger"> = {
   Open: "success",
@@ -42,6 +43,7 @@ interface TrackFormState {
   academicYear: string;
   academicSessionId: string;
   semesterTermId: string;
+  semesterNumber?: number;
   subjectOfferingId: string;
   participationMode: ParticipationMode;
   minTeamSize: number;
@@ -64,6 +66,7 @@ const DEFAULT_FORM: TrackFormState = {
   academicYear: "2025-26",
   academicSessionId: "",
   semesterTermId: "",
+  semesterNumber: undefined,
   subjectOfferingId: "",
   participationMode: "Team",
   minTeamSize: 2,
@@ -127,6 +130,8 @@ export const HodTracksView: React.FC = () => {
 
   const openCreateWizard = () => {
     const activeSession = context?.availableSessions?.find((s) => s.isActive) ?? context?.availableSessions?.[0];
+    const firstSem = context?.availableSemesters?.[0];
+    const validSemId = firstSem?.id && firstSem.id !== "00000000-0000-0000-0000-000000000000" ? firstSem.id : "";
     setEditingTrack(null);
     setWizardStep(1);
     setFormError(null);
@@ -134,7 +139,8 @@ export const HodTracksView: React.FC = () => {
       ...DEFAULT_FORM,
       academicYear: activeSession?.label || "2025-26",
       academicSessionId: activeSession?.id || "",
-      semesterTermId: context?.availableSemesters?.[0]?.id || "",
+      semesterTermId: validSemId,
+      semesterNumber: firstSem?.semesterNumber,
       subjectOfferingId: context?.availableOfferings?.[0]?.id || "",
     });
     setModalOpen(true);
@@ -215,12 +221,17 @@ export const HodTracksView: React.FC = () => {
         });
         showToast("Project track updated.");
       } else {
+        const cleanSemId =
+          form.semesterTermId && form.semesterTermId !== "00000000-0000-0000-0000-000000000000"
+            ? form.semesterTermId
+            : undefined;
         await hodApi.createTrack({
           name: form.name.trim(),
           description: form.description.trim() || undefined,
           academicYear: form.academicYear.trim() || "2025-26",
           academicSessionId: form.academicSessionId || undefined,
-          semesterTermId: form.semesterTermId || undefined,
+          semesterTermId: cleanSemId,
+          semesterNumber: form.semesterNumber,
           subjectOfferingId: form.subjectOfferingId || undefined,
           participationMode: form.participationMode,
           minTeamSize: form.participationMode === "Individual" ? 1 : form.minTeamSize,
@@ -267,6 +278,7 @@ export const HodTracksView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <HodProjectsTabBar />
       {toast && (
         <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-medium text-white shadow-lg">
           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
@@ -479,22 +491,51 @@ export const HodTracksView: React.FC = () => {
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-2xl rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  {editingTrack ? "Edit Project Track" : "Initialize Department Project Track"}
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Step {wizardStep} of 3 • {wizardStep === 1 ? "Track Identity & Scope" : wizardStep === 2 ? "Participation & Deadlines" : "Evaluation Weights & Launch"}
-                </p>
+            <div className="px-5 pt-4 pb-3 border-b border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    {editingTrack ? "Edit Project Track" : "Initialize Department Project Track"}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Step {wizardStep} of 3 • {wizardStep === 1 ? "Track Identity & Scope" : wizardStep === 2 ? "Participation & Deadlines" : "Evaluation Weights & Launch"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="Close modal"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                aria-label="Close modal"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { step: 1 as const, label: "1. Identity & Scope" },
+                  { step: 2 as const, label: "2. Mode & Deadlines" },
+                  { step: 3 as const, label: "3. Weights & Launch" },
+                ].map((item) => (
+                  <button
+                    key={item.step}
+                    type="button"
+                    onClick={() => {
+                      if (item.step <= wizardStep || form.name.trim()) {
+                        setFormError(null);
+                        setWizardStep(item.step);
+                      }
+                    }}
+                    className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-left transition ${
+                      wizardStep === item.step
+                        ? "bg-emerald-700 text-white"
+                        : wizardStep > item.step
+                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -506,6 +547,37 @@ export const HodTracksView: React.FC = () => {
 
               {wizardStep === 1 && (
                 <div className="space-y-4">
+                  {!editingTrack && (
+                    <div>
+                      <div className="text-[11px] font-semibold text-slate-500 mb-1.5">Quick Presets</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { label: "Minor Project", name: `Minor Project Sem ${form.semesterNumber ?? 6} (${form.academicYear})`, mode: "Team" as ParticipationMode, min: 2, max: 4 },
+                          { label: "Major Project", name: `Major Project Sem ${form.semesterNumber ?? 8} (${form.academicYear})`, mode: "Team" as ParticipationMode, min: 2, max: 4 },
+                          { label: "Mini Project", name: `Mini Project Sem ${form.semesterNumber ?? 4} (${form.academicYear})`, mode: "Team" as ParticipationMode, min: 2, max: 3 },
+                          { label: "Individual Capstone", name: `Individual Capstone Sem ${form.semesterNumber ?? 1} (${form.academicYear})`, mode: "Individual" as ParticipationMode, min: 1, max: 1 },
+                        ].map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() =>
+                              setForm((p) => ({
+                                ...p,
+                                name: preset.name,
+                                participationMode: preset.mode,
+                                minTeamSize: preset.min,
+                                maxTeamSize: preset.max,
+                              }))
+                            }
+                            className="rounded-full border border-slate-200 bg-slate-50 hover:border-emerald-400 hover:bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-slate-700 transition"
+                          >
+                            + {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Track Name *
@@ -549,20 +621,35 @@ export const HodTracksView: React.FC = () => {
                     {!editingTrack && (
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 mb-1">
-                          Semester Term
+                          Target Semester
                         </label>
                         <select
-                          value={form.semesterTermId}
-                          onChange={(e) => setForm((p) => ({ ...p, semesterTermId: e.target.value }))}
+                          value={form.semesterNumber ? String(form.semesterNumber) : ""}
+                          onChange={(e) => {
+                            const semNum = e.target.value ? Number(e.target.value) : undefined;
+                            const matched = context?.availableSemesters?.find((s) => s.semesterNumber === semNum);
+                            const validId =
+                              matched?.id && matched.id !== "00000000-0000-0000-0000-000000000000"
+                                ? matched.id
+                                : "";
+                            setForm((p) => ({
+                              ...p,
+                              semesterNumber: semNum,
+                              semesterTermId: validId,
+                            }));
+                          }}
                           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
                         >
-                          <option value="">All Department Semesters</option>
+                          <option value="">Default Department Semester</option>
                           {context?.availableSemesters?.map((s) => (
-                            <option key={s.id} value={s.id}>
+                            <option key={`sem-${s.semesterNumber}`} value={String(s.semesterNumber)}>
                               Sem {s.semesterNumber} — {s.semesterName}
                             </option>
                           ))}
                         </select>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Only students enrolled in this semester will see this track.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -758,6 +845,32 @@ export const HodTracksView: React.FC = () => {
                       </span>
                     </label>
                   )}
+
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-700">Evaluation Split Total</span>
+                      <Badge
+                        variant={form.guideWeightPct + form.midTermWeightPct + form.finalVivaWeightPct === 100 ? "success" : "danger"}
+                        size="sm"
+                      >
+                        {form.guideWeightPct + form.midTermWeightPct + form.finalVivaWeightPct}% / 100%
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-700">Rubric Split Total</span>
+                      <Badge
+                        variant={form.sharedProjectRubricPct + form.individualStudentRubricPct === 100 ? "success" : "danger"}
+                        size="sm"
+                      >
+                        {form.sharedProjectRubricPct + form.individualStudentRubricPct}% / 100%
+                      </Badge>
+                    </div>
+                    <div className="pt-1 text-[11px] text-slate-500">
+                      Track: <strong className="text-slate-800">{form.name || "Untitled"}</strong> •{" "}
+                      {form.semesterNumber ? `Semester ${form.semesterNumber}` : "Default Semester"} •{" "}
+                      {form.participationMode === "Individual" ? "Individual (1)" : `Team (${form.minTeamSize}–${form.maxTeamSize})`}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -766,7 +879,11 @@ export const HodTracksView: React.FC = () => {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => (wizardStep === 1 ? setModalOpen(false) : setWizardStep((s) => (s - 1) as 1 | 2))}
+                onClick={() => {
+                  setFormError(null);
+                  if (wizardStep === 1) setModalOpen(false);
+                  else setWizardStep((s) => (s - 1) as 1 | 2);
+                }}
               >
                 {wizardStep === 1 ? "Cancel" : "Back"}
               </Button>
@@ -775,7 +892,28 @@ export const HodTracksView: React.FC = () => {
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => setWizardStep((s) => (s + 1) as 2 | 3)}
+                  onClick={() => {
+                    if (wizardStep === 1 && !form.name.trim()) {
+                      setFormError("Track name is required before continuing.");
+                      return;
+                    }
+                    if (wizardStep === 2) {
+                      if (form.participationMode === "Team" && (form.minTeamSize < 1 || form.maxTeamSize < form.minTeamSize || form.maxTeamSize > 10)) {
+                        setFormError("Team size bounds must satisfy 1 <= Min <= Max <= 10.");
+                        return;
+                      }
+                      if (
+                        form.proposalDeadlineUtc &&
+                        form.finalSubmissionDeadlineUtc &&
+                        new Date(form.proposalDeadlineUtc) >= new Date(form.finalSubmissionDeadlineUtc)
+                      ) {
+                        setFormError("Proposal deadline must be earlier than the final submission deadline.");
+                        return;
+                      }
+                    }
+                    setFormError(null);
+                    setWizardStep((s) => (s + 1) as 2 | 3);
+                  }}
                 >
                   Next
                 </Button>

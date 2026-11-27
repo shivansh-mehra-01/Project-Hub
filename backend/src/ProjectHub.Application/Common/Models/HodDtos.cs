@@ -282,3 +282,34 @@ public record DomainDistributionDto
     public string Domain { get; init; } = string.Empty;
     public int Count { get; init; }
 }
+
+public record HodDepartmentStudentDto
+{
+    public Guid Id { get; init; }
+    public string FullName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string StudentNumber { get; init; } = string.Empty;
+    public bool IsActive { get; init; }
+    public bool IsActivated { get; init; }
+    public string? ProgramName { get; init; }
+    public int? CurrentSemesterNumber { get; init; }
+    public string? CurrentSemesterName { get; init; }
+    public string AcademicStatus { get; init; } = "Not Enrolled";
+    public string? AdmissionBatch { get; init; }
+    public string? ActiveTeamCode { get; init; }
+    public string? ActiveTeamTitle { get; init; }
+}
+
+public record UpdateStudentSemesterRequest
+{
+    public int SemesterNumber { get; init; }
+    public AcademicStatus AcademicStatus { get; init; } = AcademicStatus.Active;
+    public string? AdmissionBatch { get; init; }
+}
+
+public record BulkEnrollStudentsRequest
+{
+    public List<Guid> StudentIds { get; init; } = new();
+    public int SemesterNumber { get; init; }
+    public AcademicStatus AcademicStatus { get; init; } = AcademicStatus.Active;
+}

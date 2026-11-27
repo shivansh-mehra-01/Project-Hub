@@ -745,6 +745,34 @@ export interface UpdateDepartmentTrackRequest {
   individualStudentRubricPct?: number;
 }
 
+export interface HodDepartmentStudentDto {
+  id: string;
+  fullName: string;
+  email: string;
+  studentNumber: string;
+  isActive: boolean;
+  isActivated: boolean;
+  programName?: string | null;
+  currentSemesterNumber?: number | null;
+  currentSemesterName?: string | null;
+  academicStatus: string;
+  admissionBatch?: string | null;
+  activeTeamCode?: string | null;
+  activeTeamTitle?: string | null;
+}
+
+export interface UpdateStudentSemesterRequest {
+  semesterNumber: number;
+  academicStatus?: "Active" | "Promoted" | "Detained" | "Graduated" | "Withdrawn";
+  admissionBatch?: string;
+}
+
+export interface BulkEnrollStudentsRequest {
+  studentIds: string[];
+  semesterNumber: number;
+  academicStatus?: "Active" | "Promoted" | "Detained" | "Graduated" | "Withdrawn";
+}
+
 export interface ProjectProposalDto {
   teamId: string;
   teamCode: string;

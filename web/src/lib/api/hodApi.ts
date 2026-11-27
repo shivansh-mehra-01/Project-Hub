@@ -1,5 +1,6 @@
 import { apiClient } from "./apiClient";
 import {
+  BulkEnrollStudentsRequest,
   CollegeTrackDto,
   CreateDepartmentTrackRequest,
   DepartmentStudentResultDto,
@@ -9,12 +10,14 @@ import {
   HodAcademicContextDto,
   HodAssignGuideRequest,
   HodDashboardDto,
+  HodDepartmentStudentDto,
   HodProjectDto,
   HodReportsSummaryDto,
   ProjectProposalDto,
   ToggleCoordinatorRequest,
   UpdateDepartmentTrackRequest,
   UpdateMentorCapRequest,
+  UpdateStudentSemesterRequest,
 } from "./types";
 
 export const hodApi = {
@@ -143,4 +146,22 @@ export const hodApi = {
   getDepartmentResults: () => apiClient.get<DepartmentStudentResultDto[]>("/api/hod/results"),
 
   getReportsSummary: () => apiClient.get<HodReportsSummaryDto>("/api/hod/reports/summary"),
+
+  getStudents: (params?: { search?: string; semesterNumber?: number; status?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.set("search", params.search);
+    if (params?.semesterNumber !== undefined) searchParams.set("semesterNumber", String(params.semesterNumber));
+    if (params?.status) searchParams.set("status", params.status);
+    const qs = searchParams.toString();
+    return apiClient.get<HodDepartmentStudentDto[]>(`/api/hod/students${qs ? `?${qs}` : ""}`);
+  },
+
+  updateStudentEnrollment: (studentId: string, data: UpdateStudentSemesterRequest) =>
+    apiClient.put<HodDepartmentStudentDto>(`/api/hod/students/${studentId}/enrollment`, data),
+
+  bulkEnrollStudents: (data: BulkEnrollStudentsRequest) =>
+    apiClient.post<{ updatedCount: number; semesterNumber: number; semesterName: string }>(
+      "/api/hod/students/bulk-enroll",
+      data
+    ),
 };

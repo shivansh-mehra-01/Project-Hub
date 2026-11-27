@@ -24,6 +24,7 @@ import {
   FacultyWorkloadDto,
 } from "@/lib/api";
 import { HodTablePagination } from "../components/HodTablePagination";
+import { HodProjectsTabBar } from "../components/HodProjectsTabBar";
 import { ProjectDetailsDrawer } from "../components/ProjectDetailsDrawer";
 import { AssignGuideModal } from "../components/AssignGuideModal";
 
@@ -212,6 +213,7 @@ export const HodProjectsView: React.FC = () => {
 
   return (
     <div className="space-y-5">
+      <HodProjectsTabBar />
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-medium text-white shadow-xl border border-white/10 animate-in fade-in slide-in-from-top-2 duration-200">
