@@ -28,6 +28,20 @@ public class ArtifactsController : ControllerBase
         _fileStorageService = fileStorageService;
     }
 
+    private static string SanitizeDownloadFileName(string? rawName, string fallback)
+    {
+        var name = Path.GetFileName(rawName ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(name)) return fallback;
+
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string(name
+            .Where(c => !char.IsControl(c) && c != '"' && c != ';' && !invalid.Contains(c))
+            .ToArray())
+            .Trim();
+
+        return string.IsNullOrWhiteSpace(cleaned) ? fallback : cleaned;
+    }
+
     private async Task<bool> IsUserAuthorizedToDownloadAsync(Guid userId, ProjectTeam team, CancellationToken cancellationToken)
     {
         if (_tenantContext.IsSuperAdmin || _tenantContext.Role == UserRole.SuperAdmin || _tenantContext.Role == UserRole.CollegeAdmin)
@@ -98,9 +112,8 @@ public class ArtifactsController : ControllerBase
         try
         {
             var (stream, contentType) = await _fileStorageService.OpenReadAsync(artifact.StorageKey, cancellationToken);
-            var downloadName = !string.IsNullOrWhiteSpace(artifact.FileName) ? artifact.FileName : $"{artifact.SlotType}.pdf";
+            var downloadName = SanitizeDownloadFileName(artifact.FileName, $"{artifact.SlotType}.pdf");
 
-            Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{downloadName}\"");
             return File(stream, contentType, downloadName);
         }
         catch (FileNotFoundException)
@@ -142,9 +155,8 @@ public class ArtifactsController : ControllerBase
         try
         {
             var (stream, contentType) = await _fileStorageService.OpenReadAsync(artifact.StorageKey, cancellationToken);
-            var downloadName = !string.IsNullOrWhiteSpace(artifact.FileName) ? artifact.FileName : $"{artifact.SlotType}.pdf";
+            var downloadName = SanitizeDownloadFileName(artifact.FileName, $"{artifact.SlotType}.pdf");
 
-            Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{downloadName}\"");
             return File(stream, contentType, downloadName);
         }
         catch (FileNotFoundException)

@@ -1582,13 +1582,23 @@ public class StudentController : ControllerBase
         if (team == null) return NotFound(new { message = "Active project team not found." });
 
         await using var stream = file.OpenReadStream();
-        var (storageKey, checksum, fileSizeBytes) = await _fileStorageService.SaveAsync(
-            team.CollegeId,
-            team.Id,
-            slotType.ToString(),
-            file.FileName,
-            stream,
-            cancellationToken);
+        string storageKey;
+        string checksum;
+        long fileSizeBytes;
+        try
+        {
+            (storageKey, checksum, fileSizeBytes) = await _fileStorageService.SaveAsync(
+                team.CollegeId,
+                team.Id,
+                slotType.ToString(),
+                file.FileName,
+                stream,
+                cancellationToken);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
 
         var artifact = await _context.TeamArtifacts
             .FirstOrDefaultAsync(a => a.ProjectTeamId == team.Id && a.SlotType == slotType && !a.IsDeleted, cancellationToken);

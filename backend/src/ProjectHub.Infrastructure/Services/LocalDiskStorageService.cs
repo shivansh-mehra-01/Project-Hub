@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ProjectHub.Application.Interfaces;
+using ProjectHub.Domain.Enums;
 
 namespace ProjectHub.Infrastructure.Services;
 
@@ -83,27 +84,63 @@ public class LocalDiskStorageService : IFileStorageService
                 $"Invalid deliverable extension '{ext}'. Only .pdf, .ppt, and .pptx files are permitted in the capstone document vault.");
         }
 
-        var sanitizedSlot = slotType.Trim().Replace("..", "").Replace("/", "").Replace("\\", "");
+        // Validate slotType against ArtifactSlotType enum
+        if (!Enum.TryParse<ArtifactSlotType>(slotType, ignoreCase: true, out var parsedSlot) ||
+            !Enum.IsDefined(parsedSlot))
+        {
+            throw new ArgumentException($"Invalid deliverable slot '{slotType}'.");
+        }
+
+        var sanitizedSlot = parsedSlot.ToString();
+        var storedFileName = $"{sanitizedSlot}-{Guid.NewGuid():N}{ext}";
         var relativeDir = Path.Combine(collegeId.ToString("D"), teamId.ToString("D"), sanitizedSlot);
-        var targetDir = Path.Combine(_baseStoragePath, relativeDir);
+        var baseFullPath = Path.GetFullPath(_baseStoragePath);
+        var baseWithSep = baseFullPath.EndsWith(Path.DirectorySeparatorChar)
+            ? baseFullPath
+            : baseFullPath + Path.DirectorySeparatorChar;
+        var targetDir = Path.GetFullPath(Path.Combine(baseFullPath, relativeDir));
+        if (!targetDir.StartsWith(baseWithSep, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new UnauthorizedAccessException("Invalid storage directory path.");
+        }
 
         if (!Directory.Exists(targetDir))
         {
             Directory.CreateDirectory(targetDir);
         }
 
-        var targetFilePath = Path.Combine(targetDir, sanitizedFileName);
+        var targetFilePath = Path.GetFullPath(Path.Combine(targetDir, storedFileName));
+        if (!targetFilePath.StartsWith(baseWithSep, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new UnauthorizedAccessException("Invalid storage file path.");
+        }
 
         using var sha256 = SHA256.Create();
         long totalBytes = 0;
+        var headerBytes = new byte[8];
+        int headerRead = 0;
 
-        await using (var outputStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
+        await using (var outputStream = new FileStream(targetFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
         {
             var buffer = new byte[81920];
             int bytesRead;
 
             while ((bytesRead = await content.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
             {
+                if (headerRead < headerBytes.Length)
+                {
+                    var toCopy = Math.Min(bytesRead, headerBytes.Length - headerRead);
+                    Array.Copy(buffer, 0, headerBytes, headerRead, toCopy);
+                    headerRead += toCopy;
+
+                    if (headerRead >= 4 && !HasValidMagicBytes(ext, headerBytes, headerRead))
+                    {
+                        outputStream.Close();
+                        File.Delete(targetFilePath);
+                        throw new ArgumentException($"File content does not match the declared '{ext}' format.");
+                    }
+                }
+
                 totalBytes += bytesRead;
                 if (totalBytes > MaxFileSizeBytes)
                 {
@@ -116,16 +153,23 @@ public class LocalDiskStorageService : IFileStorageService
                 await outputStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
             }
 
+            if (totalBytes == 0 || !HasValidMagicBytes(ext, headerBytes, headerRead))
+            {
+                outputStream.Close();
+                File.Delete(targetFilePath);
+                throw new ArgumentException($"File content does not match the declared '{ext}' format.");
+            }
+
             sha256.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
         }
 
         var hashBytes = sha256.Hash ?? Array.Empty<byte>();
         var checksumHex = Convert.ToHexString(hashBytes).ToLowerInvariant();
-        var storageKey = $"vault/{relativeDir.Replace('\\', '/')}/{sanitizedFileName}";
+        var storageKey = $"vault/{relativeDir.Replace('\\', '/')}/{storedFileName}";
 
         _logger.LogInformation(
             "Stored vault artifact {FileName} ({Bytes} bytes, SHA-256: {Checksum}) under key {StorageKey}",
-            sanitizedFileName, totalBytes, checksumHex, storageKey);
+            storedFileName, totalBytes, checksumHex, storageKey);
 
         return (storageKey, checksumHex, totalBytes);
     }
@@ -214,6 +258,34 @@ public class LocalDiskStorageService : IFileStorageService
         }
 
         sanitizedKey = sanitizedKey.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-        return Path.Combine(_baseStoragePath, sanitizedKey);
+        var baseFullPath = Path.GetFullPath(_baseStoragePath);
+        var baseWithSep = baseFullPath.EndsWith(Path.DirectorySeparatorChar)
+            ? baseFullPath
+            : baseFullPath + Path.DirectorySeparatorChar;
+        var resolvedPath = Path.GetFullPath(Path.Combine(baseFullPath, sanitizedKey));
+
+        if (!resolvedPath.StartsWith(baseWithSep, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new UnauthorizedAccessException("Storage key resolves outside the configured vault directory.");
+        }
+
+        return resolvedPath;
+    }
+
+    private static bool HasValidMagicBytes(string ext, byte[] header, int length)
+    {
+        return ext switch
+        {
+            // %PDF-
+            ".pdf" => length >= 5 &&
+                      header[0] == 0x25 && header[1] == 0x50 && header[2] == 0x44 && header[3] == 0x46 && header[4] == 0x2D,
+            // ZIP (PK\x03\x04)
+            ".pptx" => length >= 4 &&
+                       header[0] == 0x50 && header[1] == 0x4B && header[2] == 0x03 && header[3] == 0x04,
+            // OLE Compound Document (D0 CF 11 E0)
+            ".ppt" => length >= 4 &&
+                      header[0] == 0xD0 && header[1] == 0xCF && header[2] == 0x11 && header[3] == 0xE0,
+            _ => false
+        };
     }
 }
