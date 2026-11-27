@@ -416,6 +416,18 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     sidebarOrder: 3,
   },
   {
+    path: "/college/students",
+    label: "Students & Enrollment",
+    breadcrumbGroup: "Institutional Console",
+    breadcrumbTitle: "Institutional Student Roster & Enrollment",
+    iconName: "GraduationCap",
+    allowedRoles: ["CollegeAdmin"],
+    description: "Institutional student roster, master profiles, and academic enrollment management",
+    isSidebarItem: true,
+    sidebarOrder: 4,
+  },
+
+  {
     path: "/college/users",
     label: "Faculty & Staff",
     breadcrumbGroup: "Institutional Console",
@@ -424,7 +436,7 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     allowedRoles: ["CollegeAdmin"],
     description: "Staff accounts, AICTE designations, activation & user-directed password resets",
     isSidebarItem: true,
-    sidebarOrder: 4,
+    sidebarOrder: 5,
   },
   {
     path: "/college/announcements",
@@ -485,6 +497,17 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     sidebarOrder: 2,
   },
   {
+    path: "/hod/projects/tracks",
+    label: "Project Tracks",
+    breadcrumbGroup: "HOD Console",
+    breadcrumbTitle: "Department Project Tracks",
+    iconName: "Compass",
+    allowedRoles: ["HOD"],
+    description: "Initialize, launch, configure & govern department project tracks",
+    isSidebarItem: true,
+    sidebarOrder: 3,
+  },
+  {
     path: "/hod/faculty",
     label: "Faculty & Guides",
     breadcrumbGroup: "HOD Console",
@@ -493,7 +516,7 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     allowedRoles: ["HOD"],
     description: "Faculty mentorship capacity quotas & coordinator appointments",
     isSidebarItem: true,
-    sidebarOrder: 3,
+    sidebarOrder: 4,
   },
   {
     path: "/hod/approvals",
@@ -505,7 +528,7 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     badgeKey: "pendingHODCount",
     description: "Proposals, guide reassignments, roster amendments & grade unlocks",
     isSidebarItem: true,
-    sidebarOrder: 4,
+    sidebarOrder: 5,
   },
   {
     path: "/hod/reports",
@@ -516,7 +539,7 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     allowedRoles: ["HOD"],
     description: "Project completion, faculty workload balance & student result marksheet",
     isSidebarItem: true,
-    sidebarOrder: 5,
+    sidebarOrder: 6,
   },
 
   // =========================================================================

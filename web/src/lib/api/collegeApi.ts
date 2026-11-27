@@ -120,6 +120,11 @@ export const collegeApi = {
   bulkUploadStaff: (data: BulkStaffUploadRequest) =>
     apiClient.post<BulkStaffUploadResultDto>("/api/college/users/bulk", data),
 
+  getStudents: (search?: string) => {
+    const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+    return apiClient.get<CollegeStaffDto[]>(`/api/college/students${qs}`);
+  },
+
   previewBulkStudents: (data: BulkStudentUploadRequest) =>
     apiClient.post<RosterImportPreviewDto>("/api/college/students/bulk/preview", data),
 

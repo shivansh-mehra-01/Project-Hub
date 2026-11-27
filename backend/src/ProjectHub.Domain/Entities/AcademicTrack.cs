@@ -31,7 +31,9 @@ public class AcademicTrack : BaseEntity, ITenantEntity
     public bool AllowCrossBranchTeams { get; set; } = false;
 
     public string Name { get; set; } = string.Empty; // "Minor Project", "Major Phase-I", "Major Phase-II", "Capstone"
+    public string? Description { get; set; }
     public string AcademicYear { get; set; } = "2025-2026";
+    public AcademicTrackStatus Status { get; set; } = AcademicTrackStatus.Open;
     public bool IsActive { get; set; } = true;
     public DateTime? ProposalDeadlineUtc { get; set; }
     public DateTime? FinalSubmissionDeadlineUtc { get; set; }

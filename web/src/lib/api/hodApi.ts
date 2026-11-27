@@ -13,6 +13,7 @@ import {
   HodReportsSummaryDto,
   ProjectProposalDto,
   ToggleCoordinatorRequest,
+  UpdateDepartmentTrackRequest,
   UpdateMentorCapRequest,
 } from "./types";
 
@@ -30,6 +31,21 @@ export const hodApi = {
 
   createTrack: (data: CreateDepartmentTrackRequest) =>
     apiClient.post<CollegeTrackDto>("/api/hod/tracks", data),
+
+  updateTrack: (trackId: string, data: UpdateDepartmentTrackRequest) =>
+    apiClient.put<CollegeTrackDto>(`/api/hod/tracks/${trackId}`, data),
+
+  launchTrack: (trackId: string) =>
+    apiClient.post<CollegeTrackDto>(`/api/hod/tracks/${trackId}/launch`),
+
+  pauseTrack: (trackId: string) =>
+    apiClient.post<CollegeTrackDto>(`/api/hod/tracks/${trackId}/pause`),
+
+  resumeTrack: (trackId: string) =>
+    apiClient.post<CollegeTrackDto>(`/api/hod/tracks/${trackId}/resume`),
+
+  closeTrack: (trackId: string) =>
+    apiClient.post<CollegeTrackDto>(`/api/hod/tracks/${trackId}/close`),
 
   getProjects: (params?: {
     status?: string;

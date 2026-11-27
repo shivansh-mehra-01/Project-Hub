@@ -54,6 +54,7 @@ import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { ArtifactSlot, GuideReviewStatusType, ProjectArtifact, TaskStatusType, Team } from "@/mocks/store-types";
 import { studentApi, getAuthToken } from "@/lib/api";
 import {
+  CollegeTrackDto,
   StudentDashboardDto,
   EligiblePeerDto,
   TeamInvitationDto,
@@ -131,7 +132,6 @@ export const StudentWorkspaceView: React.FC = () => {
   const [submissionToast, setSubmissionToast] = useState<string | null>(null);
 
   const fetchFinalSubmission = useCallback(async () => {
-    if (!getAuthToken()) return;
     try {
       setSubmissionLoading(true);
       const data = await studentApi.getFinalSubmission();
@@ -165,7 +165,6 @@ export const StudentWorkspaceView: React.FC = () => {
   const [evaluationLoading, setEvaluationLoading] = useState(false);
 
   const fetchEvaluation = useCallback(async () => {
-    if (!getAuthToken()) return;
     try {
       setEvaluationLoading(true);
       const data = await studentApi.getEvaluationResult();
@@ -200,7 +199,6 @@ export const StudentWorkspaceView: React.FC = () => {
   const [milestoneSubmitting, setMilestoneSubmitting] = useState(false);
 
   const fetchMilestones = useCallback(async () => {
-    if (!getAuthToken()) return;
     try {
       const list = await studentApi.getWorkspaceMilestones();
       setLiveMilestones(list || []);
@@ -224,14 +222,30 @@ export const StudentWorkspaceView: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<StudentDashboardDto | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [availableTracks, setAvailableTracks] = useState<CollegeTrackDto[]>([]);
+  const [tracksLoading, setTracksLoading] = useState(true);
+  const [showStartProjectModal, setShowStartProjectModal] = useState(false);
+  const [selectedTrackId, setSelectedTrackId] = useState("");
+  const [projectTitle, setProjectTitle] = useState("");
+  const [projectAbstract, setProjectAbstract] = useState("");
+  const [projectDomain, setProjectDomain] = useState("Software");
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [createProjectError, setCreateProjectError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
     const fetchDashboard = async () => {
       try {
-        const data = await studentApi.getDashboard();
-        if (isMounted && data) {
-          setDashboardData(data);
+        const [data, tracks] = await Promise.all([
+          studentApi.getDashboard(),
+          studentApi.getAvailableTracks().catch(() => [] as CollegeTrackDto[]),
+        ]);
+        if (isMounted) {
+          if (data) setDashboardData(data);
+          setAvailableTracks(tracks || []);
+          if (tracks && tracks.length > 0) {
+            setSelectedTrackId(tracks[0].id);
+          }
         }
       } catch (err: unknown) {
         if (isMounted) {
@@ -240,6 +254,7 @@ export const StudentWorkspaceView: React.FC = () => {
       } finally {
         if (isMounted) {
           setDashboardLoading(false);
+          setTracksLoading(false);
         }
       }
     };
@@ -566,6 +581,12 @@ export const StudentWorkspaceView: React.FC = () => {
 
   // Proposal Title & Similarity Check
   const [proposalTitle, setProposalTitle] = useState(myTeam.title);
+
+  useEffect(() => {
+    if (myTeam.title && !proposalTitle) {
+      setProposalTitle(myTeam.title);
+    }
+  }, [myTeam.title]);
 
   // Archived department project repository for title overlap checks
   const archivedProjects = [
@@ -1007,33 +1028,185 @@ export const StudentWorkspaceView: React.FC = () => {
                 </div>
               </div>
 
+              {!tracksLoading && availableTracks.length === 0 ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 text-left">
+                  <p className="font-semibold">No project track is currently open for your department/semester.</p>
+                  <p className="text-amber-800 mt-1">
+                    Please contact your Department HOD to launch a Minor, Major, or Individual project track before starting a project.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 text-left">
+                  <div className="text-xs font-semibold text-slate-700">Open Department Project Tracks</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {availableTracks.map((track) => (
+                      <div
+                        key={track.id}
+                        className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">{track.name}</div>
+                            <div className="text-[11px] text-slate-500">
+                              {track.academicYear}
+                              {track.semesterNumber ? ` • Sem ${track.semesterNumber}` : ""}
+                              {track.subjectCode ? ` • ${track.subjectCode}` : ""}
+                            </div>
+                          </div>
+                          <Badge variant="success">
+                            {track.participationMode === "Individual"
+                              ? "Individual"
+                              : `Team (${track.minTeamSize ?? 2}–${track.maxTeamSize ?? 4})`}
+                          </Badge>
+                        </div>
+                        {track.description && (
+                          <p className="text-[11px] text-slate-600 line-clamp-2">{track.description}</p>
+                        )}
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[11px] text-slate-500">
+                            {track.proposalDeadlineUtc
+                              ? `Cutoff: ${new Date(track.proposalDeadlineUtc).toLocaleDateString()}`
+                              : "Open for registration"}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => {
+                              setSelectedTrackId(track.id);
+                              setProjectTitle("");
+                              setProjectAbstract("");
+                              setCreateProjectError(null);
+                              setShowStartProjectModal(true);
+                            }}
+                          >
+                            Start Project
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-center gap-3 pt-3">
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={async () => {
-                    const teamName = prompt("Enter a name for your new project team:", `${dashboardData.identity.fullName}'s Team`);
-                    if (!teamName || !teamName.trim()) return;
-                    try {
-                      await studentApi.createTeam({
-                        title: teamName.trim(),
-                        abstract: "Team project formulation.",
-                      });
-                      window.location.reload();
-                    } catch (err: unknown) {
-                      alert(err instanceof Error ? err.message : "Failed to create team");
-                    }
-                  }}
-                  leftIcon={<Users2 className="h-4 w-4" />}
-                >
-                  Create New Project Team
-                </Button>
+                {availableTracks.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => {
+                      setSelectedTrackId(availableTracks[0].id);
+                      setProjectTitle("");
+                      setProjectAbstract("");
+                      setCreateProjectError(null);
+                      setShowStartProjectModal(true);
+                    }}
+                    leftIcon={<Users2 className="h-4 w-4" />}
+                  >
+                    Start New Project
+                  </Button>
+                )}
                 <Link href="/student/explore">
                   <Button size="sm" variant="secondary" leftIcon={<Compass className="h-4 w-4" />}>
                     Explore Problem Bank
                   </Button>
                 </Link>
               </div>
+
+              <Modal
+                isOpen={showStartProjectModal}
+                onClose={() => setShowStartProjectModal(false)}
+                title="Start Department Project"
+                description="Register your project under an open department track."
+              >
+                <div className="space-y-4">
+                  {createProjectError && (
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                      {createProjectError}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Project Track
+                    </label>
+                    <select
+                      value={selectedTrackId}
+                      onChange={(e) => setSelectedTrackId(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
+                    >
+                      {availableTracks.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} ({t.participationMode === "Individual" ? "Individual" : `Team ${t.minTeamSize ?? 2}–${t.maxTeamSize ?? 4}`})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Project Title *
+                    </label>
+                    <Input
+                      value={projectTitle}
+                      onChange={(e) => setProjectTitle(e.target.value)}
+                      placeholder="e.g., Smart Campus Energy Optimizer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Domain
+                    </label>
+                    <Input
+                      value={projectDomain}
+                      onChange={(e) => setProjectDomain(e.target.value)}
+                      placeholder="e.g., AI / IoT / Systems"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Brief Abstract *
+                    </label>
+                    <Textarea
+                      rows={3}
+                      value={projectAbstract}
+                      onChange={(e) => setProjectAbstract(e.target.value)}
+                      placeholder="Describe the problem statement and proposed solution..."
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="secondary" size="sm" onClick={() => setShowStartProjectModal(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={creatingProject}
+                      onClick={async () => {
+                        if (!projectTitle.trim() || !projectAbstract.trim()) {
+                          setCreateProjectError("Project title and brief abstract are required.");
+                          return;
+                        }
+                        try {
+                          setCreatingProject(true);
+                          setCreateProjectError(null);
+                          await studentApi.createTeam({
+                            academicTrackId: selectedTrackId || undefined,
+                            title: projectTitle.trim(),
+                            abstract: projectAbstract.trim(),
+                            domainTag: projectDomain.trim() || "Software",
+                          });
+                          setShowStartProjectModal(false);
+                          window.location.reload();
+                        } catch (err: unknown) {
+                          setCreateProjectError(err instanceof Error ? err.message : "Failed to start project.");
+                        } finally {
+                          setCreatingProject(false);
+                        }
+                      }}
+                    >
+                      {creatingProject ? "Creating..." : "Create Project"}
+                    </Button>
+                  </div>
+                </div>
+              </Modal>
 
               <div className="pt-2 text-xs text-slate-400">
                 Team formation, invitation acceptance, and idea submission are open for your department cohort.

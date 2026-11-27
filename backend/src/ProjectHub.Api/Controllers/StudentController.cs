@@ -3387,6 +3387,84 @@ public class StudentController : ControllerBase
 
     /// <summary>
     /// TEAM-001: Explicitly create a new project team in Draft state with the authenticated caller as initial Team Lead.
+    [HttpGet("tracks")]
+    public async Task<ActionResult<List<CollegeTrackDto>>> GetAvailableTracks(CancellationToken cancellationToken)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var studentId = _tenantContext.UserId!.Value;
+
+        var student = await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == studentId && u.CollegeId == collegeId && !u.IsDeleted, cancellationToken);
+
+        if (student == null) return Unauthorized();
+        if (!student.DepartmentId.HasValue) return Ok(new List<CollegeTrackDto>());
+
+        var tracks = await _context.AcademicTracks
+            .AsNoTracking()
+            .Include(t => t.Department)
+            .Include(t => t.SemesterTerm)
+            .Include(t => t.SubjectOffering)
+            .Where(t => t.CollegeId == collegeId &&
+                        t.DepartmentId == student.DepartmentId.Value &&
+                        t.Status == AcademicTrackStatus.Open &&
+                        t.IsActive &&
+                        !t.IsDeleted)
+            .OrderByDescending(t => t.AcademicYear)
+            .ThenBy(t => t.Name)
+            .ToListAsync(cancellationToken);
+
+        var enrollment = await _context.StudentAcademicEnrollments
+            .AsNoTracking()
+            .Include(e => e.CurrentSemesterTerm)
+            .FirstOrDefaultAsync(e => e.StudentUserId == studentId && e.CollegeId == collegeId && e.AcademicStatus == AcademicStatus.Active && !e.IsDeleted, cancellationToken);
+
+        var studentSemesterNumber = enrollment?.CurrentSemesterTerm?.SemesterNumber;
+        if (studentSemesterNumber.HasValue)
+        {
+            tracks = tracks
+                .Where(t => t.SemesterTerm == null || t.SemesterTerm.SemesterNumber == studentSemesterNumber.Value)
+                .ToList();
+        }
+
+        return Ok(tracks.Select(t => new CollegeTrackDto
+        {
+            Id = t.Id,
+            CollegeId = t.CollegeId,
+            DepartmentId = t.DepartmentId,
+            DepartmentCode = t.Department?.Code,
+            AcademicSessionId = t.AcademicSessionId,
+            CourseProgramId = t.CourseProgramId,
+            SemesterTermId = t.SemesterTermId,
+            SemesterNumber = t.SemesterTerm?.SemesterNumber,
+            SemesterName = t.SemesterTerm?.SemesterName,
+            SubjectOfferingId = t.SubjectOfferingId,
+            SubjectCode = t.SubjectOffering?.SubjectCode,
+            SubjectName = t.SubjectOffering?.SubjectName,
+            CurriculumSchemeId = t.CurriculumSchemeId,
+            ParticipationMode = t.ParticipationMode,
+            EnrolmentMode = t.EnrolmentMode,
+            AllowCrossBranchTeams = t.AllowCrossBranchTeams,
+            Name = t.Name,
+            Description = t.Description,
+            AcademicYear = t.AcademicYear,
+            AllowInterdisciplinaryTeams = t.AllowInterdisciplinaryTeams,
+            IsActive = t.IsActive,
+            Status = t.Status,
+            MinTeamSize = t.ParticipationMode == ParticipationMode.Individual ? 1 : t.MinTeamSize,
+            MaxTeamSize = t.ParticipationMode == ParticipationMode.Individual ? 1 : t.MaxTeamSize,
+            ProposalDeadlineUtc = t.ProposalDeadlineUtc,
+            FinalSubmissionDeadlineUtc = t.FinalSubmissionDeadlineUtc,
+            GuideWeightPct = t.GuideWeightPct,
+            MidTermWeightPct = t.MidTermWeightPct,
+            FinalVivaWeightPct = t.FinalVivaWeightPct,
+            SharedProjectRubricPct = t.SharedProjectRubricPct,
+            IndividualStudentRubricPct = t.IndividualStudentRubricPct
+        }).ToList());
+    }
+
+    /// <summary>
+    /// Creates a new project team for the student.
     /// </summary>
     [HttpPost("teams")]
     public async Task<ActionResult<StudentTeamRosterDto>> CreateTeam([FromBody] CreateStudentTeamRequest request, CancellationToken cancellationToken)
@@ -3444,27 +3522,44 @@ public class StudentController : ControllerBase
         }
 
         // 4. Resolve track within the student's department
-        Guid trackId = request.AcademicTrackId ?? Guid.Empty;
-        if (trackId == Guid.Empty)
+        AcademicTrack? selectedTrack = null;
+        if (!request.AcademicTrackId.HasValue || request.AcademicTrackId.Value == Guid.Empty)
         {
-            var defaultTrack = await _context.AcademicTracks
-                .FirstOrDefaultAsync(t => t.CollegeId == collegeId && t.DepartmentId == student.DepartmentId.Value && t.IsActive && !t.IsDeleted, cancellationToken);
-            if (defaultTrack != null) trackId = defaultTrack.Id;
+            selectedTrack = await _context.AcademicTracks
+                .FirstOrDefaultAsync(t => t.CollegeId == collegeId &&
+                                          t.DepartmentId == student.DepartmentId.Value &&
+                                          t.Status == AcademicTrackStatus.Open &&
+                                          t.IsActive &&
+                                          !t.IsDeleted, cancellationToken);
         }
         else
         {
-            var trackExists = await _context.AcademicTracks
-                .AnyAsync(t => t.Id == trackId && t.CollegeId == collegeId && t.DepartmentId == student.DepartmentId.Value && t.IsActive && !t.IsDeleted, cancellationToken);
-            if (!trackExists)
+            selectedTrack = await _context.AcademicTracks
+                .FirstOrDefaultAsync(t => t.Id == request.AcademicTrackId.Value &&
+                                          t.CollegeId == collegeId &&
+                                          t.DepartmentId == student.DepartmentId.Value &&
+                                          !t.IsDeleted, cancellationToken);
+            if (selectedTrack == null)
             {
                 return BadRequest(new { message = "The selected academic track is invalid or does not belong to your department." });
             }
+            if (selectedTrack.Status != AcademicTrackStatus.Open || !selectedTrack.IsActive)
+            {
+                return BadRequest(new { message = $"This project track is currently {selectedTrack.Status} and not accepting new projects." });
+            }
         }
 
-        if (trackId == Guid.Empty)
+        if (selectedTrack == null)
         {
-            return BadRequest(new { message = "No active academic project track is configured for your department." });
+            return BadRequest(new { message = "No open academic project track is configured for your department." });
         }
+
+        if (selectedTrack.ProposalDeadlineUtc.HasValue && DateTime.UtcNow > selectedTrack.ProposalDeadlineUtc.Value)
+        {
+            return BadRequest(new { message = "The proposal submission deadline for this project track has passed." });
+        }
+
+        Guid trackId = selectedTrack.Id;
 
         // 5. Generate team code
         var deptCode = student.Department.Code;

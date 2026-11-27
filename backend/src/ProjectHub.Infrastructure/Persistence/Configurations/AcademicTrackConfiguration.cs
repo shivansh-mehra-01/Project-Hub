@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ProjectHub.Domain.Entities;
+using ProjectHub.Domain.Enums;
 
 namespace ProjectHub.Infrastructure.Persistence.Configurations;
 
@@ -15,6 +16,14 @@ public class AcademicTrackConfiguration : IEntityTypeConfiguration<AcademicTrack
         builder.Property(t => t.Name)
             .IsRequired()
             .HasMaxLength(100);
+
+        builder.Property(t => t.Description)
+            .HasMaxLength(1000);
+
+        builder.Property(t => t.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(AcademicTrackStatus.Open);
 
         builder.Property(t => t.AcademicYear)
             .IsRequired()
@@ -37,6 +46,8 @@ public class AcademicTrackConfiguration : IEntityTypeConfiguration<AcademicTrack
         builder.HasIndex(t => new { t.CollegeId, t.DepartmentId, t.AcademicYear, t.Name })
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");
+
+        builder.HasIndex(t => new { t.CollegeId, t.DepartmentId, t.Status });
 
         builder.HasOne(t => t.College)
             .WithMany(c => c.AcademicTracks)

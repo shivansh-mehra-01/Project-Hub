@@ -116,6 +116,10 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("DepartmentId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<string>("EnrolmentMode")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -171,6 +175,13 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<int>("SharedProjectRubricPct")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Open");
+
                     b.Property<Guid?>("SubjectOfferingId")
                         .HasColumnType("uuid");
 
@@ -196,6 +207,8 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.HasIndex("SemesterTermId");
 
                     b.HasIndex("SubjectOfferingId");
+
+                    b.HasIndex("CollegeId", "DepartmentId", "Status");
 
                     b.HasIndex("CollegeId", "DepartmentId", "AcademicYear", "Name")
                         .IsUnique()

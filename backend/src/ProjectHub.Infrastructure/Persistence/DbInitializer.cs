@@ -1110,8 +1110,9 @@ public static class DbInitializer
                 Name = "Institutional Academic Session",
                 AcademicYear = "2026-2027",
                 IsActive = true,
-                ProposalDeadlineUtc = new DateTime(2026, 9, 30, 23, 59, 59, DateTimeKind.Utc),
-                FinalSubmissionDeadlineUtc = new DateTime(2027, 5, 31, 23, 59, 59, DateTimeKind.Utc),
+                Status = AcademicTrackStatus.Open,
+                ProposalDeadlineUtc = DateTime.UtcNow.AddMonths(2),
+                FinalSubmissionDeadlineUtc = DateTime.UtcNow.AddMonths(5),
                 GuideWeightPct = 30,
                 MidTermWeightPct = 30,
                 FinalVivaWeightPct = 40,
@@ -1134,6 +1135,13 @@ public static class DbInitializer
             existingMinor.ParticipationMode = ParticipationMode.Team;
             existingMinor.EnrolmentMode = EnrolmentMode.SelfJoin;
             existingMinor.AllowCrossBranchTeams = false;
+            existingMinor.Status = AcademicTrackStatus.Open;
+            existingMinor.IsActive = true;
+            if (existingMinor.ProposalDeadlineUtc < DateTime.UtcNow)
+            {
+                existingMinor.ProposalDeadlineUtc = DateTime.UtcNow.AddMonths(2);
+                existingMinor.FinalSubmissionDeadlineUtc = DateTime.UtcNow.AddMonths(5);
+            }
         }
         else if (!await context.AcademicTracks.IgnoreQueryFilters().AnyAsync(t => t.CollegeId == SistecTenantId && t.Name == "Minor Project" && t.DepartmentId == CseDepartmentId))
         {
@@ -1154,8 +1162,9 @@ public static class DbInitializer
                 Name = "Minor Project",
                 AcademicYear = "2025-2026",
                 IsActive = true,
-                ProposalDeadlineUtc = new DateTime(2026, 3, 31, 23, 59, 59, DateTimeKind.Utc),
-                FinalSubmissionDeadlineUtc = new DateTime(2026, 5, 15, 23, 59, 59, DateTimeKind.Utc),
+                Status = AcademicTrackStatus.Open,
+                ProposalDeadlineUtc = DateTime.UtcNow.AddMonths(2),
+                FinalSubmissionDeadlineUtc = DateTime.UtcNow.AddMonths(5),
                 GuideWeightPct = 30,
                 MidTermWeightPct = 30,
                 FinalVivaWeightPct = 40,

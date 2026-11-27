@@ -328,39 +328,33 @@ public class HodController : ControllerBase
     {
         var collegeId = _tenantContext.CollegeId!.Value;
         var deptId = await ResolveDepartmentIdAsync();
+
         var tracks = await _context.AcademicTracks
             .Include(t => t.Department)
-            .Where(t => t.CollegeId == collegeId && (t.DepartmentId == deptId || t.DepartmentId == null) && !t.IsDeleted)
+            .Include(t => t.SemesterTerm)
+            .Include(t => t.SubjectOffering)
+            .Where(t => t.CollegeId == collegeId && t.DepartmentId == deptId && !t.IsDeleted)
             .OrderByDescending(t => t.AcademicYear)
-            .Select(t => new CollegeTrackDto
-            {
-                Id = t.Id,
-                CollegeId = t.CollegeId,
-                DepartmentId = t.DepartmentId,
-                DepartmentCode = t.Department != null ? t.Department.Code : null,
-                AcademicSessionId = t.AcademicSessionId,
-                CourseProgramId = t.CourseProgramId,
-                SemesterTermId = t.SemesterTermId,
-                SubjectOfferingId = t.SubjectOfferingId,
-                CurriculumSchemeId = t.CurriculumSchemeId,
-                ParticipationMode = t.ParticipationMode,
-                EnrolmentMode = t.EnrolmentMode,
-                AllowCrossBranchTeams = t.AllowCrossBranchTeams,
-                Name = t.Name,
-                AcademicYear = t.AcademicYear,
-                AllowInterdisciplinaryTeams = t.AllowInterdisciplinaryTeams,
-                IsActive = t.IsActive,
-                ProposalDeadlineUtc = t.ProposalDeadlineUtc,
-                FinalSubmissionDeadlineUtc = t.FinalSubmissionDeadlineUtc,
-                GuideWeightPct = t.GuideWeightPct,
-                MidTermWeightPct = t.MidTermWeightPct,
-                FinalVivaWeightPct = t.FinalVivaWeightPct,
-                SharedProjectRubricPct = t.SharedProjectRubricPct,
-                IndividualStudentRubricPct = t.IndividualStudentRubricPct
-            })
+            .ThenByDescending(t => t.CreatedAtUtc)
             .ToListAsync();
 
-        return Ok(tracks);
+        var trackIds = tracks.Select(t => t.Id).ToList();
+        var teamStats = await _context.ProjectTeams
+            .Where(pt => pt.CollegeId == collegeId && pt.DepartmentId == deptId && trackIds.Contains(pt.AcademicTrackId) && !pt.IsDeleted)
+            .GroupBy(pt => pt.AcademicTrackId)
+            .Select(g => new
+            {
+                TrackId = g.Key,
+                Total = g.Count(),
+                Active = g.Count(pt => pt.Status == ProjectStatus.ActiveBuild || pt.Status == ProjectStatus.AtRisk || pt.Status == ProjectStatus.ReadyForViva || pt.Status == ProjectStatus.PendingHOD || pt.Status == ProjectStatus.PendingGuide || pt.Status == ProjectStatus.PendingCoordinator)
+            })
+            .ToDictionaryAsync(x => x.TrackId);
+
+        return Ok(tracks.Select(t =>
+        {
+            var stats = teamStats.GetValueOrDefault(t.Id);
+            return MapTrackDto(t, stats?.Total ?? 0, stats?.Active ?? 0);
+        }).ToList());
     }
 
     [HttpPost("tracks")]
@@ -473,6 +467,39 @@ public class HodController : ControllerBase
             subjectOfferingId = request.SubjectOfferingId.Value;
         }
 
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return BadRequest(new { message = "Track name is required." });
+        }
+
+        if (request.ProposalDeadlineUtc.HasValue && request.FinalSubmissionDeadlineUtc.HasValue &&
+            request.ProposalDeadlineUtc.Value >= request.FinalSubmissionDeadlineUtc.Value)
+        {
+            return BadRequest(new { message = "Proposal deadline must be earlier than the final submission deadline." });
+        }
+
+        var normalizedName = request.Name.Trim();
+        var normalizedYear = request.AcademicYear.Trim();
+        var duplicateExists = await _context.AcademicTracks
+            .AnyAsync(t => t.CollegeId == collegeId &&
+                           t.DepartmentId == deptId &&
+                           t.AcademicYear == normalizedYear &&
+                           t.Name.ToLower() == normalizedName.ToLower() &&
+                           !t.IsDeleted);
+        if (duplicateExists)
+        {
+            return Conflict(new { message = $"A track named '{normalizedName}' already exists for academic year {normalizedYear} in your department." });
+        }
+
+        var minSize = request.ParticipationMode == ParticipationMode.Individual ? 1 : request.MinTeamSize;
+        var maxSize = request.ParticipationMode == ParticipationMode.Individual ? 1 : request.MaxTeamSize;
+        if (minSize < 1 || maxSize < minSize || maxSize > 10)
+        {
+            return BadRequest(new { message = "Team size bounds must satisfy 1 <= MinTeamSize <= MaxTeamSize <= 10." });
+        }
+
+        var status = request.LaunchImmediately ? AcademicTrackStatus.Open : AcademicTrackStatus.Draft;
+
         var track = new AcademicTrack
         {
             CollegeId = collegeId,
@@ -484,10 +511,15 @@ public class HodController : ControllerBase
             CurriculumSchemeId = request.CurriculumSchemeId,
             ParticipationMode = request.ParticipationMode,
             EnrolmentMode = request.EnrolmentMode,
+            MinTeamSize = minSize,
+            MaxTeamSize = maxSize,
             AllowCrossBranchTeams = request.AllowCrossBranchTeams,
             AllowInterdisciplinaryTeams = request.AllowInterdisciplinaryTeams,
-            Name = request.Name.Trim(),
-            AcademicYear = request.AcademicYear.Trim(),
+            Name = normalizedName,
+            Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
+            AcademicYear = normalizedYear,
+            Status = status,
+            IsActive = status == AcademicTrackStatus.Open,
             ProposalDeadlineUtc = request.ProposalDeadlineUtc,
             FinalSubmissionDeadlineUtc = request.FinalSubmissionDeadlineUtc,
             GuideWeightPct = request.GuideWeightPct,
@@ -497,28 +529,225 @@ public class HodController : ControllerBase
             IndividualStudentRubricPct = request.IndividualStudentRubricPct
         };
 
-        track.ValidateWeights();
+        try
+        {
+            track.ValidateWeights();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
         await _context.AcademicTracks.AddAsync(track);
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = "HOD_CREATE_TRACK",
+            TargetTenantId = collegeId,
+            TargetEntity = "AcademicTrack",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new { trackId = track.Id, departmentId = deptId, name = track.Name, status = track.Status.ToString() }),
+            OccurredAtUtc = DateTime.UtcNow
+        });
         await _context.SaveChangesAsync();
 
-        return Ok(new CollegeTrackDto
+        var createdTrack = await _context.AcademicTracks
+            .Include(t => t.Department)
+            .Include(t => t.SemesterTerm)
+            .Include(t => t.SubjectOffering)
+            .FirstAsync(t => t.Id == track.Id);
+
+        return Ok(MapTrackDto(createdTrack, 0, 0));
+    }
+
+    [HttpPut("tracks/{trackId:guid}")]
+    public async Task<ActionResult<CollegeTrackDto>> UpdateDepartmentTrack(Guid trackId, [FromBody] UpdateDepartmentTrackRequest request)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+
+        var track = await _context.AcademicTracks
+            .Include(t => t.Department)
+            .Include(t => t.SemesterTerm)
+            .Include(t => t.SubjectOffering)
+            .FirstOrDefaultAsync(t => t.Id == trackId && t.CollegeId == collegeId && t.DepartmentId == deptId && !t.IsDeleted);
+
+        if (track == null) return NotFound(new { message = "Department project track not found." });
+
+        if (!string.IsNullOrWhiteSpace(request.Name))
         {
-            Id = track.Id,
-            CollegeId = track.CollegeId,
-            DepartmentId = track.DepartmentId,
-            DepartmentCode = dept?.Code,
-            AcademicSessionId = track.AcademicSessionId,
-            CourseProgramId = track.CourseProgramId,
-            SemesterTermId = track.SemesterTermId,
-            SubjectOfferingId = track.SubjectOfferingId,
-            ParticipationMode = track.ParticipationMode,
-            EnrolmentMode = track.EnrolmentMode,
-            AllowCrossBranchTeams = track.AllowCrossBranchTeams,
-            Name = track.Name,
-            AcademicYear = track.AcademicYear,
-            AllowInterdisciplinaryTeams = track.AllowInterdisciplinaryTeams,
-            IsActive = track.IsActive
+            var normalizedName = request.Name.Trim();
+            var duplicate = await _context.AcademicTracks
+                .AnyAsync(t => t.Id != trackId && t.CollegeId == collegeId && t.DepartmentId == deptId &&
+                               t.AcademicYear == track.AcademicYear && t.Name.ToLower() == normalizedName.ToLower() && !t.IsDeleted);
+            if (duplicate)
+            {
+                return Conflict(new { message = $"A track named '{normalizedName}' already exists for academic year {track.AcademicYear}." });
+            }
+            track.Name = normalizedName;
+        }
+
+        if (request.Description != null)
+        {
+            track.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        }
+
+        track.ParticipationMode = request.ParticipationMode;
+        track.EnrolmentMode = request.EnrolmentMode;
+
+        if (track.ParticipationMode == ParticipationMode.Individual)
+        {
+            track.MinTeamSize = 1;
+            track.MaxTeamSize = 1;
+        }
+        else
+        {
+            track.MinTeamSize = request.MinTeamSize;
+            track.MaxTeamSize = request.MaxTeamSize;
+            if (track.MinTeamSize < 1 || track.MaxTeamSize < track.MinTeamSize || track.MaxTeamSize > 10)
+            {
+                return BadRequest(new { message = "Team size bounds must satisfy 1 <= MinTeamSize <= MaxTeamSize <= 10." });
+            }
+        }
+
+        track.AllowCrossBranchTeams = request.AllowCrossBranchTeams;
+        track.AllowInterdisciplinaryTeams = request.AllowInterdisciplinaryTeams;
+        if (request.ProposalDeadlineUtc.HasValue) track.ProposalDeadlineUtc = request.ProposalDeadlineUtc;
+        if (request.FinalSubmissionDeadlineUtc.HasValue) track.FinalSubmissionDeadlineUtc = request.FinalSubmissionDeadlineUtc;
+
+        if (track.ProposalDeadlineUtc.HasValue && track.FinalSubmissionDeadlineUtc.HasValue &&
+            track.ProposalDeadlineUtc.Value >= track.FinalSubmissionDeadlineUtc.Value)
+        {
+            return BadRequest(new { message = "Proposal deadline must be earlier than the final submission deadline." });
+        }
+
+        track.GuideWeightPct = request.GuideWeightPct;
+        track.MidTermWeightPct = request.MidTermWeightPct;
+        track.FinalVivaWeightPct = request.FinalVivaWeightPct;
+        track.SharedProjectRubricPct = request.SharedProjectRubricPct;
+        track.IndividualStudentRubricPct = request.IndividualStudentRubricPct;
+
+        try
+        {
+            track.ValidateWeights();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = "HOD_UPDATE_TRACK",
+            TargetTenantId = collegeId,
+            TargetEntity = "AcademicTrack",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new { trackId = track.Id, departmentId = deptId, name = track.Name }),
+            OccurredAtUtc = DateTime.UtcNow
         });
+        await _context.SaveChangesAsync();
+
+        var totalTeams = await _context.ProjectTeams.CountAsync(pt => pt.AcademicTrackId == track.Id && !pt.IsDeleted);
+        return Ok(MapTrackDto(track, totalTeams, totalTeams));
+    }
+
+    [HttpPost("tracks/{trackId:guid}/launch")]
+    public Task<ActionResult<CollegeTrackDto>> LaunchDepartmentTrack(Guid trackId)
+        => TransitionTrackStatusAsync(trackId, AcademicTrackStatus.Open, "HOD_LAUNCH_TRACK",
+            allowedFrom: new[] { AcademicTrackStatus.Draft, AcademicTrackStatus.Paused });
+
+    [HttpPost("tracks/{trackId:guid}/pause")]
+    public Task<ActionResult<CollegeTrackDto>> PauseDepartmentTrack(Guid trackId)
+        => TransitionTrackStatusAsync(trackId, AcademicTrackStatus.Paused, "HOD_PAUSE_TRACK",
+            allowedFrom: new[] { AcademicTrackStatus.Open });
+
+    [HttpPost("tracks/{trackId:guid}/resume")]
+    public Task<ActionResult<CollegeTrackDto>> ResumeDepartmentTrack(Guid trackId)
+        => TransitionTrackStatusAsync(trackId, AcademicTrackStatus.Open, "HOD_RESUME_TRACK",
+            allowedFrom: new[] { AcademicTrackStatus.Paused });
+
+    [HttpPost("tracks/{trackId:guid}/close")]
+    public Task<ActionResult<CollegeTrackDto>> CloseDepartmentTrack(Guid trackId)
+        => TransitionTrackStatusAsync(trackId, AcademicTrackStatus.Closed, "HOD_CLOSE_TRACK",
+            allowedFrom: new[] { AcademicTrackStatus.Draft, AcademicTrackStatus.Open, AcademicTrackStatus.Paused });
+
+    private async Task<ActionResult<CollegeTrackDto>> TransitionTrackStatusAsync(
+        Guid trackId,
+        AcademicTrackStatus targetStatus,
+        string auditAction,
+        AcademicTrackStatus[] allowedFrom)
+    {
+        var collegeId = _tenantContext.CollegeId!.Value;
+        var deptId = await ResolveDepartmentIdAsync();
+
+        var track = await _context.AcademicTracks
+            .Include(t => t.Department)
+            .Include(t => t.SemesterTerm)
+            .Include(t => t.SubjectOffering)
+            .FirstOrDefaultAsync(t => t.Id == trackId && t.CollegeId == collegeId && t.DepartmentId == deptId && !t.IsDeleted);
+
+        if (track == null) return NotFound(new { message = "Department project track not found." });
+
+        if (!allowedFrom.Contains(track.Status))
+        {
+            return BadRequest(new { message = $"Cannot transition track from {track.Status} to {targetStatus}." });
+        }
+
+        track.Status = targetStatus;
+        track.IsActive = targetStatus == AcademicTrackStatus.Open;
+
+        await _context.PlatformAuditLogs.AddAsync(new PlatformAuditLog
+        {
+            ActorUserId = _tenantContext.UserId,
+            Action = auditAction,
+            TargetTenantId = collegeId,
+            TargetEntity = "AcademicTrack",
+            MetadataJson = System.Text.Json.JsonSerializer.Serialize(new { trackId = track.Id, departmentId = deptId, status = targetStatus.ToString() }),
+            OccurredAtUtc = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync();
+
+        var totalTeams = await _context.ProjectTeams.CountAsync(pt => pt.AcademicTrackId == track.Id && !pt.IsDeleted);
+        return Ok(MapTrackDto(track, totalTeams, totalTeams));
+    }
+
+    private static CollegeTrackDto MapTrackDto(AcademicTrack t, int teamCount, int activeTeamCount)
+    {
+        return new CollegeTrackDto
+        {
+            Id = t.Id,
+            CollegeId = t.CollegeId,
+            DepartmentId = t.DepartmentId,
+            DepartmentCode = t.Department?.Code,
+            AcademicSessionId = t.AcademicSessionId,
+            CourseProgramId = t.CourseProgramId,
+            SemesterTermId = t.SemesterTermId,
+            SemesterNumber = t.SemesterTerm?.SemesterNumber,
+            SemesterName = t.SemesterTerm?.SemesterName,
+            SubjectOfferingId = t.SubjectOfferingId,
+            SubjectCode = t.SubjectOffering?.SubjectCode,
+            SubjectName = t.SubjectOffering?.SubjectName,
+            CurriculumSchemeId = t.CurriculumSchemeId,
+            ParticipationMode = t.ParticipationMode,
+            EnrolmentMode = t.EnrolmentMode,
+            MinTeamSize = t.ParticipationMode == ParticipationMode.Individual ? 1 : t.MinTeamSize,
+            MaxTeamSize = t.ParticipationMode == ParticipationMode.Individual ? 1 : t.MaxTeamSize,
+            AllowCrossBranchTeams = t.AllowCrossBranchTeams,
+            Name = t.Name,
+            Description = t.Description,
+            AcademicYear = t.AcademicYear,
+            AllowInterdisciplinaryTeams = t.AllowInterdisciplinaryTeams,
+            IsActive = t.IsActive,
+            Status = t.Status,
+            TeamCount = teamCount,
+            ActiveTeamCount = activeTeamCount,
+            ProposalDeadlineUtc = t.ProposalDeadlineUtc,
+            FinalSubmissionDeadlineUtc = t.FinalSubmissionDeadlineUtc,
+            GuideWeightPct = t.GuideWeightPct,
+            MidTermWeightPct = t.MidTermWeightPct,
+            FinalVivaWeightPct = t.FinalVivaWeightPct,
+            SharedProjectRubricPct = t.SharedProjectRubricPct,
+            IndividualStudentRubricPct = t.IndividualStudentRubricPct
+        };
     }
 
     [HttpGet("projects")]

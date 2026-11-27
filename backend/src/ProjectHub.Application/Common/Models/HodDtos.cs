@@ -30,7 +30,11 @@ public record UpdateDepartmentEvaluationCutoffRequest
 public record CreateDepartmentTrackRequest
 {
     public string Name { get; init; } = "Minor Project";
+    public string? Description { get; init; }
     public string AcademicYear { get; init; } = "2025-2026";
+    public bool LaunchImmediately { get; init; } = true;
+    public int MinTeamSize { get; init; } = 2;
+    public int MaxTeamSize { get; init; } = 4;
     public Guid? AcademicSessionId { get; init; }
     public Guid? CourseProgramId { get; init; }
     public Guid? SemesterTermId { get; init; }
@@ -44,6 +48,25 @@ public record CreateDepartmentTrackRequest
     public EnrolmentMode EnrolmentMode { get; init; } = EnrolmentMode.SelfJoin;
     public bool AllowCrossBranchTeams { get; init; } = false;
     public bool AllowInterdisciplinaryTeams { get; init; } = false;
+    public DateTime? ProposalDeadlineUtc { get; init; }
+    public DateTime? FinalSubmissionDeadlineUtc { get; init; }
+    public int GuideWeightPct { get; init; } = 30;
+    public int MidTermWeightPct { get; init; } = 30;
+    public int FinalVivaWeightPct { get; init; } = 40;
+    public int SharedProjectRubricPct { get; init; } = 60;
+    public int IndividualStudentRubricPct { get; init; } = 40;
+}
+
+public record UpdateDepartmentTrackRequest
+{
+    public string Name { get; init; } = string.Empty;
+    public string? Description { get; init; }
+    public ParticipationMode ParticipationMode { get; init; } = ParticipationMode.Team;
+    public EnrolmentMode EnrolmentMode { get; init; } = EnrolmentMode.SelfJoin;
+    public bool AllowCrossBranchTeams { get; init; } = false;
+    public bool AllowInterdisciplinaryTeams { get; init; } = false;
+    public int MinTeamSize { get; init; } = 2;
+    public int MaxTeamSize { get; init; } = 4;
     public DateTime? ProposalDeadlineUtc { get; init; }
     public DateTime? FinalSubmissionDeadlineUtc { get; init; }
     public int GuideWeightPct { get; init; } = 30;

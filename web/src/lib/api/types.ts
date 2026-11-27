@@ -501,6 +501,8 @@ export interface UpdateUserStatusRequest {
   isActive: boolean;
 }
 
+export type AcademicTrackStatus = "Draft" | "Open" | "Paused" | "Closed";
+
 export interface CollegeTrackDto {
   id: string;
   collegeId: string;
@@ -509,15 +511,25 @@ export interface CollegeTrackDto {
   academicSessionId?: string;
   courseProgramId?: string;
   semesterTermId?: string;
+  semesterNumber?: number;
+  semesterName?: string;
   subjectOfferingId?: string;
+  subjectCode?: string;
+  subjectName?: string;
   curriculumSchemeId?: string;
   participationMode?: ParticipationMode;
   enrolmentMode?: EnrolmentMode;
+  minTeamSize?: number;
+  maxTeamSize?: number;
   allowCrossBranchTeams?: boolean;
   name: string;
+  description?: string;
   academicYear: string;
   allowInterdisciplinaryTeams: boolean;
   isActive: boolean;
+  status?: AcademicTrackStatus;
+  teamCount?: number;
+  activeTeamCount?: number;
   proposalDeadlineUtc?: string;
   finalSubmissionDeadlineUtc?: string;
   guideWeightPct: number;
@@ -688,6 +700,7 @@ export interface DepartmentStudentResultDto {
 
 export interface CreateDepartmentTrackRequest {
   name?: string;
+  description?: string;
   academicYear?: string;
   academicSessionId?: string;
   courseProgramId?: string;
@@ -700,6 +713,27 @@ export interface CreateDepartmentTrackRequest {
   curriculumSchemeId?: string;
   participationMode?: ParticipationMode;
   enrolmentMode?: EnrolmentMode;
+  minTeamSize?: number;
+  maxTeamSize?: number;
+  launchImmediately?: boolean;
+  allowCrossBranchTeams?: boolean;
+  allowInterdisciplinaryTeams?: boolean;
+  proposalDeadlineUtc?: string;
+  finalSubmissionDeadlineUtc?: string;
+  guideWeightPct?: number;
+  midTermWeightPct?: number;
+  finalVivaWeightPct?: number;
+  sharedProjectRubricPct?: number;
+  individualStudentRubricPct?: number;
+}
+
+export interface UpdateDepartmentTrackRequest {
+  name?: string;
+  description?: string;
+  participationMode?: ParticipationMode;
+  enrolmentMode?: EnrolmentMode;
+  minTeamSize?: number;
+  maxTeamSize?: number;
   allowCrossBranchTeams?: boolean;
   allowInterdisciplinaryTeams?: boolean;
   proposalDeadlineUtc?: string;

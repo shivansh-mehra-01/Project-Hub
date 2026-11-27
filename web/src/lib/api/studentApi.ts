@@ -3,6 +3,7 @@ import {
   ArchivedProjectSummaryDto,
   ArtifactSlotDto,
   CheckSimilarityRequest,
+  CollegeTrackDto,
   ContinueLineageRequest,
   CreateProjectIdeaRequest,
   CreateTaskRequest,
@@ -44,6 +45,8 @@ export const studentApi = {
     apiClient.put<StudentProfileDto>("/api/student/profile", data),
 
   getWorkspace: () => apiClient.get<StudentWorkspaceDto>("/api/student/workspace"),
+
+  getAvailableTracks: () => apiClient.get<CollegeTrackDto[]>("/api/student/tracks"),
 
   // Phase 3: Project Discovery & Problem Bank
   getProblemBank: (params?: { domain?: string; sdg?: string; search?: string }) =>

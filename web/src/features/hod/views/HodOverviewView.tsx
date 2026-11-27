@@ -17,7 +17,7 @@ import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Badge } from "@/design-system/components/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
 import { Button } from "@/design-system/components/Button";
-import { hodApi, getAuthToken, HodDashboardDto, HodProjectDto } from "@/lib/api";
+import { hodApi, getAuthToken, HodDashboardDto, HodProjectDto, CollegeTrackDto } from "@/lib/api";
 import { HodMetricCard } from "../components/HodMetricCard";
 
 export const HodOverviewView: React.FC = () => {
@@ -30,6 +30,7 @@ export const HodOverviewView: React.FC = () => {
 
   const [dashboard, setDashboard] = useState<HodDashboardDto | null>(null);
   const [projects, setProjects] = useState<HodProjectDto[]>([]);
+  const [tracks, setTracks] = useState<CollegeTrackDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [cutoffDate, setCutoffDate] = useState("");
@@ -44,9 +45,10 @@ export const HodOverviewView: React.FC = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [dashRes, projRes] = await Promise.allSettled([
+      const [dashRes, projRes, tracksRes] = await Promise.allSettled([
         hodApi.getDashboard(),
         hodApi.getProjects(),
+        hodApi.getTracks(),
       ]);
 
       if (dashRes.status === "fulfilled" && dashRes.value) {
@@ -59,6 +61,9 @@ export const HodOverviewView: React.FC = () => {
       }
       if (projRes.status === "fulfilled" && projRes.value) {
         setProjects(projRes.value);
+      }
+      if (tracksRes.status === "fulfilled" && tracksRes.value) {
+        setTracks(tracksRes.value);
       }
     } catch (err) {
       console.warn("Failed to load HOD overview:", err);
@@ -167,6 +172,13 @@ export const HodOverviewView: React.FC = () => {
         <div className="flex items-center gap-2 shrink-0">
           <Button
             size="sm"
+            variant="secondary"
+            onClick={() => router.push("/hod/projects/tracks")}
+          >
+            Project Tracks
+          </Button>
+          <Button
+            size="sm"
             variant="primary"
             onClick={() => router.push("/hod/approvals")}
             leftIcon={<AlertCircle className="h-3.5 w-3.5" />}
@@ -175,6 +187,29 @@ export const HodOverviewView: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {!loading && tracks.filter((t) => (t.status ?? (t.isActive ? "Open" : "Closed")) === "Open").length === 0 && (
+        <Card className="border-amber-200 bg-amber-50/70">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-amber-950">
+                No department project track is currently open
+              </p>
+              <p className="text-[11px] text-amber-800 mt-0.5">
+                Initialize and launch a Minor, Major, or Individual project track so students can start their projects.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => router.push("/hod/projects/tracks")}
+              rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+            >
+              Initialize Department Project Track
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 4 Operational KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
