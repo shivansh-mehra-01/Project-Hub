@@ -7,6 +7,7 @@ import {
   setAuthCookies,
 } from "@/lib/bff/authCookies";
 import { getClientForwardingHeaders } from "@/lib/bff/forwardedHeaders";
+import { executeSingleFlightRefresh } from "@/lib/bff/refreshSingleFlight";
 
 export async function GET(req: NextRequest) {
   const accessToken = req.cookies.get(ACCESS_COOKIE)?.value;
@@ -28,28 +29,28 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  let refreshWasRace = false;
   if (refreshToken) {
-    const refreshRes = await fetch(`${getBackendApiUrl()}/api/auth/refresh`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...forwardingHeaders,
-      },
-      body: JSON.stringify({ refreshToken }),
-    }).catch(() => null);
+    const refreshResult = await executeSingleFlightRefresh(
+      refreshToken,
+      getBackendApiUrl(),
+      forwardingHeaders
+    );
 
-    if (refreshRes?.ok) {
-      const data = await refreshRes.json();
-      if (data.token && data.refreshToken) {
-        const res = NextResponse.json({ authenticated: true, user: data.user });
-        setAuthCookies(res, data.token, data.refreshToken);
-        return res;
-      }
+    if (refreshResult.ok && refreshResult.data?.token && refreshResult.data?.refreshToken) {
+      const res = NextResponse.json({ authenticated: true, user: refreshResult.data.user });
+      setAuthCookies(res, refreshResult.data.token, refreshResult.data.refreshToken);
+      return res;
+    }
+
+    if (refreshResult.isRace) {
+      refreshWasRace = true;
     }
   }
 
   const res = NextResponse.json({ authenticated: false, user: null }, { status: 401 });
-  clearAuthCookies(res);
+  if (!refreshWasRace) {
+    clearAuthCookies(res);
+  }
   return res;
 }

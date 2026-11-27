@@ -7,6 +7,7 @@ import {
   validateCsrfOrigin,
 } from "@/lib/bff/authCookies";
 import { getClientForwardingHeaders } from "@/lib/bff/forwardedHeaders";
+import { executeSingleFlightRefresh } from "@/lib/bff/refreshSingleFlight";
 
 export async function POST(req: NextRequest) {
   if (!validateCsrfOrigin(req)) {
@@ -18,27 +19,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "No refresh session." }, { status: 401 });
   }
 
-  const backendRes = await fetch(`${getBackendApiUrl()}/api/auth/refresh`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...getClientForwardingHeaders(req),
-    },
-    body: JSON.stringify({ refreshToken }),
-  });
+  const refreshResult = await executeSingleFlightRefresh(
+    refreshToken,
+    getBackendApiUrl(),
+    getClientForwardingHeaders(req)
+  );
 
-  const data = await backendRes.json().catch(() => ({}));
-  if (!backendRes.ok || !data.token || !data.refreshToken) {
-    const failRes = NextResponse.json(data, { status: 401 });
-    clearAuthCookies(failRes);
+  if (!refreshResult.ok || !refreshResult.data?.token || !refreshResult.data?.refreshToken) {
+    const failRes = NextResponse.json(refreshResult.data ?? {}, { status: 401 });
+    if (!refreshResult.isRace) {
+      clearAuthCookies(failRes);
+    }
     return failRes;
   }
 
   const res = NextResponse.json({
-    user: data.user,
-    expiresAtUtc: data.expiresAtUtc,
+    user: refreshResult.data.user,
+    expiresAtUtc: refreshResult.data.expiresAtUtc,
   });
-  setAuthCookies(res, data.token, data.refreshToken);
+  setAuthCookies(res, refreshResult.data.token, refreshResult.data.refreshToken);
   return res;
 }

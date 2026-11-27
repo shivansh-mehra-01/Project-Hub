@@ -26,6 +26,7 @@ public class AuthController : ControllerBase
     private readonly IEmailOutboxService _emailOutbox;
     private readonly IWebHostEnvironment _environment;
     private readonly ITenantContext _tenantContext;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
@@ -35,6 +36,7 @@ public class AuthController : ControllerBase
         IEmailOutboxService emailOutbox,
         IWebHostEnvironment environment,
         ITenantContext tenantContext,
+        IConfiguration configuration,
         ILogger<AuthController> logger)
     {
         _context = context;
@@ -43,6 +45,7 @@ public class AuthController : ControllerBase
         _emailOutbox = emailOutbox;
         _environment = environment;
         _tenantContext = tenantContext;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -261,9 +264,21 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid refresh token." });
         }
 
-        // Reuse detection: if token was already rotated or revoked, revoke entire token family immediately
+        // Reuse detection: allow a short grace window for concurrent BFF refresh races before revoking the family
         if (existingRecord.UsedAtUtc.HasValue || existingRecord.RevokedAtUtc.HasValue)
         {
+            var graceSeconds = Math.Max(0, _configuration.GetValue<int?>("Auth:RefreshRaceGraceSeconds") ?? 15);
+            if (!existingRecord.RevokedAtUtc.HasValue &&
+                existingRecord.UsedAtUtc.HasValue &&
+                (DateTime.UtcNow - existingRecord.UsedAtUtc.Value).TotalSeconds < graceSeconds)
+            {
+                return Unauthorized(new
+                {
+                    code = "refresh_race",
+                    message = "Refresh token was recently rotated by a concurrent request. Please retry."
+                });
+            }
+
             await _sessionSecurity.RevokeTokenFamilyAsync(existingRecord.TokenFamilyId, "RefreshTokenReuseDetected", cancellationToken);
             _context.PlatformAuditLogs.Add(new PlatformAuditLog
             {
