@@ -1,0 +1,40 @@
+# Nginx Reverse Proxy Example for Colabex / Project Hub
+# Architecture:
+#   Internet -> Nginx (TLS termination) -> Next.js BFF (internal) -> ASP.NET Core API (internal)
+#
+# CRITICAL SECURITY NOTES:
+# 1. Next.js MUST NOT be exposed directly to the internet. All traffic must enter via this proxy.
+# 2. Nginx MUST OVERWRITE X-Forwarded-For with $remote_addr (do NOT use $proxy_add_x_forwarded_for),
+#    so a malicious client cannot spoof its IP via an incoming X-Forwarded-For header.
+# 3. Because the API's direct TCP peer is the Next.js server (NOT Nginx), configure
+#    ForwardedHeaders:KnownProxies / KnownNetworks on the API with the Next.js server IP or
+#    internal Docker network subnet.
+
+server {
+    listen 80;
+    server_name app.yourdomain.edu;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name app.yourdomain.edu;
+
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    client_max_body_size 30m;
+
+    location / {
+        proxy_pass http://web:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        # OVERWRITE (do not append) X-Forwarded-For with the true TCP client IP
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
