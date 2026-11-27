@@ -140,6 +140,11 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Email and password are required." });
         }
 
+        if (request.Password.Length > PasswordPolicyValidator.MaximumLength)
+        {
+            return Unauthorized(new { message = "Invalid email or password." });
+        }
+
         var rawEmail = request.Email.Trim().ToLowerInvariant();
         var normalizedEmail = NormalizeEmail(request.Email);
         _tenantContext.IsAuthLookup = true;
@@ -210,6 +215,19 @@ public class AuthController : ControllerBase
         user.LastLoginAtUtc = DateTime.UtcNow;
         user.PasswordResetOtpHashed = null;
         user.PasswordResetOtpExpiresAtUtc = null;
+
+        if (PasswordHelper.NeedsRehash(user.PasswordHash))
+        {
+            try
+            {
+                user.PasswordHash = PasswordHelper.HashPassword(request.Password);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Non-blocking password rehash failed for user {UserId}.", user.Id);
+            }
+        }
 
         if (user.MfaEnabled && !string.IsNullOrWhiteSpace(user.MfaSecret))
         {
