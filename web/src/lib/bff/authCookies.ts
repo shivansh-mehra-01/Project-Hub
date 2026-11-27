@@ -85,5 +85,6 @@ export function validateCsrfOrigin(req: NextRequest): boolean {
     }
   }
 
-  return true;
+  // Reject state-changing requests missing both Origin and Referer
+  return false;
 }

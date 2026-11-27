@@ -493,9 +493,23 @@ if (args.Contains("bootstrap-superadmin", StringComparer.OrdinalIgnoreCase) ||
     return;
 }
 
-// Fail-fast PostgreSQL RLS role check in non-Development environments
+// Fail-fast PostgreSQL RLS role check & production configuration warnings in non-Development environments
 if (!app.Environment.IsDevelopment())
 {
+    if (string.Equals(builder.Configuration["AllowedHosts"], "*", StringComparison.Ordinal))
+    {
+        Log.Warning(
+            "SECURITY WARNING: AllowedHosts is set to '*' in {Environment}. Restrict AllowedHosts to your production domain(s).",
+            app.Environment.EnvironmentName);
+    }
+
+    if (string.IsNullOrWhiteSpace(builder.Configuration["Redis:ConnectionString"]))
+    {
+        Log.Warning(
+            "OPERATIONAL WARNING: Redis:ConnectionString is not configured in {Environment}. Session revocation checks will query PostgreSQL on every request.",
+            app.Environment.EnvironmentName);
+    }
+
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
     if (db.Database.IsNpgsql())
