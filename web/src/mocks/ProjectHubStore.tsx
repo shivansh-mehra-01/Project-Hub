@@ -54,44 +54,7 @@ export interface FacultyRosterItem {
   guidedCount: number;
 }
 
-export const initialFacultyRoster: FacultyRosterItem[] = [
-  {
-    id: "usr-fac-verma",
-    name: "Prof. S. K. Verma",
-    email: "faculty@sistec.ac.in",
-    designation: "Associate Professor",
-    isProjectCoordinator: false,
-    maxTeams: 4,
-    guidedCount: 2,
-  },
-  {
-    id: "usr-fac-nair",
-    name: "Prof. Priya Nair",
-    email: "coordinator@sistec.ac.in",
-    designation: "Assistant Professor",
-    isProjectCoordinator: true,
-    maxTeams: 4,
-    guidedCount: 2,
-  },
-  {
-    id: "usr-fac-rawat",
-    name: "Dr. Amit Rawat",
-    email: "amit.rawat@sistec.ac.in",
-    designation: "Professor",
-    isProjectCoordinator: false,
-    maxTeams: 5,
-    guidedCount: 3,
-  },
-  {
-    id: "usr-fac-sharma-f",
-    name: "Dr. Manisha Sharma",
-    email: "manisha.sharma@sistec.ac.in",
-    designation: "Associate Professor",
-    isProjectCoordinator: true,
-    maxTeams: 4,
-    guidedCount: 1,
-  },
-];
+export const initialFacultyRoster: FacultyRosterItem[] = [];
 
 interface ProjectHubStoreContextType {
   currentPersona: UserPersona;
