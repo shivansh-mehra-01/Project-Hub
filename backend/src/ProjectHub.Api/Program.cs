@@ -412,15 +412,48 @@ app.MapControllers();
 app.MapGet("/", () => Results.Redirect("/scalar/v1"))
    .ExcludeFromDescription();
 
+// CLI Mode: Database Migration (`dotnet run -- migrate`)
+if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase) ||
+    args.Contains("--migrate", StringComparer.OrdinalIgnoreCase))
+{
+    var migrationConnStr = builder.Configuration.GetConnectionString("Migrations")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(migrationConnStr))
+    {
+        Console.Error.WriteLine("Migration failed: ConnectionStrings:Migrations or ConnectionStrings:DefaultConnection is required.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+    if (db.Database.IsRelational())
+    {
+        db.Database.SetConnectionString(migrationConnStr);
+        await db.Database.MigrateAsync();
+    }
+    await DbInitializer.SeedMasterCatalogsAsync(db);
+    Console.WriteLine("Database migrations and master catalog seeding completed successfully.");
+    Environment.ExitCode = 0;
+    return;
+}
+
 // CLI Mode: One-Time SuperAdmin Bootstrap (`dotnet run -- bootstrap-superadmin`)
 if (args.Contains("bootstrap-superadmin", StringComparer.OrdinalIgnoreCase) ||
     args.Contains("--bootstrap-superadmin", StringComparer.OrdinalIgnoreCase))
 {
+    var migrationConnStr = builder.Configuration.GetConnectionString("Migrations")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
     var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
     if (db.Database.IsRelational())
     {
+        if (!string.IsNullOrWhiteSpace(migrationConnStr))
+        {
+            db.Database.SetConnectionString(migrationConnStr);
+        }
         await db.Database.MigrateAsync();
     }
     await DbInitializer.SeedMasterCatalogsAsync(db);
@@ -435,6 +468,31 @@ if (args.Contains("bootstrap-superadmin", StringComparer.OrdinalIgnoreCase) ||
     Console.WriteLine(message);
     Environment.ExitCode = success ? 0 : 1;
     return;
+}
+
+// Fail-fast PostgreSQL RLS role check in non-Development environments
+if (!app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+    if (db.Database.IsNpgsql())
+    {
+        var conn = db.Database.GetDbConnection();
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user";
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (await reader.ReadAsync())
+        {
+            var isSuper = reader.GetBoolean(0);
+            var bypassRls = reader.GetBoolean(1);
+            if (isSuper || bypassRls)
+            {
+                throw new InvalidOperationException(
+                    "Security configuration error: Runtime PostgreSQL role must have NOSUPERUSER and NOBYPASSRLS so Row-Level Security (RLS) cannot be bypassed.");
+            }
+        }
+    }
 }
 
 // Database Migration & Master Reference Catalog Initialization (zero demo tenants/users)
