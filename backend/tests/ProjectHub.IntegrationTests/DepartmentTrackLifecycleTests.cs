@@ -450,4 +450,67 @@ public class DepartmentTrackLifecycleTests : IClassFixture<CustomWebApplicationF
         var stuTracks = await stuTracksResp.Content.ReadFromJsonAsync<List<CollegeTrackDto>>();
         Assert.Contains(stuTracks!, t => t.Id == track.Id && t.SemesterNumber == 1);
     }
+
+    [Fact]
+    public async Task Hod_StartProjectWindow_ValidatesCompatibilityDates_AndDoesNotGrantExtraCoordinatorRole()
+    {
+        var fx = await SeedFixtureAsync();
+        var hodToken = GenerateToken(fx.HodAId, fx.CollegeId, fx.DeptAId, UserRole.HOD);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", hodToken);
+
+        // 1. Incompatible ProjectType + Semester (Minor 1 in 7th sem) -> 400 BadRequest
+        var badTypeResp = await _client.PostAsJsonAsync("/api/hod/tracks", new CreateDepartmentTrackRequest
+        {
+            Name = "Minor 1 — 7th Semester",
+            ProjectType = "Minor 1",
+            AcademicYear = "2025-26",
+            AcademicSessionId = fx.SessionId,
+            SemesterNumber = 7,
+            RegistrationOpensUtc = DateTime.UtcNow.Date,
+            ProposalDeadlineUtc = DateTime.UtcNow.Date.AddDays(14),
+            LaunchImmediately = true
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, badTypeResp.StatusCode);
+
+        // 2. Registration deadline <= opening date -> 400 BadRequest
+        var badDateResp = await _client.PostAsJsonAsync("/api/hod/tracks", new CreateDepartmentTrackRequest
+        {
+            Name = "Minor 1 — 5th Semester",
+            ProjectType = "Minor 1",
+            AcademicYear = "2025-26",
+            AcademicSessionId = fx.SessionId,
+            SemesterNumber = 5,
+            RegistrationOpensUtc = DateTime.UtcNow.Date.AddDays(10),
+            ProposalDeadlineUtc = DateTime.UtcNow.Date.AddDays(5),
+            LaunchImmediately = true
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, badDateResp.StatusCode);
+
+        // 3. Valid window with CoordinatorUserId -> 200 OK, and Faculty.IsProjectCoordinator stays false
+        var okResp = await _client.PostAsJsonAsync("/api/hod/tracks", new CreateDepartmentTrackRequest
+        {
+            Name = "Minor 1 — 5th Semester",
+            ProjectType = "Minor 1",
+            Description = "Submit synopsis and form teams of 2-4.",
+            AcademicYear = "2025-26",
+            AcademicSessionId = fx.SessionId,
+            SemesterNumber = 5,
+            MinTeamSize = 2,
+            MaxTeamSize = 4,
+            RegistrationOpensUtc = DateTime.UtcNow.Date,
+            ProposalDeadlineUtc = DateTime.UtcNow.Date.AddDays(14),
+            CoordinatorUserId = fx.FacultyId,
+            LaunchImmediately = true
+        });
+        Assert.Equal(HttpStatusCode.OK, okResp.StatusCode);
+        var created = await okResp.Content.ReadFromJsonAsync<CollegeTrackDto>();
+        Assert.NotNull(created);
+        Assert.Equal(fx.FacultyId, created!.CoordinatorUserId);
+        Assert.NotNull(created.RegistrationOpensUtc);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ProjectHubDbContext>();
+        var facultyUser = await db.Users.IgnoreQueryFilters().FirstAsync(u => u.Id == fx.FacultyId);
+        Assert.False(facultyUser.IsProjectCoordinator);
+    }
 }

@@ -221,8 +221,11 @@ public record CollegeTrackDto
     public string? SemesterName { get; init; }
     public string? SubjectCode { get; init; }
     public string? SubjectName { get; init; }
+    public DateTime? RegistrationOpensUtc { get; init; }
     public DateTime? ProposalDeadlineUtc { get; init; }
     public DateTime? FinalSubmissionDeadlineUtc { get; init; }
+    public Guid? CoordinatorUserId { get; init; }
+    public string? CoordinatorName { get; init; }
     public int GuideWeightPct { get; init; }
     public int MidTermWeightPct { get; init; }
     public int FinalVivaWeightPct { get; init; }

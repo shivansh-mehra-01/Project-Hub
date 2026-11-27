@@ -3340,6 +3340,7 @@ public class StudentController : ControllerBase
             Status = t.Status,
             MinTeamSize = t.ParticipationMode == ParticipationMode.Individual ? 1 : t.MinTeamSize,
             MaxTeamSize = t.ParticipationMode == ParticipationMode.Individual ? 1 : t.MaxTeamSize,
+            RegistrationOpensUtc = t.RegistrationOpensUtc,
             ProposalDeadlineUtc = t.ProposalDeadlineUtc,
             FinalSubmissionDeadlineUtc = t.FinalSubmissionDeadlineUtc,
             GuideWeightPct = t.GuideWeightPct,
@@ -3439,6 +3440,11 @@ public class StudentController : ControllerBase
         if (selectedTrack == null)
         {
             return BadRequest(new { message = "No open academic project track is configured for your department." });
+        }
+
+        if (selectedTrack.RegistrationOpensUtc.HasValue && DateTime.UtcNow < selectedTrack.RegistrationOpensUtc.Value)
+        {
+            return BadRequest(new { message = "Registration for this project window has not opened yet." });
         }
 
         if (selectedTrack.ProposalDeadlineUtc.HasValue && DateTime.UtcNow > selectedTrack.ProposalDeadlineUtc.Value)

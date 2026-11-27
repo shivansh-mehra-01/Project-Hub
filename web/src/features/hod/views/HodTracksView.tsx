@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   Compass,
   Plus,
@@ -300,14 +301,21 @@ export const HodTracksView: React.FC = () => {
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          size="sm"
-          leftIcon={<Plus className="h-4 w-4" />}
-          onClick={openCreateWizard}
-        >
-          Initialize Project Track
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/hod/projects/start-window">
+            <Button variant="secondary" size="sm" leftIcon={<Compass className="h-4 w-4" />}>
+              Start Project Window
+            </Button>
+          </Link>
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={openCreateWizard}
+          >
+            Initialize Project Track
+          </Button>
+        </div>
       </div>
 
       {error && (

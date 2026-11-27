@@ -530,8 +530,11 @@ export interface CollegeTrackDto {
   status?: AcademicTrackStatus;
   teamCount?: number;
   activeTeamCount?: number;
+  registrationOpensUtc?: string;
   proposalDeadlineUtc?: string;
   finalSubmissionDeadlineUtc?: string;
+  coordinatorUserId?: string;
+  coordinatorName?: string;
   guideWeightPct: number;
   midTermWeightPct: number;
   finalVivaWeightPct: number;
@@ -700,6 +703,7 @@ export interface DepartmentStudentResultDto {
 
 export interface CreateDepartmentTrackRequest {
   name?: string;
+  projectType?: string;
   description?: string;
   academicYear?: string;
   academicSessionId?: string;
@@ -711,6 +715,7 @@ export interface CreateDepartmentTrackRequest {
   customSubjectName?: string;
   credits?: number;
   curriculumSchemeId?: string;
+  coordinatorUserId?: string;
   participationMode?: ParticipationMode;
   enrolmentMode?: EnrolmentMode;
   minTeamSize?: number;
@@ -718,6 +723,7 @@ export interface CreateDepartmentTrackRequest {
   launchImmediately?: boolean;
   allowCrossBranchTeams?: boolean;
   allowInterdisciplinaryTeams?: boolean;
+  registrationOpensUtc?: string;
   proposalDeadlineUtc?: string;
   finalSubmissionDeadlineUtc?: string;
   guideWeightPct?: number;
@@ -1512,6 +1518,11 @@ export interface MasterCatalogOverviewDto {
   schemes: string[];
 }
 
+export interface SemesterBatchMappingDto {
+  semesterNumber: number;
+  admissionBatch: string;
+}
+
 export interface HodAcademicContextDto {
   departmentId: string;
   departmentName: string;
@@ -1521,6 +1532,7 @@ export interface HodAcademicContextDto {
   availableSessions: AcademicSessionDto[];
   availableSemesters: SemesterTermDto[];
   availableOfferings: SubjectOfferingDto[];
+  semesterBatches?: SemesterBatchMappingDto[];
 }
 
 // --- Account Management DTOs ---

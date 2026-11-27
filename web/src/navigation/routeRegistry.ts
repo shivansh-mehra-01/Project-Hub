@@ -507,6 +507,16 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     isSidebarItem: false,
   },
   {
+    path: "/hod/projects/start-window",
+    label: "Start Project Window",
+    breadcrumbGroup: "HOD Console",
+    breadcrumbTitle: "Start Project Window",
+    iconName: "Compass",
+    allowedRoles: ["HOD"],
+    description: "Initiate a new academic project window for a specific semester",
+    isSidebarItem: false,
+  },
+  {
     path: "/hod/students",
     label: "Students",
     breadcrumbGroup: "HOD Console",

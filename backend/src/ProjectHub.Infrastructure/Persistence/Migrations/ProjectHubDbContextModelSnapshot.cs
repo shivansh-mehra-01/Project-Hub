@@ -98,6 +98,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CollegeId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CoordinatorUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("CourseProgramId")
                         .HasColumnType("uuid");
 
@@ -169,6 +172,9 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("ProposalDeadlineUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("RegistrationOpensUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("SemesterTermId")
                         .HasColumnType("uuid");
 
@@ -197,6 +203,8 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AcademicSessionId");
+
+                    b.HasIndex("CoordinatorUserId");
 
                     b.HasIndex("CourseProgramId");
 
@@ -3523,6 +3531,11 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ProjectHub.Domain.Entities.UserAccount", "CoordinatorUser")
+                        .WithMany()
+                        .HasForeignKey("CoordinatorUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("ProjectHub.Domain.Entities.CourseProgram", "CourseProgram")
                         .WithMany("AcademicTracks")
                         .HasForeignKey("CourseProgramId")
@@ -3551,6 +3564,8 @@ namespace ProjectHub.Infrastructure.Persistence.Migrations
                     b.Navigation("AcademicSession");
 
                     b.Navigation("College");
+
+                    b.Navigation("CoordinatorUser");
 
                     b.Navigation("CourseProgram");
 

@@ -310,6 +310,28 @@ public class HodController : ControllerBase
             })
             .ToListAsync();
 
+        var semesterBatches = await _context.StudentAcademicEnrollments
+            .AsNoTracking()
+            .Include(e => e.CurrentSemesterTerm)
+            .Where(e => e.CollegeId == collegeId &&
+                        e.DepartmentId == deptId &&
+                        e.AcademicStatus == AcademicStatus.Active &&
+                        !e.IsDeleted &&
+                        e.CurrentSemesterTerm != null)
+            .Select(e => new { e.CurrentSemesterTerm!.SemesterNumber, e.AdmissionBatch })
+            .ToListAsync();
+
+        var batchMappings = semesterBatches
+            .Where(x => !string.IsNullOrWhiteSpace(x.AdmissionBatch))
+            .GroupBy(x => x.SemesterNumber)
+            .Select(g => new SemesterBatchMappingDto
+            {
+                SemesterNumber = g.Key,
+                AdmissionBatch = string.Join(", ", g.Select(x => x.AdmissionBatch).Distinct().OrderBy(b => b))
+            })
+            .OrderBy(x => x.SemesterNumber)
+            .ToList();
+
         return Ok(new HodAcademicContextDto
         {
             DepartmentId = dept.Id,
@@ -319,7 +341,8 @@ public class HodController : ControllerBase
             CourseProgramName = dept.CourseProgram?.Name,
             AvailableSessions = sessions,
             AvailableSemesters = availableSemesters,
-            AvailableOfferings = offerings
+            AvailableOfferings = offerings,
+            SemesterBatches = batchMappings
         });
     }
 
@@ -333,6 +356,7 @@ public class HodController : ControllerBase
             .Include(t => t.Department)
             .Include(t => t.SemesterTerm)
             .Include(t => t.SubjectOffering)
+            .Include(t => t.CoordinatorUser)
             .Where(t => t.CollegeId == collegeId && t.DepartmentId == deptId && !t.IsDeleted)
             .OrderByDescending(t => t.AcademicYear)
             .ThenByDescending(t => t.CreatedAtUtc)
@@ -472,10 +496,48 @@ public class HodController : ControllerBase
             return BadRequest(new { message = "Track name is required." });
         }
 
+        if (request.RegistrationOpensUtc.HasValue && request.ProposalDeadlineUtc.HasValue &&
+            request.RegistrationOpensUtc.Value >= request.ProposalDeadlineUtc.Value)
+        {
+            return BadRequest(new { message = "Registration deadline must be after the registration opening date." });
+        }
+
         if (request.ProposalDeadlineUtc.HasValue && request.FinalSubmissionDeadlineUtc.HasValue &&
             request.ProposalDeadlineUtc.Value >= request.FinalSubmissionDeadlineUtc.Value)
         {
             return BadRequest(new { message = "Proposal deadline must be earlier than the final submission deadline." });
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ProjectType))
+        {
+            var pt = request.ProjectType.Trim();
+            var isMinorType = pt.Equals("Minor 1", StringComparison.OrdinalIgnoreCase) || pt.Equals("Minor 2", StringComparison.OrdinalIgnoreCase);
+            var isMajorType = pt.Equals("Major 1", StringComparison.OrdinalIgnoreCase) || pt.Equals("Major 2", StringComparison.OrdinalIgnoreCase);
+            if (isMinorType && semNumber is not (5 or 6))
+            {
+                return BadRequest(new { message = $"{pt} is only compatible with 5th or 6th Semester." });
+            }
+            if (isMajorType && semNumber is not (7 or 8))
+            {
+                return BadRequest(new { message = $"{pt} is only compatible with 7th or 8th Semester." });
+            }
+        }
+
+        Guid? coordinatorUserId = null;
+        if (request.CoordinatorUserId.HasValue && request.CoordinatorUserId.Value != Guid.Empty)
+        {
+            var coordinator = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u =>
+                u.Id == request.CoordinatorUserId.Value &&
+                u.CollegeId == collegeId &&
+                u.DepartmentId == deptId &&
+                (u.Role == UserRole.Faculty || u.Role == UserRole.HOD) &&
+                u.IsActive &&
+                !u.IsDeleted);
+            if (coordinator == null)
+            {
+                return BadRequest(new { message = "Selected faculty coordinator is not an active member of your department." });
+            }
+            coordinatorUserId = coordinator.Id;
         }
 
         var normalizedName = request.Name.Trim();
@@ -520,8 +582,10 @@ public class HodController : ControllerBase
             AcademicYear = normalizedYear,
             Status = status,
             IsActive = status == AcademicTrackStatus.Open,
+            RegistrationOpensUtc = request.RegistrationOpensUtc,
             ProposalDeadlineUtc = request.ProposalDeadlineUtc,
             FinalSubmissionDeadlineUtc = request.FinalSubmissionDeadlineUtc,
+            CoordinatorUserId = coordinatorUserId,
             GuideWeightPct = request.GuideWeightPct,
             MidTermWeightPct = request.MidTermWeightPct,
             FinalVivaWeightPct = request.FinalVivaWeightPct,
@@ -554,6 +618,7 @@ public class HodController : ControllerBase
             .Include(t => t.Department)
             .Include(t => t.SemesterTerm)
             .Include(t => t.SubjectOffering)
+            .Include(t => t.CoordinatorUser)
             .FirstAsync(t => t.Id == track.Id);
 
         return Ok(MapTrackDto(createdTrack, 0, 0));
@@ -740,8 +805,11 @@ public class HodController : ControllerBase
             Status = t.Status,
             TeamCount = teamCount,
             ActiveTeamCount = activeTeamCount,
+            RegistrationOpensUtc = t.RegistrationOpensUtc,
             ProposalDeadlineUtc = t.ProposalDeadlineUtc,
             FinalSubmissionDeadlineUtc = t.FinalSubmissionDeadlineUtc,
+            CoordinatorUserId = t.CoordinatorUserId,
+            CoordinatorName = t.CoordinatorUser?.FullName,
             GuideWeightPct = t.GuideWeightPct,
             MidTermWeightPct = t.MidTermWeightPct,
             FinalVivaWeightPct = t.FinalVivaWeightPct,

@@ -83,5 +83,10 @@ public class AcademicTrackConfiguration : IEntityTypeConfiguration<AcademicTrack
             .WithMany()
             .HasForeignKey(t => t.CurriculumSchemeId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(t => t.CoordinatorUser)
+            .WithMany()
+            .HasForeignKey(t => t.CoordinatorUserId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

@@ -35,8 +35,10 @@ public class AcademicTrack : BaseEntity, ITenantEntity
     public string AcademicYear { get; set; } = "2025-2026";
     public AcademicTrackStatus Status { get; set; } = AcademicTrackStatus.Open;
     public bool IsActive { get; set; } = true;
+    public DateTime? RegistrationOpensUtc { get; set; }
     public DateTime? ProposalDeadlineUtc { get; set; }
     public DateTime? FinalSubmissionDeadlineUtc { get; set; }
+    public Guid? CoordinatorUserId { get; set; }
 
     public int MinTeamSize { get; set; } = 2;
     public int MaxTeamSize { get; set; } = 4;
@@ -76,6 +78,7 @@ public class AcademicTrack : BaseEntity, ITenantEntity
     public SemesterTerm? SemesterTerm { get; set; }
     public SubjectOffering? SubjectOffering { get; set; }
     public CurriculumScheme? CurriculumScheme { get; set; }
+    public UserAccount? CoordinatorUser { get; set; }
 
     public ICollection<ProjectTeam> Teams { get; set; } = new List<ProjectTeam>();
 }
