@@ -396,21 +396,33 @@ app.UseAuthentication();
 app.UseTenantResolution();
 app.UseAuthorization();
 
-// OpenAPI Spec & Scalar UI
-app.MapOpenApi("/openapi/v1.json");
-app.MapScalarApiReference("/scalar/v1", options =>
+// OpenAPI Spec & Scalar UI (Development or explicit Docs:Enabled=true only)
+var docsEnabled = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Docs:Enabled");
+if (docsEnabled)
 {
-    options.WithTitle("Collabex API Documentation");
-    options.WithTheme(ScalarTheme.Default);
-});
+    app.MapOpenApi("/openapi/v1.json");
+    app.MapScalarApiReference("/scalar/v1", options =>
+    {
+        options.WithTitle("Collabex API Documentation");
+        options.WithTheme(ScalarTheme.Default);
+    });
+}
 
 // System Endpoints
 app.MapHealthEndpoints();
 app.MapControllers();
 
-// Root Redirect to Scalar UI
-app.MapGet("/", () => Results.Redirect("/scalar/v1"))
-   .ExcludeFromDescription();
+// Root endpoint
+if (docsEnabled)
+{
+    app.MapGet("/", () => Results.Redirect("/scalar/v1"))
+       .ExcludeFromDescription();
+}
+else
+{
+    app.MapGet("/", () => Results.NotFound())
+       .ExcludeFromDescription();
+}
 
 // CLI Mode: Database Migration (`dotnet run -- migrate`)
 if (args.Contains("migrate", StringComparer.OrdinalIgnoreCase) ||
