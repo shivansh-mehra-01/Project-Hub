@@ -166,8 +166,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             <div className="p-3 bg-brand-primary-tint rounded-lg border border-brand-primary-border flex items-start gap-2.5">
               <UserCheck className="h-4 w-4 text-brand-primary shrink-0 mt-0.5" strokeWidth={1.75} />
               <div className="text-xs text-brand-primary-text leading-relaxed">
-                Pre-registered student record found in SISTec Department of CSE
-                roster. Please verify and complete your profile.
+                Pre-registered student record found. Please verify and complete your profile.
               </div>
             </div>
 
@@ -189,7 +188,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 value={initialEmail}
                 disabled
                 readOnly
-                helperText="Verified via SISTec SSO"
+                helperText="Verified via Institutional SSO"
               />
             </div>
             <Input
@@ -254,7 +253,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               <p className="text-[11px] text-[#475569] leading-relaxed">
                 I hereby declare that all project deliverables, Git commits, and
                 weekly log submissions will represent original work developed
-                under the supervision of SISTec faculty.
+                under faculty supervision.
               </p>
             </div>
           </div>

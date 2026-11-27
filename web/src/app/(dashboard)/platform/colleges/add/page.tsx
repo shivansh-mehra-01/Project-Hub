@@ -1,4 +1,5 @@
-import AddCollegePage, { metadata } from "../new/page";
+import { redirect } from "next/navigation";
 
-export { metadata };
-export default AddCollegePage;
+export default function AddCollegeAliasPage() {
+  redirect("/platform/colleges/new");
+}

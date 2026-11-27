@@ -1,26 +1,22 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Plus,
   History,
-  CheckCircle2,
   AlertCircle,
   Loader2,
   Search,
-  UserCheck,
-  UserX,
-  Building2,
-  Clock,
-  ArrowRight,
-  ShieldCheck,
-  RotateCcw,
   AlertTriangle,
-  Upload,
-  Download,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
+import { ConfirmationDialog, PageLoadingState } from "@/design-system/patterns/PageStates";
+import { TablePagination } from "@/design-system/patterns/TablePagination";
+import { showToast } from "@/lib/toast";
 import { Modal } from "@/design-system/components/Modal";
+import { Button } from "@/design-system/components/Button";
 import { SlideOverDrawer } from "@/design-system/components/SlideOverDrawer";
 import { Select } from "@/design-system/components/Select";
 import { collegeApi } from "@/lib/api/collegeApi";
@@ -45,10 +41,12 @@ export const HodManagementView: React.FC = () => {
   const [facultyList, setFacultyList] = useState<CollegeStaffDto[]>([]);
   const [historyList, setHistoryList] = useState<HodAssignmentHistoryDto[]>([]);
 
-  // Filtering State
+  // Filtering & Pagination State
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "appointed" | "vacant">("all");
   const [programFilter, setProgramFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Modals & Drawer
   const [showAppointModal, setShowAppointModal] = useState(false);
@@ -60,20 +58,14 @@ export const HodManagementView: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [relieveTarget, setRelieveTarget] = useState<HodManagementDto | null>(null);
   const [relieving, setRelieving] = useState(false);
-
-  // Toast
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [statusToggleTarget, setStatusToggleTarget] = useState<HodManagementDto | null>(null);
+  const [togglingStatus, setTogglingStatus] = useState(false);
 
   useDashboardHeader({
-    title: "Department Heads",
+    title: "Department Leadership",
   });
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setApiError(null);
@@ -86,27 +78,54 @@ export const HodManagementView: React.FC = () => {
       setHods(hodRes || []);
       setDepartments(deptRes || []);
       setFacultyList(staffRes || []);
-    } catch (err: any) {
-      console.error("Failed to load department leadership data:", err);
-      setApiError(err?.message || "Failed to connect to backend service. Leadership data unavailable.");
+    } catch (err: unknown) {
+      setApiError(
+        err instanceof Error
+          ? err.message
+          : "Failed to connect to backend service. Leadership data unavailable."
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const loadHistory = async () => {
     try {
       const res = await collegeApi.getHodHistory();
       setHistoryList(res || []);
-    } catch (err) {
-      console.error("Failed to load HOD history:", err);
-      showToast("Unable to fetch tenure history from database.");
+    } catch {
+      showToast("Unable to fetch tenure history from database.", "error");
     }
     setShowHistoryDrawer(true);
   };
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    Promise.all([
+      collegeApi.getHods(),
+      collegeApi.getDepartments(),
+      collegeApi.getStaffUsers({ role: "Faculty" }),
+    ])
+      .then(([hodRes, deptRes, staffRes]) => {
+        if (!active) return;
+        setHods(hodRes || []);
+        setDepartments(deptRes || []);
+        setFacultyList(staffRes || []);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setApiError(
+          err instanceof Error
+            ? err.message
+            : "Failed to connect to backend service. Leadership data unavailable."
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const currentDepartmentHod = hods.find((h) => h.departmentId === targetDepartmentId);
@@ -171,27 +190,40 @@ export const HodManagementView: React.FC = () => {
 
       setShowAppointModal(false);
       await loadData();
-      showToast(`Assigned ${fac?.fullName || "Faculty"} as HOD of ${deptDisplayName}.`);
-    } catch (err: any) {
-      console.error("Failed to appoint HOD:", err);
-      setModalError(err?.message || "Unable to appoint HOD. Please verify eligibility and try again.");
+      showToast(`Assigned ${fac?.fullName || "Faculty"} as HOD of ${deptDisplayName}.`, "success");
+    } catch (err: unknown) {
+      setModalError(
+        err instanceof Error
+          ? err.message
+          : "Unable to appoint HOD. Please verify eligibility and try again."
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleToggleStatus = async (item: HodManagementDto) => {
-    if (!item.hodUserId) return;
+  const confirmToggleStatus = async () => {
+    if (!statusToggleTarget?.hodUserId) return;
+    const item = statusToggleTarget;
+    const newStatus = !item.isActive;
+    setTogglingStatus(true);
     try {
-      const newStatus = !item.isActive;
-      await collegeApi.updateHodStatus(item.hodUserId, { isActive: newStatus });
-      showToast(`HOD account for ${item.hodName} is now ${newStatus ? "Active" : "Deactivated"}.`);
+      await collegeApi.updateHodStatus(item.hodUserId!, { isActive: newStatus });
+      showToast(
+        `HOD account for ${item.hodName} is now ${newStatus ? "Active" : "Deactivated"}.`,
+        "success"
+      );
       setHods((prev) =>
         prev.map((h) => (h.hodUserId === item.hodUserId ? { ...h, isActive: newStatus } : h))
       );
-    } catch (err: any) {
-      console.error(err);
-      showToast("Failed to update HOD status.");
+      setStatusToggleTarget(null);
+    } catch (err: unknown) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to update HOD status.",
+        "error"
+      );
+    } finally {
+      setTogglingStatus(false);
     }
   };
 
@@ -215,37 +247,67 @@ export const HodManagementView: React.FC = () => {
   const activeHodCount = hods.filter((h) => h.hodUserId && h.hodName).length;
   const vacantDeptCount = totalDepartmentsCount - activeHodCount;
 
+  const availablePrograms = useMemo(() => {
+    const codes = new Set(hods.map((h) => getProgramInfo(h).code));
+    return Array.from(codes).sort();
+  }, [hods]);
+
   // Filtered List
-  const filteredHods = hods.filter((h) => {
-    const q = searchQuery.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      h.departmentName.toLowerCase().includes(q) ||
-      h.departmentCode.toLowerCase().includes(q) ||
-      (h.hodName && h.hodName.toLowerCase().includes(q)) ||
-      (h.hodEmail && h.hodEmail.toLowerCase().includes(q));
+  const filteredHods = useMemo(() => {
+    return hods.filter((h) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        h.departmentName.toLowerCase().includes(q) ||
+        h.departmentCode.toLowerCase().includes(q) ||
+        (h.hodName && h.hodName.toLowerCase().includes(q)) ||
+        (h.hodEmail && h.hodEmail.toLowerCase().includes(q));
 
-    const isAppointed = Boolean(h.hodUserId && h.hodName);
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "appointed" && isAppointed) ||
-      (statusFilter === "vacant" && !isAppointed);
+      const isAppointed = Boolean(h.hodUserId && h.hodName);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "appointed" && isAppointed) ||
+        (statusFilter === "vacant" && !isAppointed);
 
-    const progInfo = getProgramInfo(h);
-    const matchesProgram =
-      programFilter === "all" || progInfo.code.toLowerCase() === programFilter.toLowerCase();
+      const progInfo = getProgramInfo(h);
+      const matchesProgram =
+        programFilter === "all" || progInfo.code.toLowerCase() === programFilter.toLowerCase();
 
-    return matchesSearch && matchesStatus && matchesProgram;
-  });
+      return matchesSearch && matchesStatus && matchesProgram;
+    });
+  }, [hods, searchQuery, statusFilter, programFilter]);
+
+  const paginatedHods = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredHods.slice(start, start + pageSize);
+  }, [filteredHods, currentPage, pageSize]);
 
   return (
-    <div className="space-y-6 pb-12 font-sans bg-[#f8fafc]">
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-800 text-white text-xs font-semibold rounded-lg shadow-lg">
-          <CheckCircle2 className="h-4 w-4" strokeWidth={1.75} />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+    <div className="space-y-6 pb-12 font-sans">
+      <PageHeader
+        title="Department Leadership"
+        description="Appoint, replace, or relieve Heads of Department and review institutional succession history."
+        actions={
+          <>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={loadHistory}
+              leftIcon={<History className="h-3.5 w-3.5" />}
+            >
+              Tenure History
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => handleOpenAppoint()}
+              leftIcon={<Plus className="h-3.5 w-3.5" />}
+            >
+              Appoint HOD
+            </Button>
+          </>
+        }
+      />
 
       {apiError && (
         <ApiConnectionBanner onRetry={loadData} message={apiError} isRetrying={loading} />
@@ -283,20 +345,28 @@ export const HodManagementView: React.FC = () => {
         {/* Table Controls */}
         <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <input
                 type="text"
+                aria-label="Search branch, code, or HOD"
                 placeholder="Search branch, code, or HOD..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-700"
               />
             </div>
 
             <select
+              aria-label="Filter by appointment status"
               value={statusFilter}
-              onChange={(e: any) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as "all" | "appointed" | "vacant");
+                setCurrentPage(1);
+              }}
               className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
             >
               <option value="all">All Statuses</option>
@@ -305,148 +375,141 @@ export const HodManagementView: React.FC = () => {
             </select>
 
             <select
+              aria-label="Filter by program"
               value={programFilter}
-              onChange={(e) => setProgramFilter(e.target.value)}
+              onChange={(e) => {
+                setProgramFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
             >
               <option value="all">All Programs</option>
-              <option value="B.Tech">B.Tech</option>
-              <option value="M.Tech">M.Tech</option>
-              <option value="MBA">MBA</option>
-              <option value="MCA">MCA</option>
+              {availablePrograms.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
             </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={loadHistory}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-            >
-              <History className="h-4 w-4 text-slate-500" />
-              <span>Tenure History</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleOpenAppoint()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-800 rounded-lg hover:bg-emerald-900 cursor-pointer shadow-xs"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Appoint HOD</span>
-            </button>
           </div>
         </div>
 
         {/* Table Body */}
         {loading ? (
-          <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin mr-2 text-emerald-800" />
-            Loading department leadership roster...
-          </div>
+          <PageLoadingState message="Loading department leadership roster..." className="border-0 rounded-none" />
         ) : filteredHods.length === 0 ? (
-          <div className="p-12 text-center text-xs text-slate-500">
-            No departments match your filter criteria.
-          </div>
+          <EmptyState
+            title="No departments found"
+            description="No departments match your current search or filter criteria."
+            className="border-0 rounded-none"
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
-                <tr>
-                  <th className="p-3">Department Branch</th>
-                  <th className="p-3">Program</th>
-                  <th className="p-3">Head of Department</th>
-                  <th className="p-3">Employee ID</th>
-                  <th className="p-3">Account Status</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredHods.map((item) => {
-                  const prog = getProgramInfo(item);
-                  const isAppointed = Boolean(item.hodUserId && item.hodName);
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
+                  <tr>
+                    <th className="p-3">Department Branch</th>
+                    <th className="p-3">Program</th>
+                    <th className="p-3">Head of Department</th>
+                    <th className="p-3">Employee ID</th>
+                    <th className="p-3">Account Status</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {paginatedHods.map((item) => {
+                    const prog = getProgramInfo(item);
+                    const isAppointed = Boolean(item.hodUserId && item.hodName);
 
-                  return (
-                    <tr key={item.departmentId} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="p-3">
-                        <div className="font-bold text-slate-900">{item.departmentName}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">Code: {item.departmentCode}</div>
-                      </td>
-                      <td className="p-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-semibold border ${prog.badgeClass}`}>
-                          {prog.code}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        {isAppointed ? (
-                          <div>
-                            <div className="font-semibold text-slate-900">{item.hodName}</div>
-                            <div className="text-[11px] text-slate-500">{item.hodEmail}</div>
-                          </div>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold">
-                            <AlertCircle className="h-3 w-3" />
-                            Vacant
+                    return (
+                      <tr key={item.departmentId} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="p-3">
+                          <div className="font-bold text-slate-900">{item.departmentName}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">Code: {item.departmentCode}</div>
+                        </td>
+                        <td className="p-3">
+                          <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-semibold border ${prog.badgeClass}`}>
+                            {prog.code}
                           </span>
-                        )}
-                      </td>
-                      <td className="p-3 font-mono text-[11px] text-slate-600">
-                        {item.employeeCode || "—"}
-                      </td>
-                      <td className="p-3">
-                        {isAppointed ? (
-                          <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
-                            item.isActive
-                              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                              : "bg-slate-100 text-slate-600 border border-slate-200"
-                          }`}>
-                            {item.isActive ? "Active" : "Deactivated"}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-slate-400">Unassigned</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right space-x-2">
-                        {isAppointed ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleStatus(item)}
-                              className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
-                            >
-                              {item.isActive ? "Deactivate" : "Activate"}
-                            </button>
+                        </td>
+                        <td className="p-3">
+                          {isAppointed ? (
+                            <div>
+                              <div className="font-semibold text-slate-900">{item.hodName}</div>
+                              <div className="text-[11px] text-slate-500">{item.hodEmail}</div>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold">
+                              <AlertCircle className="h-3 w-3" />
+                              Vacant
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 font-mono text-[11px] text-slate-600">
+                          {item.employeeCode || "—"}
+                        </td>
+                        <td className="p-3">
+                          {isAppointed ? (
+                            <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
+                              item.isActive
+                                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                : "bg-slate-100 text-slate-600 border border-slate-200"
+                            }`}>
+                              {item.isActive ? "Active" : "Deactivated"}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right space-x-2 whitespace-nowrap">
+                          {isAppointed ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setStatusToggleTarget(item)}
+                                className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                              >
+                                {item.isActive ? "Deactivate" : "Activate"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAppoint(item.departmentId)}
+                                className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 cursor-pointer"
+                              >
+                                Reassign
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRelieveTarget(item)}
+                                className="text-[11px] font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
+                              >
+                                End Appointment
+                              </button>
+                            </>
+                          ) : (
                             <button
                               type="button"
                               onClick={() => handleOpenAppoint(item.departmentId)}
-                              className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 cursor-pointer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-emerald-800 hover:bg-emerald-900 rounded-md cursor-pointer"
                             >
-                              Reassign
+                              Appoint HOD
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setRelieveTarget(item)}
-                              className="text-[11px] font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
-                            >
-                              End Appointment
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenAppoint(item.departmentId)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-emerald-800 hover:bg-emerald-900 rounded-md cursor-pointer"
-                          >
-                            Appoint HOD
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <TablePagination
+              currentPage={currentPage}
+              totalItems={filteredHods.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
         )}
       </div>
 
@@ -597,9 +660,11 @@ export const HodManagementView: React.FC = () => {
       >
         <div className="space-y-4">
           {historyList.length === 0 ? (
-            <div className="text-center py-8 text-xs text-slate-500">
-              No historical appointment records found.
-            </div>
+            <EmptyState
+              title="No appointment history"
+              description="No historical department leadership records found."
+              className="border-0 py-6"
+            />
           ) : (
             historyList.map((h) => (
               <div key={h.id} className="p-3.5 rounded-lg border border-slate-200 bg-white space-y-1.5 shadow-xs">
@@ -623,57 +688,55 @@ export const HodManagementView: React.FC = () => {
         </div>
       </SlideOverDrawer>
 
-      {/* End HOD Appointment Confirmation Modal */}
-      <Modal
+      <ConfirmationDialog
+        isOpen={Boolean(statusToggleTarget)}
+        onClose={() => !togglingStatus && setStatusToggleTarget(null)}
+        onConfirm={confirmToggleStatus}
+        title={
+          statusToggleTarget?.isActive
+            ? "Deactivate HOD Account"
+            : "Activate HOD Account"
+        }
+        description={
+          statusToggleTarget?.isActive
+            ? `Deactivate HOD account for ${statusToggleTarget.hodName} (${statusToggleTarget.departmentName})? They will be unable to sign in until reactivated.`
+            : `Reactivate HOD account for ${statusToggleTarget?.hodName || "this HOD"} (${statusToggleTarget?.departmentName || ""})?`
+        }
+        confirmText={statusToggleTarget?.isActive ? "Deactivate" : "Activate"}
+        variant={statusToggleTarget?.isActive ? "warning" : "primary"}
+        isLoading={togglingStatus}
+      />
+
+      <ConfirmationDialog
         isOpen={Boolean(relieveTarget)}
         onClose={() => !relieving && setRelieveTarget(null)}
+        onConfirm={async () => {
+          if (!relieveTarget) return;
+          setRelieving(true);
+          try {
+            await collegeApi.relieveHod(relieveTarget.departmentId);
+            const relievedName = relieveTarget.hodName || "Faculty";
+            setRelieveTarget(null);
+            await loadData();
+            showToast(
+              `Ended HOD appointment for ${relievedName}. Faculty account remains active.`,
+              "success"
+            );
+          } catch (err: unknown) {
+            showToast(
+              err instanceof Error ? err.message : "Failed to end HOD appointment.",
+              "error"
+            );
+          } finally {
+            setRelieving(false);
+          }
+        }}
         title="End HOD Appointment"
-        description="Revoke Head of Department privileges while keeping the faculty account active."
-      >
-        {relieveTarget && (
-          <div className="space-y-4">
-            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
-              Are you sure you want to end the HOD appointment of{" "}
-              <span className="font-bold">{relieveTarget.hodName}</span> for{" "}
-              <span className="font-bold">
-                {relieveTarget.departmentName} ({relieveTarget.departmentCode})
-              </span>
-              ? Their role will revert to <span className="font-semibold">Faculty</span> and their account will remain active.
-            </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                disabled={relieving}
-                onClick={() => setRelieveTarget(null)}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={relieving}
-                onClick={async () => {
-                  setRelieving(true);
-                  try {
-                    await collegeApi.relieveHod(relieveTarget.departmentId);
-                    const relievedName = relieveTarget.hodName || "Faculty";
-                    setRelieveTarget(null);
-                    await loadData();
-                    showToast(`Ended HOD appointment for ${relievedName}. Faculty account remains active.`);
-                  } catch (err: any) {
-                    showToast(err?.message || "Failed to end HOD appointment.");
-                  } finally {
-                    setRelieving(false);
-                  }
-                }}
-                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-rose-700 rounded-lg hover:bg-rose-800 cursor-pointer disabled:opacity-50"
-              >
-                {relieving ? "Ending..." : "Confirm End Appointment"}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        description={`Are you sure you want to end the HOD appointment of ${relieveTarget?.hodName || "this faculty member"} for ${relieveTarget?.departmentName || ""} (${relieveTarget?.departmentCode || ""})? Their role will revert to Faculty and their account will remain active.`}
+        confirmText="Confirm End Appointment"
+        variant="danger"
+        isLoading={relieving}
+      />
     </div>
   );
 };

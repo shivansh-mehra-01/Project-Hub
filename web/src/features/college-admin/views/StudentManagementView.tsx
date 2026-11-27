@@ -1,31 +1,20 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  Users,
   Plus,
-  Trash2,
   Search,
-  KeyRound,
-  CheckCircle2,
   Loader2,
-  UserCheck,
-  UserX,
-  Mail,
-  Building2,
-  ShieldCheck,
-  Shield,
-  GraduationCap,
   Upload,
   Download,
-  FileSpreadsheet,
-  AlertTriangle,
-  X,
-  Check,
-  ShieldAlert,
   History,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
+import { ConfirmationDialog, PageLoadingState } from "@/design-system/patterns/PageStates";
+import { TablePagination } from "@/design-system/patterns/TablePagination";
+import { showToast } from "@/lib/toast";
 import { Modal } from "@/design-system/components/Modal";
 import { Button } from "@/design-system/components/Button";
 import { Input } from "@/design-system/components/Input";
@@ -36,34 +25,36 @@ import {
   CourseProgramDto,
   DepartmentDto,
   RoleType,
-  FacultyDesignation,
-  BulkStaffUploadRowDto,
   RosterImportPreviewDto,
   RosterImportHistoryDto,
 } from "@/lib/api/types";
 import { ApiConnectionBanner } from "../components/ApiConnectionBanner";
 import {
-  applyBackendRowErrors,
   generateStudentCsvTemplate,
-  MAX_ROSTER_ROWS,
   parseStudentCsv,
   ParsedStudentRow,
   STUDENT_CSV_HEADERS,
 } from "./studentCsvHelpers";
-import {
-  isLastActiveCollegeAdmin,
-} from "./staffDirectoryHelpers";
+
+type StudentRow = CollegeStaffDto & {
+  status: "Active" | "Pending" | "Inactive";
+  enrollmentOrEmployeeCode?: string;
+  admissionYear?: string;
+  currentSemesterTerm?: number;
+  programName?: string;
+};
 
 export const StudentManagementView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [users, setUsers] = useState<CollegeStaffDto[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
+  const [students, setStudents] = useState<StudentRow[]>([]);
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
   const [programs, setPrograms] = useState<CourseProgramDto[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Add Student Modal State
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -77,7 +68,7 @@ export const StudentManagementView: React.FC = () => {
 
   // Edit Student Modal State
   const [showEditStudentModal, setShowEditStudentModal] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<any | null>(null);
+  const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editStudentNumber, setEditStudentNumber] = useState("");
@@ -86,22 +77,11 @@ export const StudentManagementView: React.FC = () => {
   const [editSemester, setEditSemester] = useState("1");
   const [updating, setUpdating] = useState(false);
 
-  // Delete User Confirmation State
-  const [studentToDelete, setStudentToDelete] = useState<any | null>(null);
+  // Delete & Status Toggle Confirmation State
+  const [studentToDelete, setStudentToDelete] = useState<StudentRow | null>(null);
   const [isDeletingStudent, setIsDeletingStudent] = useState(false);
-
-  // Bulk CSV Import State
-  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
-  const [bulkImportTab, setBulkImportTab] = useState<"file" | "paste">("file");
-  const [rawCsvInput, setRawCsvInput] = useState("");
-  const [fileName, setFileName] = useState("");
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
-  const [csvHeaderError, setCsvHeaderError] = useState<string | null>(null);
-  const [parsedRows, setParsedRows] = useState<any[]>([]);
-  const [bulkImportError, setBulkImportError] = useState<string | null>(null);
-  const [staffServerPreview, setStaffServerPreview] = useState<any | null>(null);
-  const [isPreviewingStaff, setIsPreviewingStaff] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
+  const [studentToToggleStatus, setStudentToToggleStatus] = useState<StudentRow | null>(null);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
   // Students.csv Import Modal State
   const [showStudentCsvModal, setShowStudentCsvModal] = useState(false);
@@ -110,39 +90,30 @@ export const StudentManagementView: React.FC = () => {
   const [studentCsvHeaderError, setStudentCsvHeaderError] = useState<string | null>(null);
   const [parsedStudentRows, setParsedStudentRows] = useState<ParsedStudentRow[]>([]);
   const [studentCsvError, setStudentCsvError] = useState<string | null>(null);
-  const [studentServerPreview, setStudentServerPreview] = useState<any | null>(null);
+  const [studentServerPreview, setStudentServerPreview] = useState<RosterImportPreviewDto | null>(null);
   const [isPreviewingStudents, setIsPreviewingStudents] = useState(false);
   const [isImportingStudents, setIsImportingStudents] = useState(false);
-  const [isImportingStudentsFlag, setIsImportingStudentsFlag] = useState(false);
 
   // Roster Import History Modal State
   const [showImportHistoryModal, setShowImportHistoryModal] = useState(false);
-  const [importHistory, setImportHistory] = useState<any[]>([]);
+  const [importHistory, setImportHistory] = useState<RosterImportHistoryDto[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-
-  // Toast
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useDashboardHeader({
     title: "Students & Enrollment",
   });
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setApiError(null);
-      const [studentRes, deptRes, progRes] = await Promise.all([
+      const [studentRes, deptRes, progRes, historyRes] = await Promise.all([
         collegeApi.getStudents(),
         collegeApi.getDepartments(),
         collegeApi.getCoursePrograms(),
+        collegeApi.getRosterImportHistory().catch(() => [] as RosterImportHistoryDto[]),
       ]);
 
-      setUsers(studentRes || []);
       setStudents(
         (studentRes || []).map((s) => ({
           ...s,
@@ -151,17 +122,66 @@ export const StudentManagementView: React.FC = () => {
       );
       setDepartments(deptRes || []);
       setPrograms(progRes || []);
-    } catch (err: any) {
-      console.error("Failed to load student directory:", err);
-      setApiError(err?.message || "Failed to connect to backend service. Student directory unavailable.");
+      setImportHistory(historyRes || []);
+    } catch (err: unknown) {
+      setApiError(
+        err instanceof Error
+          ? err.message
+          : "Failed to connect to backend service. Student directory unavailable."
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    Promise.all([
+      collegeApi.getStudents(),
+      collegeApi.getDepartments(),
+      collegeApi.getCoursePrograms(),
+      collegeApi.getRosterImportHistory().catch(() => [] as RosterImportHistoryDto[]),
+    ])
+      .then(([studentRes, deptRes, progRes, historyRes]) => {
+        if (!active) return;
+        setStudents(
+          (studentRes || []).map((s) => ({
+            ...s,
+            status: s.isActive ? (s.isActivated ? "Active" : "Pending") : "Inactive",
+          }))
+        );
+        setDepartments(deptRes || []);
+        setPrograms(progRes || []);
+        setImportHistory(historyRes || []);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setApiError(
+          err instanceof Error
+            ? err.message
+            : "Failed to connect to backend service. Student directory unavailable."
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
+
+  const handleOpenImportHistory = async () => {
+    setShowImportHistoryModal(true);
+    setLoadingHistory(true);
+    try {
+      const history = await collegeApi.getRosterImportHistory();
+      setImportHistory(history || []);
+    } catch {
+      // Keep existing list if refresh fails
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   // Filtered List
   const filteredStudents = useMemo(() => {
@@ -172,6 +192,7 @@ export const StudentManagementView: React.FC = () => {
         u.fullName.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
         (u.employeeCode && u.employeeCode.toLowerCase().includes(q)) ||
+        (u.enrollmentOrEmployeeCode && u.enrollmentOrEmployeeCode.toLowerCase().includes(q)) ||
         (u.departmentName && u.departmentName.toLowerCase().includes(q));
 
       const matchesDept = departmentFilter === "All" || u.departmentId === departmentFilter;
@@ -180,6 +201,11 @@ export const StudentManagementView: React.FC = () => {
       return matchesSearch && matchesDept && matchesStatus;
     });
   }, [students, searchQuery, departmentFilter, statusFilter]);
+
+  const paginatedStudents = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredStudents.slice(start, start + pageSize);
+  }, [filteredStudents, currentPage, pageSize]);
 
   const handleOpenAddStudent = () => {
     setNewStudentName("");
@@ -207,22 +233,27 @@ export const StudentManagementView: React.FC = () => {
       };
 
       await collegeApi.createStaffUser(payload);
-      showToast(`Student ${newStudentName} provisioned. Account activation dispatched to ${newStudentEmail}.`);
+      showToast(
+        `Student ${newStudentName} provisioned. Account activation dispatched to ${newStudentEmail}.`,
+        "success"
+      );
       setShowAddStudentModal(false);
-      loadData();
-    } catch (err: any) {
-      console.error(err);
-      showToast(err?.message || "Error provisioning student account.");
+      void loadData();
+    } catch (err: unknown) {
+      showToast(
+        err instanceof Error ? err.message : "Error provisioning student account.",
+        "error"
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleOpenEditStudent = (student: any) => {
+  const handleOpenEditStudent = (student: StudentRow) => {
     setEditingStudent(student);
     setEditName(student.fullName);
     setEditEmail(student.email);
-    setEditStudentNumber(student.enrollmentOrEmployeeCode);
+    setEditStudentNumber(student.enrollmentOrEmployeeCode || "");
     setEditDeptId(student.departmentId?.toString() || "");
     setEditAdmissionYear(student.admissionYear || "");
     setEditSemester(student.currentSemesterTerm?.toString() || "1");
@@ -245,22 +276,17 @@ export const StudentManagementView: React.FC = () => {
       };
 
       await collegeApi.updateStaffUser(editingStudent.id, payload);
-      showToast(`Updated account details for ${editName}.`);
+      showToast(`Updated account details for ${editName}.`, "success");
       setShowEditStudentModal(false);
-      loadData();
-    } catch (err: any) {
-      console.error(err);
-      showToast(err?.message || "Error updating account.");
+      void loadData();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Error updating account.", "error");
     } finally {
       setUpdating(false);
     }
   };
 
-  const handleDeleteStudent = (student: any) => {
-    if (isLastActiveCollegeAdmin(student, students)) {
-      showToast("Cannot deactivate the last active College Admin.");
-      return;
-    }
+  const handleDeleteStudent = (student: StudentRow) => {
     setStudentToDelete(student);
   };
 
@@ -271,126 +297,80 @@ export const StudentManagementView: React.FC = () => {
     try {
       await collegeApi.deleteStaffUser(targetStudent.id);
       setStudentToDelete(null);
-      showToast(`Removed ${targetStudent.fullName} from directory.`);
+      showToast(`Deleted ${targetStudent.fullName} from directory.`, "success");
       await loadData();
-    } catch (err: any) {
-      console.error(err);
-      showToast(err?.message || "Error removing user account.");
+    } catch (err: unknown) {
+      showToast(
+        err instanceof Error ? err.message : "Error deleting student account.",
+        "error"
+      );
     } finally {
       setIsDeletingStudent(false);
     }
   };
 
-  // CSV Template Downloader
-  const handleDownloadStudentTemplate = () => {
-    const csvContent = generateStudentCsvTemplate(departments);
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "Students.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const parseCsvText = (text: string) => {
-    setBulkImportError(null);
-    if (!text.trim()) {
-      setCsvHeaders([]);
-      setCsvHeaderError(null);
-      setParsedRows([]);
-      return;
-    }
-
-    const result = parseStudentCsv(text, departments, programs);
-    setCsvHeaders(result.headers);
-    setCsvHeaderError(result.headerError);
-    setParsedStudentRows(result.rows);
-  };
-
-  const handlePreviewBulkStudents = async () => {
-    if (isPreviewingStudents || csvHeaderError || parsedStudentRows.length === 0) return;
-    setBulkImportError(null);
-    setIsPreviewingStudents(true);
+  const confirmToggleStudentStatus = async () => {
+    if (!studentToToggleStatus) return;
+    const target = studentToToggleStatus;
+    const nextIsActive = !target.isActive;
+    setIsTogglingStatus(true);
     try {
-      const preview = await collegeApi.previewBulkStudents({
-        csvHeaders: csvHeaders.length > 0 ? csvHeaders : [...STUDENT_CSV_HEADERS],
-        studentRows: parsedStudentRows.map((r): any => ({
-          studentName: r.studentName,
-          email: r.email,
-          studentNumber: r.studentNumber,
-          departmentCode: r.departmentCode,
-          program: r.program,
-          admissionYear: r.admissionYear,
-          currentSemester: r.currentSemester,
-        })),
-      });
-      setStudentServerPreview(preview);
-      if (preview.headerErrors.length > 0) {
-        setBulkImportError(preview.headerErrors.join(" "));
-      }
-    } catch (err: any) {
-      setBulkImportError(err?.message || "Failed to verify student roster on server.");
-    } finally {
-      setIsPreviewingStudents(false);
-    }
-  };
-
-  const handleExecuteBulkUpload = async () => {
-    if (isImportingStudentsFlag) return;
-    setBulkImportError(null);
-
-    if (csvHeaderError) {
-      setBulkImportError(csvHeaderError);
-      return;
-    }
-
-    if (parsedStudentRows.length === 0 || parsedStudentRows.some((r) => !r.isValid || !r.studentNumber)) {
-      setBulkImportError("Resolve all invalid or conflicting rows before importing.");
-      return;
-    }
-
-    setIsImportingStudentsFlag(true);
-    try {
-      const payload = {
-        csvHeaders: csvHeaders.length > 0 ? csvHeaders : [...STUDENT_CSV_HEADERS],
-        studentRows: parsedStudentRows.map((r): any => ({
-          studentName: r.studentName,
-          email: r.email,
-          studentNumber: r.studentNumber,
-          departmentCode: r.departmentCode,
-          program: r.program,
-          admissionYear: r.admissionYear,
-          currentSemester: r.currentSemester,
-        })),
-      };
-
-      const res = await collegeApi.bulkUploadStudents(payload);
-      setShowStudentCsvModal(false);
-      setStudentServerPreview(null);
+      await collegeApi.updateUserStatus(target.id, { isActive: nextIsActive });
+      setStudentToToggleStatus(null);
+      showToast(
+        `Account for ${target.fullName} is now ${nextIsActive ? "Active" : "Deactivated"}.`,
+        "success"
+      );
       await loadData();
-      showToast(`Students.csv imported: ${res.successfullyCreated} created, ${res.successfullyUpdated} updated.`);
-    } catch (err: any) {
-      const errs: string[] | undefined = err?.data?.errors;
-      setStudentCsvError(errs && errs.length > 0 ? errs.join(" ") : err?.message || "Student roster import failed.");
+    } catch (err: unknown) {
+      showToast(
+        err instanceof Error ? err.message : "Error updating student account status.",
+        "error"
+      );
     } finally {
-      setIsImportingStudentsFlag(false);
+      setIsTogglingStatus(false);
     }
   };
 
   // Counts
-  const studentCount = students.filter((u) => u.role === "Student").length;
+  const studentCount = students.length;
+  const activatedCount = students.filter((u) => u.status === "Active").length;
+  const studentImportsCount = importHistory.length;
 
   return (
-    <div className="space-y-6 pb-12 font-sans bg-[#f8fafc]">
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-800 text-white text-xs font-semibold rounded-lg shadow-lg">
-          <CheckCircle2 className="h-4 w-4" strokeWidth={1.75} />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+    <div className="space-y-6 pb-12 font-sans">
+      <PageHeader
+        title="Students & Enrollment"
+        description="Manage institutional student accounts, enrollment numbers, and bulk Students.csv roster imports."
+        actions={
+          <>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleOpenImportHistory}
+              leftIcon={<History className="h-3.5 w-3.5" />}
+            >
+              Import History
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setShowStudentCsvModal(true)}
+              leftIcon={<Upload className="h-3.5 w-3.5" />}
+            >
+              Import Students.csv
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={handleOpenAddStudent}
+              leftIcon={<Plus className="h-3.5 w-3.5" />}
+            >
+              Add Student
+            </Button>
+          </>
+        }
+      />
 
       {apiError && (
         <ApiConnectionBanner onRetry={loadData} message={apiError} isRetrying={loading} />
@@ -403,21 +383,25 @@ export const StudentManagementView: React.FC = () => {
           <span className="block text-2xl font-bold text-slate-900 font-mono mt-1">
             {studentCount}
           </span>
-          <span className="text-[11px] text-slate-500">Active students in the institutional roster</span>
+          <span className="text-[11px] text-slate-500">Students in institutional roster</span>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-          <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">New This Session</span>
+          <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Activated Accounts</span>
           <span className="block text-2xl font-bold text-emerald-800 font-mono mt-1">
-            {/* Would calculate from import history */}0</span>
-          <span className="text-[11px] text-emerald-700 font-medium">Newly enrolled students</span>
+            {activatedCount}
+          </span>
+          <span className="text-[11px] text-emerald-700 font-medium">
+            {studentCount - activatedCount} pending or inactive
+          </span>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
           <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Import History</span>
           <span className="block text-2xl font-bold text-slate-700 font-mono mt-1">
-            {/* Would show import count */}0</span>
-          <span className="text-[11px] text-slate-500">Faculty & Staff imports</span>
+            {studentImportsCount}
+          </span>
+          <span className="text-[11px] text-slate-500">Recorded roster imports</span>
         </div>
       </div>
 
@@ -426,20 +410,28 @@ export const StudentManagementView: React.FC = () => {
         {/* Table Filter Bar */}
         <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <input
                 type="text"
+                aria-label="Search students by name, email, or ID"
                 placeholder="Search students by name, email, or ID..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-700"
               />
             </div>
 
             <select
+              aria-label="Filter by department"
               value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
+              onChange={(e) => {
+                setDepartmentFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
             >
               <option value="All">All Departments</option>
@@ -449,129 +441,119 @@ export const StudentManagementView: React.FC = () => {
             </select>
 
             <select
+              aria-label="Filter by account status"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700"
             >
               <option value="All">All Statuses</option>
               <option value="Active">Active</option>
+              <option value="Pending">Pending Activation</option>
               <option value="Inactive">Inactive</option>
             </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowImportHistoryModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-            >
-              <History className="h-4 w-4 text-slate-500" />
-              <span>Import History</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowStudentCsvModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-            >
-              <Upload className="h-4 w-4 text-slate-500" />
-              <span>Import Students.csv</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleOpenAddStudent}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-800 rounded-lg hover:bg-emerald-900 cursor-pointer shadow-xs"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add Student</span>
-            </button>
           </div>
         </div>
 
         {/* Table Body */}
         {loading ? (
-          <div className="p-12 text-center text-xs text-slate-500 flex items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin mr-2 text-emerald-800" />
-            Loading student directory...
-          </div>
+          <PageLoadingState message="Loading student directory..." className="border-0 rounded-none" />
         ) : filteredStudents.length === 0 ? (
-          <div className="p-12 text-center text-xs text-slate-500">
-            No students found matching your filters.
-          </div>
+          <EmptyState
+            title="No students found"
+            description={
+              students.length === 0
+                ? "Add students individually or import an approved Students.csv roster."
+                : "No students match your current search or filter criteria."
+            }
+            className="border-0 rounded-none"
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
-                <tr>
-                  <th className="p-3">Student Name</th>
-                  <th className="p-3">Student Number</th>
-                  <th className="p-3">Email</th>
-                  <th className="p-3">Department</th>
-                  <th className="p-3">Program</th>
-                  <th className="p-3">Admission Year</th>
-                  <th className="p-3">Current Semester</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredStudents.map((u) => {
-                  const deptDisplay = u.departmentName || "—";
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100">
+                  <tr>
+                    <th className="p-3">Student Name</th>
+                    <th className="p-3">Student Number</th>
+                    <th className="p-3">Email</th>
+                    <th className="p-3">Department</th>
+                    <th className="p-3">Program</th>
+                    <th className="p-3">Admission Year</th>
+                    <th className="p-3">Current Semester</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {paginatedStudents.map((u) => {
+                    const deptDisplay = u.departmentName || "—";
 
-                  return (
-                    <tr key={u.id} className="hover:bg-slate-50/60 transition-colors align-top">
-                      <td className="p-3 min-w-[200px] max-w-[280px]">
-                        <div className="font-bold text-slate-900 break-words">{u.fullName}</div>
-                        <div className="text-[11px] text-slate-500 break-all">{u.email}</div>
-                      </td>
-                      <td className="p-3 whitespace-nowrap font-mono text-[11px] text-slate-600">
-                        {u.employeeCode || u.enrollmentOrEmployeeCode || "—"}
-                      </td>
-                      <td className="p-3">{u.email || "—"}</td>
-                      <td className="p-3 min-w-[140px]">
-                        <div>
-                          <div className="font-medium text-slate-900">{deptDisplay}</div>
-                          {u.departmentCode && (
-                            <div className="text-[10px] text-slate-400 font-mono">{u.departmentCode}</div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3">{u.programName || "—"}</td>
-                      <td className="p-3">{u.admissionYear || "—"}</td>
-                      <td className="p-3">{u.currentSemesterTerm || "—"}</td>
-                      <td className="p-3 text-right">
-                        <div className="inline-flex flex-wrap items-center justify-end gap-x-3 gap-y-1 whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditStudent(u)}
-                            className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 cursor-pointer"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteStudent(u)}
-                            disabled={isLastActiveCollegeAdmin(u, students)}
-                            className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            {u.isActive ? "Deactivate" : "Activate"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteStudent(u)}
-                            disabled={isLastActiveCollegeAdmin(u, students)}
-                            className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-50/60 transition-colors align-top">
+                        <td className="p-3 min-w-[200px] max-w-[280px]">
+                          <div className="font-bold text-slate-900 break-words">{u.fullName}</div>
+                          <div className="text-[11px] text-slate-500 break-all">{u.email}</div>
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-mono text-[11px] text-slate-600">
+                          {u.employeeCode || u.enrollmentOrEmployeeCode || "—"}
+                        </td>
+                        <td className="p-3">{u.email || "—"}</td>
+                        <td className="p-3 min-w-[140px]">
+                          <div>
+                            <div className="font-medium text-slate-900">{deptDisplay}</div>
+                            {u.departmentCode && (
+                              <div className="text-[10px] text-slate-400 font-mono">{u.departmentCode}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3">{u.programName || "—"}</td>
+                        <td className="p-3">{u.admissionYear || "—"}</td>
+                        <td className="p-3">{u.currentSemesterTerm || "—"}</td>
+                        <td className="p-3 text-right">
+                          <div className="inline-flex flex-wrap items-center justify-end gap-x-3 gap-y-1 whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditStudent(u)}
+                              className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-900 cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setStudentToToggleStatus(u)}
+                              className={`text-[11px] font-semibold cursor-pointer ${
+                                u.isActive
+                                  ? "text-amber-700 hover:text-amber-900"
+                                  : "text-emerald-700 hover:text-emerald-900"
+                              }`}
+                            >
+                              {u.isActive ? "Deactivate" : "Activate"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteStudent(u)}
+                              className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <TablePagination
+              currentPage={currentPage}
+              totalItems={filteredStudents.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
         )}
       </div>
 
@@ -630,7 +612,7 @@ export const StudentManagementView: React.FC = () => {
           <Select
             label="Current Semester"
             value={newSemester}
-            onChange={(e: any) => setNewSemester(e.target.value)}
+            onChange={(e) => setNewSemester(e.target.value)}
             options={[
               { label: "1", value: "1" },
               { label: "2", value: "2" },
@@ -720,7 +702,7 @@ export const StudentManagementView: React.FC = () => {
           <Select
             label="Current Semester"
             value={editSemester}
-            onChange={(e: any) => setEditSemester(e.target.value)}
+            onChange={(e) => setEditSemester(e.target.value)}
             options={[
               { label: "1", value: "1" },
               { label: "2", value: "2" },
@@ -735,12 +717,6 @@ export const StudentManagementView: React.FC = () => {
               { label: "11", value: "11" },
               { label: "12", value: "12" },
             ]}
-          />
-
-          <Input
-            label="Employee ID (Optional)"
-            value={editStudentNumber}
-            onChange={(e) => setEditStudentNumber(e.target.value)}
           />
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -765,7 +741,7 @@ export const StudentManagementView: React.FC = () => {
       {/* Bulk CSV Import Modal */}
       <Modal
         isOpen={showStudentCsvModal}
-        onClose={() => !isImportingStudentsFlag && setShowStudentCsvModal(false)}
+        onClose={() => !isImportingStudents && setShowStudentCsvModal(false)}
         title="Import Student Roster (Students.csv)"
         description="Provision approved student roster records with StudentNumber, DepartmentCode, Program, and AdmissionYear."
         size="lg"
@@ -923,8 +899,8 @@ export const StudentManagementView: React.FC = () => {
                     const errs = preview.rows.filter((x) => x.action === "invalid").flatMap((x) => x.errors.map((e) => `Row ${x.rowNumber}: ${e}`));
                     if (errs.length > 0) setStudentCsvError(errs.join(" "));
                   }
-                } catch (err: any) {
-                  setStudentCsvError(err?.message || "Failed to verify student roster on server.");
+                } catch (err: unknown) {
+                  setStudentCsvError(err instanceof Error ? err.message : "Failed to verify student roster on server.");
                 } finally {
                   setIsPreviewingStudents(false);
                 }
@@ -961,10 +937,20 @@ export const StudentManagementView: React.FC = () => {
                   setShowStudentCsvModal(false);
                   setStudentServerPreview(null);
                   await loadData();
-                  showToast(`Students.csv imported: ${res.successfullyCreated} created, ${res.successfullyUpdated} updated.`);
-                } catch (err: any) {
-                  const errs: string[] | undefined = err?.data?.errors;
-                  setStudentCsvError(errs && errs.length > 0 ? errs.join(" ") : err?.message || "Student roster import failed.");
+                  showToast(
+                    `Students.csv imported: ${res.successfullyCreated} created, ${res.successfullyUpdated} updated.`,
+                    "success"
+                  );
+                } catch (err: unknown) {
+                  const errObj = err as { data?: { errors?: string[] }; message?: string };
+                  const errs = errObj?.data?.errors;
+                  setStudentCsvError(
+                    errs && errs.length > 0
+                      ? errs.join(" ")
+                      : err instanceof Error
+                        ? err.message
+                        : "Student roster import failed."
+                  );
                 } finally {
                   setIsImportingStudents(false);
                 }
@@ -991,9 +977,11 @@ export const StudentManagementView: React.FC = () => {
               <span>Loading import history...</span>
             </div>
           ) : importHistory.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500">
-              No roster imports have been recorded yet.
-            </div>
+            <EmptyState
+              title="No roster imports recorded"
+              description="No Faculty.csv or Students.csv roster imports have been recorded yet."
+              className="border-0 py-6"
+            />
           ) : (
             <div className="max-h-80 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-200 text-xs">
               {importHistory.map((item) => (
@@ -1018,6 +1006,36 @@ export const StudentManagementView: React.FC = () => {
           )}
         </div>
       </Modal>
+
+      <ConfirmationDialog
+        isOpen={Boolean(studentToToggleStatus)}
+        onClose={() => setStudentToToggleStatus(null)}
+        onConfirm={confirmToggleStudentStatus}
+        title={
+          studentToToggleStatus?.isActive
+            ? "Deactivate Student Account"
+            : "Activate Student Account"
+        }
+        description={
+          studentToToggleStatus?.isActive
+            ? `Deactivate ${studentToToggleStatus.fullName} (${studentToToggleStatus.enrollmentOrEmployeeCode || studentToToggleStatus.email})? They will not be able to sign in until reactivated.`
+            : `Reactivate ${studentToToggleStatus?.fullName || "this student"} (${studentToToggleStatus?.enrollmentOrEmployeeCode || studentToToggleStatus?.email || ""})? They will regain access to their student account.`
+        }
+        confirmText={studentToToggleStatus?.isActive ? "Deactivate" : "Activate"}
+        variant={studentToToggleStatus?.isActive ? "warning" : "primary"}
+        isLoading={isTogglingStatus}
+      />
+
+      <ConfirmationDialog
+        isOpen={Boolean(studentToDelete)}
+        onClose={() => setStudentToDelete(null)}
+        onConfirm={confirmDeleteStudent}
+        title="Delete Student Account"
+        description={`Are you sure you want to permanently delete ${studentToDelete?.fullName || "this student"} (${studentToDelete?.enrollmentOrEmployeeCode || studentToDelete?.email || ""}) from the institutional student directory?`}
+        confirmText="Delete Student"
+        variant="danger"
+        isLoading={isDeletingStudent}
+      />
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { PlatformOverviewView } from "@/features/platform/overview/PlatformOverviewView";
+import { PageLoadingState } from "@/design-system/patterns/PageStates";
 
 export const metadata = {
   title: "Platform Overview | Colabex Super Admin",
@@ -8,13 +9,7 @@ export const metadata = {
 
 export default function PlatformDashboardPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="p-8 text-center text-slate-500 text-sm">
-          Loading platform overview...
-        </div>
-      }
-    >
+    <Suspense fallback={<PageLoadingState message="Loading platform overview..." />}>
       <PlatformOverviewView />
     </Suspense>
   );

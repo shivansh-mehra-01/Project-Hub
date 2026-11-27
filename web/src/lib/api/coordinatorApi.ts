@@ -23,6 +23,23 @@ export const coordinatorApi = {
       params: { departmentId, trackId },
     }),
 
+  getFaculty: () =>
+    apiClient.get<Array<{ id: string; fullName: string; designation?: string; isAvailable: boolean; currentMentoredTeams: number; maxMentorTeams: number }>>(
+      "/api/coordinator/faculty"
+    ),
+
+  verifyProposal: (teamId: string, remarks?: string) =>
+    apiClient.post<{ success: boolean; teamId: string; status: string }>(
+      `/api/coordinator/proposals/${teamId}/verify`,
+      remarks ? { remarks } : {}
+    ),
+
+  returnProposal: (teamId: string, remarks: string) =>
+    apiClient.post<{ success: boolean; teamId: string; status: string }>(
+      `/api/coordinator/proposals/${teamId}/return`,
+      { remarks }
+    ),
+
   assignGuide: (teamId: string, data: AssignGuideRequest) =>
     apiClient.post<{ success: boolean; teamId: string; guideId: string; guideName: string }>(
       `/api/coordinator/teams/${teamId}/assign-guide`,

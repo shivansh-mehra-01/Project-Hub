@@ -33,7 +33,7 @@ import {
   UserCheck,
   CircleUser,
 } from "lucide-react";
-import { RoleType } from "@/mocks/store-types";
+import type { RoleType } from "@/mocks/store-types";
 
 export type IconName =
   | "LayoutDashboard"
@@ -188,7 +188,7 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
 
   // --- SUB-PAGES & NON-SIDEBAR ROUTES ---
   {
-    path: "/platform/colleges/applications",
+    path: "/platform/colleges/applications/[id]",
     label: "Application Review",
     breadcrumbGroup: "Management",
     breadcrumbTitle: "Institutional Onboarding Applications",
@@ -202,10 +202,32 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     path: "/platform/colleges/new",
     label: "Add College",
     breadcrumbGroup: "Management",
-    breadcrumbTitle: "Add New College",
+    breadcrumbTitle: "Register New Institution",
     iconName: "Building2",
     allowedRoles: ["SuperAdmin"],
     description: "Register a new institution and provision its dedicated multi-tenant partition",
+    isSidebarItem: false,
+    section: "MENU",
+  },
+  {
+    path: "/platform/colleges/add",
+    label: "Add College",
+    breadcrumbGroup: "Management",
+    breadcrumbTitle: "Register New Institution",
+    iconName: "Building2",
+    allowedRoles: ["SuperAdmin"],
+    description: "Alias for /platform/colleges/new",
+    isSidebarItem: false,
+    section: "MENU",
+  },
+  {
+    path: "/platform/colleges/[id]",
+    label: "College Details",
+    breadcrumbGroup: "Management",
+    breadcrumbTitle: "Institutional Profile & Administration",
+    iconName: "Building2",
+    allowedRoles: ["SuperAdmin"],
+    description: "Inspect college tenant profile, administrators, and activity",
     isSidebarItem: false,
     section: "MENU",
   },
@@ -217,7 +239,7 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     iconName: "User",
     allowedRoles: ["SuperAdmin"],
     description: "Administrator identity, credentials, security, and preferences",
-    isSidebarItem: true,
+    isSidebarItem: false,
     sidebarOrder: 10,
     section: "ACCOUNT",
   },
@@ -279,11 +301,11 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
   },
   {
     path: "/platform/integrations",
-    label: "Platform Administrators",
-    breadcrumbGroup: "Management",
+    label: "Overview",
+    breadcrumbGroup: "Platform Console",
     iconName: "Boxes",
     allowedRoles: ["SuperAdmin"],
-    description: "Redirect to /platform/administrators",
+    description: "Redirect to /platform/dashboard",
     isSidebarItem: false,
   },
   {
@@ -378,6 +400,15 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     description: "Redirect to /platform/security-audit",
     isSidebarItem: false,
   },
+  {
+    path: "/admin/templates",
+    label: "Colleges",
+    breadcrumbGroup: "Management",
+    iconName: "Building2",
+    allowedRoles: ["SuperAdmin"],
+    description: "Redirect to /platform/colleges",
+    isSidebarItem: false,
+  },
 
   // =========================================================================
   // 2. COLLEGE ADMIN ROUTES (/college)
@@ -447,7 +478,7 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     allowedRoles: ["CollegeAdmin"],
     description: "Published platform notices, maintenance advisories, and operational bulletins",
     isSidebarItem: true,
-    sidebarOrder: 5,
+    sidebarOrder: 6,
   },
   {
     path: "/college/settings",
@@ -458,7 +489,7 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     allowedRoles: ["CollegeAdmin"],
     description: "Campus profile, digital seal, quotas, module toggles & SSO security",
     isSidebarItem: true,
-    sidebarOrder: 6,
+    sidebarOrder: 7,
   },
   {
     path: "/college/departments",
@@ -667,10 +698,10 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     path: "/student",
     label: "Workspace",
     breadcrumbGroup: "Project Workspace",
-    breadcrumbTitle: "SISTec CSE • Minor Project",
+    breadcrumbTitle: "Project Workspace",
     iconName: "FolderGit2",
     allowedRoles: ["Student", "TeamLead"],
-    description: "Sprint tasks, 4-slot capstone document vault & weekly logbook",
+    description: "Project lifecycle, tasks, logs, and deliverables",
     isSidebarItem: true,
     sidebarOrder: 1,
   },
@@ -704,8 +735,8 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
     iconName: "User",
     allowedRoles: ["Student", "TeamLead"],
     description: "Institutional enrollment USN, technical skill badges & VCS endpoints",
-    isSidebarItem: true,
-    sidebarOrder: 4,
+    isSidebarItem: false,
+    sidebarOrder: 99,
   },
 
   // =========================================================================
@@ -725,7 +756,7 @@ export const ROUTE_REGISTRY: RouteDefinition[] = [
 ];
 
 // Publicly accessible paths without authentication
-export const PUBLIC_ROUTES = ["/", "/login", "/onboarding"];
+export const PUBLIC_ROUTES = ["/", "/login", "/onboarding", "/activate"];
 
 // Authorized Landing / Home Routes per Role
 export const ROLE_HOME_ROUTES: Record<RoleType, string> = {
@@ -777,18 +808,49 @@ export const getRouteIcon = (name: IconName): React.ComponentType<{ className?: 
   return ICON_MAP[name] || LayoutDashboard;
 };
 
-// Find route by exact or prefix match
+const normalizePath = (path: string): string => {
+  if (!path || path === "/") return "/";
+  return path.endsWith("/") ? path.slice(0, -1) : path;
+};
+
+const matchDynamicPattern = (pattern: string, pathname: string): boolean => {
+  const patternParts = normalizePath(pattern).split("/").filter(Boolean);
+  const pathParts = normalizePath(pathname).split("/").filter(Boolean);
+  if (patternParts.length !== pathParts.length) return false;
+  return patternParts.every((part, idx) => {
+    if (part.startsWith("[") && part.endsWith("]")) {
+      const segment = pathParts[idx];
+      if (!segment) return false;
+      // Prevent a dynamic segment like /platform/colleges/[id] from swallowing
+      // a reserved static namespace segment like "applications" from /platform/colleges/applications/[id]
+      const staticPrefix = `/${pathParts.slice(0, idx + 1).join("/")}`;
+      const isReservedNamespace = ROUTE_REGISTRY.some((r) => {
+        const rParts = normalizePath(r.path).split("/").filter(Boolean);
+        return (
+          rParts.length > idx + 1 &&
+          !rParts[idx].startsWith("[") &&
+          `/${rParts.slice(0, idx + 1).join("/")}` === staticPrefix
+        );
+      });
+      return !isReservedNamespace;
+    }
+    return part === pathParts[idx];
+  });
+};
+
+// Find route by exact or dynamic segment match (no blind prefix fallback on unknown routes)
 export const findRouteByPath = (pathname: string): RouteDefinition | undefined => {
   if (!pathname) return undefined;
-  // First try exact match
-  const exact = ROUTE_REGISTRY.find((r) => r.path === pathname);
+  const normalized = normalizePath(pathname);
+
+  // 1. Exact match (always takes precedence over dynamic patterns)
+  const exact = ROUTE_REGISTRY.find((r) => normalizePath(r.path) === normalized);
   if (exact) return exact;
 
-  // Fallback: match longest prefix for nested subroutes
-  const prefixMatches = ROUTE_REGISTRY.filter((r) => pathname.startsWith(r.path)).sort(
-    (a, b) => b.path.length - a.path.length
+  // 2. Dynamic route pattern match (e.g. /faculty/teams/[teamId], /platform/colleges/[id])
+  return ROUTE_REGISTRY.find(
+    (r) => r.path.includes("[") && matchDynamicPattern(r.path, normalized)
   );
-  return prefixMatches[0];
 };
 
 // Check if a role is authorized for a specific path
@@ -797,14 +859,10 @@ export const isRouteAuthorized = (
   role: RoleType,
   isProjectCoordinator = false
 ): boolean => {
-  if (PUBLIC_ROUTES.includes(pathname)) return true;
+  const normalized = normalizePath(pathname);
+  if (PUBLIC_ROUTES.includes(normalized)) return true;
 
-  // Allow legacy admin paths for SuperAdmin
-  if (role === "SuperAdmin" && (pathname.startsWith("/platform") || pathname.startsWith("/admin") || pathname === "/account")) {
-    return true;
-  }
-
-  const route = findRouteByPath(pathname);
+  const route = findRouteByPath(normalized);
   if (!route) return false;
 
   // Coordinator check

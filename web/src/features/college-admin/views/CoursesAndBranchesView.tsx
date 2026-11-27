@@ -6,11 +6,9 @@ import {
   Plus,
   Pencil,
   Trash2,
-  CheckCircle2,
   Loader2,
   Search,
   GraduationCap,
-  ShieldCheck,
   Monitor,
   Briefcase,
   GitFork,
@@ -23,6 +21,10 @@ import {
   Palette,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
+import { ConfirmationDialog, PageLoadingState } from "@/design-system/patterns/PageStates";
+import { showToast } from "@/lib/toast";
 import { Button } from "@/design-system/components/Button";
 import { Modal } from "@/design-system/components/Modal";
 import { Input } from "@/design-system/components/Input";
@@ -43,7 +45,6 @@ import {
   COURSE_CATEGORIES,
   BRANCH_CATALOG,
   CatalogCourse,
-  CatalogBranch,
 } from "../data/courseCatalog";
 
 // ─── Helper: icon selector ────────────────────────────────────────────────────
@@ -114,9 +115,6 @@ export const CoursesAndBranchesView: React.FC = () => {
   // ── Network / API error state ─────────────────────────────────────────────
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // ── Toast feedback ────────────────────────────────────────────────────────
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   // ── Form states for Course Program ────────────────────────────────────────
   const [progCode, setProgCode] = useState("");
   const [progName, setProgName] = useState("");
@@ -133,11 +131,6 @@ export const CoursesAndBranchesView: React.FC = () => {
   useDashboardHeader({
     title: "Programs & Branches",
   });
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
 
   const loadData = async () => {
     try {
@@ -180,18 +173,60 @@ export const CoursesAndBranchesView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    Promise.allSettled([
+      collegeApi.getCoursePrograms(),
+      collegeApi.getDepartments(),
+    ])
+      .then(([progRes, deptRes]) => {
+        if (!active) return;
+        if (progRes.status === "rejected" || deptRes.status === "rejected") {
+          setApiError(
+            "Unable to reach the Colabex central API server. Displaying cached academic structure."
+          );
+        } else {
+          setApiError(null);
+        }
+
+        const progs =
+          progRes.status === "fulfilled" && progRes.value?.length ? progRes.value : [];
+        const depts =
+          deptRes.status === "fulfilled" && deptRes.value?.length ? deptRes.value : [];
+
+        setPrograms(progs);
+        setDepartments(depts);
+
+        if (progs.length > 0) {
+          setSelectedProgramId((prev) =>
+            prev && progs.some((p) => p.id === prev) ? prev : progs[0].id
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const selectedProgram = programs.find((p) => p.id === selectedProgramId) || programs[0];
 
-  const currentBranches = departments.filter((d) => {
-    if (!selectedProgram) return false;
-    if (d.courseProgramId === selectedProgram.id) return true;
-    if (d.courseProgramCode && d.courseProgramCode.toUpperCase() === selectedProgram.code.toUpperCase()) return true;
-    if (!d.courseProgramId && selectedProgram.code === "BTECH") return true;
-    return false;
-  });
+  const currentBranches = useMemo(
+    () =>
+      departments.filter((d) => {
+        if (!selectedProgram) return false;
+        if (d.courseProgramId === selectedProgram.id) return true;
+        if (
+          d.courseProgramCode &&
+          d.courseProgramCode.toUpperCase() === selectedProgram.code.toUpperCase()
+        )
+          return true;
+        if (!d.courseProgramId && selectedProgram.code === "BTECH") return true;
+        return false;
+      }),
+    [departments, selectedProgram]
+  );
 
   const filteredBranches = currentBranches.filter((b) => {
     if (!searchQuery.trim()) return true;
@@ -266,13 +301,13 @@ export const CoursesAndBranchesView: React.FC = () => {
         totalSemesters: Number(progSemesters),
       };
       const newProg = await collegeApi.createCourseProgram(payload);
-      showToast(`Course "${payload.code}" created successfully!`);
+      showToast(`Course "${payload.code}" created successfully!`, "success");
       setShowAddProgramModal(false);
       await loadData();
       if (newProg?.id) setSelectedProgramId(newProg.id);
     } catch (err) {
       console.error(err);
-      showToast("Error creating course program.");
+      showToast("Error creating course program.", "error");
     } finally {
       setSubmittingProg(false);
     }
@@ -298,12 +333,12 @@ export const CoursesAndBranchesView: React.FC = () => {
         isActive: editingProgram.isActive,
       };
       await collegeApi.updateCourseProgram(editingProgram.id, payload);
-      showToast(`Course "${editingProgram.code}" updated.`);
+      showToast(`Course "${editingProgram.code}" updated.`, "success");
       setShowEditProgramModal(false);
       loadData();
     } catch (err) {
       console.error(err);
-      showToast("Error updating course program.");
+      showToast("Error updating course program.", "error");
     } finally {
       setSubmittingProg(false);
     }
@@ -331,7 +366,7 @@ export const CoursesAndBranchesView: React.FC = () => {
       setDepartments((prev) =>
         prev.filter((d) => d.courseProgramId !== prog.id && d.courseProgramCode?.toUpperCase() !== prog.code.toUpperCase())
       );
-      showToast(`Program "${prog.code}" archived successfully.`);
+      showToast(`Program "${prog.code}" archived successfully.`, "success");
       setProgramToArchive(null);
     } catch (err) {
       console.error(err);
@@ -340,7 +375,7 @@ export const CoursesAndBranchesView: React.FC = () => {
         setSelectedProgramId(next[0]?.id || "");
         return next;
       });
-      showToast(`Program "${prog.code}" archived.`);
+      showToast(`Program "${prog.code}" archived.`, "success");
       setProgramToArchive(null);
     } finally {
       setIsDeleting(false);
@@ -360,7 +395,7 @@ export const CoursesAndBranchesView: React.FC = () => {
     if (!branchCode.trim() || !branchName.trim() || !selectedProgram) return;
     const quota = Number(branchIntake);
     if (!Number.isFinite(quota) || quota < 1 || quota > 10000) {
-      showToast("Sanctioned intake quota must be between 1 and 10,000 seats.");
+      showToast("Sanctioned intake quota must be between 1 and 10,000 seats.", "error");
       return;
     }
     setSubmittingBranch(true);
@@ -372,12 +407,12 @@ export const CoursesAndBranchesView: React.FC = () => {
         courseProgramId: selectedProgram.id,
       };
       await collegeApi.createDepartment(payload);
-      showToast(`Branch "${payload.code}" added to ${selectedProgram.code}!`);
+      showToast(`Branch "${payload.code}" added to ${selectedProgram.code}!`, "success");
       setShowAddBranchModal(false);
       loadData();
     } catch (err) {
       console.error(err);
-      showToast("Error creating branch.");
+      showToast("Error creating branch.", "error");
     } finally {
       setSubmittingBranch(false);
     }
@@ -396,7 +431,7 @@ export const CoursesAndBranchesView: React.FC = () => {
     if (!editingBranch || !branchName.trim()) return;
     const quota = Number(branchIntake);
     if (!Number.isFinite(quota) || quota < 1 || quota > 10000) {
-      showToast("Sanctioned intake quota must be between 1 and 10,000 seats.");
+      showToast("Sanctioned intake quota must be between 1 and 10,000 seats.", "error");
       return;
     }
     setSubmittingBranch(true);
@@ -409,12 +444,12 @@ export const CoursesAndBranchesView: React.FC = () => {
         isActive: true,
       };
       await collegeApi.updateDepartment(editingBranch.id, payload);
-      showToast(`Branch "${editingBranch.code}" updated.`);
+      showToast(`Branch "${editingBranch.code}" updated.`, "success");
       setShowEditBranchModal(false);
       loadData();
     } catch (err) {
       console.error(err);
-      showToast("Error updating branch.");
+      showToast("Error updating branch.", "error");
     } finally {
       setSubmittingBranch(false);
     }
@@ -434,12 +469,12 @@ export const CoursesAndBranchesView: React.FC = () => {
         await collegeApi.deleteDepartment(dept.id, { suppressToast: true }).catch(() => {});
       }
       setDepartments((prev) => prev.filter((d) => d.id !== dept.id && d.code !== dept.code));
-      showToast(`Branch "${dept.code}" deactivated.`);
+      showToast(`Branch "${dept.code}" deactivated.`, "success");
       setBranchToDeactivate(null);
     } catch (err) {
       console.error(err);
       setDepartments((prev) => prev.filter((d) => d.id !== dept.id && d.code !== dept.code));
-      showToast(`Branch "${dept.code}" deactivated.`);
+      showToast(`Branch "${dept.code}" deactivated.`, "success");
       setBranchToDeactivate(null);
     } finally {
       setIsDeleting(false);
@@ -477,13 +512,13 @@ export const CoursesAndBranchesView: React.FC = () => {
         const created = await collegeApi.createCourseProgram(payload);
         if (created?.id) lastId = created.id;
       }
-      showToast(`${selectedCatalogCodes.length} course${selectedCatalogCodes.length > 1 ? "s" : ""} added successfully!`);
+      showToast(`${selectedCatalogCodes.length} course${selectedCatalogCodes.length > 1 ? "s" : ""} added successfully!`, "success");
       setShowCourseCatalogModal(false);
       await loadData();
       if (lastId) setSelectedProgramId(lastId);
     } catch (err) {
       console.error(err);
-      showToast("Error adding courses. Please try again.");
+      showToast("Error adding courses. Please try again.", "error");
     } finally {
       setIsBatchAddingCourses(false);
     }
@@ -521,12 +556,12 @@ export const CoursesAndBranchesView: React.FC = () => {
         };
         await collegeApi.createDepartment(payload);
       }
-      showToast(`${selectedBranchCodes.length} branch${selectedBranchCodes.length > 1 ? "es" : ""} added to ${selectedProgram.code}!`);
+      showToast(`${selectedBranchCodes.length} branch${selectedBranchCodes.length > 1 ? "es" : ""} added to ${selectedProgram.code}!`, "success");
       setShowBranchCatalogModal(false);
       loadData();
     } catch (err) {
       console.error(err);
-      showToast("Error adding branches. Please try again.");
+      showToast("Error adding branches. Please try again.", "error");
     } finally {
       setIsBatchAddingBranches(false);
     }
@@ -536,23 +571,39 @@ export const CoursesAndBranchesView: React.FC = () => {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5 pb-12 font-sans max-w-6xl mx-auto">
-      {/* Toast */}
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 bg-emerald-600 text-white text-xs font-semibold rounded-xl shadow-xl">
-          <CheckCircle2 className="h-4 w-4" />
-          {toastMessage}
-        </div>
-      )}
+    <div className="space-y-6 pb-12 font-sans max-w-6xl mx-auto">
+      <PageHeader
+        title="Programs & Branches"
+        description="Configure degree programs, department branches, and sanctioned student intake quotas."
+        actions={
+          !loading && programs.length > 0 ? (
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleOpenCourseCatalog}
+                leftIcon={<BookOpen className="h-3.5 w-3.5 text-emerald-600" />}
+              >
+                From Catalog
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={handleOpenAddProgram}
+                leftIcon={<Plus className="h-3.5 w-3.5" />}
+              >
+                Add Program
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
 
       {/* Network / API Error Banner */}
       <ApiConnectionBanner error={apiError} onRetry={loadData} />
 
       {loading ? (
-        <div className="p-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
-          <Loader2 className="h-7 w-7 animate-spin mx-auto mb-2 text-emerald-600" />
-          <p className="text-xs font-medium">Loading courses and branches...</p>
-        </div>
+        <PageLoadingState message="Loading courses and branches..." />
 
       ) : programs.length === 0 ? (
         /* ===================================================================
@@ -635,10 +686,11 @@ export const CoursesAndBranchesView: React.FC = () => {
                   const durationYears = prog.totalSemesters ? prog.totalSemesters / 2 : 4;
 
                   return (
-                    <div
+                    <button
                       key={prog.id}
+                      type="button"
                       onClick={() => { setSelectedProgramId(prog.id); setSearchQuery(""); }}
-                      className={`p-3 transition-colors duration-200 ease-out cursor-pointer ${
+                      className={`w-full text-left p-3 transition-colors duration-200 ease-out cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600/40 ${
                         isSelected
                           ? "bg-slate-50 border-l-4 border-l-emerald-800"
                           : "hover:bg-slate-50/60"
@@ -668,7 +720,7 @@ export const CoursesAndBranchesView: React.FC = () => {
                           <ArrowRight className={`h-3.5 w-3.5 transition-colors duration-200 ease-out ${isSelected ? "text-emerald-800" : "text-slate-300"}`} strokeWidth={1.75} />
                         </div>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -770,36 +822,14 @@ export const CoursesAndBranchesView: React.FC = () => {
 
                   {/* Branches list */}
                   {currentBranches.length === 0 ? (
-                    <div className="p-10 text-center space-y-4 bg-slate-50/60 rounded-xl border border-dashed border-slate-200">
-                      <div className="h-10 w-10 rounded-xl bg-white text-slate-400 border border-slate-200 flex items-center justify-center mx-auto shadow-2xs">
-                        <GitFork className="h-5 w-5" strokeWidth={1.8} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-800">No Branches Configured in {selectedProgram.code}</h4>
-                        <p className="text-[11px] text-slate-500 max-w-xs mx-auto mt-0.5">
-                          Add standard branches from catalog or create a custom branch.
-                        </p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-                        {filteredCatalogBranches.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={handleOpenBranchCatalog}
-                            className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                          >
-                            <Layers className="h-3.5 w-3.5" />
-                            Select from Catalog
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={handleOpenAddBranch}
-                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors cursor-pointer"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          Custom Branch
-                        </button>
-                      </div>
+                    <div className="space-y-3">
+                      <EmptyState
+                        icon={<GitFork className="h-5 w-5 text-slate-400" strokeWidth={1.8} />}
+                        title={`No Branches Configured in ${selectedProgram.code}`}
+                        description="Add standard branches from catalog or create a custom branch."
+                        actionLabel={filteredCatalogBranches.length > 0 ? "Select from Catalog" : "Custom Branch"}
+                        onAction={filteredCatalogBranches.length > 0 ? handleOpenBranchCatalog : handleOpenAddBranch}
+                      />
                     </div>
                   ) : filteredBranches.length === 0 ? (
                     <div className="p-8 text-center text-xs text-slate-400">
@@ -959,7 +989,7 @@ export const CoursesAndBranchesView: React.FC = () => {
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-700">Sanctioned Student Intake Quota</label>
-            <Input type="number" min={10} max={1000} value={branchIntake} onChange={(e) => setBranchIntake(parseInt(e.target.value) || 120)} required />
+            <Input type="number" min={1} max={10000} value={branchIntake} onChange={(e) => setBranchIntake(parseInt(e.target.value) || 120)} required />
           </div>
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
             <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddBranchModal(false)}>Cancel</Button>
@@ -979,7 +1009,7 @@ export const CoursesAndBranchesView: React.FC = () => {
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-700">Sanctioned Student Intake Quota</label>
-            <Input type="number" min={10} max={1000} value={branchIntake} onChange={(e) => setBranchIntake(parseInt(e.target.value) || 120)} required />
+            <Input type="number" min={1} max={10000} value={branchIntake} onChange={(e) => setBranchIntake(parseInt(e.target.value) || 120)} required />
           </div>
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
             <Button type="button" variant="ghost" size="sm" onClick={() => setShowEditBranchModal(false)}>Cancel</Button>
@@ -1055,7 +1085,14 @@ export const CoursesAndBranchesView: React.FC = () => {
                 <div className="py-16 text-center text-xs text-slate-400">
                   {catalogSearch ? `No programs match "${catalogSearch}"` : "All programs in this category have already been added."}
                   <br />
-                  <button type="button" onClick={handleOpenAddProgram} className="mt-3 text-emerald-600 font-semibold hover:underline cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCourseCatalogModal(false);
+                      handleOpenAddProgram();
+                    }}
+                    className="mt-3 text-emerald-600 font-semibold hover:underline cursor-pointer"
+                  >
                     + Add a custom program instead
                   </button>
                 </div>
@@ -1213,7 +1250,16 @@ export const CoursesAndBranchesView: React.FC = () => {
                     return (
                       <div
                         key={branch.code}
-                        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer ${
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggleCatalogBranch(branch.code);
+                          }
+                        }}
+                        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40 ${
                           isSelected
                             ? "border-emerald-500 bg-emerald-50/50"
                             : "border-slate-200 bg-white hover:border-slate-300"
@@ -1242,8 +1288,9 @@ export const CoursesAndBranchesView: React.FC = () => {
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
-                              min={10}
-                              max={1000}
+                              min={1}
+                              max={10000}
+                              aria-label={`Intake quota for ${branch.name}`}
                               value={catalogBranchIntakes[branch.code] ?? branch.defaultIntake}
                               onChange={(e) =>
                                 setCatalogBranchIntakes((prev) => ({
@@ -1301,75 +1348,27 @@ export const CoursesAndBranchesView: React.FC = () => {
         </div>
       )}
 
-      {/* =====================================================================
-          MODAL 7: CONFIRM ARCHIVE PROGRAM
-          ===================================================================== */}
-      <Modal
-        isOpen={!!programToArchive}
+      <ConfirmationDialog
+        isOpen={Boolean(programToArchive)}
         onClose={() => setProgramToArchive(null)}
+        onConfirm={confirmArchiveProgram}
         title="Archive Degree Program"
-        description="This action archives the degree program and all affiliated branches."
-      >
-        <div className="space-y-4 pt-2">
-          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
-            <p className="font-semibold">
-              Are you sure you want to archive &ldquo;{programToArchive?.name}&rdquo; ({programToArchive?.code})?
-            </p>
-            <p className="mt-1 text-rose-700">
-              All associated department branches and quotas under this program will be deactivated. Historical student and accreditation data remain safely retained in audit records.
-            </p>
-          </div>
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setProgramToArchive(null)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              size="sm"
-              disabled={isDeleting}
-              onClick={confirmArchiveProgram}
-            >
-              {isDeleting ? "Archiving..." : "Archive Program"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        description={`Are you sure you want to archive "${programToArchive?.name || ""}" (${programToArchive?.code || ""})? All associated department branches and quotas under this program will be deactivated. Historical student and accreditation data remain safely retained in audit records.`}
+        confirmText="Archive Program"
+        variant="danger"
+        isLoading={isDeleting}
+      />
 
-      {/* =====================================================================
-          MODAL 8: CONFIRM DEACTIVATE BRANCH
-          ===================================================================== */}
-      <Modal
-        isOpen={!!branchToDeactivate}
+      <ConfirmationDialog
+        isOpen={Boolean(branchToDeactivate)}
         onClose={() => setBranchToDeactivate(null)}
+        onConfirm={confirmDeactivateBranch}
         title="Deactivate Department Branch"
-        description="This action deactivates the department branch from active enrollment."
-      >
-        <div className="space-y-4 pt-2">
-          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
-            <p className="font-semibold">
-              Are you sure you want to deactivate branch &ldquo;{branchToDeactivate?.name}&rdquo; ({branchToDeactivate?.code})?
-            </p>
-            <p className="mt-1 text-rose-700">
-              Active students and faculty affiliations will be archived. Academic records will remain preserved for statutory compliance.
-            </p>
-          </div>
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setBranchToDeactivate(null)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              size="sm"
-              disabled={isDeleting}
-              onClick={confirmDeactivateBranch}
-            >
-              {isDeleting ? "Deactivating..." : "Deactivate Branch"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        description={`Are you sure you want to deactivate branch "${branchToDeactivate?.name || ""}" (${branchToDeactivate?.code || ""})? Active students and faculty affiliations will be archived while academic records remain preserved.`}
+        confirmText="Deactivate Branch"
+        variant="danger"
+        isLoading={isDeleting}
+      />
 
     </div>
   );

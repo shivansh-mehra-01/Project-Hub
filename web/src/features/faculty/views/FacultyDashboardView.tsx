@@ -10,7 +10,6 @@ import {
   ProjectProposalDto,
 } from "@/lib/api/types";
 import { getUserProfile, authApi } from "@/lib/api";
-import { useProjectHubStore } from "@/mocks/ProjectHubStore";
 import { showToast } from "@/lib/toast";
 import { FacultyStatCard } from "../components/FacultyStatCard";
 import { ActionQueueTable } from "../components/ActionQueueTable";
@@ -23,37 +22,36 @@ import {
 import { MentoredTeamCard } from "../components/MentoredTeamCard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/design-system/components/Card";
 import { Button } from "@/design-system/components/Button";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { PageErrorState } from "@/design-system/patterns/PageStates";
+import { EmptyState } from "@/design-system/patterns/EmptyState";
 import {
   Users,
   Calendar,
   FileText,
   GraduationCap,
-  Plus,
-  RefreshCw,
-  AlertCircle,
   ArrowRight,
 } from "lucide-react";
 
 export const FacultyDashboardView: React.FC = () => {
   const router = useRouter();
-  const { currentPersona } = useProjectHubStore();
   const [profile, setProfile] = useState(() => getUserProfile());
 
   useEffect(() => {
-    const cached = getUserProfile();
-    if (cached) {
-      setProfile(cached);
-    } else {
-      authApi
-        .session()
-        .then((res) => {
-          if (res.authenticated && res.user) {
-            setProfile(res.user);
-          }
-        })
-        .catch(() => {});
-    }
-  }, []);
+    if (profile) return;
+    let active = true;
+    authApi
+      .session()
+      .then((res) => {
+        if (active && res.authenticated && res.user) {
+          setProfile(res.user);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [profile]);
 
   const [actionQueue, setActionQueue] = useState<ActionQueueDto | null>(null);
   const [mentoredTeams, setMentoredTeams] = useState<ProjectProposalDto[]>([]);
@@ -162,29 +160,12 @@ export const FacultyDashboardView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Clean Top Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-[#0F172A] tracking-tight">
-            Welcome back, {profile?.fullName || currentPersona?.name || "Faculty"}
-          </h1>
-          <p className="text-xs text-[#64748B]">
-            {profile?.departmentName || "Department"}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title={`Welcome back, ${profile?.fullName || "Faculty"}`}
+        description={profile?.departmentName || "Faculty & Guide Mentorship Console"}
+      />
 
-      {error && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-            <span>{error}</span>
-          </div>
-          <Button size="sm" variant="secondary" onClick={loadDashboardData}>
-            Retry
-          </Button>
-        </div>
-      )}
+      <PageErrorState error={error} onRetry={loadDashboardData} />
 
       {/* KPI Ribbon */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -194,6 +175,7 @@ export const FacultyDashboardView: React.FC = () => {
           subtext="Active capstone & minor teams"
           icon={<Users />}
           variant="neutral"
+          onClick={() => router.push("/faculty/teams")}
         />
 
         <FacultyStatCard
@@ -202,6 +184,7 @@ export const FacultyDashboardView: React.FC = () => {
           subtext="Friday check-ins awaiting sign-off"
           icon={<Calendar />}
           variant="amber"
+          onClick={() => router.push("/faculty/logs")}
         />
 
         <FacultyStatCard
@@ -210,6 +193,7 @@ export const FacultyDashboardView: React.FC = () => {
           subtext="Student dossiers requiring review"
           icon={<FileText />}
           variant="blue"
+          onClick={() => router.push("/faculty/proposals")}
         />
 
         <FacultyStatCard
@@ -218,6 +202,7 @@ export const FacultyDashboardView: React.FC = () => {
           subtext="Assigned viva examination panels"
           icon={<GraduationCap />}
           variant="emerald"
+          onClick={() => router.push("/faculty/evaluations")}
         />
       </div>
 
@@ -262,14 +247,15 @@ export const FacultyDashboardView: React.FC = () => {
               <MentoredTeamCard
                 key={team.teamId}
                 team={team}
-                onOpenWorkspace={(teamId) => router.push(`/faculty/teams/${teamId}`)}
+                onOpenWorkspace={(teamId) => router.push(`/faculty/teams/${teamId}?from=dashboard`)}
               />
             ))}
           </div>
         ) : !isLoading ? (
-          <div className="p-8 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
-            <p className="text-xs text-[#64748B]">No project teams assigned to your mentorship yet.</p>
-          </div>
+          <EmptyState
+            title="No mentored teams yet"
+            description="No project teams are assigned to your mentorship yet."
+          />
         ) : null}
       </div>
 

@@ -3,10 +3,9 @@ import {
   ROUTE_REGISTRY,
   findRouteByPath,
   getRouteIcon,
-  IconName,
-  PlatformNavSection,
 } from "./routeRegistry";
-import { RoleType } from "@/mocks/store-types";
+import type { IconName, PlatformNavSection } from "./routeRegistry";
+import type { RoleType } from "@/mocks/store-types";
 
 export interface SidebarNavItem {
   label: string;
@@ -83,29 +82,36 @@ export const getSidebarNav = (
  * Pure selector returning exact parent/child breadcrumb labels for the top header
  */
 export const getBreadcrumbs = (pathname: string, role?: RoleType): BreadcrumbInfo => {
-  if (role === "SuperAdmin" && pathname.startsWith("/platform")) {
-    const route = findRouteByPath(pathname);
-    if (route) {
-      return {
-        pageTitle: route.breadcrumbGroup || "Platform Console",
-        breadcrumb: route.breadcrumbTitle,
-        group: route.breadcrumbGroup || "Platform Console",
-      };
-    }
-  }
-
   const route = findRouteByPath(pathname);
   if (!route) {
     return {
-      pageTitle: "Project Hub",
+      pageTitle: "Colabex",
       breadcrumb: undefined,
-      group: "Project Hub",
+      group: "Colabex",
     };
   }
 
+  if (role === "SuperAdmin" && pathname.startsWith("/platform")) {
+    const group = route.breadcrumbGroup || "Platform Console";
+    const sub =
+      route.breadcrumbTitle && route.breadcrumbTitle !== route.label
+        ? route.breadcrumbTitle
+        : undefined;
+    return {
+      pageTitle: route.label || group,
+      breadcrumb: sub,
+      group,
+    };
+  }
+
+  const sub =
+    route.breadcrumbTitle && route.breadcrumbTitle !== route.label
+      ? route.breadcrumbTitle
+      : undefined;
+
   return {
     pageTitle: route.label,
-    breadcrumb: undefined,
+    breadcrumb: sub,
     group: route.breadcrumbGroup,
   };
 };
@@ -125,8 +131,12 @@ export const getCommandPaletteItems = (
 ): CommandPaletteEntity[] => {
   const items: CommandPaletteEntity[] = [];
 
-  // 1. Strictly Authorized Navigation Routes
+  // 1. Strictly Authorized Navigation Routes (exclude dynamic template paths & legacy redirects)
   const authorizedRoutes = ROUTE_REGISTRY.filter((route) => {
+    if (route.path.includes("[")) return false;
+    if (route.description.startsWith("Alias for ") || route.description.startsWith("Redirect to ")) {
+      return false;
+    }
     if (route.coordinatorOnly) {
       return role === "Faculty" && isProjectCoordinator;
     }
@@ -196,7 +206,7 @@ export const getCommandPaletteItems = (
         subtitle: "Submit synopsis, review deck, or final dissertation PDF",
         category: "Actions",
         iconName: "FolderGit2",
-        path: "/student?subtab=logs",
+        path: "/student?subtab=vault",
       }
     );
   } else if (role === "Faculty") {
@@ -229,7 +239,7 @@ export const getCommandPaletteItems = (
         subtitle: `${tn.domain} • ${tn.plan} License Plan`,
         category: "Entities",
         iconName: "Building2",
-        path: `/platform/institutions?search=${encodeURIComponent(tn.code || tn.name)}`,
+        path: `/platform/colleges?search=${encodeURIComponent(tn.code || tn.name)}`,
       });
     }
   }

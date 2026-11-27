@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useId } from "react";
 import Image from "next/image";
 import {
   Building2,
   Landmark,
   MapPin,
   Layers,
-  CheckCircle2,
   Save,
   Loader2,
   Upload,
@@ -18,9 +17,21 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { TabBar } from "@/design-system/patterns/TabBar";
+import {
+  PageLoadingState,
+  PageErrorState,
+  ConfirmationDialog,
+} from "@/design-system/patterns/PageStates";
 import { collegeApi } from "@/lib/api/collegeApi";
+import { showToast } from "@/lib/toast";
 import { AcademicSessionDto, CollegeSettingsDto } from "@/lib/api/types";
-import { ApiConnectionBanner } from "../components/ApiConnectionBanner";
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  const errObj = err as { data?: { message?: string }; message?: string } | null;
+  return errObj?.data?.message || errObj?.message || fallback;
+}
 
 function toDateInputValue(iso?: string | null): string {
   if (!iso) return "";
@@ -46,7 +57,9 @@ export const CollegeSettingsView: React.FC = () => {
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [showRemoveLogoConfirm, setShowRemoveLogoConfirm] = useState(false);
   const crestFileInputRef = useRef<HTMLInputElement>(null);
+  const formId = useId();
 
   // Academic Session state
   const [sessions, setSessions] = useState<AcademicSessionDto[]>([]);
@@ -58,16 +71,9 @@ export const CollegeSettingsView: React.FC = () => {
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [savingSession, setSavingSession] = useState(false);
 
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   useDashboardHeader({
     title: "College Settings",
   });
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
 
   const applySettings = (res: CollegeSettingsDto) => {
     setSettings(res);
@@ -104,16 +110,39 @@ export const CollegeSettingsView: React.FC = () => {
       applySettings(settingsRes);
       setSessions(sessionsRes || []);
       applySession(activeSessionRes);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Settings API error:", err);
-      setApiError(err?.message || "Failed to load institutional settings from backend.");
+      setApiError(getErrorMessage(err, "Failed to load institutional settings from backend."));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    Promise.all([
+      collegeApi.getSettings(),
+      collegeApi.getAcademicSessions().catch(() => [] as AcademicSessionDto[]),
+      collegeApi.getActiveSession().catch(() => null),
+    ])
+      .then(([settingsRes, sessionsRes, activeSessionRes]) => {
+        if (!active) return;
+        applySettings(settingsRes);
+        setSessions(sessionsRes || []);
+        applySession(activeSessionRes);
+        setApiError(null);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        console.error("Settings API error:", err);
+        setApiError(getErrorMessage(err, "Failed to load institutional settings from backend."));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const hasGeneralChanges =
@@ -148,9 +177,9 @@ export const CollegeSettingsView: React.FC = () => {
       if (updated) {
         applySettings(updated);
       }
-      showToast("Institution identity saved.");
-    } catch (err: any) {
-      setGeneralError(err?.data?.message || err?.message || "Failed to save institution details.");
+      showToast("Institution identity saved.", "success");
+    } catch (err: unknown) {
+      setGeneralError(getErrorMessage(err, "Failed to save institution details."));
     } finally {
       setSavingGeneral(false);
     }
@@ -178,9 +207,9 @@ export const CollegeSettingsView: React.FC = () => {
       if (updated) {
         applySettings(updated);
       }
-      showToast("College logo uploaded.");
-    } catch (err: any) {
-      setLogoError(err?.data?.message || err?.message || "Failed to upload college logo.");
+      showToast("College logo uploaded.", "success");
+    } catch (err: unknown) {
+      setLogoError(getErrorMessage(err, "Failed to upload college logo."));
     } finally {
       setLogoBusy(false);
     }
@@ -194,9 +223,10 @@ export const CollegeSettingsView: React.FC = () => {
       if (updated) {
         applySettings(updated);
       }
-      showToast("College logo removed.");
-    } catch (err: any) {
-      setLogoError(err?.data?.message || err?.message || "Failed to remove college logo.");
+      setShowRemoveLogoConfirm(false);
+      showToast("College logo removed.", "success");
+    } catch (err: unknown) {
+      setLogoError(getErrorMessage(err, "Failed to remove college logo."));
     } finally {
       setLogoBusy(false);
     }
@@ -235,11 +265,9 @@ export const CollegeSettingsView: React.FC = () => {
       applySession(saved);
       const allSessions = await collegeApi.getAcademicSessions().catch(() => []);
       setSessions(allSessions);
-      showToast("Academic session configuration saved.");
-    } catch (err: any) {
-      setSessionError(
-        err?.data?.message || err?.message || "Failed to save academic session configuration."
-      );
+      showToast("Academic session configuration saved.", "success");
+    } catch (err: unknown) {
+      setSessionError(getErrorMessage(err, "Failed to save academic session configuration."));
     } finally {
       setSavingSession(false);
     }
@@ -263,22 +291,15 @@ export const CollegeSettingsView: React.FC = () => {
 
   return (
     <div className="space-y-5 pb-16 font-sans max-w-5xl mx-auto">
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-lg">
-          <CheckCircle2 className="h-4 w-4" />
-          {toastMessage}
-        </div>
-      )}
+      <PageHeader
+        title="College Settings"
+        description="Manage your institution identity, official logo, active academic session, and plan entitlements."
+      />
 
-      {apiError && (
-        <ApiConnectionBanner onRetry={loadData} message={apiError} isRetrying={loading} />
-      )}
+      {apiError && <PageErrorState error={apiError} onRetry={loadData} />}
 
       {loading && !settings ? (
-        <div className="space-y-4">
-          <div className="h-24 rounded-xl border border-slate-200 bg-white animate-pulse" />
-          <div className="h-64 rounded-xl border border-slate-200 bg-white animate-pulse" />
-        </div>
+        <PageLoadingState message="Loading institutional settings..." />
       ) : (
         settings && (
           <>
@@ -321,46 +342,20 @@ export const CollegeSettingsView: React.FC = () => {
             </div>
 
             {/* TABS */}
-            <div className="flex border-b border-slate-200 gap-4 text-xs font-medium overflow-x-auto">
-              <button
-                type="button"
-                onClick={() => setActiveTab("general")}
-                className={`pb-3 px-1 inline-flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-                  activeTab === "general"
-                    ? "text-emerald-700 font-bold border-b-2 border-emerald-600"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Building2 className="h-4 w-4" />
-                <span>General</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab("academic")}
-                className={`pb-3 px-1 inline-flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-                  activeTab === "academic"
-                    ? "text-emerald-700 font-bold border-b-2 border-emerald-600"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Calendar className="h-4 w-4" />
-                <span>Academic Configuration</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab("plan")}
-                className={`pb-3 px-1 inline-flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-                  activeTab === "plan"
-                    ? "text-emerald-700 font-bold border-b-2 border-emerald-600"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                <Layers className="h-4 w-4" />
-                <span>Plan & Usage</span>
-              </button>
-            </div>
+            <TabBar
+              ariaLabel="College settings sections"
+              activeTab={activeTab}
+              onChange={setActiveTab}
+              tabs={[
+                { id: "general", label: "General", icon: <Building2 className="h-4 w-4" /> },
+                {
+                  id: "academic",
+                  label: "Academic Configuration",
+                  icon: <Calendar className="h-4 w-4" />,
+                },
+                { id: "plan", label: "Plan & Usage", icon: <Layers className="h-4 w-4" /> },
+              ]}
+            />
 
             {/* TAB 1: GENERAL */}
             {activeTab === "general" && (
@@ -392,11 +387,15 @@ export const CollegeSettingsView: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                      <label
+                        htmlFor={`${formId}-college-name`}
+                        className="text-xs font-semibold text-slate-700 flex items-center gap-1.5"
+                      >
                         <Building2 className="h-3.5 w-3.5 text-slate-400" />
                         Official College Name
                       </label>
                       <input
+                        id={`${formId}-college-name`}
                         type="text"
                         value={collegeName}
                         onChange={(e) => setCollegeName(e.target.value)}
@@ -407,11 +406,15 @@ export const CollegeSettingsView: React.FC = () => {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                      <label
+                        htmlFor={`${formId}-university`}
+                        className="text-xs font-semibold text-slate-700 flex items-center gap-1.5"
+                      >
                         <Landmark className="h-3.5 w-3.5 text-slate-400" />
                         Affiliated University
                       </label>
                       <input
+                        id={`${formId}-university`}
                         type="text"
                         value={affiliatedUniversity}
                         onChange={(e) => setAffiliatedUniversity(e.target.value)}
@@ -422,11 +425,15 @@ export const CollegeSettingsView: React.FC = () => {
                     </div>
 
                     <div className="sm:col-span-2 space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                      <label
+                        htmlFor={`${formId}-address`}
+                        className="text-xs font-semibold text-slate-700 flex items-center gap-1.5"
+                      >
                         <MapPin className="h-3.5 w-3.5 text-slate-400" />
                         Main Campus Address
                       </label>
                       <input
+                        id={`${formId}-address`}
                         type="text"
                         value={campusAddress}
                         onChange={(e) => setCampusAddress(e.target.value)}
@@ -505,6 +512,7 @@ export const CollegeSettingsView: React.FC = () => {
                       <input
                         ref={crestFileInputRef}
                         type="file"
+                        aria-label="Upload college logo file"
                         accept="image/png,image/jpeg,image/webp"
                         onChange={handleLogoUpload}
                         className="hidden"
@@ -527,7 +535,7 @@ export const CollegeSettingsView: React.FC = () => {
                         <button
                           type="button"
                           disabled={logoBusy}
-                          onClick={handleRemoveLogo}
+                          onClick={() => setShowRemoveLogoConfirm(true)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold cursor-pointer disabled:opacity-50"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -572,10 +580,14 @@ export const CollegeSettingsView: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700">
+                      <label
+                        htmlFor={`${formId}-session-label`}
+                        className="text-xs font-semibold text-slate-700"
+                      >
                         Academic Session Label
                       </label>
                       <input
+                        id={`${formId}-session-label`}
                         type="text"
                         value={sessionLabel}
                         onChange={(e) => setSessionLabel(e.target.value)}
@@ -587,8 +599,14 @@ export const CollegeSettingsView: React.FC = () => {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700">Start Date</label>
+                      <label
+                        htmlFor={`${formId}-session-start`}
+                        className="text-xs font-semibold text-slate-700"
+                      >
+                        Start Date
+                      </label>
                       <input
+                        id={`${formId}-session-start`}
                         type="date"
                         value={sessionStartDate}
                         onChange={(e) => setSessionStartDate(e.target.value)}
@@ -598,8 +616,14 @@ export const CollegeSettingsView: React.FC = () => {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700">End Date</label>
+                      <label
+                        htmlFor={`${formId}-session-end`}
+                        className="text-xs font-semibold text-slate-700"
+                      >
+                        End Date
+                      </label>
                       <input
+                        id={`${formId}-session-end`}
                         type="date"
                         value={sessionEndDate}
                         onChange={(e) => setSessionEndDate(e.target.value)}
@@ -744,6 +768,17 @@ export const CollegeSettingsView: React.FC = () => {
           </>
         )
       )}
+
+      <ConfirmationDialog
+        isOpen={showRemoveLogoConfirm}
+        onClose={() => !logoBusy && setShowRemoveLogoConfirm(false)}
+        onConfirm={handleRemoveLogo}
+        title="Remove College Logo"
+        description="Are you sure you want to remove your institution's uploaded logo? Default placeholder branding will be shown until a new logo is uploaded."
+        confirmText="Remove Logo"
+        variant="danger"
+        isLoading={logoBusy}
+      />
     </div>
   );
 };

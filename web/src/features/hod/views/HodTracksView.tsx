@@ -22,6 +22,8 @@ import { useDashboardHeader } from "@/design-system/patterns/AppShell";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/design-system/components/Card";
 import { Badge } from "@/design-system/components/Badge";
 import { Button } from "@/design-system/components/Button";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { PageErrorState } from "@/design-system/patterns/PageStates";
 import {
   hodApi,
   CollegeTrackDto,
@@ -287,37 +289,19 @@ export const HodTracksView: React.FC = () => {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-            Department Project Tracks
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Initialize, launch, and govern Minor, Major, Mini, and Individual project tracks for{" "}
-            <span className="font-semibold text-slate-700">
-              {context?.departmentName || "your department"}
-            </span>
-            .
-          </p>
-        </div>
+      <PageHeader
+        title="Department Project Tracks"
+        description={`Initialize, launch, and govern Minor, Major, Mini, and Individual project tracks for ${context?.departmentName || "your department"}.`}
+        actions={
+          <Link href="/hod/projects/start-window">
+            <Button variant="primary" size="sm" leftIcon={<Plus className="h-4 w-4" />}>
+              Start Project Window
+            </Button>
+          </Link>
+        }
+      />
 
-        <Link href="/hod/projects/start-window">
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<Plus className="h-4 w-4" />}
-          >
-            Start Project Window
-          </Button>
-        </Link>
-      </div>
-
-      {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
+      <PageErrorState error={error} />
 
       {!loading && openTracksCount === 0 && (
         <Card className="border-amber-200 bg-amber-50/60">

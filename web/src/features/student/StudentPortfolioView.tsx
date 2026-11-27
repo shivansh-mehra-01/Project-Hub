@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  AlertCircle,
   Award,
   BookOpen,
   Calendar,
@@ -14,11 +13,12 @@ import {
   FileText,
   FolderGit2,
   Globe,
-  RefreshCw,
   ShieldCheck,
   UserCheck,
 } from "lucide-react";
 import { useDashboardHeader } from "@/design-system/patterns/AppShell";
+import { PageHeader } from "@/design-system/patterns/PageHeader";
+import { PageErrorState, PageLoadingState } from "@/design-system/patterns/PageStates";
 import { Badge } from "@/design-system/components/Badge";
 import { Button } from "@/design-system/components/Button";
 import {
@@ -30,6 +30,7 @@ import {
 } from "@/design-system/components/Card";
 import { Modal } from "@/design-system/components/Modal";
 import { studentApi } from "@/lib/api/studentApi";
+import { showToast } from "@/lib/toast";
 import {
   PendingPortfolioProjectDto,
   StudentAcademicRecordDto,
@@ -78,10 +79,6 @@ export const StudentPortfolioView: React.FC = () => {
   const [allowPublic, setAllowPublic] = useState(false);
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
   const [copiedShareUrl, setCopiedShareUrl] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
 
   const [detailRecord, setDetailRecord] = useState<StudentAcademicRecordDto | null>(null);
   const [credentialRecord, setCredentialRecord] = useState<StudentAcademicRecordDto | null>(null);
@@ -105,15 +102,30 @@ export const StudentPortfolioView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    void loadPortfolio();
-  }, [loadPortfolio]);
-
-  const showToast = (type: "success" | "error", text: string) => {
-    setStatusMessage({ type, text });
-    setTimeout(() => {
-      setStatusMessage((prev) => (prev?.text === text ? null : prev));
-    }, 4000);
-  };
+    let active = true;
+    studentApi
+      .getVerifiedPortfolio()
+      .then((data) => {
+        if (!active) return;
+        setPortfolio(data);
+        setAllowPublic(Boolean(data.allowPublicPortfolio));
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setError(
+            err instanceof Error && err.message
+              ? err.message
+              : "Unable to load your academic portfolio right now."
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleToggleVisibility = async () => {
     if (!portfolio || updatingVisibility) return;
@@ -126,13 +138,13 @@ export const StudentPortfolioView: React.FC = () => {
         prev ? { ...prev, allowPublicPortfolio: nextValue } : prev
       );
       showToast(
-        "success",
         nextValue
           ? "Public portfolio link enabled."
-          : "Portfolio set to private."
+          : "Portfolio set to private.",
+        "success"
       );
     } catch {
-      showToast("error", "Could not update portfolio visibility. Please try again.");
+      showToast("Could not update portfolio visibility. Please try again.", "error");
     } finally {
       setUpdatingVisibility(false);
     }
@@ -145,64 +157,20 @@ export const StudentPortfolioView: React.FC = () => {
       setCopiedShareUrl(true);
       setTimeout(() => setCopiedShareUrl(false), 2000);
     } catch {
-      showToast("error", "Unable to copy link to clipboard.");
+      showToast("Unable to copy link to clipboard.", "error");
     }
   };
 
   if (loading) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <Card>
-          <CardContent className="p-6">
-            <div className="h-6 w-56 bg-slate-200 rounded mb-3" />
-            <div className="h-4 w-80 bg-slate-100 rounded" />
-          </CardContent>
-        </Card>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardContent className="p-6 space-y-3">
-              <div className="h-4 w-32 bg-slate-200 rounded" />
-              <div className="h-5 w-3/4 bg-slate-200 rounded" />
-              <div className="h-16 w-full bg-slate-100 rounded" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6 space-y-3">
-              <div className="h-4 w-32 bg-slate-200 rounded" />
-              <div className="h-5 w-3/4 bg-slate-200 rounded" />
-              <div className="h-16 w-full bg-slate-100 rounded" />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
+    return <PageLoadingState message="Loading your verified academic portfolio..." />;
   }
 
   if (error || !portfolio) {
     return (
-      <Card className="border-red-200 bg-red-50/40">
-        <CardContent className="p-8 flex flex-col items-center text-center max-w-md mx-auto space-y-4">
-          <div className="h-11 w-11 rounded-full bg-red-100 text-red-700 flex items-center justify-center">
-            <AlertCircle className="h-5 w-5" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-base font-semibold text-slate-900">
-              Could not load portfolio
-            </h2>
-            <p className="text-sm text-slate-600">
-              {error ?? "An unexpected error occurred while loading your academic records."}
-            </p>
-          </div>
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
-            onClick={() => void loadPortfolio()}
-          >
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
+      <PageErrorState
+        error={error ?? "An unexpected error occurred while loading your academic records."}
+        onRetry={() => void loadPortfolio()}
+      />
     );
   }
 
@@ -222,24 +190,11 @@ export const StudentPortfolioView: React.FC = () => {
 
   return (
     <>
-      {statusMessage && (
-        <div
-          className={`fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-lg shadow-lg text-xs font-medium flex items-center gap-2 border ${
-            statusMessage.type === "success"
-              ? "bg-slate-900 text-white border-slate-800"
-              : "bg-red-700 text-white border-red-800"
-          }`}
-        >
-          {statusMessage.type === "success" ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          ) : (
-            <AlertCircle className="h-4 w-4 text-red-200" />
-          )}
-          <span>{statusMessage.text}</span>
-        </div>
-      )}
-
       <div className="space-y-6">
+        <PageHeader
+          title="Academic Portfolio"
+          description="Verified project records, credentials, and public showcase settings."
+        />
         {/* Verified Academic Identity Header */}
         <Card>
           <CardContent className="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -319,14 +274,7 @@ export const StudentPortfolioView: React.FC = () => {
                   No completed projects in your portfolio yet
                 </h3>
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  Your portfolio stores completed and department-verified academic
-                  projects—including your project title, verified contribution role,
-                  faculty guide, evaluation outcome, and digital credential record.
-                </p>
-                <p className="text-xs text-slate-500">
-                  Once you complete a project cycle and your department finalizes
-                  evaluation and closure, verified records will appear here
-                  automatically.
+                  Completed and department-verified projects will appear here automatically.
                 </p>
               </div>
             </CardContent>

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { AssignedDefenseTeamDto, StudentScoreInput, ArtifactSlotDto } from "@/lib/api/types";
 import { facultyApi } from "@/lib/api/facultyApi";
+import { checkFinalVivaDeliverableGate } from "@/features/shared/projectLifecycleHelpers";
 import { Card, CardHeader, CardTitle, CardContent } from "@/design-system/components/Card";
-import { Badge } from "@/design-system/components/Badge";
 import { Button } from "@/design-system/components/Button";
+import { ConfirmationDialog } from "@/design-system/patterns/PageStates";
 import {
   RubricScoringGrid,
   RubricCriteriaScores,
@@ -46,32 +47,37 @@ export const FacultyEvaluationsView: React.FC = () => {
   const [studentScores, setStudentScores] = useState<Record<string, StudentScoreInput>>({});
   const [generalRemarks, setGeneralRemarks] = useState<string>("");
   const [isLockedLocally, setIsLockedLocally] = useState<boolean>(false);
-
-  const loadAssignedTeams = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const data = await facultyApi.getAssignedDefenseTeams();
-      const list = Array.isArray(data) ? data : [];
-      setTeams(list);
-      if (list.length > 0) {
-        setSelectedTeamId((prev) => {
-          const exists = list.some((t) => t.teamId === prev);
-          return exists ? prev : list[0].teamId;
-        });
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to load assigned viva defense panels.";
-      setErrorMessage(msg);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const [confirmEvalOpen, setConfirmEvalOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadAssignedTeams();
-  }, [loadAssignedTeams]);
+    let active = true;
+    facultyApi
+      .getAssignedDefenseTeams()
+      .then((data) => {
+        if (!active) return;
+        const list = Array.isArray(data) ? data : [];
+        setTeams(list);
+        if (list.length > 0) {
+          setSelectedTeamId((prev) => {
+            const exists = list.some((t) => t.teamId === prev);
+            return exists ? prev : list[0].teamId;
+          });
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setErrorMessage(
+            err instanceof Error ? err.message : "Failed to load assigned viva defense panels."
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const selectedTeam = useMemo(
     () => teams.find((t) => t.teamId === selectedTeamId),
@@ -119,27 +125,10 @@ export const FacultyEvaluationsView: React.FC = () => {
   }, [selectedTeam]);
 
   // Check FinalViva deliverable gates
-  const deliverableGate = useMemo(() => {
-    if (!selectedTeam || selectedTeam.checkpointType !== "FinalViva") {
-      return { passes: true, missing: [] };
-    }
-
-    const thesis = artifacts.find(
-      (a) => a.slotType === "FinalThesis" && a.status === "Verified"
-    );
-    const plagiarism = artifacts.find(
-      (a) => a.slotType === "PlagiarismReport" && a.status === "Verified"
-    );
-
-    const missing: string[] = [];
-    if (!thesis) missing.push("Final Thesis Document");
-    if (!plagiarism) missing.push("Plagiarism Verification Report (< 15% similarity)");
-
-    return {
-      passes: missing.length === 0,
-      missing,
-    };
-  }, [selectedTeam, artifacts]);
+  const deliverableGate = useMemo(
+    () => checkFinalVivaDeliverableGate(selectedTeam?.checkpointType, artifacts),
+    [selectedTeam, artifacts]
+  );
 
   // Computed scores
   const rawSharedTotal = useMemo(
@@ -163,22 +152,25 @@ export const FacultyEvaluationsView: React.FC = () => {
     }));
   };
 
-  const handleSubmitEvaluation = async () => {
+  const handleRequestSubmitEvaluation = () => {
     if (!selectedTeam) return;
-
     if (selectedTeam.isGuideConflict) {
       setErrorMessage(
         "Academic Policy Violation: You cannot grade a team you are guiding as primary mentor."
       );
       return;
     }
-
     if (!deliverableGate.passes) {
       setErrorMessage(
         `Final Viva Gate Blocked: ${deliverableGate.missing.join(" and ")} must be verified.`
       );
       return;
     }
+    setConfirmEvalOpen(true);
+  };
+
+  const handleSubmitEvaluation = async () => {
+    if (!selectedTeam) return;
 
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -197,6 +189,7 @@ export const FacultyEvaluationsView: React.FC = () => {
       const res = await facultyApi.submitVivaEvaluation(payload);
       if (res && res.success) {
         setIsLockedLocally(true);
+        setConfirmEvalOpen(false);
         setSuccessMessage(
           "Marks locked & recorded successfully. Institutional completion sign-off is pending department administration."
         );
@@ -445,7 +438,7 @@ export const FacultyEvaluationsView: React.FC = () => {
                       !selectedTeam.members ||
                       selectedTeam.members.length === 0
                     }
-                    onClick={handleSubmitEvaluation}
+                    onClick={handleRequestSubmitEvaluation}
                     className="gap-2 text-xs px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
                   >
                     {isSubmitting ? (
@@ -474,6 +467,17 @@ export const FacultyEvaluationsView: React.FC = () => {
           )}
         </div>
       </div>
+
+      <ConfirmationDialog
+        isOpen={confirmEvalOpen}
+        onClose={() => !isSubmitting && setConfirmEvalOpen(false)}
+        onConfirm={handleSubmitEvaluation}
+        title="Finalize & Lock Viva Evaluation"
+        description={`Submit and lock viva marks for ${selectedTeam?.teamCode || "this team"} (${selectedTeam?.checkpointType || ""})? Modifications afterward require an HOD Grade Unlock Exception.`}
+        confirmText="Finalize & Lock Marks"
+        variant="warning"
+        isLoading={isSubmitting}
+      />
     </div>
   );
 };

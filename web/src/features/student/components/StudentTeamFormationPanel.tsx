@@ -68,6 +68,7 @@ export const StudentTeamFormationPanel: React.FC<StudentTeamFormationPanelProps>
   const [sendingJoin, setSendingJoin] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
+  const [mountNow] = useState(() => Date.now());
 
   useEffect(() => {
     studentApi
@@ -99,10 +100,31 @@ export const StudentTeamFormationPanel: React.FC<StudentTeamFormationPanelProps>
   }, [selectedTeamFilter, searchQuery, skillFilter]);
 
   useEffect(() => {
-    if (activeTab === "explore" && availableTracks.length > 0) {
-      loadExploreData();
-    }
-  }, [activeTab, availableTracks.length, loadExploreData]);
+    if (activeTab !== "explore" || availableTracks.length === 0) return;
+    let active = true;
+    Promise.all([
+      studentApi.explorePublishedTeams({
+        trackId: selectedTeamFilter !== "ALL" ? selectedTeamFilter : undefined,
+        search: searchQuery.trim() || undefined,
+        skill: skillFilter.trim() || undefined,
+      }),
+      studentApi.getMyJoinRequests().catch(() => [] as TeamJoinRequestDto[]),
+    ])
+      .then(([teamsRes, reqsRes]) => {
+        if (!active) return;
+        setPublishedTeams(teamsRes || []);
+        setMyRequests(reqsRes || []);
+      })
+      .catch(() => {
+        if (active) setPublishedTeams([]);
+      })
+      .finally(() => {
+        if (active) setExploreLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeTab, availableTracks.length, selectedTeamFilter, searchQuery, skillFilter]);
 
   const selectedTrack = useMemo(
     () => availableTracks.find((t) => t.id === selectedTrackId) || availableTracks[0] || null,
@@ -272,9 +294,8 @@ export const StudentTeamFormationPanel: React.FC<StudentTeamFormationPanelProps>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {availableTracks.map((track) => {
-              const now = Date.now();
               const opensAt = track.registrationOpensUtc ? new Date(track.registrationOpensUtc).getTime() : null;
-              const isUpcoming = opensAt !== null && now < opensAt;
+              const isUpcoming = opensAt !== null && mountNow < opensAt;
               return (
                 <Card
                   key={track.id}
@@ -373,27 +394,7 @@ export const StudentTeamFormationPanel: React.FC<StudentTeamFormationPanelProps>
               className="rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-emerald-600 focus:outline-none bg-white sm:w-48"
             />
 
-            {selectedTrack && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3.5 py-2.5 text-xs space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-emerald-950">{selectedTrack.name}</span>
-                <Badge variant="success" size="sm">
-                  {selectedTrack.participationMode === "Individual"
-                    ? "Individual (1)"
-                    : `Capacity: ${selectedTrack.minTeamSize ?? 2}–${selectedTrack.maxTeamSize ?? 4} members`}
-                </Badge>
-              </div>
-              <div className="text-[11px] text-emerald-800">
-                {selectedTrack.academicYear}
-                {selectedTrack.semesterNumber ? ` • Semester ${selectedTrack.semesterNumber}` : ""}
-                {selectedTrack.proposalDeadlineUtc
-                  ? ` • Deadline: ${new Date(selectedTrack.proposalDeadlineUtc).toLocaleDateString()}`
-                  : ""}
-              </div>
-            </div>
-          )}
-
-          {availableTracks.length > 1 && (
+            {availableTracks.length > 1 && (
               <select
                 value={selectedTeamFilter}
                 onChange={(e) => setSelectedTeamFilter(e.target.value)}
